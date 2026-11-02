@@ -1,0 +1,17 @@
+{
+  "$schema": "../../schema/map.schema.json",
+  "id": "map-preview",
+  "name": "Map Preview",
+  "uploadedBy": "Marko Cekić",
+  "date": "2026-11-02T12:15:28.447Z",
+  "aspect": 1.732,
+  "width": 4096,
+  "height": 2365,
+  "hash": "b5b8d4feccb0",
+  "sizes": {
+    "1024": "maps/map-preview/b5b8d4feccb0-1024.webp",
+    "2048": "maps/map-preview/b5b8d4feccb0-2048.webp",
+    "4096": "maps/map-preview/b5b8d4feccb0-4096.webp"
+  },
+  "lqip": "data:image/webp;base64,UklGRmICAABXRUJQVlA4WAoAAAAQAAAALwAAGwAAQUxQSJ8AAAABgNtGkiTJf58zQums6t69R46ICUDAjoqIOKMCKgL4lh126hNwsz4UaNCwcycoXUZHxp0LRQ8V5JmYCsjbKKAyTjLaBJxYeLCWUaEILki4AESxBAXYJYGsRiHJV9iAwKNkd/mKVyHFu+2QuXAFHLDgYwmUPcAHAgmEA4a8AQhnkgAkCbV4wRNmxcMFPa+6sliXQEIGBc/hv+3XfbMeegcAVlA4IJwBAABwBwCdASowABwAPtFgqlAoJSOipWmZABoJQBfntuSiiSvV6od4sklwVt3wDblCzTjvWn/csDE9TWZC7ZGLXVMi4onUAAD+3P75ec+mDw+EZnkyVzJPdvf8VIa8l/2bemMRltOJQUXnbkn6NI/XHivNzDaiFVwCj60VVWopiFbe/SUdvrTmYGrQCUTk875phLTJcb++Vy3pFP19C3InvRO541OPZchKUeolPUr/a4enIJrVeaXGQMulTwt8LTP9Vjajxaki7AgmH7tVK18FtLA2yrSK+4EJuRvL/VLBhxvTL+H+JJRAL9yMKMAqjqGbwEa7WdK1MSVayFHTwpcskyyase4nkpfJNZp+N1Z2xOn33K1OTbB5dG9tyULAEnzf0sN8qFybg8vXrLaHdFsMG+dfPubZdCDjmhFELqCgriCvsj5U/mcXfAk0+F5wntdZKcWkUVaKYpN84KK4hiMbd+7SvYOwyQSFtj89TgbakJd9e7vWjcm+h4SojT+iw7/Q8srh1KloVywgrkW6sHn0s+nouyWsby/23O6XAAAA"
+}
