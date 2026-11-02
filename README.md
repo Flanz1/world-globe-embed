@@ -29,6 +29,8 @@ Query parameters override the slot's defaults:
 | `bg` | `transparent` or a hex colour like `%23101010` | Background (`#` must be written as `%23` in a URL) |
 | `lat`, `lon` | degrees | Point facing the viewer at load |
 | `zoom` | `0.47` to `2.2` | `1` is the default framing; larger is closer |
+| `north`, `south` | `0` to `49` | Percent of the globe left unmapped at each pole (pole padding) |
+| `pole` | hex colour like `%23e8dcc8` | Fill colour for the padded polar areas |
 
 How it moves: on load the globe spins slowly from the slot's default view. As soon as someone drags, pinches or scrolls, the spin stops for the rest of that visit, and the globe then moves only while they move it, with no drift or momentum. Nothing is remembered between visits. With "reduce motion" turned on in the OS, the globe starts still.
 
@@ -41,12 +43,12 @@ How it moves: on load the globe spins slowly from the slot's default view. As so
 **1. Upload the image**
 
 1. Open the repo on GitHub and go into the folder **`content/incoming`**.
-2. Click **Add file → Upload files** and drag in your map. It must be an equirectangular PNG, JPEG or WebP, about twice as wide as it is tall (e.g. 4096×2048).
+2. Click **Add file → Upload files** and drag in your map: an equirectangular PNG, JPEG or WebP. 2:1 (e.g. 4096×2048) looks best, but anything from square up to 4:1 is accepted. The globe stretches it to fit, and pole padding can fill in the rest (see below).
    - The file name becomes the map's id: `Aerthos v2.png` becomes `aerthos-v2`.
    - Images wider than 4096 px are fine, but they make the repo bigger. Downscale them first if you can.
 3. Leave **Commit directly to the `main` branch** selected and click **Commit changes**.
 4. Open the **Actions** tab. A run called **Process maps** converts the image (usually 1 to 2 minutes). Once it's green, there's a new file `content/maps/aerthos-v2.json`.
-   - If it's red, open the run to see why (for example "is 3000×2000 (ratio 1.500:1)"). Delete your file from `content/incoming`, fix the image and try again. **The site won't redeploy while a rejected image is still sitting in `content/incoming`.**
+   - If it's red, open the run to see why (for example a portrait image, or one wider than 4:1). Delete your file from `content/incoming`, fix the image and try again. **The site won't redeploy while a rejected image is still sitting in `content/incoming`.**
 
 **2. Point the embed at it**
 
@@ -69,6 +71,7 @@ Open `/admin/` on the site and sign in with a token (see [Tokens for the admin p
 - see every map (with thumbnails) and every slot;
 - **switch a slot's map** with a preview;
 - **upload a map**, optionally switching a slot to it in the same commit (the image is downscaled to at most 4096 px in your browser first);
+- **preview** any map or slot on the page itself as a real, spinnable globe. For a slot, you can adjust the north/south pole padding and pole colour live, use **Fit padding to image** for maps wider than 2:1, see whether the map is stretched or squashed, and **Save to slot**;
 - copy each slot's embed code;
 - follow the latest workflow runs, so you can see when your change is live.
 
@@ -87,8 +90,14 @@ Each action is a single commit made under your own GitHub account.
 | `bg` | `"transparent"` | Or a hex colour like `"#202020"` |
 | `lat`, `lon` | `15`, `0` | Point facing the viewer at load |
 | `zoom` | `1` | Initial zoom |
+| `north`, `south` | `0` | Pole padding: percent of the globe's height left unmapped at each pole, as in the desktop app |
+| `pole` | `"#e8dcc8"` | Colour of the padded polar areas |
 
 The schema is in `schema/slots.schema.json`. Editors like VS Code use it for autocomplete and error highlighting. To rename a map, edit `"name"` in its `content/maps/<id>.json`. Leave the other fields alone.
+
+### Pole padding
+
+As in the desktop app, padding leaves part of the globe unmapped at the north and/or south pole and fills it with a solid colour. This is useful when a map doesn't reach the poles. A map wider than 2:1 keeps its proportions when the padding adds up to `100 × (1 − 2 / ratio)` percent (e.g. 33% total for a 3:1 map), and the admin page's **Fit padding to image** button works that out for you. A map narrower than 2:1 (like 6000×3465) is squashed a little north–south to fit, the same as in the desktop app.
 
 ### Who changed what
 

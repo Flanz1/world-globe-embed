@@ -1,4 +1,5 @@
-import { buildViewerConfig, renderSlotPage } from "../../src/shared/page.ts";
+import { buildViewerConfig, previewMaps, renderSlotPage } from "../../src/shared/page.ts";
+import { DEFAULT_VIEW } from "../../src/shared/types.ts";
 import type { Content } from "./content.ts";
 
 export interface GeneratedPage {
@@ -23,4 +24,31 @@ export function generateSlotPages(
       html: renderSlotPage({ cfg, lqip: map.lqip, bootJs, globeUrl: rel(globeFromRoot), modulePreloads: preloadsFromRoot.map(rel) }),
     };
   });
+}
+
+/**
+ * preview/index.html: the viewer with every map inlined, chosen with ?map=<id>.
+ * The admin page shows it in an iframe and adjusts padding live with postMessage.
+ */
+export function generatePreviewPage(
+  content: Content,
+  bootJs: string,
+  globeFromRoot: string,
+  preloadsFromRoot: string[] = [],
+): GeneratedPage {
+  const toRoot = "../";
+  const rel = (p: string) => (/^(\/|https?:)/.test(p) ? p : toRoot + p);
+  const cfg = { ...DEFAULT_VIEW, slug: "preview", title: "Map preview", textures: [] };
+  return {
+    path: "preview/index.html",
+    html: renderSlotPage({
+      cfg,
+      lqip: "",
+      bootJs,
+      globeUrl: rel(globeFromRoot),
+      modulePreloads: preloadsFromRoot.map(rel),
+      maps: previewMaps(content.maps.values(), toRoot),
+      noindex: true,
+    }),
+  };
 }

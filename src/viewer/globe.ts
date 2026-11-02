@@ -31,8 +31,8 @@ import {
   Texture,
   WebGLRenderer,
 } from "three";
-import { BASE_DISTANCE, FOV_DEG, MAX_DISTANCE, MIN_DISTANCE, clamp, distanceForZoom } from "../shared/params.ts";
-import type { StartContext } from "./contract.ts";
+import { BASE_DISTANCE, FOV_DEG, MAX_DISTANCE, MIN_DISTANCE, clamp, clampPadding, distanceForZoom, parseHex } from "../shared/params.ts";
+import type { PreviewMessage, StartContext } from "./contract.ts";
 
 const DEG = Math.PI / 180;
 /** Auto-spin speed in radians per second (about 2 minutes per turn, like the desktop app). */
@@ -148,7 +148,32 @@ export async function start(ctx: StartContext): Promise<void> {
 
   const small = Math.min(stage.clientWidth, stage.clientHeight) * dpr() < 600;
   const lowGeo = device.mobile || small;
-  const geo = new SphereGeometry(1, lowGeo ? 64 : 128, lowGeo ? 48 : 96);
+  const wSegs = lowGeo ? 64 : 128;
+  const hSegs = lowGeo ? 48 : 96;
+
+  /* ── Pole padding, as in the desktop app: the map covers only the band between the
+   * padded areas, and the caps are filled with a solid pole colour. Instead of redrawing the
+   * texture on a canvas (slow at 4096px), the textured sphere is built as a band and the caps
+   * are separate meshes, so changing padding never touches the texture. */
+  let geo = new SphereGeometry(1, wSegs, hSegs);
+  const poleMat = new MeshPhongMaterial({ color: cfg.pole, specular: 0x333333, shininess: 15 });
+  const caps = new Group();
+  function buildBand(north: number, south: number): void {
+    const { north: n, south: s } = clampPadding(north, south);
+    const t0 = (n / 100) * Math.PI;
+    const t1 = (1 - s / 100) * Math.PI;
+    const rows = (frac: number) => Math.max(2, Math.round(hSegs * frac));
+    const next = new SphereGeometry(1, wSegs, rows((t1 - t0) / Math.PI), 0, Math.PI * 2, t0, t1 - t0);
+    for (const m of [globe, fade?.mesh]) if (m) m.geometry = next;
+    geo.dispose();
+    geo = next;
+    for (const c of [...caps.children] as Mesh[]) {
+      c.geometry.dispose();
+      caps.remove(c);
+    }
+    if (t0 > 0) caps.add(new Mesh(new SphereGeometry(1, wSegs, rows(t0 / Math.PI), 0, Math.PI * 2, 0, t0), poleMat));
+    if (t1 < Math.PI) caps.add(new Mesh(new SphereGeometry(1, wSegs, rows(1 - t1 / Math.PI), 0, Math.PI * 2, t1, Math.PI - t1), poleMat));
+  }
 
   const makeTexture = (d: { src: ImageBitmap | HTMLImageElement; preFlipped: boolean }) => {
     const t = new Texture(d.src);
@@ -177,11 +202,13 @@ export async function start(ctx: StartContext): Promise<void> {
   const grid = buildGrid(lowGeo ? 64 : 128);
 
   const world = new Group();
-  world.add(globe, atmosphere, grid);
+  world.add(globe, caps, atmosphere, grid);
   scene.add(world);
 
   /* ── View state ── */
   const view = { yaw: 0, pitch: 0, distance: BASE_DISTANCE };
+  let fade: { mesh: Mesh; mat: MeshPhongMaterial; t0: number; done: () => void } | null = null;
+  buildBand(cfg.north, cfg.south);
   let spinning = false;
   let gridOn = cfg.grid;
 
@@ -211,7 +238,6 @@ export async function start(ctx: StartContext): Promise<void> {
   let dirty = true;
   let lastT = 0;
   let onScreen = true;
-  let fade: { mesh: Mesh; mat: MeshPhongMaterial; t0: number; done: () => void } | null = null;
   const active = () => onScreen && document.visibilityState === "visible";
   const euler = new Euler(0, 0, 0, "XYZ");
 
@@ -346,6 +372,20 @@ export async function start(ctx: StartContext): Promise<void> {
       else void root.requestFullscreen().catch(() => {});
     });
   }
+
+  // Live padding updates from the admin page's preview (same origin only, so an embedding site can't drive it).
+  window.addEventListener("message", (e: MessageEvent<PreviewMessage>) => {
+    if (e.origin !== location.origin || e.data?.type !== "wge-preview") return;
+    const d = e.data;
+    buildBand(Number(d.north) || 0, Number(d.south) || 0);
+    const pole = parseHex(d.pole);
+    if (pole) poleMat.color.set(pole);
+    if (typeof d.grid === "boolean") {
+      gridOn = d.grid;
+      applyGrid();
+    }
+    invalidate();
+  });
 
   // Back/forward cache: a restored page starts fresh, like a new visit.
   window.addEventListener("pageshow", (e) => {

@@ -2,7 +2,7 @@ import { defineConfig, type Plugin } from "vite";
 import { buildBoot } from "./scripts/lib/build-boot.ts";
 import { loadContent } from "./scripts/lib/content.ts";
 import { renderLanding } from "./scripts/lib/landing.ts";
-import { generateSlotPages } from "./scripts/lib/pages.ts";
+import { generatePreviewPage, generateSlotPages } from "./scripts/lib/pages.ts";
 
 /** Dev server only: serves /v/<slug>/ and / from content/ on the fly. */
 function devSlotPages(): Plugin {
@@ -13,13 +13,15 @@ function devSlotPages(): Plugin {
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? "/", "http://x");
         const m = /^\/v\/([a-z0-9-]+)\/?$/.exec(url.pathname);
-        if (!m && url.pathname !== "/" && url.pathname !== "/index.html") return next();
+        const preview = url.pathname === "/preview/";
+        if (!m && !preview && url.pathname !== "/" && url.pathname !== "/index.html") return next();
         const { content, errors } = loadContent();
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         if (!content) {
           res.statusCode = 500;
           return res.end(`<pre>${errors.join("\n").replace(/</g, "&lt;")}</pre>`);
         }
+        if (preview) return res.end(generatePreviewPage(content, await buildBoot(), "/src/viewer/globe.ts").html);
         if (!m) return res.end(renderLanding(content));
         if (!url.pathname.endsWith("/")) {
           res.statusCode = 302;
@@ -47,6 +49,8 @@ export const ADMIN_CSP = [
   "style-src 'self'",
   "img-src 'self' data:",
   "connect-src https://api.github.com",
+  // The preview dialog shows this site's own preview/ page.
+  "frame-src 'self'",
   "base-uri 'none'",
   "form-action 'none'",
   "object-src 'none'",

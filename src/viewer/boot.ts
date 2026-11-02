@@ -6,7 +6,7 @@
  * with the 3D globe, start fetching the 1024px texture, then (after first
  * paint) create the WebGL context and dynamically import the Three.js viewer.
  */
-import { applyParams, diameterFraction, distanceForZoom } from "../shared/params.ts";
+import { applyParams, diameterFraction, distanceForZoom, posterVars } from "../shared/params.ts";
 import type { ViewerConfig } from "../shared/types.ts";
 import type { BootData, StartContext } from "./contract.ts";
 
@@ -15,11 +15,35 @@ const cfg: ViewerConfig = applyParams(data.cfg, location.search);
 const root = document.documentElement;
 const $ = (id: string) => document.getElementById(id)!;
 
+// Preview page (used by the admin page): every map is inlined, pick one with ?map=<id>.
+if (data.maps) {
+  const ids = Object.keys(data.maps);
+  const want = new URLSearchParams(location.search).get("map") ?? "";
+  const m = want ? data.maps[want] : data.maps[ids[0]];
+  if (!m) {
+    const note = document.createElement("p");
+    note.className = "note";
+    note.textContent = "This map isn't published yet. It shows up here once the deploy has finished.";
+    $("stage").replaceChildren(note);
+    $("ui").hidden = true;
+    throw new Error("map not deployed");
+  }
+  {
+    cfg.textures = m.textures;
+    cfg.title = m.name;
+    document.title = `${m.name} (preview)`;
+    root.style.setProperty("--lqip", `url("${m.lqip}")`);
+  }
+}
+
 root.style.setProperty("--bg", cfg.bg);
+root.style.setProperty("--pole", cfg.pole);
 root.style.setProperty("--k", String(diameterFraction(distanceForZoom(cfg.zoom))));
-// Centre the poster on the slot's longitude: the poster shows half the map (180°).
-root.style.setProperty("--px", `${((cfg.lon + 180) / 360 - 0.25) * 200}%`);
+// Centre the poster on the slot's longitude (it shows half the map) and fit it inside the padded band.
+for (const [k, v] of Object.entries(posterVars(cfg))) root.style.setProperty(k, v);
 $("ui").hidden = !cfg.controls;
+
+if (!cfg.textures.length) throw new Error("no map");
 
 // The preload <link> in <head> has already started this request; fetch() reuses it.
 const firstTexture: Promise<Blob> = fetch(cfg.textures[0].url).then((r) => {

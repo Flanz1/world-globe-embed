@@ -17,19 +17,23 @@ export function sniff(buf: Uint8Array): ImageKind | null {
   return null;
 }
 
-/** Accept up to 3% away from a perfect 2:1. Slightly-off images are stretched to exactly 2:1. */
-export const ASPECT_TOLERANCE = 0.03;
+/**
+ * Any landscape image from square (1:1) up to 4:1 is accepted. The globe stretches it over the sphere,
+ * so 2:1 looks undistorted; wider maps can use north/south pole padding to keep their proportions.
+ */
+export const MIN_ASPECT = 1;
+export const MAX_ASPECT = 4;
 export const MIN_WIDTH = 1024;
 
 export function checkAspect(width: number, height: number): { ok: boolean; aspect: number; message?: string } {
   const aspect = width / height;
-  if (Math.abs(aspect / 2 - 1) <= ASPECT_TOLERANCE) return { ok: true, aspect };
+  if (aspect >= MIN_ASPECT - 1e-9 && aspect <= MAX_ASPECT + 1e-9) return { ok: true, aspect };
   return {
     ok: false,
     aspect,
     message:
-      `is ${width}×${height} (ratio ${aspect.toFixed(3)}:1). A globe map must be an equirectangular image ` +
-      `about twice as wide as it is tall (2:1, e.g. 4096×2048). Crop or pad it and upload again.`,
+      `is ${width}×${height} (ratio ${aspect.toFixed(2)}:1). A globe map has to be at least as wide as it is tall ` +
+      `and no more than 4 times as wide (2:1, e.g. 4096×2048, looks best).`,
   };
 }
 
@@ -80,9 +84,9 @@ export async function inspect(file: string): Promise<Inspection> {
 
 const LQIP_MAX_BYTES = 2048;
 
-export async function makeLqip(img: Sharp): Promise<string> {
+export async function makeLqip(img: Sharp, aspect = 2): Promise<string> {
   for (const [w, q] of [[48, 50], [40, 40], [32, 35], [24, 30]] as const) {
-    const buf = await img.clone().resize(w, w / 2, { fit: "fill" }).blur(0.5).webp({ quality: q, effort: 6 }).toBuffer();
+    const buf = await img.clone().resize(w, Math.max(1, Math.round(w / aspect)), { fit: "fill" }).blur(0.5).webp({ quality: q, effort: 6 }).toBuffer();
     if (buf.length <= LQIP_MAX_BYTES) return `data:image/webp;base64,${buf.toString("base64")}`;
   }
   throw new Error("could not make an LQIP under 2 KB");
@@ -104,6 +108,8 @@ export async function processImage(file: string, opts: ProcessOptions): Promise<
   const hash = createHash("sha256").update(buf).digest("hex").slice(0, 12);
   // .rotate() applies EXIF orientation; sharp drops EXIF/ICC/XMP metadata on output by default.
   const base = sharp(buf, { limitInputPixels: 16384 * 8192 }).rotate();
+  // Outputs keep the source's proportions; the viewer maps them onto the sphere.
+  const aspect = info.width / info.height;
 
   const outDir = path.join(paths.publicDir, "maps", info.id);
   mkdirSync(outDir, { recursive: true });
@@ -113,7 +119,7 @@ export async function processImage(file: string, opts: ProcessOptions): Promise<
     const name = `${hash}-${w}.webp`;
     await base
       .clone()
-      .resize(w, w / 2, { fit: "fill", kernel: "lanczos3" })
+      .resize(w, Math.round(w / aspect), { fit: "fill", kernel: "lanczos3" })
       .webp({ quality: w === 4096 ? 80 : 82, effort: 5, smartSubsample: true })
       .toFile(path.join(outDir, name));
     sizes[`${w as TextureWidth}`] = `maps/${info.id}/${name}`;
@@ -135,7 +141,7 @@ export async function processImage(file: string, opts: ProcessOptions): Promise<
     height: info.height,
     hash,
     sizes,
-    lqip: await makeLqip(base),
+    lqip: await makeLqip(base, aspect),
   };
   mkdirSync(paths.mapsDir, { recursive: true });
   writeFileSync(metaFile, JSON.stringify(meta, null, 2) + "\n");
