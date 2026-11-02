@@ -58,7 +58,7 @@
 
     <section class="card">
       <h2>Upload a map</h2>
-      <p class="muted">An equirectangular image about twice as wide as tall (2:1). It's downscaled to at most 4096 px wide in your browser before upload.</p>
+      <p class="muted">An equirectangular image, ideally twice as wide as tall (2:1); anything from square up to 4:1 works, and pole padding can fill in the rest. It's downscaled to at most 4096 px wide in your browser before upload.</p>
       <form id="upload" class="row">
         <label>Image <input name="file" type="file" accept="image/png,image/jpeg,image/webp" required></label>
         <label>Map id <input name="id" required pattern="[a-z0-9][a-z0-9\-]{0,63}" placeholder="from the file name"></label>
@@ -74,6 +74,26 @@
     </section>
   </div>
 </main>
+<dialog id="preview" aria-labelledby="pv-title">
+  <div class="pv-head">
+    <h2 id="pv-title">Preview</h2>
+    <button id="pv-close" type="button" class="ghost" aria-label="Close preview">Close</button>
+  </div>
+  <div class="pv-body">
+    <iframe id="pv-frame" title="Globe preview"></iframe>
+    <div class="pv-controls">
+      <label>Map <select id="pv-map" class="map-select"></select></label>
+      <label>North pole padding <span class="range"><input id="pv-north" type="range" min="0" max="49" step="0.5"><output id="pv-north-v"></output></span></label>
+      <label>South pole padding <span class="range"><input id="pv-south" type="range" min="0" max="49" step="0.5"><output id="pv-south-v"></output></span></label>
+      <label class="inline">Pole colour <input id="pv-pole" type="color"></label>
+      <label class="inline"><input id="pv-grid" type="checkbox"> Show grid</label>
+      <button id="pv-fit" type="button" class="ghost">Fit padding to image</button>
+      <p id="pv-hint" class="muted small"></p>
+      <button id="pv-save" type="button">Save to slot</button>
+      <p id="pv-note" class="muted small"></p>
+    </div>
+  </div>
+</dialog>
 <script type="module" src="../src/admin/main.ts"></script>
 </body>
 </html>

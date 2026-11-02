@@ -7,6 +7,7 @@
 import type { MapMeta, Slot, SlotsFile } from "../shared/types.ts";
 import { escapeHtml } from "../shared/page.ts";
 import { GitHub, GitHubError, type FileChange, type WorkflowRun } from "./github.ts";
+import { openPreview } from "./preview.ts";
 
 declare const __REPO__: string;
 
@@ -96,6 +97,7 @@ function renderMaps(): void {
             "div",
             { className: "map" },
             thumb(m, ""),
+            h("button", { type: "button", className: "ghost", textContent: "Preview", onclick: () => openPreview({ maps, mapId: m.id }) }),
             h("div", {}, h("strong", { textContent: m.name }), " ", h("code", { textContent: m.id })),
             h("div", { className: "muted", textContent: `${m.width}×${m.height} · ${m.uploadedBy} · ${new Date(m.date).toLocaleDateString()}` }),
           ),
@@ -116,6 +118,38 @@ function renderSlots(): void {
       const img = thumb(current);
       const save = h("button", { type: "button", textContent: "Switch map", disabled: true });
       const copy = h("button", { type: "button", className: "ghost", textContent: "Copy embed code" });
+      const preview = h("button", { type: "button", className: "ghost", textContent: "Preview" });
+      preview.addEventListener("click", () =>
+        openPreview({
+          maps,
+          slug,
+          slot,
+          mapId: select.value,
+          onSave: (patch) => {
+            const unchanged =
+              patch.map === slot.map &&
+              patch.north === (slot.north ?? 0) &&
+              patch.south === (slot.south ?? 0) &&
+              patch.pole.toLowerCase() === (slot.pole ?? "#e8dcc8").toLowerCase();
+            if (unchanged) return setStatus("Nothing changed.");
+            void act(`Saving ${slug}…`, () =>
+              gh!.commit(`Update slot "${slug}": map "${patch.map}", padding N ${patch.north}% / S ${patch.south}%`, async () => [
+                await slotsChange((s) => {
+                  const cur = s.slots[slug];
+                  if (!cur) throw new Error(`Slot "${slug}" no longer exists.`);
+                  cur.map = patch.map;
+                  // Keep slots.json tidy: write padding only when it's used.
+                  for (const k of ["north", "south"] as const) {
+                    if (patch[k]) cur[k] = patch[k];
+                    else delete cur[k];
+                  }
+                  if (patch.north || patch.south || cur.pole) cur.pole = patch.pole;
+                }),
+              ]),
+            );
+          },
+        }),
+      );
       select.addEventListener("change", () => {
         save.disabled = select.value === slot.map;
         img.replaceWith(Object.assign(thumb(maps.find((m) => m.id === select.value)), {}));
@@ -149,7 +183,7 @@ function renderSlots(): void {
           h("code", { textContent: slug }),
           " ",
           h("a", { href: new URL(`v/${slug}/`, SITE).href, target: "_blank", rel: "noopener", textContent: "open" }),
-          h("div", { className: "actions" }, select, save, copy),
+          h("div", { className: "actions" }, select, save, preview, copy),
         ),
       );
     }),
@@ -255,8 +289,8 @@ const blobToBase64 = (blob: Blob): Promise<string> =>
 async function prepareImage(file: File): Promise<{ blob: Blob; ext: string; w: number; h: number }> {
   const bmp = await createImageBitmap(file);
   const aspect = bmp.width / bmp.height;
-  if (Math.abs(aspect / 2 - 1) > 0.03)
-    throw new Error(`This image is ${bmp.width}×${bmp.height}. Globe maps need to be about 2:1 (twice as wide as tall).`);
+  if (aspect < 1 || aspect > 4)
+    throw new Error(`This image is ${bmp.width}×${bmp.height}. Globe maps need to be at least as wide as they are tall, and at most 4× as wide.`);
   if (bmp.width < 1024) throw new Error(`This image is only ${bmp.width}px wide; maps need at least 1024px.`);
   const scale = Math.min(1, 4096 / bmp.width);
   const w = Math.round(bmp.width * scale);

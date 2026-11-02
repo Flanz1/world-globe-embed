@@ -13,6 +13,21 @@ export function parseBg(v: string | null | undefined): string | undefined {
   return HEX.test(hex) ? hex : undefined;
 }
 
+/** A #hex colour, or undefined. */
+export function parseHex(v: string | null | undefined): string | undefined {
+  const b = parseBg(v);
+  return b && b !== "transparent" ? b : undefined;
+}
+
+export const MAX_PAD = 49;
+
+/** Keeps north + south padding below 98% so some of the map is always visible. */
+export function clampPadding(north: number, south: number): { north: number; south: number } {
+  const n = clamp(north, 0, MAX_PAD);
+  const s = clamp(south, 0, MAX_PAD);
+  return { north: n, south: s };
+}
+
 function bool(v: string | null): boolean | undefined {
   if (v === "1" || v === "true") return true;
   if (v === "0" || v === "false") return false;
@@ -25,7 +40,7 @@ function num(v: string | null, lo: number, hi: number): number | undefined {
   return Number.isFinite(n) ? clamp(n, lo, hi) : undefined;
 }
 
-/** Applies query-string overrides (grid, rotate, bg, lat, lon, zoom, controls, legend). */
+/** Applies query-string overrides (grid, rotate, bg, lat, lon, zoom, controls, legend, north, south, pole). */
 export function applyParams<T extends ViewDefaults>(base: T, search: string): T {
   const q = new URLSearchParams(search);
   const out = { ...base };
@@ -40,6 +55,9 @@ export function applyParams<T extends ViewDefaults>(base: T, search: string): T 
   set("lat", num(q.get("lat"), -90, 90));
   set("lon", num(q.get("lon"), -180, 180));
   set("zoom", num(q.get("zoom"), ZOOM_MIN, ZOOM_MAX));
+  set("north", num(q.get("north"), 0, MAX_PAD));
+  set("south", num(q.get("south"), 0, MAX_PAD));
+  set("pole", parseHex(q.get("pole")));
   return out;
 }
 
@@ -63,3 +81,14 @@ export const distanceForZoom = (zoom: number): number =>
  */
 export const diameterFraction = (distance: number): number =>
   Math.tan(Math.asin(1 / distance)) / Math.tan((FOV_DEG / 2) * (Math.PI / 180));
+
+/** CSS values that place the LQIP poster inside the padded band, matching the 3D globe. */
+export function posterVars(v: { lon: number; north: number; south: number }): Record<string, string> {
+  const { north, south } = clampPadding(v.north, v.south);
+  const band = 100 - north - south;
+  return {
+    "--px": `${(((v.lon + 180) / 360 - 0.25) * 200).toFixed(2)}%`,
+    "--ph": `${band.toFixed(2)}%`,
+    "--py": `${north + south > 0 ? ((north / (north + south)) * 100).toFixed(2) : 50}%`,
+  };
+}

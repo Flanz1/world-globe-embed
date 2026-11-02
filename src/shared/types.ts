@@ -18,6 +18,12 @@ export interface ViewDefaults {
   lon: number;
   /** 1 = default framing; larger is closer. */
   zoom: number;
+  /** Percent of the globe's height left unmapped at the north pole (0–49), like the desktop app. */
+  north: number;
+  /** Percent left unmapped at the south pole (0–49). */
+  south: number;
+  /** Fill colour for the padded polar areas. */
+  pole: string;
 }
 
 export const DEFAULT_VIEW: ViewDefaults = {
@@ -29,6 +35,9 @@ export const DEFAULT_VIEW: ViewDefaults = {
   lat: 15,
   lon: 0,
   zoom: 1,
+  north: 0,
+  south: 0,
+  pole: "#e8dcc8",
 };
 
 export interface Slot extends Partial<ViewDefaults> {
@@ -67,5 +76,13 @@ export interface ViewerConfig extends ViewDefaults {
   slug: string;
   title: string;
   /** Available textures, URLs relative to the slot page, smallest first. */
+  textures: { w: number; url: string }[];
+}
+
+/** One map as the preview page needs it. */
+export interface PreviewMap {
+  name: string;
+  aspect: number;
+  lqip: string;
   textures: { w: number; url: string }[];
 }

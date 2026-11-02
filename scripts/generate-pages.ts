@@ -5,7 +5,7 @@ import { gzipSync } from "node:zlib";
 import { buildBoot } from "./lib/build-boot.ts";
 import { loadContent } from "./lib/content.ts";
 import { renderLanding } from "./lib/landing.ts";
-import { generateSlotPages } from "./lib/pages.ts";
+import { generatePreviewPage, generateSlotPages } from "./lib/pages.ts";
 import { ROOT } from "./lib/paths.ts";
 
 interface ManifestChunk {
@@ -37,13 +37,13 @@ walk("src/viewer/globe.ts");
 
 const boot = await buildBoot();
 const pages = generateSlotPages(content, boot, entry.file, preloads);
-for (const p of pages) {
+for (const p of [...pages, generatePreviewPage(content, boot, entry.file, preloads)]) {
   const out = path.join(dist, p.path);
   mkdirSync(path.dirname(out), { recursive: true });
   writeFileSync(out, p.html);
 }
 writeFileSync(path.join(dist, "index.html"), renderLanding(content));
-writeFileSync(path.join(dist, "robots.txt"), "User-agent: *\nDisallow: /admin/\n");
+writeFileSync(path.join(dist, "robots.txt"), "User-agent: *\nDisallow: /admin/\nDisallow: /preview/\n");
 rmSync(path.join(dist, ".vite"), { recursive: true, force: true });
 
 const gz = (s: string | Buffer) => gzipSync(s, { level: 9 }).length;
