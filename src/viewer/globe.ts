@@ -176,7 +176,7 @@ export async function start(ctx: StartContext): Promise<void> {
     if (t1 < Math.PI) caps.add(new Mesh(new SphereGeometry(1, wSegs, rows(1 - t1 / Math.PI), 0, Math.PI * 2, t1, Math.PI - t1), poleMat));
   }
 
-  const shift = clamp(cfg.shift, -180, 180);
+  let shift = clamp(cfg.shift, -180, 180);
   const makeTexture = (d: { src: ImageBitmap | HTMLImageElement; preFlipped: boolean }) => {
     const t = new Texture(d.src);
     t.colorSpace = SRGBColorSpace;
@@ -383,6 +383,10 @@ export async function start(ctx: StartContext): Promise<void> {
     if (e.origin !== location.origin || e.data?.type !== "wge-preview") return;
     const d = e.data;
     buildBand(Number(d.north) || 0, Number(d.south) || 0);
+    if (typeof d.shift === "number" && Number.isFinite(d.shift)) {
+      shift = clamp(d.shift, -180, 180);
+      for (const t of [globeMat.map, fade?.mat.map]) if (t) t.offset.x = -shift / 360;
+    }
     const pole = parseHex(d.pole);
     if (pole) poleMat.color.set(pole);
     if (typeof d.grid === "boolean") {

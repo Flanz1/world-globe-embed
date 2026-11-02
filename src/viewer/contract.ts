@@ -15,6 +15,8 @@ export interface PreviewMessage {
   north: number;
   south: number;
   pole: string;
+  /** Prime meridian shift in degrees. */
+  shift?: number;
   grid?: boolean;
 }
 

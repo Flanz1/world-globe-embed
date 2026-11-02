@@ -14,7 +14,7 @@ export interface PreviewOptions {
   /** Map to show first (defaults to the slot's map). */
   mapId: string;
   /** Called with the fields to write into the slot. */
-  onSave?: (patch: { map: string; north: number; south: number; pole: string }) => void;
+  onSave?: (patch: { map: string; north: number; south: number; pole: string; shift: number }) => void;
 }
 
 const SITE = new URL("../", location.href);
@@ -35,10 +35,10 @@ const hint = $<HTMLParagraphElement>("pv-hint");
 const note = $<HTMLParagraphElement>("pv-note");
 
 let current: PreviewOptions | null = null;
-/** The slot's prime meridian shift, passed through so the preview matches the embed (not editable here). */
-let shiftDeg = 0;
+const shift = $<HTMLInputElement>("pv-shift");
+const shiftV = $<HTMLOutputElement>("pv-shift-v");
 
-const values = () => ({ north: Number(north.value), south: Number(south.value), pole: pole.value });
+const values = () => ({ north: Number(north.value), south: Number(south.value), pole: pole.value, shift: Number(shift.value) });
 
 /** Padding (split evenly) that keeps a map wider than 2:1 in proportion on the sphere. */
 export function fitPadding(aspect: number): number {
@@ -48,6 +48,8 @@ export function fitPadding(aspect: number): number {
 function describe(): void {
   northV.value = `${north.value}%`;
   southV.value = `${south.value}%`;
+  const sh = Number(shift.value);
+  shiftV.value = `${sh > 0 ? "+" : ""}${sh}°`;
   const m = current?.maps.find((x) => x.id === mapSel.value);
   if (!m) return void (hint.textContent = "");
   const band = 100 - Number(north.value) - Number(south.value);
@@ -75,7 +77,7 @@ function load(): void {
     north: north.value,
     south: south.value,
     pole: pole.value,
-    shift: String(shiftDeg),
+    shift: shift.value,
     grid: grid.checked ? "1" : "0",
     rotate: "0",
   });
@@ -86,6 +88,7 @@ function load(): void {
 north.addEventListener("input", send);
 south.addEventListener("input", send);
 pole.addEventListener("input", send);
+shift.addEventListener("input", send);
 grid.addEventListener("change", send);
 mapSel.addEventListener("change", load);
 fit.addEventListener("click", () => {
@@ -98,7 +101,7 @@ fit.addEventListener("click", () => {
 save.addEventListener("click", () => {
   if (!current?.onSave) return;
   const v = values();
-  current.onSave({ map: mapSel.value, north: v.north, south: v.south, pole: v.pole });
+  current.onSave({ map: mapSel.value, north: v.north, south: v.south, pole: v.pole, shift: v.shift });
   dialog.close();
 });
 
@@ -108,7 +111,7 @@ export function openPreview(opts: PreviewOptions): void {
   mapSel.replaceChildren(
     ...opts.maps.map((m) => Object.assign(document.createElement("option"), { value: m.id, textContent: m.name, selected: m.id === opts.mapId })),
   );
-  shiftDeg = s.shift ?? DEFAULT_VIEW.shift;
+  shift.value = String(s.shift ?? DEFAULT_VIEW.shift);
   north.value = String(s.north ?? DEFAULT_VIEW.north);
   south.value = String(s.south ?? DEFAULT_VIEW.south);
   pole.value = s.pole && /^#[0-9a-f]{6}$/i.test(s.pole) ? s.pole : DEFAULT_VIEW.pole;
@@ -116,7 +119,7 @@ export function openPreview(opts: PreviewOptions): void {
   $("pv-title").textContent = opts.slug ? `Preview: ${opts.slug}` : "Preview";
   save.hidden = !opts.slug;
   note.textContent = opts.slug
-    ? "Saving commits the map and padding to this slot. Drag and zoom here don't change the embed's starting view."
+    ? "Saving commits the map, padding and prime meridian to this slot. Drag and zoom here don't change the embed's starting view."
     : "Maps show up here once they're deployed.";
   load();
   dialog.showModal();
