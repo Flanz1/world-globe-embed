@@ -87,7 +87,7 @@
       <label>South pole padding <span class="range"><input id="pv-south" type="range" min="0" max="49" step="0.5"><output id="pv-south-v"></output></span></label>
       <label class="inline">Pole colour <input id="pv-pole" type="color"></label>
       <label class="inline"><input id="pv-grid" type="checkbox"> Show grid</label>
-      <label>Prime meridian <span class="range"><input id="pv-shift" type="range" min="-180" max="180" step="1"><output id="pv-shift-v"></output></span><span class="muted small">← West · East →. Line the red grid line up with your map's prime meridian.</span></label>
+      <label>Prime meridian <span class="range"><input id="pv-shift" type="range" min="-180" max="180" step="0.01" aria-label="Prime meridian slider"><input id="pv-shift-n" type="number" min="-180" max="180" step="0.01" inputmode="decimal" aria-label="Prime meridian in degrees"><span aria-hidden="true">°</span></span><span class="muted small">← West · East →. Line the red grid line up with your map's prime meridian.</span></label>
       <button id="pv-fit" type="button" class="ghost">Fit padding to image</button>
       <p id="pv-hint" class="muted small"></p>
       <button id="pv-save" type="button">Save to slot</button>
