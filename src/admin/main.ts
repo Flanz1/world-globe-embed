@@ -147,16 +147,17 @@ function renderSlots(): void {
               patch.map === slot.map &&
               patch.north === (slot.north ?? 0) &&
               patch.south === (slot.south ?? 0) &&
-              patch.pole.toLowerCase() === (slot.pole ?? "#e8dcc8").toLowerCase();
+              patch.pole.toLowerCase() === (slot.pole ?? "#e8dcc8").toLowerCase() &&
+              patch.shift === (slot.shift ?? 0);
             if (unchanged) return setStatus("Nothing changed.");
             void act(`Saving ${slug}…`, () =>
-              gh!.commit(`Update slot "${slug}": map "${patch.map}", padding N ${patch.north}% / S ${patch.south}%`, async () => [
+              gh!.commit(`Update slot "${slug}": map "${patch.map}", padding N ${patch.north}% / S ${patch.south}%, prime meridian ${patch.shift}°`, async () => [
                 await slotsChange((s) => {
                   const cur = s.slots[slug];
                   if (!cur) throw new Error(`Slot "${slug}" no longer exists.`);
                   cur.map = patch.map;
                   // Keep slots.json tidy: write padding only when it's used.
-                  for (const k of ["north", "south"] as const) {
+                  for (const k of ["north", "south", "shift"] as const) {
                     if (patch[k]) cur[k] = patch[k];
                     else delete cur[k];
                   }
