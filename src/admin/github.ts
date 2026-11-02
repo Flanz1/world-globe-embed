@@ -30,6 +30,21 @@ export interface WorkflowRun {
   head_commit?: { message: string } | null;
 }
 
+/**
+ * Classic-token scopes the admin page accepts. Anything broader (repo, workflow, delete_repo, admin:*, …)
+ * would turn a stolen admin token into much more than "can edit public repos", so sign-in is refused.
+ */
+const ALLOWED_CLASSIC_SCOPES = new Set(["public_repo", "read:user", "user:email", "read:org"]);
+
+/** Scopes in an X-OAuth-Scopes header that the admin page doesn't need. Fine-grained tokens send none. */
+export function excessScopes(header: string | null): string[] {
+  if (!header) return [];
+  return header
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s && !ALLOWED_CLASSIC_SCOPES.has(s));
+}
+
 const utf8ToBase64 = (s: string): string => {
   const bytes = new TextEncoder().encode(s);
   let bin = "";
@@ -48,6 +63,10 @@ export class GitHub {
   ) {}
 
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    return (await this.send<T>(path, init)).data;
+  }
+
+  private async send<T>(path: string, init: RequestInit = {}): Promise<{ data: T; headers: Headers }> {
     const r = await fetch(`${API}${path}`, {
       ...init,
       cache: "no-store",
@@ -71,17 +90,21 @@ export class GitHub {
         msg = `${msg}. Check that the token has access to ${this.repo} with Contents: Read and write.`;
       throw new GitHubError(r.status, msg);
     }
-    return (r.status === 204 ? undefined : await r.json()) as T;
+    return { data: (r.status === 204 ? undefined : await r.json()) as T, headers: r.headers };
   }
 
-  /** Confirms the token works and can push; also learns the default branch. */
-  async whoAmI(): Promise<{ login: string; canPush: boolean }> {
+  /** Confirms the token works and can push, and lists any scopes it has beyond what the page needs. */
+  async whoAmI(): Promise<{ login: string; canPush: boolean; excessScopes: string[] }> {
     const [user, repo] = await Promise.all([
-      this.request<{ login: string }>("/user").catch(() => ({ login: "token" })),
-      this.request<{ default_branch: string; permissions?: { push?: boolean } }>(`/repos/${this.repo}`),
+      this.send<{ login: string }>("/user").catch(() => null),
+      this.send<{ default_branch: string; permissions?: { push?: boolean } }>(`/repos/${this.repo}`),
     ]);
-    this.branch = repo.default_branch;
-    return { login: user.login, canPush: !!repo.permissions?.push };
+    this.branch = repo.data.default_branch;
+    return {
+      login: user?.data.login ?? "token",
+      canPush: !!repo.data.permissions?.push,
+      excessScopes: excessScopes(repo.headers.get("X-OAuth-Scopes")),
+    };
   }
 
   async readText(path: string): Promise<string> {

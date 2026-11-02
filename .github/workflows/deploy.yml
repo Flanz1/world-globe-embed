@@ -25,6 +25,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
+          persist-credentials: false
 
       # If this push added images to content/incoming/, "Process maps" will convert them
       # and deploy afterwards, so skip here (the new map doesn't exist yet).

@@ -110,7 +110,9 @@ On GitHub, open `content/` (or `content/slots.json`) and click **History**.
 
 ### Tokens for the admin page
 
-The admin page works in your browser only. It keeps your token in that browser's `localStorage`, sends it only to `api.github.com`, never logs it, and has a **Forget token** button. The page has `noindex`, and it's harmless without a token.
+The admin page works in your browser only. It sends your token only to `api.github.com` and never logs it. By default the token is kept in `sessionStorage`, so it's gone when you close the tab; tick **Remember on this device** to keep it in `localStorage` until you press **Forget token** (only do that on your own computer). The page refuses tokens with more than the `public_repo` scope, refuses to run inside a frame, and ships a strict Content-Security-Policy. It has `noindex` and is harmless without a token.
+
+Keep in mind that every GitHub Pages site under `flanz1.github.io` shares one browser origin, so script on any of those sites could read a remembered token. Serving this repo from its own custom domain removes that.
 
 - **Repository owner:** create a [fine-grained token](https://github.com/settings/personal-access-tokens/new). Pick **Only select repositories → world-globe-embed**, then under **Repository permissions** set **Contents: Read and write**. Optionally add **Actions: Read-only** for the run status, which works without it on a public repo. Give it an expiry.
 - **Collaborators:** GitHub [doesn't allow fine-grained tokens](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) to write to a personal account's repo where you're only a collaborator. Collaborators should create a [classic token](https://github.com/settings/tokens/new?scopes=public_repo&description=Globe%20maps%20admin) with **only** the `public_repo` scope and a short expiry. Alternatively, move this repo into a (free) GitHub organization: then everyone can use fine-grained tokens limited to this one repo.

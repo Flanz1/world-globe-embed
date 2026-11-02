@@ -36,13 +36,43 @@ function devSlotPages(): Plugin {
   };
 }
 
+/**
+ * Production build only: a strict Content-Security-Policy for the admin page. GitHub Pages can't send
+ * headers, so it goes in a <meta> tag (which can't express frame-ancestors; main.ts refuses to run framed).
+ * The dev server is left alone because Vite's client needs inline scripts and a websocket.
+ */
+export const ADMIN_CSP = [
+  "default-src 'none'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self' data:",
+  "connect-src https://api.github.com",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "object-src 'none'",
+].join("; ");
+
+function adminCsp(): Plugin {
+  return {
+    name: "admin-csp",
+    apply: "build",
+    transformIndexHtml: {
+      order: "post",
+      handler(html, ctx) {
+        if (!ctx.filename.endsWith("admin/index.html")) return html;
+        return html.replace(/<meta charset="utf-8">/i, (m) => `${m}\n<meta http-equiv="Content-Security-Policy" content="${ADMIN_CSP}">`);
+      },
+    },
+  };
+}
+
 export default defineConfig({
   // Relative by default so the same build works on flanz1.github.io/world-globe-embed/ and on a custom domain.
   base: process.env.BASE_PATH || "./",
   define: {
     __REPO__: JSON.stringify(process.env.GITHUB_REPOSITORY || "Flanz1/world-globe-embed"),
   },
-  plugins: [devSlotPages()],
+  plugins: [devSlotPages(), adminCsp()],
   build: {
     target: "es2022",
     manifest: true,

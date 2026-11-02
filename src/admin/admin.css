@@ -38,3 +38,5 @@ form.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-t
 code { font-size: 12px; }
 details summary { cursor: pointer; color: var(--accent); }
 @media (max-width: 520px) { .slot { grid-template-columns: 1fr; } .thumb { width: 100%; } }
+label.check { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+label.check input { margin: 0; }
