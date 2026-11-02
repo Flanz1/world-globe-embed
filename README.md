@@ -72,8 +72,7 @@ Open `/admin/` on the site and sign in with a token (see [Tokens for the admin p
 - see every map (with thumbnails) and every slot;
 - **switch a slot's map** with a preview;
 - **upload a map**, optionally switching a slot to it in the same commit (the image is downscaled to at most 4096 px in your browser first);
-- **preview** any map or slot on the page itself as a real, spinnable globe. For a slot, you can adjust the north/south pole padding and pole colour live, use **Fit padding to image** for maps wider than 2:1, see whether the map is stretched or squashed, and **Save to slot**;
-- set each slot's **prime meridian** (in degrees) next to its map, so the map's own prime meridian lines up with the grid's red line;
+- **preview** any map or slot on the page itself as a real, spinnable globe. For a slot, you can adjust the north/south pole padding, pole colour and prime meridian live, use **Fit padding to image** for maps wider than 2:1, see whether the map is stretched or squashed, and **Save to slot**;
 - copy each slot's embed code;
 - follow the latest workflow runs, so you can see when your change is live.
 
