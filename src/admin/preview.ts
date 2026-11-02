@@ -36,9 +36,15 @@ const note = $<HTMLParagraphElement>("pv-note");
 
 let current: PreviewOptions | null = null;
 const shift = $<HTMLInputElement>("pv-shift");
-const shiftV = $<HTMLOutputElement>("pv-shift-v");
+const shiftN = $<HTMLInputElement>("pv-shift-n");
 
-const values = () => ({ north: Number(north.value), south: Number(south.value), pole: pole.value, shift: Number(shift.value) });
+/** Degrees rounded to 2 decimals and kept within ±180. */
+export function roundShift(v: number): number {
+  if (!Number.isFinite(v)) return 0;
+  return Math.round(Math.max(-180, Math.min(180, v)) * 100) / 100;
+}
+
+const values = () => ({ north: Number(north.value), south: Number(south.value), pole: pole.value, shift: roundShift(Number(shift.value)) });
 
 /** Padding (split evenly) that keeps a map wider than 2:1 in proportion on the sphere. */
 export function fitPadding(aspect: number): number {
@@ -48,8 +54,6 @@ export function fitPadding(aspect: number): number {
 function describe(): void {
   northV.value = `${north.value}%`;
   southV.value = `${south.value}%`;
-  const sh = Number(shift.value);
-  shiftV.value = `${sh > 0 ? "+" : ""}${sh}°`;
   const m = current?.maps.find((x) => x.id === mapSel.value);
   if (!m) return void (hint.textContent = "");
   const band = 100 - Number(north.value) - Number(south.value);
@@ -88,7 +92,22 @@ function load(): void {
 north.addEventListener("input", send);
 south.addEventListener("input", send);
 pole.addEventListener("input", send);
-shift.addEventListener("input", send);
+shift.addEventListener("input", () => {
+  shiftN.value = String(roundShift(Number(shift.value)));
+  send();
+});
+// Typing: update live while the number is valid, tidy it up (clamp, 2 decimals) when leaving the field.
+shiftN.addEventListener("input", () => {
+  if (shiftN.value.trim() === "" || !Number.isFinite(Number(shiftN.value))) return;
+  shift.value = String(roundShift(Number(shiftN.value)));
+  send();
+});
+shiftN.addEventListener("change", () => {
+  const v = roundShift(Number(shiftN.value));
+  shiftN.value = String(v);
+  shift.value = String(v);
+  send();
+});
 grid.addEventListener("change", send);
 mapSel.addEventListener("change", load);
 fit.addEventListener("click", () => {
@@ -111,7 +130,7 @@ export function openPreview(opts: PreviewOptions): void {
   mapSel.replaceChildren(
     ...opts.maps.map((m) => Object.assign(document.createElement("option"), { value: m.id, textContent: m.name, selected: m.id === opts.mapId })),
   );
-  shift.value = String(s.shift ?? DEFAULT_VIEW.shift);
+  shift.value = shiftN.value = String(roundShift(s.shift ?? DEFAULT_VIEW.shift));
   north.value = String(s.north ?? DEFAULT_VIEW.north);
   south.value = String(s.south ?? DEFAULT_VIEW.south);
   pole.value = s.pole && /^#[0-9a-f]{6}$/i.test(s.pole) ? s.pole : DEFAULT_VIEW.pole;
