@@ -17,7 +17,7 @@
 <main id="app">
   <section id="signin" class="card" hidden>
     <h2>Sign in</h2>
-    <p>Paste your own GitHub token. It's kept only in this browser (localStorage) and sent only to api.github.com.</p>
+    <p>Paste your own GitHub token. It's sent only to api.github.com and, unless you tick <em>Remember</em>, forgotten when you close this tab.</p>
     <ul class="muted">
       <li><strong>Repository owner:</strong> a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">fine-grained token</a>
         limited to this one repository, with <em>Contents: Read and write</em> (and optionally <em>Actions: Read-only</em>).</li>
@@ -28,7 +28,9 @@
     <form id="signin-form">
       <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…" required>
       <button type="submit">Sign in</button>
+      <label class="check"><input id="remember" type="checkbox"> Remember on this device</label>
     </form>
+    <p class="muted">Only tick <em>Remember</em> on your own computer: a remembered token stays in this browser until you press <em>Forget token</em>.</p>
     <p id="signin-error" class="error" role="alert"></p>
   </section>
 

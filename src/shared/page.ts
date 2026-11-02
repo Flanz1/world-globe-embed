@@ -9,6 +9,9 @@ import { DEFAULT_VIEW, TEXTURE_WIDTHS } from "./types.ts";
 export const escapeHtml = (s: string): string =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
+/** A base64 WebP data: URI and nothing else (no quotes, brackets or spaces). */
+export const LQIP = /^data:image\/webp;base64,[A-Za-z0-9+/]+={0,2}$/;
+
 /** JSON that is safe inside a <script> element. */
 export const scriptJson = (v: unknown): string =>
   JSON.stringify(v).replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
@@ -68,10 +71,12 @@ export function renderSlotPage({ cfg, lqip, bootJs, globeUrl, modulePreloads = [
   const px = `${(((cfg.lon + 180) / 360 - 0.25) * 200).toFixed(2)}%`;
   const title = escapeHtml(cfg.title);
   const first = cfg.textures[0];
+  // The schema already limits these, but escape anyway: this attribute is the one place map data meets raw HTML.
+  if (!LQIP.test(lqip)) throw new Error(`map "${cfg.slug}": lqip must be a base64 WebP data: URI`);
   const vars = `--bg:${cfg.bg};--k:${k};--px:${px};--lqip:url("${lqip}")`;
   const data = scriptJson({ cfg, globe: globeUrl });
   return `<!doctype html>
-<html lang="en" style='${vars}'>
+<html lang="en" style="${escapeHtml(vars)}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">

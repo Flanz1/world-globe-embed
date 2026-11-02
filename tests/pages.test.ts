@@ -40,7 +40,7 @@ describe("slot page generator", () => {
 
   it("inlines config, LQIP, boot script and a preload for the 1024 texture, with relative URLs only", () => {
     const html = pages[0].html;
-    expect(html).toContain('--lqip:url("data:image/webp;base64,AAAA")');
+    expect(html).toContain('--lqip:url(&quot;data:image/webp;base64,AAAA&quot;)');
     expect(html).toContain("<script>/*boot*/</script>");
     expect(html).toContain('<link rel="preload" href="../../maps/terra/abcdef012345-1024.webp" as="fetch" type="image/webp" crossorigin>');
     expect(html).toContain('<link rel="modulepreload" href="../../assets/globe-abc.js">');
@@ -54,6 +54,12 @@ describe("slot page generator", () => {
       { w: 2048, url: "../../maps/terra/abcdef012345-2048.webp" },
       { w: 4096, url: "../../maps/terra/abcdef012345-4096.webp" },
     ]);
+  });
+
+  it("refuses an LQIP that could break out of the style attribute", () => {
+    const evil: MapMeta = { ...map, lqip: `data:image/webp;base64,AA")'><script>alert(1)</script>` };
+    const c: Content = { maps: new Map([["terra", evil]]), slots: { slots: { x: { map: "terra" } } } };
+    expect(() => generateSlotPages(c, "", "g.js")).toThrow(/lqip/);
   });
 
   it("escapes the title in HTML and in the inline JSON", () => {

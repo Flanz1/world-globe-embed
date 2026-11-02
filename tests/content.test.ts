@@ -42,6 +42,14 @@ describe("content validation", () => {
     expect(r.content?.maps.get("terra")?.id).toBe("terra");
   });
 
+  it("rejects an LQIP with anything after the base64 data", () => {
+    const r = loadContent(
+      project({ slots: { aerthos: { map: "terra" } } }, [{ id: "terra", lqip: `${LQIP}")'><script>alert(1)</script>` }]),
+    );
+    expect(r.content).toBeNull();
+    expect(r.errors.join("\n")).toMatch(/content\/maps\/terra\.json: lqip/);
+  });
+
   it("catches a slot that points at a missing map, with a hint", () => {
     const r = loadContent(project({ slots: { aerthos: { map: "tera" } } }, [{ id: "terra" }, { id: "luna" }]));
     expect(r.content).toBeNull();

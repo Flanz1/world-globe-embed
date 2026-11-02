@@ -1,10 +1,12 @@
 /**
  * Admin page: list maps and slots, upload a map, switch a slot's map.
  * Every action is a single commit through the GitHub API, signed in with the
- * collaborator's own fine-grained token (kept in localStorage, never logged).
+ * collaborator's own token. The token is kept in sessionStorage (this tab only) unless the user
+ * ticks "Remember", then in localStorage. It is never logged.
  */
 import type { MapMeta, Slot, SlotsFile } from "../shared/types.ts";
-import { GitHub, type FileChange, type WorkflowRun } from "./github.ts";
+import { escapeHtml } from "../shared/page.ts";
+import { GitHub, GitHubError, type FileChange, type WorkflowRun } from "./github.ts";
 
 declare const __REPO__: string;
 
@@ -27,29 +29,32 @@ function h<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
+/*
+ * Every GitHub Pages project site of an account shares one origin (<user>.github.io), so anything
+ * stored here is readable by script on any of the owner's other Pages sites. sessionStorage is the
+ * default because it is scoped to this tab and gone when the tab closes; localStorage only on request.
+ */
+const tryStorage = <T>(fn: () => T, fallback: T): T => {
+  try {
+    return fn();
+  } catch {
+    return fallback;
+  }
+};
 const store = {
-  get: () => {
-    try {
-      return localStorage.getItem(TOKEN_KEY);
-    } catch {
-      return null;
-    }
-  },
-  set: (t: string) => {
-    try {
-      localStorage.setItem(TOKEN_KEY, t);
-    } catch {
-      /* private mode: token lives for this page only */
-    }
+  get: () => tryStorage(() => sessionStorage.getItem(TOKEN_KEY) ?? localStorage.getItem(TOKEN_KEY), null),
+  set: (t: string, remember: boolean) => {
+    store.clear();
+    tryStorage(() => (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, t), undefined);
   },
   clear: () => {
-    try {
-      localStorage.removeItem(TOKEN_KEY);
-    } catch {
-      /* ignore */
-    }
+    tryStorage(() => localStorage.removeItem(TOKEN_KEY), undefined);
+    tryStorage(() => sessionStorage.removeItem(TOKEN_KEY), undefined);
   },
 };
+
+/** The page acts with the user's token, so it must never run inside someone else's frame (clickjacking). */
+const framed = tryStorage(() => window.top !== window.self, true);
 
 let gh: GitHub | null = null;
 let maps: MapMeta[] = [];
@@ -64,7 +69,7 @@ function setStatus(text: string, kind: "muted" | "error" | "ok" = "muted"): void
 const embedCode = (slug: string, title: string) =>
   `<iframe src="${new URL(`v/${slug}/`, SITE).href}" width="100%" height="480" ` +
   `style="border:0;border-radius:8px;background:transparent" loading="lazy" allow="fullscreen" ` +
-  `title="${title.replace(/"/g, "&quot;")} globe"></iframe>`;
+  `title="${escapeHtml(title)} globe"></iframe>`;
 
 function thumb(map: MapMeta | undefined, cls = "thumb"): HTMLImageElement {
   const img = h("img", { className: cls, alt: map ? map.name : "", loading: "lazy", decoding: "async" });
@@ -337,11 +342,18 @@ function wireNewSlot(): void {
 
 /* ── Sign in ── */
 
+class TokenRejected extends Error {}
+
 async function signIn(token: string): Promise<boolean> {
   const client = new GitHub(token, __REPO__);
   try {
     const me = await client.whoAmI();
-    if (!me.canPush) throw new Error(`This token can read ${__REPO__} but can't write to it. Give it Contents: Read and write.`);
+    if (!me.canPush) throw new TokenRejected(`This token can read ${__REPO__} but can't write to it. Give it Contents: Read and write.`);
+    if (me.excessScopes.length)
+      throw new TokenRejected(
+        `This token has more access than the admin page needs (${me.excessScopes.join(", ")}). ` +
+          "Create a classic token with only the public_repo scope, or a fine-grained token for this repository, and revoke this one if you don't need it.",
+      );
     gh = client;
     $("#who").textContent = `${__REPO__} · signed in as ${me.login}`;
     $("#forget").hidden = false;
@@ -353,6 +365,8 @@ async function signIn(token: string): Promise<boolean> {
     void refreshRuns();
     return true;
   } catch (e) {
+    // A rejected token is dropped rather than retried on every visit; network hiccups keep it.
+    if ((e instanceof GitHubError && e.status === 401) || e instanceof TokenRejected) store.clear();
     $("#signin").hidden = false;
     $("#signin-error").textContent = (e as Error).message;
     return false;
@@ -366,18 +380,25 @@ function signOut(): void {
   location.reload();
 }
 
-$("#forget").addEventListener("click", signOut);
-$<HTMLFormElement>("#signin-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  const input = $<HTMLInputElement>("#token");
-  const token = input.value.trim();
-  input.value = "";
-  void signIn(token).then((ok) => ok && store.set(token));
-});
-wireUpload();
-wireNewSlot();
+if (framed) {
+  $("#app").replaceChildren(
+    h("p", { className: "error", textContent: "The admin page can't be used inside a frame. " }, h("a", { href: location.href, target: "_top", rel: "noopener", textContent: "Open it directly" })),
+  );
+} else {
+  $("#forget").addEventListener("click", signOut);
+  $<HTMLFormElement>("#signin-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const input = $<HTMLInputElement>("#token");
+    const remember = $<HTMLInputElement>("#remember").checked;
+    const token = input.value.trim();
+    input.value = "";
+    void signIn(token).then((ok) => ok && store.set(token, remember));
+  });
+  wireUpload();
+  wireNewSlot();
 
-const saved = store.get();
-if (saved) void signIn(saved);
-else $("#signin").hidden = false;
-$("#who").textContent = __REPO__;
+  const saved = store.get();
+  if (saved) void signIn(saved);
+  else $("#signin").hidden = false;
+  $("#who").textContent = __REPO__;
+}
