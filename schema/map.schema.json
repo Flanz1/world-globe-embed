@@ -12,9 +12,9 @@
     "name": { "type": "string", "minLength": 1, "maxLength": 120 },
     "uploadedBy": { "type": "string" },
     "date": { "type": "string", "format": "date-time" },
-    "aspect": { "type": "number", "minimum": 1.9, "maximum": 2.1 },
+    "aspect": { "type": "number", "minimum": 1, "maximum": 4 },
     "width": { "type": "integer", "minimum": 1024 },
-    "height": { "type": "integer", "minimum": 512 },
+    "height": { "type": "integer", "minimum": 256 },
     "hash": { "type": "string", "pattern": "^[0-9a-f]{12}$" },
     "sizes": {
       "type": "object",

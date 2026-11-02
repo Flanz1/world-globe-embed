@@ -34,16 +34,17 @@ describe("sniff", () => {
 });
 
 describe("checkAspect", () => {
-  it("accepts 2:1 and near-2:1", () => {
+  it("accepts anything from square to 4:1, including the 6000×3465 map that used to fail", () => {
     expect(checkAspect(4096, 2048).ok).toBe(true);
-    expect(checkAspect(4000, 1960).ok).toBe(true); // 2.04
+    expect(checkAspect(6000, 3465).ok).toBe(true); // 1.73
+    expect(checkAspect(2048, 2048).ok).toBe(true);
+    expect(checkAspect(8000, 2000).ok).toBe(true);
   });
-  it("rejects other ratios with a readable message", () => {
-    const r = checkAspect(2048, 2048);
+  it("rejects portrait and extremely wide images with a readable message", () => {
+    const r = checkAspect(1000, 1500);
     expect(r.ok).toBe(false);
-    expect(r.message).toMatch(/2:1/);
-    expect(checkAspect(5000, 2000).ok).toBe(false); // 2.5
-    expect(checkAspect(3000, 1600).ok).toBe(false); // 1.875
+    expect(r.message).toMatch(/at least as wide as it is tall/);
+    expect(checkAspect(9000, 2000).ok).toBe(false); // 4.5
   });
 });
 
@@ -101,14 +102,24 @@ describe("processImage", () => {
     expect(existsSync(path.join(paths.publicDir, second.sizes["1024"]!))).toBe(true);
   });
 
-  it("rejects a non-2:1 image without writing anything", async () => {
+  it("keeps the source's proportions for maps that aren't 2:1", async () => {
     const paths = tempProject();
-    const src = path.join(paths.incomingDir, "square.png");
-    await gradient(1500, 1500).png().toFile(src);
-    expect((await inspect(src)).errors[0]).toMatch(/square\.png: is 1500×1500/);
-    await expect(processImage(src, { paths, uploadedBy: "x" })).rejects.toThrow(/2:1/);
+    const src = path.join(paths.incomingDir, "tall.jpg");
+    await gradient(2400, 1386).jpeg().toFile(src); // same ratio as 6000×3465
+    const meta = await processImage(src, { paths, uploadedBy: "x" });
+    expect(meta.aspect).toBeCloseTo(1.732, 2);
+    const out = await sharp(path.join(paths.publicDir, meta.sizes["2048"]!)).metadata();
+    expect([out.width, out.height]).toEqual([2048, 1183]);
+  });
+
+  it("rejects a portrait image without writing anything", async () => {
+    const paths = tempProject();
+    const src = path.join(paths.incomingDir, "portrait.png");
+    await gradient(1200, 1500).png().toFile(src);
+    expect((await inspect(src)).errors[0]).toMatch(/portrait\.png: is 1200×1500/);
+    await expect(processImage(src, { paths, uploadedBy: "x" })).rejects.toThrow(/at least as wide/);
     expect(existsSync(src)).toBe(true);
-    expect(existsSync(path.join(paths.mapsDir, "square.json"))).toBe(false);
+    expect(existsSync(path.join(paths.mapsDir, "portrait.json"))).toBe(false);
   });
 
   it("rejects files that are not images even with an image extension", async () => {

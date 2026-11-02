@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateSlotPages } from "../scripts/lib/pages.ts";
+import { generatePreviewPage, generateSlotPages } from "../scripts/lib/pages.ts";
 import type { Content } from "../scripts/lib/content.ts";
 import type { MapMeta } from "../src/shared/types.ts";
 import { applyParams, parseBg } from "../src/shared/params.ts";
@@ -23,7 +23,7 @@ const map: MapMeta = {
 };
 const content: Content = {
   maps: new Map([["terra", map]]),
-  slots: { slots: { aerthos: { map: "terra", title: "Aerthos </script><b>", grid: true, lon: 90 }, plain: { map: "terra" } } },
+  slots: { slots: { aerthos: { map: "terra", title: "Aerthos </script><b>", grid: true, lon: 90 }, plain: { map: "terra" }, padded: { map: "terra", north: 10, south: 30, pole: "#abcdef" } } },
 };
 
 function dataOf(html: string) {
@@ -35,7 +35,7 @@ describe("slot page generator", () => {
   const pages = generateSlotPages(content, "/*boot*/", "assets/globe-abc.js", ["assets/chunk-1.js"]);
 
   it("writes one page per slot", () => {
-    expect(pages.map((p) => p.path)).toEqual(["v/aerthos/index.html", "v/plain/index.html"]);
+    expect(pages.map((p) => p.path)).toEqual(["v/aerthos/index.html", "v/plain/index.html", "v/padded/index.html"]);
   });
 
   it("inlines config, LQIP, boot script and a preload for the 1024 texture, with relative URLs only", () => {
@@ -76,10 +76,32 @@ describe("slot page generator", () => {
   });
 });
 
+describe("pole padding", () => {
+  it("passes padding to the viewer and fits the poster inside the padded band", () => {
+    const html = generateSlotPages(content, "", "g.js")[2].html;
+    expect(dataOf(html).cfg).toMatchObject({ north: 10, south: 30, pole: "#abcdef" });
+    expect(html).toContain("--pole:#abcdef");
+    expect(html).toContain("--ph:60.00%"); // 100 - 10 - 30
+    expect(html).toContain("--py:25.00%"); // 10 / (10 + 30)
+  });
+});
+
+describe("preview page", () => {
+  it("inlines every map, is noindex and has no slot-specific preload", () => {
+    const page = generatePreviewPage(content, "", "assets/globe-abc.js");
+    expect(page.path).toBe("preview/index.html");
+    expect(page.html).toContain('<meta name="robots" content="noindex">');
+    expect(page.html).not.toContain('rel="preload"');
+    const data = dataOf(page.html);
+    expect(data.globe).toBe("../assets/globe-abc.js");
+    expect(data.maps.terra.textures[0]).toEqual({ w: 1024, url: "../maps/terra/abcdef012345-1024.webp" });
+  });
+});
+
 describe("query params", () => {
   it("override slot defaults and ignore junk", () => {
-    const out = applyParams(DEFAULT_VIEW, "?grid=1&rotate=0&bg=%23112233&lat=120&lon=-30&zoom=abc&controls=0");
-    expect(out).toMatchObject({ grid: true, rotate: false, bg: "#112233", lat: 90, lon: -30, zoom: 1, controls: false });
+    const out = applyParams(DEFAULT_VIEW, "?grid=1&rotate=0&bg=%23112233&lat=120&lon=-30&zoom=abc&controls=0&north=12.5&south=80&pole=transparent");
+    expect(out).toMatchObject({ grid: true, rotate: false, bg: "#112233", lat: 90, lon: -30, zoom: 1, controls: false, north: 12.5, south: 49, pole: "#e8dcc8" });
   });
   it("only allows transparent or hex backgrounds", () => {
     expect(parseBg("transparent")).toBe("transparent");
