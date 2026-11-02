@@ -8,7 +8,8 @@
       "rotate": true,
       "lat": 20,
       "lon": 0,
-      "zoom": 1
+      "zoom": 1,
+      "shift": 116
     }
   }
 }
