@@ -58,6 +58,7 @@ export function applyParams<T extends ViewDefaults>(base: T, search: string): T 
   set("north", num(q.get("north"), 0, MAX_PAD));
   set("south", num(q.get("south"), 0, MAX_PAD));
   set("pole", parseHex(q.get("pole")));
+  set("shift", num(q.get("shift"), -180, 180));
   return out;
 }
 
@@ -83,11 +84,13 @@ export const diameterFraction = (distance: number): number =>
   Math.tan(Math.asin(1 / distance)) / Math.tan((FOV_DEG / 2) * (Math.PI / 180));
 
 /** CSS values that place the LQIP poster inside the padded band, matching the 3D globe. */
-export function posterVars(v: { lon: number; north: number; south: number }): Record<string, string> {
+export function posterVars(v: { lon: number; north: number; south: number; shift?: number }): Record<string, string> {
   const { north, south } = clampPadding(v.north, v.south);
   const band = 100 - north - south;
+  // The poster shows half the map centred on `lon`; a positive shift (degrees) moves the map east.
+  const f = (v.lon + 180) / 360 - (v.shift ?? 0) / 360;
   return {
-    "--px": `${(((v.lon + 180) / 360 - 0.25) * 200).toFixed(2)}%`,
+    "--px": `${((f - 0.25) * 200).toFixed(2)}%`,
     "--ph": `${band.toFixed(2)}%`,
     "--py": `${north + south > 0 ? ((north / (north + south)) * 100).toFixed(2) : 50}%`,
   };

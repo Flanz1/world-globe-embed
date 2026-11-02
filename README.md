@@ -31,6 +31,7 @@ Query parameters override the slot's defaults:
 | `zoom` | `0.47` to `2.2` | `1` is the default framing; larger is closer |
 | `north`, `south` | `0` to `49` | Percent of the globe left unmapped at each pole (pole padding) |
 | `pole` | hex colour like `%23e8dcc8` | Fill colour for the padded polar areas |
+| `shift` | `-180` to `180` | Prime meridian: moves the map east (+) or west (−) by this many degrees |
 
 How it moves: on load the globe spins slowly from the slot's default view. As soon as someone drags, pinches or scrolls, the spin stops for the rest of that visit, and the globe then moves only while they move it, with no drift or momentum. Nothing is remembered between visits. With "reduce motion" turned on in the OS, the globe starts still.
 
@@ -72,6 +73,7 @@ Open `/admin/` on the site and sign in with a token (see [Tokens for the admin p
 - **switch a slot's map** with a preview;
 - **upload a map**, optionally switching a slot to it in the same commit (the image is downscaled to at most 4096 px in your browser first);
 - **preview** any map or slot on the page itself as a real, spinnable globe. For a slot, you can adjust the north/south pole padding and pole colour live, use **Fit padding to image** for maps wider than 2:1, see whether the map is stretched or squashed, and **Save to slot**;
+- set each slot's **prime meridian** (in degrees) next to its map, so the map's own prime meridian lines up with the grid's red line;
 - copy each slot's embed code;
 - follow the latest workflow runs, so you can see when your change is live.
 
@@ -92,6 +94,7 @@ Each action is a single commit made under your own GitHub account.
 | `zoom` | `1` | Initial zoom |
 | `north`, `south` | `0` | Pole padding: percent of the globe's height left unmapped at each pole, as in the desktop app |
 | `pole` | `"#e8dcc8"` | Colour of the padded polar areas |
+| `shift` | `0` | Prime meridian: degrees to move the map east (+) or west (−) so its own prime meridian lines up with the grid's red line (the desktop app's "Horizontal Shift") |
 
 The schema is in `schema/slots.schema.json`. Editors like VS Code use it for autocomplete and error highlighting. To rename a map, edit `"name"` in its `content/maps/<id>.json`. Leave the other fields alone.
 
