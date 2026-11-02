@@ -35,6 +35,8 @@ const hint = $<HTMLParagraphElement>("pv-hint");
 const note = $<HTMLParagraphElement>("pv-note");
 
 let current: PreviewOptions | null = null;
+/** The slot's prime meridian shift, passed through so the preview matches the embed (not editable here). */
+let shiftDeg = 0;
 
 const values = () => ({ north: Number(north.value), south: Number(south.value), pole: pole.value });
 
@@ -73,6 +75,7 @@ function load(): void {
     north: north.value,
     south: south.value,
     pole: pole.value,
+    shift: String(shiftDeg),
     grid: grid.checked ? "1" : "0",
     rotate: "0",
   });
@@ -105,6 +108,7 @@ export function openPreview(opts: PreviewOptions): void {
   mapSel.replaceChildren(
     ...opts.maps.map((m) => Object.assign(document.createElement("option"), { value: m.id, textContent: m.name, selected: m.id === opts.mapId })),
   );
+  shiftDeg = s.shift ?? DEFAULT_VIEW.shift;
   north.value = String(s.north ?? DEFAULT_VIEW.north);
   south.value = String(s.south ?? DEFAULT_VIEW.south);
   pole.value = s.pole && /^#[0-9a-f]{6}$/i.test(s.pole) ? s.pole : DEFAULT_VIEW.pole;

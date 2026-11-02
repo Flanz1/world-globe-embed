@@ -24,6 +24,11 @@ export interface ViewDefaults {
   south: number;
   /** Fill colour for the padded polar areas. */
   pole: string;
+  /**
+   * Prime meridian position: moves the map east (+) or west (-) by this many degrees, like the
+   * desktop app's "Horizontal Shift", so the map's own prime meridian lines up with the grid's red line.
+   */
+  shift: number;
 }
 
 export const DEFAULT_VIEW: ViewDefaults = {
@@ -38,6 +43,7 @@ export const DEFAULT_VIEW: ViewDefaults = {
   north: 0,
   south: 0,
   pole: "#e8dcc8",
+  shift: 0,
 };
 
 export interface Slot extends Partial<ViewDefaults> {

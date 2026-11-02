@@ -25,6 +25,7 @@ import {
   MeshBasicMaterial,
   MeshPhongMaterial,
   PerspectiveCamera,
+  RepeatWrapping,
   Scene,
   SphereGeometry,
   SRGBColorSpace,
@@ -175,6 +176,7 @@ export async function start(ctx: StartContext): Promise<void> {
     if (t1 < Math.PI) caps.add(new Mesh(new SphereGeometry(1, wSegs, rows(1 - t1 / Math.PI), 0, Math.PI * 2, t1, Math.PI - t1), poleMat));
   }
 
+  const shift = clamp(cfg.shift, -180, 180);
   const makeTexture = (d: { src: ImageBitmap | HTMLImageElement; preFlipped: boolean }) => {
     const t = new Texture(d.src);
     t.colorSpace = SRGBColorSpace;
@@ -182,6 +184,9 @@ export async function start(ctx: StartContext): Promise<void> {
     t.anisotropy = Math.min(8, maxAniso);
     t.minFilter = LinearMipmapLinearFilter;
     t.magFilter = LinearFilter;
+    // Horizontal shift: wrap around in longitude and offset the lookup (positive = east).
+    t.wrapS = RepeatWrapping;
+    t.offset.x = -shift / 360;
     t.needsUpdate = true;
     return t;
   };

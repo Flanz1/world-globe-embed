@@ -115,15 +115,32 @@ function renderSlots(): void {
       const title = slot.title ?? current?.name ?? slug;
       const select = h("select", { className: "map-select", ariaLabel: `Map for ${slug}` });
       mapOptions(select, slot.map);
-      const img = thumb(current);
-      const save = h("button", { type: "button", textContent: "Switch map", disabled: true });
+      let img = thumb(current);
+      const save = h("button", { type: "button", textContent: "Save", disabled: true });
+      // Prime meridian: degrees to move the map east (+) or west (-) so it lines up with the grid.
+      const meridian = h("input", {
+        type: "number",
+        min: "-180",
+        max: "180",
+        step: "1",
+        value: String(slot.shift ?? 0),
+        className: "meridian",
+        title: "Moves the map east (+) or west (−) so its prime meridian lines up with the globe's grid",
+      });
+      const meridianLabel = h("label", { className: "inline" }, "Prime meridian ", meridian, "°");
+      const shiftValue = () => {
+        const n = Math.round(Number(meridian.value));
+        return Number.isFinite(n) ? Math.max(-180, Math.min(180, n)) : 0;
+      };
+      const dirty = () => (save.disabled = select.value === slot.map && shiftValue() === (slot.shift ?? 0));
+      meridian.addEventListener("input", dirty);
       const copy = h("button", { type: "button", className: "ghost", textContent: "Copy embed code" });
       const preview = h("button", { type: "button", className: "ghost", textContent: "Preview" });
       preview.addEventListener("click", () =>
         openPreview({
           maps,
           slug,
-          slot,
+          slot: { ...slot, shift: shiftValue() },
           mapId: select.value,
           onSave: (patch) => {
             const unchanged =
@@ -151,16 +168,26 @@ function renderSlots(): void {
         }),
       );
       select.addEventListener("change", () => {
-        save.disabled = select.value === slot.map;
-        img.replaceWith(Object.assign(thumb(maps.find((m) => m.id === select.value)), {}));
+        dirty();
+        const next = thumb(maps.find((m) => m.id === select.value));
+        img.replaceWith(next);
+        img = next;
       });
       save.addEventListener("click", () => {
         const target = select.value;
-        void act(`Switching ${slug} to ${target}…`, () =>
-          gh!.commit(`Show map "${target}" in slot "${slug}"`, async () => [
+        const shift = shiftValue();
+        const parts = [
+          target !== slot.map ? `show map "${target}"` : "",
+          shift !== (slot.shift ?? 0) ? `prime meridian ${shift > 0 ? "+" : ""}${shift}°` : "",
+        ].filter(Boolean);
+        void act(`Saving ${slug}…`, () =>
+          gh!.commit(`Slot "${slug}": ${parts.join(", ")}`, async () => [
             await slotsChange((s) => {
-              if (!s.slots[slug]) throw new Error(`Slot "${slug}" no longer exists.`);
-              s.slots[slug].map = target;
+              const cur = s.slots[slug];
+              if (!cur) throw new Error(`Slot "${slug}" no longer exists.`);
+              cur.map = target;
+              if (shift) cur.shift = shift;
+              else delete cur.shift;
             }),
           ]),
         );
@@ -183,7 +210,7 @@ function renderSlots(): void {
           h("code", { textContent: slug }),
           " ",
           h("a", { href: new URL(`v/${slug}/`, SITE).href, target: "_blank", rel: "noopener", textContent: "open" }),
-          h("div", { className: "actions" }, select, save, preview, copy),
+          h("div", { className: "actions" }, select, meridianLabel, save, preview, copy),
         ),
       );
     }),

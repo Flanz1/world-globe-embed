@@ -98,6 +98,20 @@ describe("preview page", () => {
   });
 });
 
+describe("prime meridian shift", () => {
+  it("is a query param in degrees, clamped to ±180", () => {
+    expect(applyParams(DEFAULT_VIEW, "?shift=-30").shift).toBe(-30);
+    expect(applyParams(DEFAULT_VIEW, "?shift=500").shift).toBe(180);
+  });
+  it("moves the poster with the map", () => {
+    const base = generateSlotPages({ ...content, slots: { slots: { a: { map: "terra" } } } }, "", "g.js")[0].html;
+    const shifted = generateSlotPages({ ...content, slots: { slots: { a: { map: "terra", shift: 90 } } } }, "", "g.js")[0].html;
+    expect(base).toContain("--px:50.00%");
+    expect(shifted).toContain("--px:0.00%"); // 90° east = a quarter of the map
+    expect(dataOf(shifted).cfg.shift).toBe(90);
+  });
+});
+
 describe("query params", () => {
   it("override slot defaults and ignore junk", () => {
     const out = applyParams(DEFAULT_VIEW, "?grid=1&rotate=0&bg=%23112233&lat=120&lon=-30&zoom=abc&controls=0&north=12.5&south=80&pole=transparent");
