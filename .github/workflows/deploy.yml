@@ -1,0 +1,85 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to build
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      pending: ${{ steps.pending.outputs.pending }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      # If this push added images to content/incoming/, "Process maps" will convert them
+      # and deploy afterwards, so skip here (the new map doesn't exist yet).
+      - name: Check for unprocessed uploads
+        id: pending
+        run: |
+          if find content/incoming -type f ! -name '.*' ! -iname 'readme*' | grep -q .; then
+            echo "pending=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Waiting for map processing::New images are in content/incoming/. The Process maps workflow will convert them and deploy."
+          else
+            echo "pending=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.pending.outputs.pending != 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - if: steps.pending.outputs.pending != 'true'
+        run: npm ci
+
+      - name: Validate slots and maps
+        if: steps.pending.outputs.pending != 'true'
+        run: npm run validate
+
+      - name: Typecheck, lint and test
+        if: steps.pending.outputs.pending != 'true'
+        run: npm run check
+
+      - uses: actions/configure-pages@v5
+        if: steps.pending.outputs.pending != 'true'
+
+      - name: Build
+        if: steps.pending.outputs.pending != 'true'
+        env:
+          # Relative base: the same build works on <user>.github.io/<repo>/ and on a custom domain.
+          BASE_PATH: ./
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.pending.outputs.pending != 'true'
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.pending != 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

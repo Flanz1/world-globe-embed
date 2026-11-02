@@ -1,0 +1,71 @@
+/** Shapes shared by the viewer, the build scripts and the admin page. */
+
+/** Widths the processing workflow generates, smallest first. */
+export const TEXTURE_WIDTHS = [1024, 2048, 4096] as const;
+export type TextureWidth = (typeof TEXTURE_WIDTHS)[number];
+
+/** Per-slot view defaults. Every field can be overridden by a query param. */
+export interface ViewDefaults {
+  grid: boolean;
+  rotate: boolean;
+  legend: boolean;
+  controls: boolean;
+  /** "transparent" or a #hex colour. */
+  bg: string;
+  /** Latitude (degrees, -90..90) facing the viewer at load. */
+  lat: number;
+  /** Longitude (degrees, -180..180) facing the viewer at load. */
+  lon: number;
+  /** 1 = default framing; larger is closer. */
+  zoom: number;
+}
+
+export const DEFAULT_VIEW: ViewDefaults = {
+  grid: false,
+  rotate: true,
+  legend: false,
+  controls: true,
+  bg: "transparent",
+  lat: 15,
+  lon: 0,
+  zoom: 1,
+};
+
+export interface Slot extends Partial<ViewDefaults> {
+  /** Map id: the file stem of content/maps/<id>.json. */
+  map: string;
+  /** Used for the page <title> and the iframe title in the embed snippet. */
+  title?: string;
+}
+
+export interface SlotsFile {
+  $schema?: string;
+  slots: Record<string, Slot>;
+}
+
+export interface MapMeta {
+  $schema?: string;
+  id: string;
+  name: string;
+  uploadedBy: string;
+  /** ISO 8601 timestamp of processing. */
+  date: string;
+  /** width / height of the processed source. */
+  aspect: number;
+  width: number;
+  height: number;
+  /** Content hash of the source image (first 12 hex chars of sha256). */
+  hash: string;
+  /** Width → path relative to the site root, e.g. "maps/aerthos/ab12cd34ef56-1024.webp". */
+  sizes: Partial<Record<`${TextureWidth}`, string>>;
+  /** Tiny blurred preview as a data: URI. */
+  lqip: string;
+}
+
+/** What a generated slot page hands to the viewer (inlined as JSON). */
+export interface ViewerConfig extends ViewDefaults {
+  slug: string;
+  title: string;
+  /** Available textures, URLs relative to the slot page, smallest first. */
+  textures: { w: number; url: string }[];
+}

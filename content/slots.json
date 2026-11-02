@@ -1,0 +1,14 @@
+{
+  "$schema": "../schema/slots.schema.json",
+  "slots": {
+    "aerthos": {
+      "map": "sample-world",
+      "title": "Aerthos",
+      "grid": false,
+      "rotate": true,
+      "lat": 20,
+      "lon": 0,
+      "zoom": 1
+    }
+  }
+}

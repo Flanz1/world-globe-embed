@@ -1,0 +1,76 @@
+name: Process maps
+
+# Runs when someone drops an image into content/incoming/ (web UI upload or the admin page).
+# Validates it, makes 1024/2048/4096 WebPs + LQIP + metadata, deletes the original,
+# commits the result back to main and then deploys the site.
+on:
+  push:
+    branches: [main]
+    paths: ["content/incoming/**"]
+  workflow_dispatch:
+
+# One run at a time; queued runs wait instead of being cancelled.
+concurrency:
+  group: process-maps
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    outputs:
+      committed: ${{ steps.commit.outputs.committed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          # Enough history for "git log" to find who uploaded each file.
+          fetch-depth: 50
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Process uploaded images
+        run: npm run process-maps
+
+      - name: Commit processed maps
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A content/ public/maps/
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            echo "committed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          maps=$(git diff --cached --name-only -- content/maps | sed -E 's#content/maps/(.*)\.json#\1#' | paste -sd, - | sed 's/,/, /g')
+          git commit -m "Process uploaded maps: ${maps} [bot]"
+          # Someone may have pushed meanwhile: rebase onto the latest main and retry.
+          for attempt in 1 2 3 4 5; do
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              echo "committed=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep $((attempt * 5))
+          done
+          echo "::error::Could not push the processed maps after 5 attempts."
+          exit 1
+
+  # Pushes made with the workflow token don't trigger other workflows, so deploy from here.
+  deploy:
+    needs: process
+    if: needs.process.outputs.committed == 'true'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      ref: main
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

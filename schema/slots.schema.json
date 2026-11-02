@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flanz1.github.io/world-globe-embed/schema/slots.schema.json",
+  "title": "Globe embed slots",
+  "description": "Which map each embed (slot) shows, plus its view defaults.",
+  "type": "object",
+  "required": ["slots"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "slots": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+      "additionalProperties": { "$ref": "#/$defs/slot" }
+    }
+  },
+  "$defs": {
+    "slot": {
+      "type": "object",
+      "required": ["map"],
+      "additionalProperties": false,
+      "properties": {
+        "map": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$", "description": "Map id (file stem in content/maps/)." },
+        "title": { "type": "string", "maxLength": 120 },
+        "grid": { "type": "boolean" },
+        "rotate": { "type": "boolean" },
+        "legend": { "type": "boolean" },
+        "controls": { "type": "boolean" },
+        "bg": { "type": "string", "pattern": "^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$" },
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+        "zoom": { "type": "number", "minimum": 0.4, "maximum": 2.2 }
+      }
+    }
+  }
+}

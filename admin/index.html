@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Globe maps admin</title>
+<link rel="stylesheet" href="../src/admin/admin.css">
+</head>
+<body>
+<header>
+  <h1>Globe maps</h1>
+  <span id="who" class="muted"></span>
+  <button id="forget" type="button" class="ghost" hidden>Forget token</button>
+</header>
+<main id="app">
+  <section id="signin" class="card" hidden>
+    <h2>Sign in</h2>
+    <p>Paste your own GitHub token. It's kept only in this browser (localStorage) and sent only to api.github.com.</p>
+    <ul class="muted">
+      <li><strong>Repository owner:</strong> a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">fine-grained token</a>
+        limited to this one repository, with <em>Contents: Read and write</em> (and optionally <em>Actions: Read-only</em>).</li>
+      <li><strong>Collaborators:</strong> GitHub doesn't let fine-grained tokens write to a personal account's repository you're only a collaborator on,
+        so create a <a href="https://github.com/settings/tokens/new?scopes=public_repo&amp;description=Globe%20maps%20admin" target="_blank" rel="noopener">classic token</a>
+        with only the <code>public_repo</code> scope and a short expiry.</li>
+    </ul>
+    <form id="signin-form">
+      <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…" required>
+      <button type="submit">Sign in</button>
+    </form>
+    <p id="signin-error" class="error" role="alert"></p>
+  </section>
+
+  <div id="main" hidden>
+    <section class="card" id="status-card">
+      <h2>Status</h2>
+      <p id="status" aria-live="polite" class="muted">Loading…</p>
+      <ul id="runs" class="runs"></ul>
+    </section>
+
+    <section class="card">
+      <h2>Slots</h2>
+      <p class="muted">Each slot is one embed. Switching a slot's map is one commit; it goes live when the deploy finishes (allow up to ~10 minutes for GitHub Pages caching).</p>
+      <div id="slots" class="slots"></div>
+      <details>
+        <summary>Add a slot</summary>
+        <form id="new-slot" class="row">
+          <label>Slot name <input name="slug" required pattern="[a-z0-9][a-z0-9\-]{0,63}" placeholder="e.g. aerthos"></label>
+          <label>Title <input name="title" placeholder="Shown as the page title"></label>
+          <label>Map <select name="map" class="map-select" required></select></label>
+          <button type="submit">Add slot</button>
+        </form>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>Upload a map</h2>
+      <p class="muted">An equirectangular image about twice as wide as tall (2:1). It's downscaled to at most 4096 px wide in your browser before upload.</p>
+      <form id="upload" class="row">
+        <label>Image <input name="file" type="file" accept="image/png,image/jpeg,image/webp" required></label>
+        <label>Map id <input name="id" required pattern="[a-z0-9][a-z0-9\-]{0,63}" placeholder="from the file name"></label>
+        <label>Also show it in <select name="slot"><option value="">(no slot)</option></select></label>
+        <button type="submit">Upload</button>
+      </form>
+      <p id="upload-info" class="muted"></p>
+    </section>
+
+    <section class="card">
+      <h2>Maps</h2>
+      <div id="maps" class="maps"></div>
+    </section>
+  </div>
+</main>
+<script type="module" src="../src/admin/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flanz1.github.io/world-globe-embed/schema/map.schema.json",
+  "title": "Processed map metadata",
+  "description": "Written by process-maps.yml. Edit only 'name' by hand.",
+  "type": "object",
+  "required": ["id", "name", "uploadedBy", "date", "aspect", "width", "height", "hash", "sizes", "lqip"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "uploadedBy": { "type": "string" },
+    "date": { "type": "string", "format": "date-time" },
+    "aspect": { "type": "number", "minimum": 1.9, "maximum": 2.1 },
+    "width": { "type": "integer", "minimum": 1024 },
+    "height": { "type": "integer", "minimum": 512 },
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{12}$" },
+    "sizes": {
+      "type": "object",
+      "required": ["1024"],
+      "additionalProperties": false,
+      "properties": {
+        "1024": { "$ref": "#/$defs/path" },
+        "2048": { "$ref": "#/$defs/path" },
+        "4096": { "$ref": "#/$defs/path" }
+      }
+    },
+    "lqip": { "type": "string", "pattern": "^data:image/webp;base64,", "maxLength": 2800 }
+  },
+  "$defs": {
+    "path": { "type": "string", "pattern": "^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096)\\.webp$" }
+  }
+}

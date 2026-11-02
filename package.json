@@ -1,0 +1,42 @@
+{
+  "name": "world-globe-embed",
+  "version": "1.0.0",
+  "description": "Lightweight globe embed for Obsidian Publish, hosted on GitHub Pages",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run validate && vite build && tsx scripts/generate-pages.ts",
+    "preview": "vite preview --port 4173",
+    "validate": "tsx scripts/validate-content.ts",
+    "process-maps": "tsx scripts/process-maps.ts",
+    "sample": "tsx scripts/make-sample.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "measure": "node scripts/measure.mjs",
+    "check": "npm run typecheck && npm run lint && npm test"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.6",
+    "@types/three": "^0.187.0",
+    "ajv": "^8.20.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
+    "sharp": "^0.35.5",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}
