@@ -45,13 +45,14 @@ dialog#preview { width: min(1000px, calc(100vw - 32px)); max-height: calc(100vh 
 dialog#preview::backdrop { background: rgba(0, 0, 0, .55); }
 .pv-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--line); margin: 0; }
 .pv-head h2 { margin: 0; font-size: 16px; }
-.pv-body { display: grid; grid-template-columns: 1fr 260px; }
+.pv-body { display: grid; grid-template-columns: minmax(0, 1fr) 290px; }
 #pv-frame { width: 100%; height: min(70vh, 560px); border: 0; background: #14120f; display: block; }
 .pv-controls { display: grid; gap: 12px; align-content: start; padding: 14px; }
 .pv-controls .range { display: flex; gap: 8px; align-items: center; }
-.pv-controls .range input { flex: 1; }
+.pv-controls .range input { flex: 1; min-width: 0; }
 .pv-controls output { width: 3.2em; text-align: right; color: var(--fg); font-variant-numeric: tabular-nums; }
 .pv-controls label.inline { display: flex; align-items: center; gap: 8px; }
 .small { font-size: 12px; margin: 0; }
 @media (max-width: 720px) { .pv-body { grid-template-columns: 1fr; } #pv-frame { height: 50vh; } }
 .map button { margin: 6px 0 2px; padding: 2px 10px; font-size: 13px; }
+.pv-controls .range input[type=number] { flex: 0 0 6.5em; width: 6.5em; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
