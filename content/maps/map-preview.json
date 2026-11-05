@@ -2,16 +2,16 @@
   "$schema": "../../schema/map.schema.json",
   "id": "map-preview",
   "name": "Map Preview",
-  "uploadedBy": "Marko Cekić",
-  "date": "2026-11-02T12:15:28.447Z",
+  "uploadedBy": "LoopSimon",
+  "date": "2026-11-05T21:14:05.537Z",
   "aspect": 1.732,
   "width": 4096,
   "height": 2365,
-  "hash": "b5b8d4feccb0",
+  "hash": "c0344c668dfc",
   "sizes": {
-    "1024": "maps/map-preview/b5b8d4feccb0-1024.webp",
-    "2048": "maps/map-preview/b5b8d4feccb0-2048.webp",
-    "4096": "maps/map-preview/b5b8d4feccb0-4096.webp"
+    "1024": "maps/map-preview/c0344c668dfc-1024.webp",
+    "2048": "maps/map-preview/c0344c668dfc-2048.webp",
+    "4096": "maps/map-preview/c0344c668dfc-4096.webp"
   },
-  "lqip": "data:image/webp;base64,UklGRmICAABXRUJQVlA4WAoAAAAQAAAALwAAGwAAQUxQSJ8AAAABgNtGkiTJf58zQums6t69R46ICUDAjoqIOKMCKgL4lh126hNwsz4UaNCwcycoXUZHxp0LRQ8V5JmYCsjbKKAyTjLaBJxYeLCWUaEILki4AESxBAXYJYGsRiHJV9iAwKNkd/mKVyHFu+2QuXAFHLDgYwmUPcAHAgmEA4a8AQhnkgAkCbV4wRNmxcMFPa+6sliXQEIGBc/hv+3XfbMeegcAVlA4IJwBAABwBwCdASowABwAPtFgqlAoJSOipWmZABoJQBfntuSiiSvV6od4sklwVt3wDblCzTjvWn/csDE9TWZC7ZGLXVMi4onUAAD+3P75ec+mDw+EZnkyVzJPdvf8VIa8l/2bemMRltOJQUXnbkn6NI/XHivNzDaiFVwCj60VVWopiFbe/SUdvrTmYGrQCUTk875phLTJcb++Vy3pFP19C3InvRO541OPZchKUeolPUr/a4enIJrVeaXGQMulTwt8LTP9Vjajxaki7AgmH7tVK18FtLA2yrSK+4EJuRvL/VLBhxvTL+H+JJRAL9yMKMAqjqGbwEa7WdK1MSVayFHTwpcskyyase4nkpfJNZp+N1Z2xOn33K1OTbB5dG9tyULAEnzf0sN8qFybg8vXrLaHdFsMG+dfPubZdCDjmhFELqCgriCvsj5U/mcXfAk0+F5wntdZKcWkUVaKYpN84KK4hiMbd+7SvYOwyQSFtj89TgbakJd9e7vWjcm+h4SojT+iw7/Q8srh1KloVywgrkW6sHn0s+nouyWsby/23O6XAAAA"
+  "lqip": "data:image/webp;base64,UklGRqYBAABXRUJQVlA4IJoBAACQBwCdASowABwAPtFgqVAoJSOipWmZABoJYwDDdAx9gNcyvkOLUrDbX9JlcHVswkWEAt0wjc5w3hLyQSPMz7fmBSMsOgAA/t2/63A8E13O4kuzZUcQMCWKFyco/591BRk3YqeA6F3K1/5Q0Yv5zUBvrHV6Sv4eVO/DW4lodoHmBLlbVb04Ym2POPN0bNWQTI8Q/Wt3uN/rzoXjtVt9GWnWLXOiS7sL3+SxJ4f7im3roUY6RefLgPV3GQMulypMOthTHIKpYxh156KrSGTYA8ykyvQDA3DLSK+4Hdl+vdS/Zi+1P14NKSdBCHij08dFPnwWrz8k5uXkbJMn+/RGIvWN/c5UKoQK24uNAEq3JV+cGNnvhf7/4YmcU254USSJCECBq1nmym2Fp6kqlRo9jw+qMbD6TASeFGQB98cuUk96tUktr2REs5GoUK0p6SeX2Bm7gZit2HcpqzCoF9XKcQpYhScDR3YYVz5V7SqPvZBBCt3j/N9HRgHUij/pcaXEzHUwvyNKa+fqZ1AN7AVe75Iu+OIF4xB9ynLAAA=="
 }
