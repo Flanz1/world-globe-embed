@@ -2,7 +2,7 @@
   "$schema": "../schema/slots.schema.json",
   "slots": {
     "aerthos": {
-      "map": "world-map",
+      "map": "map-preview",
       "title": "Aerthos",
       "grid": false,
       "rotate": true,
