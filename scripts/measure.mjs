@@ -2,6 +2,7 @@
  * Cold-load measurement in a headless browser, with the embed in a cross-origin iframe.
  *
  *   npm run build; and npm run measure
+ *   SLUG=align QUERY='region=landmark-disc&view=flat' DIST=/path/to/dist npm run measure
  *
  * Serves dist/ on http://localhost:4173 and a host page on http://127.0.0.1:4180
  * (different origin), then loads the host page in fresh browser contexts.
@@ -16,8 +17,10 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
-const DIST = path.resolve("dist");
+const DIST = path.resolve(process.env.DIST || "dist");
 const SLUG = process.env.SLUG || "aerthos";
+// Extra query string for the embed, e.g. region=<id>&view=flat.
+const QUERY = process.env.QUERY || "";
 const RUNS = Number(process.env.RUNS || 3);
 const OUT = path.resolve(".e2e");
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".webp": "image/webp", ".json": "application/json", ".txt": "text/plain" };
@@ -34,7 +37,7 @@ const host = createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/html" });
   res.end(`<!doctype html><html><body style="margin:0;background:#202020;font:14px system-ui;color:#ddd">
 <p style="padding:8px">Host page on another origin (stand-in for Obsidian Publish, dark theme)</p>
-<iframe src="http://localhost:4173/v/${SLUG}/?grid=1" width="100%" height="480"
+<iframe src="http://localhost:4173/v/${SLUG}/?${QUERY || "grid=1"}" width="100%" height="480"
  style="border:0;border-radius:8px;background:transparent" allow="fullscreen" title="globe"></iframe></body></html>`);
 }).listen(4180, "127.0.0.1");
 
@@ -74,6 +77,11 @@ for (const prof of PROFILES) {
         fcp: paint("first-contentful-paint"),
         interactive: performance.getEntriesByName("wge-interactive")[0]?.startTime ?? null,
         hiresTexture: performance.getEntriesByType("resource").filter((r) => r.name.endsWith(".webp")).map((r) => r.name.split("-").pop()).join(", "),
+        threeLoaded: performance.getEntriesByType("resource").some((r) => /assets\/globe-/.test(r.name)),
+        region: (() => {
+          const r = performance.getEntriesByType("resource").find((x) => /\/regions\/[^/]+\.json$/.test(x.name));
+          return r ? Math.round(r.responseEnd) : null;
+        })(),
         bytes: performance.getEntriesByType("resource").reduce((n, r) => n + (r.encodedBodySize || 0), 0) +
           (performance.getEntriesByType("navigation")[0]?.encodedBodySize ?? 0),
       };
@@ -103,8 +111,9 @@ site.close();
 host.close();
 
 const fmt = (v) => (v == null ? "n/a" : `${Math.round(v)} ms`);
-console.log("\n| Profile | Run | Cross-origin | First paint | FCP | Interactive | Textures loaded | Bytes | Errors |");
-console.log("|---|---|---|---|---|---|---|---|---|");
+console.log(`\nEmbed: v/${SLUG}/?${QUERY || "grid=1"}`);
+console.log("\n| Profile | Run | Cross-origin | First paint | FCP | Region JSON loaded | Interactive | Three.js loaded | Textures loaded | Bytes | Errors |");
+console.log("|---|---|---|---|---|---|---|---|---|---|---|");
 for (const r of results)
-  console.log(`| ${r.profile} | ${r.run} | ${r.crossOrigin} | ${fmt(r.firstPaint)} | ${fmt(r.fcp)} | ${fmt(r.interactive)} | ${r.hiresTexture} | ${(r.bytes / 1024).toFixed(0)} KB | ${r.errors} |`);
+  console.log(`| ${r.profile} | ${r.run} | ${r.crossOrigin} | ${fmt(r.firstPaint)} | ${fmt(r.fcp)} | ${fmt(r.region)} | ${fmt(r.interactive)} | ${r.threeLoaded ? "yes" : "no"} | ${r.hiresTexture} | ${(r.bytes / 1024).toFixed(0)} KB | ${r.errors} |`);
 console.log(`\nScreenshots in ${OUT}/`);

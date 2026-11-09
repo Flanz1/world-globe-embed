@@ -83,6 +83,8 @@ export interface ViewerConfig extends ViewDefaults {
   title: string;
   /** Available textures, URLs relative to the slot page, smallest first. */
   textures: { w: number; url: string }[];
+  /** Map image width / height (the flat view keeps the image's own proportions). Defaults to 2. */
+  aspect?: number;
 }
 
 /** One map as the preview page needs it. */

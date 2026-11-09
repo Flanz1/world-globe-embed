@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { generatePreviewPage, generateSlotPages } from "../scripts/lib/pages.ts";
+import { generatePreviewPage, generateRegionFiles, generateSlotPages } from "../scripts/lib/pages.ts";
+import { defaultEmbedOptions, regionEmbedCode } from "../src/shared/embed.ts";
 import type { Content } from "../scripts/lib/content.ts";
 import type { MapMeta } from "../src/shared/types.ts";
 import { applyParams, parseBg } from "../src/shared/params.ts";
@@ -43,11 +44,12 @@ describe("slot page generator", () => {
     expect(html).toContain('--lqip:url(&quot;data:image/webp;base64,AAAA&quot;)');
     expect(html).toContain("<script>/*boot*/</script>");
     expect(html).toContain('<link rel="preload" href="../../maps/terra/abcdef012345-1024.webp" as="fetch" type="image/webp" crossorigin>');
-    expect(html).toContain('<link rel="modulepreload" href="../../assets/globe-abc.js">');
-    expect(html).toContain('<link rel="modulepreload" href="../../assets/chunk-1.js">');
+    // Module preloads are added by the boot script for the chosen view only (flat must never fetch Three.js).
+    expect(html).not.toContain("modulepreload");
     expect(html).not.toMatch(/(src|href)="\//);
     const data = dataOf(html);
     expect(data.globe).toBe("../../assets/globe-abc.js");
+    expect(data.preload.globe).toEqual(["../../assets/chunk-1.js"]);
     expect(data.cfg).toMatchObject({ slug: "aerthos", grid: true, lon: 90, rotate: true, zoom: 1 });
     expect(data.cfg.textures).toEqual([
       { w: 1024, url: "../../maps/terra/abcdef012345-1024.webp" },
@@ -121,5 +123,59 @@ describe("query params", () => {
     expect(parseBg("transparent")).toBe("transparent");
     expect(parseBg("1e1e1e")).toBe("#1e1e1e");
     expect(parseBg("red;background:url(x)")).toBeUndefined();
+  });
+});
+
+describe("regions in the build", () => {
+  const evil = '"><script>alert(1)</script>';
+  const region = {
+    $schema: "../../schema/region.schema.json",
+    type: "Feature" as const,
+    id: "evil",
+    properties: { name: evil, slot: "aerthos", map: "terra", color: "#c33", description: "</script><img src=x onerror=alert(2)>", label: true },
+    geometry: { type: "Polygon" as const, coordinates: [[[170, 0], [-170, 0], [-170, 10], [170, 10], [170, 0]]] as [number, number][][] },
+  };
+  const withRegion: Content = { ...content, regions: new Map([["evil", region]]) };
+
+  it("inlines only a small index per region into its slot page, and nothing from the region's text", () => {
+    const pages = generateSlotPages(withRegion, "", "g.js");
+    const html = pages[0].html;
+    expect(dataOf(html).regions).toEqual({ evil: { c: [180, 5.06], z: expect.any(Number), b: [170, 0, 190, 10] } });
+    expect(html).not.toContain("alert");
+    expect(html.match(/<\/script>/g)!.length).toBe(2);
+    // Other slots get no index entry for it.
+    expect(dataOf(pages[1].html).regions).toBeUndefined();
+  });
+
+  it("writes regions/<id>.json minified, with the name as plain JSON text", () => {
+    const [file] = generateRegionFiles(withRegion);
+    expect(file.path).toBe("regions/evil.json");
+    const data = JSON.parse(file.json);
+    expect(data).toEqual({ id: "evil", slot: "aerthos", name: evil, color: "#c33", fillOpacity: 0.35, label: true, geometry: region.geometry });
+    expect(file.json).not.toContain("description");
+    expect(file.json).not.toMatch(/\n/);
+  });
+
+  it("re-checks region data in the generator", () => {
+    const bad = { ...region, geometry: { type: "Polygon" as const, coordinates: [[[0, 0], [2, 2], [2, 0], [0, 2], [0, 0]]] as [number, number][][] } };
+    expect(() => generateRegionFiles({ ...content, regions: new Map([["evil", bad]]) })).toThrow(/crosses itself/);
+    const badColor = { ...region, properties: { ...region.properties, color: "red;}" } };
+    expect(() => generateRegionFiles({ ...content, regions: new Map([["evil", badColor]]) })).toThrow(/embed's own checks/);
+  });
+
+  it("the copied embed snippet escapes the name", () => {
+    const code = regionEmbedCode("https://flanz1.github.io/world-globe-embed/", "aerthos", "Aerthos", { id: "evil", name: evil, label: true }, defaultEmbedOptions({ label: true }));
+    expect(code).toBe(
+      '<iframe src="https://flanz1.github.io/world-globe-embed/v/aerthos/?region=evil&amp;view=globe"\n' +
+        '        width="100%" height="480" style="border:0;border-radius:8px;background:transparent"\n' +
+        '        loading="lazy" allow="fullscreen" title="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt; (Aerthos)"></iframe>',
+    );
+    expect(code).not.toMatch(/<script/);
+  });
+
+  it("embed URL options: flat, label off, dim, start unlocked, custom domain", () => {
+    const code = regionEmbedCode("https://maps.example.org/", "aerthos", "Aerthos", { id: "vael", name: "Vael", label: true }, { view: "flat", height: 600, label: false, dim: true, lock: false });
+    expect(code).toContain('src="https://maps.example.org/v/aerthos/?region=vael&amp;view=flat&amp;label=0&amp;dim=1&amp;lock=0"');
+    expect(code).toContain('height="600"');
   });
 });

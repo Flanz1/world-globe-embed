@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flanz1.github.io/world-globe-embed/schema/region.schema.json",
+  "title": "Region",
+  "description": "One region (a country, province, kingdom…) drawn on a map: a GeoJSON Feature (RFC 7946) stored as content/regions/<id>.json. COORDINATES ARE [lon, lat] IN THE MAP IMAGE'S OWN FRAME: lon = x / width * 360 - 180 and lat = 90 - y / height * 180, where x/y are pixels in the image as uploaded. They are NOT adjusted for the slot's prime meridian shift or pole padding; the globe applies the same padding and shift to the region as to the texture, so the region stays on the land when those settings change. That's why the numbers can differ from the globe's grid labels on a padded or shifted globe. Longitudes are within [-180, 180] and every edge takes the shorter way round (so [179, 0] → [-179, 0] crosses the antimeridian and is 2° long). A ring may span at most 180° of longitude and may not contain a pole. Rings are closed, have at least 4 positions, outer rings are counter-clockwise and holes clockwise, and they don't cross themselves. At most 5000 vertices in total. The id is permanent (embeds point at it): renaming changes only properties.name.",
+  "type": "object",
+  "required": [
+    "type",
+    "id",
+    "properties",
+    "geometry"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "type": {
+      "const": "Feature"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+      "description": "Permanent id; must match the file name. Embeds use it: v/<slot>/?region=<id>."
+    },
+    "properties": {
+      "type": "object",
+      "required": [
+        "name",
+        "slot",
+        "map",
+        "color"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name (plain text). Renaming keeps embeds working."
+        },
+        "slot": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+          "description": "Slot (in content/slots.json) whose globe shows this region."
+        },
+        "map": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+          "description": "Map id the region was drawn on."
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
+          "description": "Fill and border colour, #rgb or #rrggbb."
+        },
+        "fillOpacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.35
+        },
+        "label": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the name as a label in the embed."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional short plain-text description."
+        },
+        "updated": {
+          "type": "string",
+          "maxLength": 40,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+        }
+      }
+    },
+    "geometry": {
+      "type": "object",
+      "required": [
+        "type",
+        "coordinates"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "Polygon",
+            "MultiPolygon"
+          ]
+        },
+        "coordinates": {
+          "type": "array"
+        }
+      },
+      "if": {
+        "properties": {
+          "type": {
+            "const": "Polygon"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "coordinates": {
+            "$ref": "#/$defs/polygon"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "coordinates": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/$defs/polygon"
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "polygon": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Outer ring first, then holes.",
+      "items": {
+        "$ref": "#/$defs/ring"
+      }
+    },
+    "ring": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "$ref": "#/$defs/position"
+      }
+    },
+    "position": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        }
+      ],
+      "items": false
+    }
+  }
+}

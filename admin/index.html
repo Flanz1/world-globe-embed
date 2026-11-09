@@ -12,6 +12,7 @@
 <header>
   <h1>Globe maps</h1>
   <span id="who" class="muted"></span>
+  <span id="branch" class="branch" role="note" hidden></span>
   <button id="forget" type="button" class="ghost" hidden>Forget token</button>
 </header>
 <main id="app">
@@ -41,6 +42,12 @@
       <ul id="runs" class="runs"></ul>
     </section>
 
+    <div class="tabs" role="tablist" aria-label="Admin sections">
+      <button type="button" role="tab" id="tab-btn-maps" aria-controls="tab-maps" aria-selected="true">Maps &amp; slots</button>
+      <button type="button" role="tab" id="tab-btn-regions" aria-controls="tab-regions" aria-selected="false">Regions</button>
+    </div>
+
+    <div id="tab-maps" role="tabpanel" aria-labelledby="tab-btn-maps" class="tabpanel">
     <section class="card">
       <h2>Slots</h2>
       <p class="muted">Each slot is one embed. Switching a slot's map is one commit; it goes live when the deploy finishes (allow up to ~10 minutes for GitHub Pages caching).</p>
@@ -72,6 +79,27 @@
       <h2>Maps</h2>
       <div id="maps" class="maps"></div>
     </section>
+    </div>
+
+    <div id="tab-regions" role="tabpanel" aria-labelledby="tab-btn-regions" class="tabpanel" hidden>
+      <section class="card">
+        <h2>Regions</h2>
+        <div class="row r-new-row">
+          <label>New region on slot <select id="r-new-slot"></select></label>
+          <button type="button" class="r-new">New region</button>
+        </div>
+        <div id="regions-tools" class="row r-tools" hidden>
+          <label class="grow">Search <input id="r-search" type="search" placeholder="Name or id" autocomplete="off"></label>
+          <label>Slot <select id="r-slot"><option value="">All slots</option></select></label>
+          <label>Sort <select id="r-sort"><option value="name">Name</option><option value="updated">Last updated</option></select></label>
+        </div>
+        <div id="regions-empty" class="empty" hidden>
+          <p><strong>No regions yet.</strong> A region is a named, coloured area on a map: a country, a province, a kingdom. You draw it here on the flat map, and each region gets its own embed code, which shows it highlighted on the globe (or on the flat map) in an Obsidian note.</p>
+          <button type="button" class="r-new">New region</button>
+        </div>
+        <div id="regions" class="regions"></div>
+      </section>
+    </div>
   </div>
 </main>
 <dialog id="preview" aria-labelledby="pv-title">

@@ -8,6 +8,8 @@ export interface ContentPaths {
   content: string;
   slotsFile: string;
   mapsDir: string;
+  /** content/regions/<id>.json, one GeoJSON Feature per region. */
+  regionsDir: string;
   incomingDir: string;
   /** public/ (Vite copies it into dist/). Processed WebPs live in public/maps/<id>/. */
   publicDir: string;
@@ -19,6 +21,7 @@ export function contentPaths(root = ROOT): ContentPaths {
     content: path.join(root, "content"),
     slotsFile: path.join(root, "content", "slots.json"),
     mapsDir: path.join(root, "content", "maps"),
+    regionsDir: path.join(root, "content", "regions"),
     incomingDir: path.join(root, "content", "incoming"),
     publicDir: path.join(root, "public"),
   };
