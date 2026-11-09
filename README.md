@@ -37,6 +37,75 @@ How it moves: on load the globe spins slowly from the slot's default view. As so
 
 > **Transparent background tip:** browsers only keep an iframe transparent when its colour scheme matches the page's. If you see a white or black box around the globe, set `bg` to your theme's background colour, e.g. `bg=%23202020`.
 
+## Regions
+
+A region is an outline (a kingdom, a province, a battlefield) drawn on a slot's map. An embed can show one region: it outlines and labels it, centres the globe or flat map on it and starts locked there, so the note it sits in scrolls normally.
+
+### Drawing and editing a region
+
+1. Open the admin page and sign in, then pick the **Regions** tab (the address ends in `#regions`, so a reload stays there).
+2. Choose a slot and press **New region**, or press **Edit** on an existing card.
+3. Draw on the flat map. It wraps round left and right, so a region can cross the ±180° edge.
+4. Give it a name and colour in the side panel. The globe preview on the right updates as you draw, and **Centre on region** turns it to face the region.
+5. Press **Save**. Each save is one commit that changes only `content/regions/<id>.json`. If someone changed the same file on GitHub since you opened it, the editor refuses to overwrite it and offers to reload.
+
+| Keys and mouse | Does |
+|---|---|
+| `V` / `P` / `F` | Select, polygon and freehand tools |
+| Click (polygon) | Add a point; double-click, `Enter` or click the first point to close |
+| `Backspace` while drawing | Remove the last point |
+| `Esc` | Cancel the outline being drawn, or clear the selection |
+| Drag a vertex | Move it; hold `Shift` to snap to a neighbouring region's vertex |
+| Drag a midpoint | Insert a vertex there |
+| `Alt`+click, right-click | Delete a vertex |
+| `Shift`+click, box drag | Select several vertices |
+| `Delete` / `Backspace` | Delete the selected vertices |
+| Drag inside the fill | Move the whole shape; `Ctrl`+drag moves one part |
+| Arrow keys | Nudge the selection (or the shape) 1 px; `Shift` for 10 px |
+| `Ctrl+Z`, `Ctrl+Shift+Z` / `Ctrl+Y` | Undo and redo (at least 100 steps; a whole drag is one step) |
+| Wheel / pinch | Zoom around the cursor |
+| `Space`+drag, middle drag | Pan |
+| `G` | Grid |
+| `?` | This list, in the editor |
+
+**Add part** draws another separate piece (islands), **Cut hole** draws a hole inside a part (a lake). **Simplify…** removes vertices with a live preview and before/after counts, **Smooth** rounds the corners (one pass per click). An edit that would make an outline cross itself is refused and the vertex snaps back. The limit is 5,000 vertices per region.
+
+**Rename** changes only the name: the id, and so every embed already pasted, stays the same. **Duplicate** opens an unsaved copy with a new id. **Delete** asks you to type the region's name; embeds of a deleted region fall back to the plain globe with a small "Region not found" note.
+
+### How regions are stored
+
+Each region is a GeoJSON Feature in `content/regions/<id>.json`, checked against `schema/region.schema.json` by `npm run validate` and in CI:
+
+- Coordinates are `[longitude, latitude]` in the **map image's** frame: longitude −180 at the image's left edge to 180 at its right edge, latitude 90 at the top to −90 at the bottom. Pole padding and the prime-meridian shift are applied when drawing, so changing a slot's padding or shift keeps regions on the same land.
+- An edge between two points always takes the shorter way round, so `170 → -170` crosses the ±180° line (20°), never the long way (340°). A single ring may span at most 180° of longitude and can't go round a pole; split anything bigger into parts.
+- Outer rings run counter-clockwise and holes clockwise, every ring is closed, nothing crosses itself, and coordinates have at most 4 decimals.
+- `properties.slot` must name an existing slot. `properties.map` records which map it was drawn on; if the slot now shows a different map, validation warns (it doesn't fail) and the admin card says "drawn on a different map".
+
+### Embedding a region
+
+Press **Copy embed code** on a region's card (or **Embed code…** in the editor) and paste the snippet into a note:
+
+```html
+<iframe src="https://flanz1.github.io/world-globe-embed/v/aerthos/?region=old-kingdom"
+        width="100%" height="480" style="border:0;border-radius:8px;background:transparent"
+        loading="lazy" allow="fullscreen" title="Old Kingdom (Aerthos)"></iframe>
+```
+
+Region embeds take these parameters on top of the ones above:
+
+| Param | Values | Meaning |
+|---|---|---|
+| `region` | a region id | The region to show (it must belong to this slot) |
+| `view` | `globe` / `flat` | 3D globe (default) or the flat map; the flat view never loads Three.js |
+| `label` | `0` / `1` | Region name label (default: the region's own setting) |
+| `dim` | `0` / `1` | Dim everything outside the region |
+| `lock` | `0` / `1` | `1` (default) starts locked on the region; `0` starts unlocked |
+| `lat`, `lon`, `zoom` | as above | Override the automatic framing (in the flat view: centre in map degrees and a zoom multiplier) |
+
+`rotate` defaults to off for region embeds.
+
+**View lock:** a region embed starts locked on the region. While locked, dragging, scrolling and pinching over it do nothing to the view and go to the page instead, so the note scrolls as usual. Press the padlock (bottom right) to unlock and move freely; press it again to glide back (in under 300 ms, instantly with "reduce motion") to the region and lock. Nothing is remembered: every load, reload or back-navigation starts locked again. The padlock shows even with `controls=0`.
+
 ## How to change the map (no coding needed)
 
 ### Option A: GitHub website
@@ -160,6 +229,20 @@ npm run build; and npm run measure
 set -x GITHUB_REPOSITORY Flanz1/world-globe-embed
 npm run build
 set -e GITHUB_REPOSITORY
+
+# Point the admin page at another branch, e.g. to try region editing without touching main.
+# The page then says "Writing to branch … (not main)" at the top.
+env VITE_CONTENT_BRANCH=test/region-overlays npm run build
+env VITE_CONTENT_BRANCH=test/region-overlays npm run dev
+
+# Timings for a region embed (globe, then flat)
+env SLUG=aerthos QUERY='region=old-kingdom' npm run measure
+env SLUG=aerthos QUERY='region=old-kingdom&view=flat' npm run measure
+
+# Browser checks for regions: builds a throwaway copy with test content and drives the embeds
+# and the admin editor in headless Chromium against a fake GitHub API (nothing is pushed).
+# Screenshots and report.json go to .e2e/regions/
+npm run e2e:regions
 ```
 
 ### Layout
@@ -168,13 +251,15 @@ set -e GITHUB_REPOSITORY
 content/
   slots.json            which map each embed shows, plus per-slot defaults
   maps/<map-id>.json    map metadata (written by process-maps)
+  regions/<id>.json     region outlines (GeoJSON Features, written by the admin editor)
   incoming/             drop new images here
 public/maps/<map-id>/   processed WebPs: <hash>-1024.webp, -2048, -4096 (written by process-maps)
-schema/                 JSON schemas for slots.json and map metadata
+schema/                 JSON schemas for slots.json, map metadata and regions
 src/viewer/boot.ts      tiny inline boot script (poster, params, starts loading)
 src/viewer/globe.ts     Three.js globe, loaded with import() after first paint
+src/viewer/flat.ts      flat 2D map viewer (view=flat), no Three.js
 src/shared/             types, query params, the per-slot page template
-src/admin/              admin page code (admin/index.html is the page)
+src/admin/              admin page code (admin/index.html is the page); editor/ is the region editor
 scripts/                processing, validation, page generation, sample, measurement
 .github/workflows/      process-maps.yml, deploy.yml, ci.yml (PR checks)
 ```
@@ -182,7 +267,7 @@ scripts/                processing, validation, page generation, sample, measure
 ### How a page loads
 
 1. `v/<slot>/index.html` is generated at build time. Its CSS, the slot config and a blurred LQIP of the map (about 1 KB) are inlined, so the first paint shows a globe-shaped poster with no extra request.
-2. After first paint, the inline boot script creates the WebGL context and `import()`s the viewer (Three.js and the globe code). The 1024px texture is already downloading thanks to `<link rel="preload">`.
+2. After first paint, the inline boot script creates the WebGL context and `import()`s the viewer (Three.js and the globe code). The 1024px texture is already downloading thanks to `<link rel="preload">`. For a region embed, `regions/<id>.json` is fetched at the same time, and the first frame is already centred on the region (its centre and zoom are inlined in the page).
 3. The globe crossfades in over the poster with the 1024px texture. It then loads the 2048px texture, or 4096px on large, high-DPI desktop screens, and crossfades to it.
 4. It renders only while something moves, and pauses completely when it's scrolled out of view or the tab is hidden.
 5. Without WebGL, it shows the flat 2048px map.
