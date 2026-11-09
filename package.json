@@ -19,7 +19,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "measure": "node scripts/measure.mjs",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "check": "npm run typecheck && npm run lint && npm test",
+    "e2e:regions": "tsx scripts/e2e/regions.mjs"
   },
   "dependencies": {
     "three": "^0.187.0"

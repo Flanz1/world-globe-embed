@@ -106,6 +106,20 @@ export async function makeFixture({ quiet = false } = {}) {
       color: "#c33",
     }),
   );
+  // On the other slot, drawn on a map that slot no longer shows: a warning in CI, a badge in the admin page.
+  writeFileSync(
+    path.join(regionsDir, "old-map-region.json"),
+    JSON.stringify({ ...region("old-map-region", "Old Province", { type: "Polygon", coordinates: [[[0, 0], [20, 0], [20, 15], [0, 15], [0, 0]]] }), properties: { name: "Old Province", slot: "aerthos", map: "world-map", color: "#2e86de" } }, null, 2) + "\n",
+  );
+  // 2,000 vertices, for the editor's live-preview speed check.
+  const big = [];
+  for (let i = 0; i < 2000; i++) {
+    const t = (i / 2000) * 2 * Math.PI;
+    const r = 9 + 1.5 * Math.sin(t * 7);
+    big.push([r4(-100 + r * Math.cos(t)), r4(20 + r * Math.sin(t))]);
+  }
+  big.push(big[0]);
+  write(region("big-ring", "Big Ring", { type: "Polygon", coordinates: [big] }, { color: "#8e44ad" }));
   return dir;
 }
 
