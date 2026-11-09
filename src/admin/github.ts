@@ -29,7 +29,7 @@ export interface FileCommit {
 }
 
 /** A branch name that is safe to put in an API path (no "..", no spaces or odd characters). */
-export const BRANCH = /^(?!.*\.\.)(?!\/)(?!.*\/$)[A-Za-z0-9._\/-]{1,200}$/;
+export const BRANCH = /^(?!.*\.\.)(?!\/)(?!.*\/$)[A-Za-z0-9._/-]{1,200}$/;
 
 export interface WorkflowRun {
   id: number;
