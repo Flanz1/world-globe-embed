@@ -207,3 +207,19 @@ describe("stored geometry", () => {
     expect(toStoredGeometry([[sq(0)], [sq(5)]]).type).toBe("MultiPolygon");
   });
 });
+
+describe("unwrapRing keeps closing points exact", () => {
+  it("a closed ring across ±180° unwraps to a closed ring (no rounding drift)", () => {
+    // Found by the browser checks: summing deltas left the closing point 2e-14 off the first one,
+    // so the stored ring looked like it had a zero-length edge and was refused as self-crossing.
+    const ring: Position[] = [
+      [178.4531, -6.2344], [-178.3452, -5.6804], [-176.2869, -5.0028], [-175.3722, -4.2017], [-174.6861, -2.4759],
+      [-174.2287, 0.1747], [-174.75, 2.4375], [-176.25, 4.3125], [-178.75, 5.4375], [177.75, 5.8125], [174.8139, 5.3991],
+      [172.4418, 4.1974], [171.0696, 2.9957], [170.6974, 1.794], [170.8892, -0.196], [171.6449, -2.9744],
+      [173.2301, -4.9006], [175.6449, -5.9744], [178.4531, -6.2344],
+    ];
+    const un = unwrapRing(ring);
+    expect(un[un.length - 1]).toEqual(un[0]);
+    expect(checkGeometry({ type: "Polygon", coordinates: [ring] })).toEqual([]);
+  });
+});

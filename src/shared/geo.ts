@@ -51,8 +51,11 @@ export function unwrapRing(ring: Ring): Ring {
   if (!ring.length) return [];
   const out: Ring = [[ring[0][0], ring[0][1]]];
   for (let i = 1; i < ring.length; i++) {
+    // The point's own longitude plus whole turns (not a running sum of deltas), so rounding doesn't
+    // build up and a closing point that equals the first one stays exactly equal.
     const prev = out[i - 1][0];
-    out.push([prev + lonDelta(ring[i - 1][0], ring[i][0]), ring[i][1]]);
+    const x = ring[i][0];
+    out.push([x + 360 * Math.round((prev - x) / 360), ring[i][1]]);
   }
   return out;
 }
