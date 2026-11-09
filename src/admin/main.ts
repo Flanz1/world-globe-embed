@@ -8,27 +8,12 @@ import type { MapMeta, Slot, SlotsFile } from "../shared/types.ts";
 import { escapeHtml } from "../shared/page.ts";
 import { GitHub, GitHubError, type FileChange, type WorkflowRun } from "./github.ts";
 import { openPreview } from "./preview.ts";
+import { $, SITE, h } from "./dom.ts";
 
 declare const __REPO__: string;
 
 const TOKEN_KEY = "wge-admin-token";
 const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
-const SITE = new URL("../", location.href);
-
-const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
-
-function h<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  props: Partial<HTMLElementTagNameMap[K]> & { dataset?: Record<string, string> } = {},
-  ...children: (Node | string | null | false)[]
-): HTMLElementTagNameMap[K] {
-  const el = document.createElement(tag);
-  const { dataset, ...rest } = props;
-  Object.assign(el, rest);
-  if (dataset) Object.assign(el.dataset, dataset);
-  for (const c of children) if (c) el.append(c);
-  return el;
-}
 
 /*
  * Every GitHub Pages project site of an account shares one origin (<user>.github.io), so anything

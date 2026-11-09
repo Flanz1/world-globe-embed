@@ -43,11 +43,12 @@ describe("slot page generator", () => {
     expect(html).toContain('--lqip:url(&quot;data:image/webp;base64,AAAA&quot;)');
     expect(html).toContain("<script>/*boot*/</script>");
     expect(html).toContain('<link rel="preload" href="../../maps/terra/abcdef012345-1024.webp" as="fetch" type="image/webp" crossorigin>');
-    expect(html).toContain('<link rel="modulepreload" href="../../assets/globe-abc.js">');
-    expect(html).toContain('<link rel="modulepreload" href="../../assets/chunk-1.js">');
+    // Module preloads are added by the boot script for the chosen view only (flat must never fetch Three.js).
+    expect(html).not.toContain("modulepreload");
     expect(html).not.toMatch(/(src|href)="\//);
     const data = dataOf(html);
     expect(data.globe).toBe("../../assets/globe-abc.js");
+    expect(data.preload.globe).toEqual(["../../assets/chunk-1.js"]);
     expect(data.cfg).toMatchObject({ slug: "aerthos", grid: true, lon: 90, rotate: true, zoom: 1 });
     expect(data.cfg.textures).toEqual([
       { w: 1024, url: "../../maps/terra/abcdef012345-1024.webp" },

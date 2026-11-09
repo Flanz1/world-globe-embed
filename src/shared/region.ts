@@ -110,7 +110,8 @@ export function parseGeometry(v: unknown): RegionGeometry | null {
     return c ? { type: "Polygon", coordinates: c } : null;
   }
   if (v.type === "MultiPolygon") {
-    if (!Array.isArray(v.coordinates) || !v.coordinates.length || v.coordinates.length > 1000) return null;
+    // An empty MultiPolygon is allowed here (the editor sends one when every part was deleted); saved files need at least one part.
+    if (!Array.isArray(v.coordinates) || v.coordinates.length > 1000) return null;
     const polys: Ring[][] = [];
     for (const p of v.coordinates) {
       const poly = parsePolygon(p, budget);
