@@ -15,10 +15,21 @@ export class GitHubError extends Error {
 
 export interface FileChange {
   path: string;
-  /** UTF-8 text, or base64 when `base64` is true. */
+  /** UTF-8 text, or base64 when `base64` is true. Ignored when `delete` is set. */
   content: string;
   base64?: boolean;
+  /** Remove the file in this commit instead of writing it. */
+  delete?: boolean;
 }
+
+/** The last commit that touched a file. */
+export interface FileCommit {
+  author: string;
+  date: string;
+}
+
+/** A branch name that is safe to put in an API path (no "..", no spaces or odd characters). */
+export const BRANCH = /^(?!.*\.\.)(?!\/)(?!.*\/$)[A-Za-z0-9._\/-]{1,200}$/;
 
 export interface WorkflowRun {
   id: number;
@@ -55,12 +66,22 @@ const base64ToUtf8 = (b64: string): string =>
   new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, "")), (c) => c.charCodeAt(0)));
 
 export class GitHub {
+  /** The branch every read and commit goes to. */
   branch = "main";
+  /** The repository's default branch (what GitHub Pages deploys). */
+  defaultBranch = "main";
 
+  /**
+   * @param targetBranch branch to read from and commit to; empty means the repository's default branch.
+   *   Set at build time with VITE_CONTENT_BRANCH so a test build never writes to main.
+   */
   constructor(
     private token: string,
     public repo: string,
-  ) {}
+    private targetBranch = "",
+  ) {
+    if (targetBranch && !BRANCH.test(targetBranch)) throw new Error(`"${targetBranch}" isn't a valid branch name.`);
+  }
 
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     return (await this.send<T>(path, init)).data;
@@ -99,7 +120,17 @@ export class GitHub {
       this.send<{ login: string }>("/user").catch(() => null),
       this.send<{ default_branch: string; permissions?: { push?: boolean } }>(`/repos/${this.repo}`),
     ]);
-    this.branch = repo.data.default_branch;
+    this.defaultBranch = repo.data.default_branch;
+    this.branch = this.targetBranch || this.defaultBranch;
+    if (this.branch !== this.defaultBranch) {
+      try {
+        await this.request(`/repos/${this.repo}/git/ref/heads/${this.branch}`);
+      } catch (e) {
+        if (e instanceof GitHubError && e.status === 404)
+          throw new GitHubError(404, `This admin page is set to write to the branch "${this.branch}", which doesn't exist in ${this.repo}. Create it, or rebuild without VITE_CONTENT_BRANCH.`);
+        throw e;
+      }
+    }
     return {
       login: user?.data.login ?? "token",
       canPush: !!repo.data.permissions?.push,
@@ -108,10 +139,35 @@ export class GitHub {
   }
 
   async readText(path: string): Promise<string> {
-    const f = await this.request<{ content: string; encoding: string }>(
+    return (await this.readFile(path)).text;
+  }
+
+  /** A file's text and blob SHA (to notice when someone else changed it). */
+  async readFile(path: string): Promise<{ text: string; sha: string }> {
+    const f = await this.request<{ content: string; encoding: string; sha: string }>(
       `/repos/${this.repo}/contents/${path}?ref=${encodeURIComponent(this.branch)}`,
     );
-    return base64ToUtf8(f.content);
+    return { text: base64ToUtf8(f.content), sha: f.sha };
+  }
+
+  /** Blob SHA of a file on the branch, or null if it doesn't exist. */
+  async fileSha(path: string): Promise<string | null> {
+    try {
+      return (await this.request<{ sha: string }>(`/repos/${this.repo}/contents/${path}?ref=${encodeURIComponent(this.branch)}`)).sha;
+    } catch (e) {
+      if (e instanceof GitHubError && e.status === 404) return null;
+      throw e;
+    }
+  }
+
+  /** Author and date of the last commit on the branch that touched `path`. */
+  async lastCommit(path: string): Promise<FileCommit | null> {
+    const list = await this.request<{ commit: { author?: { name?: string; date?: string } }; author?: { login?: string } | null }[]>(
+      `/repos/${this.repo}/commits?path=${encodeURIComponent(path)}&sha=${encodeURIComponent(this.branch)}&per_page=1`,
+    );
+    const c = list[0];
+    if (!c) return null;
+    return { author: c.author?.login ?? c.commit.author?.name ?? "unknown", date: c.commit.author?.date ?? "" };
   }
 
   async listDir(path: string): Promise<{ name: string; path: string; type: string }[]> {
@@ -134,6 +190,8 @@ export class GitHub {
       const changes = await build();
       const tree = await Promise.all(
         changes.map(async (c) => {
+          // A null sha removes the file from the tree.
+          if (c.delete) return { path: c.path, mode: "100644", type: "blob", sha: null };
           const blob = await this.request<{ sha: string }>(`/repos/${this.repo}/git/blobs`, {
             method: "POST",
             body: JSON.stringify({ content: c.base64 ? c.content : utf8ToBase64(c.content), encoding: "base64" }),
