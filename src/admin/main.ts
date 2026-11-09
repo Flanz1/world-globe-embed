@@ -9,8 +9,11 @@ import { escapeHtml } from "../shared/page.ts";
 import { GitHub, GitHubError, type FileChange, type WorkflowRun } from "./github.ts";
 import { openPreview } from "./preview.ts";
 import { $, SITE, h } from "./dom.ts";
+import { initRegions, loadRegions, renderRegions } from "./regions.ts";
 
 declare const __REPO__: string;
+/** Branch the admin page reads from and commits to; empty = the repository's default branch. Set with VITE_CONTENT_BRANCH at build time. */
+const CONTENT_BRANCH: string = (import.meta.env.VITE_CONTENT_BRANCH ?? "").trim();
 
 const TOKEN_KEY = "wge-admin-token";
 const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -210,6 +213,7 @@ async function loadAll(): Promise<void> {
   slots = JSON.parse(await gh!.readText("content/slots.json")) as SlotsFile;
   renderMaps();
   renderSlots();
+  await loadRegions();
 }
 
 async function slotsChange(mutate: (s: SlotsFile) => void): Promise<FileChange> {
@@ -248,14 +252,20 @@ function pollRuns(): void {
   pollTimer = window.setTimeout(tick, 5_000);
 }
 
+/** After a commit: tell the user, watch the workflows, reload everything. */
+async function afterCommit(sha: string): Promise<void> {
+  setStatus(`Committed ${sha.slice(0, 7)} to ${gh!.branch}. Waiting for the workflow to publish it…`, "ok");
+  if (gh!.branch !== gh!.defaultBranch) setStatus(`Committed ${sha.slice(0, 7)} to the test branch ${gh!.branch}. GitHub Pages only deploys ${gh!.defaultBranch}, so it won't go live from here.`, "ok");
+  pollRuns();
+  await loadAll().catch((e) => setStatus((e as Error).message, "error"));
+}
+
 async function act(label: string, fn: () => Promise<string>): Promise<void> {
   document.querySelectorAll("button").forEach((b) => b.setAttribute("aria-busy", "true"));
   setStatus(label);
   try {
     const sha = await fn();
-    setStatus(`Committed ${sha.slice(0, 7)}. Waiting for the workflow to publish it…`, "ok");
-    pollRuns();
-    await loadAll();
+    await afterCommit(sha);
   } catch (e) {
     setStatus((e as Error).message, "error");
   } finally {
@@ -362,12 +372,48 @@ function wireNewSlot(): void {
   });
 }
 
+/* ── Tabs (kept in the URL hash so a reload stays on the same tab) ── */
+
+function showTab(name: "maps" | "regions"): void {
+  for (const t of ["maps", "regions"] as const) {
+    $(`#tab-${t}`).hidden = t !== name;
+    const b = $(`#tab-btn-${t}`);
+    b.setAttribute("aria-selected", String(t === name));
+    b.tabIndex = t === name ? 0 : -1;
+  }
+  if (name === "regions") renderRegions();
+}
+
+function wireTabs(): void {
+  const fromHash = () => showTab(location.hash === "#regions" ? "regions" : "maps");
+  for (const t of ["maps", "regions"] as const)
+    $(`#tab-btn-${t}`).addEventListener("click", () => {
+      history.replaceState(null, "", t === "regions" ? "#regions" : location.pathname + location.search);
+      showTab(t);
+    });
+  $(".tabs").addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    const next = location.hash === "#regions" ? "maps" : "regions";
+    $(`#tab-btn-${next}`).click();
+    $(`#tab-btn-${next}`).focus();
+  });
+  window.addEventListener("hashchange", fromHash);
+  fromHash();
+}
+
+/** Shows which branch the page writes to whenever it isn't the default branch. */
+function showBranch(client: GitHub): void {
+  const el = $("#branch");
+  el.hidden = client.branch === client.defaultBranch;
+  el.textContent = `Writing to branch ${client.branch} (not ${client.defaultBranch})`;
+}
+
 /* ── Sign in ── */
 
 class TokenRejected extends Error {}
 
 async function signIn(token: string): Promise<boolean> {
-  const client = new GitHub(token, __REPO__);
+  const client = new GitHub(token, __REPO__, CONTENT_BRANCH);
   try {
     const me = await client.whoAmI();
     if (!me.canPush) throw new TokenRejected(`This token can read ${__REPO__} but can't write to it. Give it Contents: Read and write.`);
@@ -378,6 +424,7 @@ async function signIn(token: string): Promise<boolean> {
       );
     gh = client;
     $("#who").textContent = `${__REPO__} · signed in as ${me.login}`;
+    showBranch(client);
     $("#forget").hidden = false;
     $("#signin").hidden = true;
     $("#main").hidden = false;
@@ -418,6 +465,8 @@ if (framed) {
   });
   wireUpload();
   wireNewSlot();
+  initRegions({ gh: () => gh!, maps: () => maps, slots: () => slots, act, afterCommit });
+  wireTabs();
 
   const saved = store.get();
   if (saved) void signIn(saved);

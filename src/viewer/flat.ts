@@ -89,8 +89,11 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       view.cx = ease.from.cx + (ease.to.cx - ease.from.cx) * e;
       view.cy = ease.from.cy + (ease.to.cy - ease.from.cy) * e;
       view.k = ease.from.k * Math.pow(ease.to.k / ease.from.k, e);
-      if (k >= 1) ease = null;
-      else schedule();
+      if (k >= 1) {
+        // Land exactly on the selected position.
+        Object.assign(view, ease.to);
+        ease = null;
+      } else schedule();
     }
     const { w, h } = size();
     const d = dpr();

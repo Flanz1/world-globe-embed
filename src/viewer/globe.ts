@@ -396,7 +396,11 @@ export async function start(ctx: StartContext): Promise<void> {
       view.pitch = ease.from.pitch + (ease.to.pitch - ease.from.pitch) * e;
       view.distance = ease.from.distance + (ease.to.distance - ease.from.distance) * e;
       dirty = true;
-      if (k >= 1) ease = null;
+      if (k >= 1) {
+        // Land exactly on the selected position.
+        Object.assign(view, ease.to);
+        ease = null;
+      }
     }
     if (fade) {
       const k = reducedMotion.matches ? 1 : Math.min(1, (t - fade.t0) / FADE_MS);
