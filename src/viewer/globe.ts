@@ -253,10 +253,20 @@ export async function start(ctx: StartContext): Promise<void> {
       overlay.dimCaps.traverse((o) => (o.renderOrder = 1.5));
     }
   }
+  /**
+   * Texture width that matches the screen: 2π × the pixels per radian at the point under the camera,
+   * so a region embed zoomed in close asks for the 4096 map. Phones get 4096 only when zoomed in.
+   */
+  function textureWant(): number {
+    const f = (stage.clientHeight * dpr()) / 2 / Math.tan((camera.fov * DEG) / 2);
+    const want = (2 * Math.PI * f) / Math.max(0.05, view.distance - 1);
+    return want >= 3000 && (!device.mobile || want >= 4500) ? 4096 : 2048;
+  }
+  let onZoom = (): void => {};
   function ensureOverlay(): NonNullable<typeof overlay> {
     if (overlay) return overlay;
-    // 4096 × 2048 on large, dense desktop screens (like the map texture), otherwise 2048 × 1024.
-    const big = !device.mobile && Math.PI * Math.min(stage.clientWidth, stage.clientHeight) * dpr() >= 3000 && maxTex >= 4096;
+    // 4096 × 2048 when the map texture would be 4096 too (zoomed in, or a large dense screen), otherwise 2048 × 1024.
+    const big = textureWant() >= 4096 && maxTex >= 4096;
     const c = document.createElement("canvas");
     c.width = big ? 4096 : 2048;
     c.height = c.width / 2;
@@ -476,6 +486,7 @@ export async function start(ctx: StartContext): Promise<void> {
     if (pointers.size === 2) {
       const d = pinchDistance();
       if (pinchDist > 0 && d > 0) view.distance = clamp((view.distance * pinchDist) / d, MIN_DISTANCE, MAX_DISTANCE);
+      onZoom();
       pinchDist = d;
     }
     invalidate();
@@ -496,6 +507,7 @@ export async function start(ctx: StartContext): Promise<void> {
       takeOver();
       const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
       view.distance = clamp(view.distance * Math.exp(dy * 0.0015), MIN_DISTANCE, MAX_DISTANCE);
+      onZoom();
       invalidate();
     },
     { passive: false },
@@ -580,6 +592,7 @@ export async function start(ctx: StartContext): Promise<void> {
       if (centre) {
         fit();
         goHome(true);
+        onZoom();
       }
       invalidate();
     });
@@ -600,50 +613,62 @@ export async function start(ctx: StartContext): Promise<void> {
     performance.mark("wge-interactive");
   });
 
-  const stageMin = Math.min(stage.clientWidth, stage.clientHeight);
-  // Visible half of the map spans the globe's diameter, so texture width ≈ π × diameter in device pixels.
-  const wantPx = Math.PI * stageMin * dpr();
-  // 4096 only on desktop with a large, dense viewport; otherwise 2048.
-  const wantW = !device.mobile && wantPx >= 3000 ? 4096 : 2048;
-  const usable = cfg.textures.filter((t) => t.w > cfg.textures[0].w && t.w <= Math.min(wantW, maxTex));
-  const pick = usable[usable.length - 1];
-  if (!pick) {
-    root.dataset.state = "hires";
-    return;
+  /* Then a sharper texture to match what's on screen (2048, or 4096 when zoomed in or on a large, dense screen). */
+  let texW = cfg.textures[0].w;
+  let upgrading = false;
+  async function upgradeTexture(): Promise<void> {
+    if (upgrading || fade) return;
+    const pick = cfg.textures.filter((t) => t.w > texW && t.w <= Math.min(textureWant(), maxTex)).pop();
+    if (!pick) {
+      root.dataset.state = "hires";
+      return;
+    }
+    upgrading = true;
+    try {
+      const next = makeTexture(await decode(await fetchBlob(pick.url)));
+      renderer.initTexture(next);
+      const mat = new MeshPhongMaterial({
+        map: next,
+        specular: 0x333333,
+        shininess: 15,
+        transparent: true,
+        opacity: 0,
+        depthFunc: LessEqualDepth,
+        depthWrite: false,
+      });
+      const layer = new Mesh(geo, mat);
+      layer.renderOrder = 1;
+      world.add(layer);
+      fade = {
+        mesh: layer,
+        mat,
+        t0: performance.now(),
+        done: () => {
+          const old = globeMat.map;
+          globeMat.map = next;
+          globeMat.needsUpdate = true;
+          world.remove(layer);
+          mat.dispose();
+          releaseTexture(old);
+          fade = null;
+          texW = pick.w;
+          upgrading = false;
+          root.dataset.state = "hires";
+          void upgradeTexture(); // zoomed in further meanwhile?
+        },
+      };
+      invalidate();
+    } catch {
+      texW = pick.w; // don't retry this size; keep the current texture
+      upgrading = false;
+      root.dataset.state = "hires";
+    }
   }
-
-  try {
-    const next = makeTexture(await decode(await fetchBlob(pick.url)));
-    renderer.initTexture(next);
-    const mat = new MeshPhongMaterial({
-      map: next,
-      specular: 0x333333,
-      shininess: 15,
-      transparent: true,
-      opacity: 0,
-      depthFunc: LessEqualDepth,
-      depthWrite: false,
-    });
-    const overlay = new Mesh(geo, mat);
-    overlay.renderOrder = 1;
-    world.add(overlay);
-    fade = {
-      mesh: overlay,
-      mat,
-      t0: performance.now(),
-      done: () => {
-        const old = globeMat.map;
-        globeMat.map = next;
-        globeMat.needsUpdate = true;
-        world.remove(overlay);
-        mat.dispose();
-        releaseTexture(old);
-        fade = null;
-        root.dataset.state = "hires";
-      },
-    };
-    invalidate();
-  } catch {
-    root.dataset.state = "hires"; // keep the 1024 texture
-  }
+  void upgradeTexture();
+  // Zooming in can call for a sharper texture: look again once a zoom settles.
+  let zoomTimer = 0;
+  onZoom = () => {
+    clearTimeout(zoomTimer);
+    zoomTimer = window.setTimeout(() => void upgradeTexture(), 250);
+  };
 }
