@@ -1,7 +1,7 @@
 name: Process maps
 
 # Runs when someone drops an image into content/incoming/ (web UI upload or the admin page).
-# Validates it, makes 1024/2048/4096 WebPs + LQIP + metadata, deletes the original,
+# Validates it, makes 1024/2048/4096 WebPs (plus 8192 for sources at least 8192 wide) + LQIP + metadata, deletes the original,
 # commits the result back to main and then deploys the site.
 on:
   push:

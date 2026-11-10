@@ -65,7 +65,7 @@
 
     <section class="card">
       <h2>Upload a map</h2>
-      <p class="muted">An equirectangular image, ideally twice as wide as tall (2:1); anything from square up to 4:1 works, and pole padding can fill in the rest. It's downscaled to at most 4096 px wide in your browser before upload.</p>
+      <p class="muted">An equirectangular image, ideally twice as wide as tall (2:1); anything from square up to 4:1 works, and pole padding can fill in the rest. It's downscaled to at most 8192 px wide in your browser before upload; 8192 px wide or more also gets an extra-sharp 8192 version for zoomed-in embeds.</p>
       <form id="upload" class="row">
         <label>Image <input name="file" type="file" accept="image/png,image/jpeg,image/webp" required></label>
         <label>Map id <input name="id" required pattern="[a-z0-9][a-z0-9\-]{0,63}" placeholder="from the file name"></label>
