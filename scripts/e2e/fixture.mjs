@@ -99,7 +99,7 @@ export async function makeFixture({ quiet = false } = {}) {
   slots.slots[SLOT.slug] = { map: MAP.id, title: "Alignment test", north: SLOT.north, south: SLOT.south, shift: SLOT.shift, pole: "#334455" };
   writeFileSync(slotsFile, JSON.stringify(slots, null, 2) + "\n");
 
-  // Only the test regions: the repo's own content/regions would change the counts the checks expect.
+  // Only the test regions: real ones saved to content/regions would change the counts the checks expect.
   const regionsDir = path.join(dir, "content/regions");
   rmSync(regionsDir, { recursive: true, force: true });
   mkdirSync(regionsDir, { recursive: true });

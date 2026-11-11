@@ -42,6 +42,7 @@ import { BASE_DISTANCE, FOV_DEG, MAX_DISTANCE, MIN_DISTANCE, clamp, clampPadding
 import { imageToGlobe, sphericalCentroid, type Position } from "../shared/geo.ts";
 import { regionFit, regionLayers, type RegionData } from "../shared/region.ts";
 import { paintLayers } from "../shared/raster.ts";
+import { deviceLimit, nextTier } from "../shared/tiers.ts";
 import type { PreviewMessage, StartContext } from "./contract.ts";
 import { RELOCK_MS, makeLabel, makeLegend, regionNote, setupLock, type Lock } from "./region-ui.ts";
 
@@ -147,6 +148,8 @@ export async function start(ctx: StartContext): Promise<void> {
   const dpr = () => Math.min(window.devicePixelRatio || 1, device.mobile ? 1.5 : 2);
   renderer.setPixelRatio(dpr());
   const maxTex = renderer.capabilities.maxTextureSize;
+  /** Largest map texture this device loads: 8192 on desktops whose GPU takes it, otherwise 4096. */
+  const texLimit = deviceLimit(device.mobile, maxTex);
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
 
   const scene = new Scene();
@@ -255,11 +258,13 @@ export async function start(ctx: StartContext): Promise<void> {
   }
   /**
    * Texture width that matches the screen: 2π × the pixels per radian at the point under the camera,
-   * so a region embed zoomed in close asks for the 4096 map. Phones get 4096 only when zoomed in.
+   * so a region embed zoomed in close asks for the 4096 map, and closer still for the 8192 one.
+   * Phones get 4096 only when zoomed in, and never 8192 (see deviceLimit).
    */
   function textureWant(): number {
     const f = (stage.clientHeight * dpr()) / 2 / Math.tan((camera.fov * DEG) / 2);
     const want = (2 * Math.PI * f) / Math.max(0.05, view.distance - 1);
+    if (want >= 6000 && !device.mobile) return 8192;
     return want >= 3000 && (!device.mobile || want >= 4500) ? 4096 : 2048;
   }
   let onZoom = (): void => {};
@@ -606,6 +611,7 @@ export async function start(ctx: StartContext): Promise<void> {
   globeMat.needsUpdate = true;
   resize();
   renderer.initTexture(first);
+  root.dataset.tex = String(cfg.textures[0].w);
   dirty = true;
   frame(performance.now());
   // Show the canvas on the frame after the first real render, so the poster crossfade has pixels to reveal.
@@ -615,12 +621,13 @@ export async function start(ctx: StartContext): Promise<void> {
     performance.mark("wge-interactive");
   });
 
-  /* Then a sharper texture to match what's on screen (2048, or 4096 when zoomed in or on a large, dense screen). */
+  /* Then a sharper texture to match what's on screen: 2048, or 4096 when zoomed in or on a large, dense
+   * screen, and when zoomed in further 8192, always after the 4096 has shown (see nextTier). */
   let texW = cfg.textures[0].w;
   let upgrading = false;
   async function upgradeTexture(): Promise<void> {
     if (upgrading || fade) return;
-    const pick = cfg.textures.filter((t) => t.w > texW && t.w <= Math.min(textureWant(), maxTex)).pop();
+    const pick = nextTier(cfg.textures, texW, textureWant(), texLimit);
     if (!pick) {
       root.dataset.state = "hires";
       return;
@@ -628,7 +635,14 @@ export async function start(ctx: StartContext): Promise<void> {
     upgrading = true;
     try {
       const next = makeTexture(await decode(await fetchBlob(pick.url)));
+      // Clear stale errors so the check below is about this upload.
+      for (let i = 0; i < 8 && gl.getError() !== gl.NO_ERROR; i++) continue;
       renderer.initTexture(next);
+      // An 8192 texture can be too big for the GPU's free memory even when its size limit allows it.
+      if (gl.getError() === gl.OUT_OF_MEMORY) {
+        releaseTexture(next);
+        throw new Error("out of GPU memory");
+      }
       const mat = new MeshPhongMaterial({
         map: next,
         specular: 0x333333,
@@ -656,7 +670,8 @@ export async function start(ctx: StartContext): Promise<void> {
           texW = pick.w;
           upgrading = false;
           root.dataset.state = "hires";
-          void upgradeTexture(); // zoomed in further meanwhile?
+          root.dataset.tex = String(pick.w);
+          void upgradeTexture(); // the next stage (8192 after 4096), or zoomed in further meanwhile?
         },
       };
       invalidate();

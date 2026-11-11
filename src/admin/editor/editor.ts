@@ -41,7 +41,8 @@ import {
   type RegionFeature,
 } from "../../shared/region.ts";
 import { clampPadding } from "../../shared/params.ts";
-import type { MapMeta, SlotsFile } from "../../shared/types.ts";
+import { TEXTURE_WIDTHS, type MapMeta, type SlotsFile, type TextureWidth } from "../../shared/types.ts";
+import { deviceLimit, nextTier } from "../../shared/tiers.ts";
 import { h } from "../dom.ts";
 import type { GitHub } from "../github.ts";
 import { loadMapImage } from "../images.ts";
@@ -309,16 +310,29 @@ export function openEditor(o: EditorOptions): void {
     draw();
   }
 
-  /* ── Map image (2048, or 4096 when zoomed far in on a large screen) ── */
+  /* ── Map image: 2048, then 4096 when zoomed far in on a large screen, then 8192 when zoomed in further ── */
   let img: HTMLImageElement | null = null;
   let imgW = 0;
   let upgrading = false;
   if (map) void loadMapImage(map, 2048).then((i) => ((img = i), (imgW = 2048), draw()), () => setMsg("The map image isn't deployed yet; you can still draw.", "error"));
   function maybeUpgrade(): void {
-    if (!map || upgrading || imgW >= 4096 || !map.sizes["4096"]) return;
-    if (360 * view.k * (window.devicePixelRatio || 1) < 3000 || innerWidth < 1100) return;
+    if (!map || upgrading || innerWidth < 1100) return;
+    const need = 360 * view.k * (window.devicePixelRatio || 1);
+    const want = need >= 6000 ? 8192 : need >= 3000 ? 4096 : 2048;
+    const pick = nextTier(TEXTURE_WIDTHS.filter((w) => map.sizes[`${w}`]).map((w) => ({ w, url: "" })), imgW, want, deviceLimit(false));
+    if (!pick) return;
+    const w = pick.w as TextureWidth;
     upgrading = true;
-    void loadMapImage(map, 4096).then((i) => ((img = i), (imgW = 4096), draw()), () => {});
+    void loadMapImage(map, w).then(
+      (i) => {
+        img = i;
+        imgW = w;
+        upgrading = false;
+        draw();
+        maybeUpgrade(); // 8192 after 4096, if still zoomed in that far
+      },
+      () => {}, // keep the current image and stop upgrading
+    );
   }
 
   /* ── State ── */

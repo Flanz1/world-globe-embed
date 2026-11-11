@@ -1,7 +1,7 @@
 /** Shapes shared by the viewer, the build scripts and the admin page. */
 
 /** Widths the processing workflow generates, smallest first. */
-export const TEXTURE_WIDTHS = [1024, 2048, 4096] as const;
+export const TEXTURE_WIDTHS = [1024, 2048, 4096, 8192] as const;
 export type TextureWidth = (typeof TEXTURE_WIDTHS)[number];
 
 /** Per-slot view defaults. Every field can be overridden by a query param. */

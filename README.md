@@ -119,7 +119,8 @@ Region embeds take these parameters on top of the ones above:
 1. Open the repo on GitHub and go into the folder **`content/incoming`**.
 2. Click **Add file → Upload files** and drag in your map: an equirectangular PNG, JPEG or WebP. 2:1 (e.g. 4096×2048) looks best, but anything from square up to 4:1 is accepted. The globe stretches it to fit, and pole padding can fill in the rest (see below).
    - The file name becomes the map's id: `Aerthos v2.png` becomes `aerthos-v2`.
-   - Images wider than 4096 px are fine, but they make the repo bigger. Downscale them first if you can.
+   - Images 8192 px wide or more also get an extra-sharp 8192 px version, which zoomed-in embeds (especially region embeds) load after the 4096. Anything wider than 8192 is downscaled to 8192, so there's no point uploading bigger.
+   - Big images make the repo bigger. If you don't need the 8192 version, downscale to 4096 px first.
 3. Leave **Commit directly to the `main` branch** selected and click **Commit changes**.
 4. Open the **Actions** tab. A run called **Process maps** converts the image (usually 1 to 2 minutes). Once it's green, there's a new file `content/maps/aerthos-v2.json`.
    - If it's red, open the run to see why (for example a portrait image, or one wider than 4:1). Delete your file from `content/incoming`, fix the image and try again. **The site won't redeploy while a rejected image is still sitting in `content/incoming`.**
@@ -144,7 +145,7 @@ Open `/admin/` on the site and sign in with a token (see [Tokens for the admin p
 
 - see every map (with thumbnails) and every slot;
 - **switch a slot's map** with a preview;
-- **upload a map**, optionally switching a slot to it in the same commit (the image is downscaled to at most 4096 px in your browser first);
+- **upload a map**, optionally switching a slot to it in the same commit (the image is downscaled to at most 8192 px in your browser first; 8192 px wide uploads also get the extra-sharp 8192 version);
 - **preview** any map or slot on the page itself as a real, spinnable globe. For a slot, you can adjust the north/south pole padding, pole colour and prime meridian live, use **Fit padding to image** for maps wider than 2:1, see whether the map is stretched or squashed, and **Save to slot**;
 - copy each slot's embed code;
 - follow the latest workflow runs, so you can see when your change is live.
@@ -247,6 +248,7 @@ env SLUG=aerthos QUERY='region=old-kingdom&view=flat' npm run measure
 # and the admin editor in headless Chromium against a fake GitHub API (nothing is pushed).
 # Screenshots and report.json go to .e2e/regions/
 npm run e2e:regions
+npm run e2e:tiers     # which texture sizes load, and in what order (1024 → 4096 → 8192 when zoomed in)
 ```
 
 ### Layout
@@ -257,7 +259,7 @@ content/
   maps/<map-id>.json    map metadata (written by process-maps)
   regions/<id>.json     region outlines (GeoJSON Features, written by the admin editor)
   incoming/             drop new images here
-public/maps/<map-id>/   processed WebPs: <hash>-1024.webp, -2048, -4096 (written by process-maps)
+public/maps/<map-id>/   processed WebPs: <hash>-1024.webp, -2048, -4096, -8192 (written by process-maps)
 schema/                 JSON schemas for slots.json, map metadata and regions
 src/viewer/boot.ts      tiny inline boot script (poster, params, starts loading)
 src/viewer/globe.ts     Three.js globe, loaded with import() after first paint
@@ -272,13 +274,15 @@ scripts/                processing, validation, page generation, sample, measure
 
 1. `v/<slot>/index.html` is generated at build time. Its CSS, the slot config and a blurred LQIP of the map (about 1 KB) are inlined, so the first paint shows a globe-shaped poster with no extra request.
 2. After first paint, the inline boot script creates the WebGL context and `import()`s the viewer (Three.js and the globe code). The 1024px texture is already downloading thanks to `<link rel="preload">`. For a region embed, `regions/<id>.json` is fetched at the same time, and the first frame is already centred on the region (its centre and zoom are inlined in the page).
-3. The globe crossfades in over the poster with the 1024px texture. It then loads the 2048px texture, or 4096px on large, high-DPI desktop screens, and crossfades to it.
+3. The globe crossfades in over the poster with the 1024px texture. It then loads the 2048px texture, or 4096px on large, high-DPI desktop screens or when zoomed in, and crossfades to it.
+   - Zoomed in further (a small region embed, or zooming in by hand), it loads in two stages: the 4096px texture first, then the 8192px one, if the map has it. The flat view (`view=flat`) does the same.
+   - 8192 is desktop only. Phones, devices that report under 8 GB of memory, and GPUs whose largest texture is under 8192 stay at 4096. If the GPU runs out of memory on the 8192, the embed keeps the 4096.
 4. It renders only while something moves, and pauses completely when it's scrolled out of view or the tab is hidden.
 5. Without WebGL, it shows the flat 2048px map.
 
 ## GitHub Pages limits and pruning old maps
 
-- The published site can be up to **1 GB**, a single file up to **100 MB**, and there's a soft cap of **100 GB/month** of bandwidth. A 4096×2048 map is usually 0.3 to 3 MB for all three sizes, so hundreds of maps fit.
+- The published site can be up to **1 GB**, a single file up to **100 MB**, and there's a soft cap of **100 GB/month** of bandwidth. A 4096×2048 map is usually 0.3 to 3 MB for all three sizes, so hundreds of maps fit. An 8192×4096 upload adds an 8192 texture, typically 2 to 4 times the size of its 4096 one (so a few MB), which only zoomed-in desktop viewers download.
 - The **repo** should stay under about 1 GB too. Every upload stays in git history, which is why the admin page downscales before uploading.
 
 **To remove a map you no longer use:** make sure no slot uses it (`npm run validate` or the deploy will tell you), then delete both `content/maps/<id>.json` and the folder `public/maps/<id>/`. On GitHub, open the file or folder, click **⋯ → Delete**, and commit. The next deploy drops it from the site.

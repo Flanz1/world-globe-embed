@@ -10,6 +10,7 @@ import { clamp, clampPadding } from "../shared/params.ts";
 import { geometryBounds, globeToImage, sphericalCentroid, type Position } from "../shared/geo.ts";
 import { FLAT_K_MAX, flatFit, flatMinK, regionLayers, type FlatView, type RegionData } from "../shared/region.ts";
 import { paintLayers } from "../shared/raster.ts";
+import { deviceLimit, nextTier } from "../shared/tiers.ts";
 import type { FlatStartContext } from "./contract.ts";
 import { RELOCK_MS, makeLabel, makeLegend, regionNote, setupLock, type Lock } from "./region-ui.ts";
 
@@ -170,13 +171,15 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     g.restore();
   }
 
-  /* ── Textures: the 1024 the boot script already fetched, then 2048, or 4096 when the crop is small on a big screen ── */
+  /* ── Textures: the 1024 the boot script already fetched, then 2048, or 4096 when the crop is small on a
+   * big screen, and 8192 when zoomed in further on a desktop, always after the 4096 has shown (see nextTier). ── */
   let loading = false;
+  const texLimit = deviceLimit(mobile);
   function maybeUpgrade(): void {
     if (loading || !img) return;
     const needPx = 360 * view.k * dpr();
-    const want = needPx > 2600 && !mobile ? 4096 : 2048;
-    const pick = cfg.textures.filter((t) => t.w > imgW && t.w <= want).pop();
+    const want = needPx > 5200 ? 8192 : needPx > 2600 && !mobile ? 4096 : 2048;
+    const pick = nextTier(cfg.textures, imgW, want, texLimit);
     if (!pick) return;
     loading = true;
     void fetch(pick.url)
@@ -192,7 +195,8 @@ export async function start(ctx: FlatStartContext): Promise<void> {
         if (old && "close" in old) old.close();
         loading = false;
         root.dataset.state = "hires";
-        schedule();
+        root.dataset.tex = String(pick.w);
+        schedule(); // the render calls maybeUpgrade again: the next stage (8192 after 4096), if this view wants it
       })
       .catch(() => {
         imgW = pick.w; // don't retry this size
@@ -360,6 +364,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
 
   img = await decode(await ctx.firstTexture);
   imgW = cfg.textures[0].w;
+  root.dataset.tex = String(imgW);
   render();
   requestAnimationFrame(() => {
     root.classList.add("ready");

@@ -56,6 +56,19 @@ describe("mapIdFromFilename", () => {
 });
 
 describe("processImage", () => {
+  it("makes an 8192 texture only from sources at least 8192 wide", async () => {
+    const paths = tempProject();
+    const small = path.join(paths.incomingDir, "just-under.png");
+    await gradient(8000, 4000).png().toFile(small);
+    expect(Object.keys((await processImage(small, { paths, uploadedBy: "t" })).sizes)).toEqual(["1024", "2048", "4096"]);
+    const big = path.join(paths.incomingDir, "big.png");
+    await gradient(8192, 4096).png().toFile(big);
+    const meta = await processImage(big, { paths, uploadedBy: "t" });
+    expect(Object.keys(meta.sizes)).toEqual(["1024", "2048", "4096", "8192"]);
+    const out = await sharp(path.join(paths.publicDir, meta.sizes["8192"]!)).metadata();
+    expect([out.format, out.width, out.height]).toEqual(["webp", 8192, 4096]);
+  }, 60_000);
+
   it("writes 1024/2048 WebPs, a small LQIP and metadata, strips EXIF and removes the source", async () => {
     const paths = tempProject();
     const src = path.join(paths.incomingDir, "Test World.jpg");
