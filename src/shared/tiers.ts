@@ -26,9 +26,14 @@ export function nextTier<T extends Tier>(textures: readonly T[], current: number
   return textures.filter((t) => t.w > current && t.w <= cap).pop();
 }
 
-/** deviceMemory where the browser reports it (Chromium), in GB. */
+/**
+ * deviceMemory where the browser reports it truthfully (Chromium), in GB. Brave's fingerprinting
+ * protection reports a random, often lower, value, which kept a desktop with plenty of memory at
+ * 4096 and without tiles, so it's ignored there (`navigator.brave` only exists in Brave).
+ */
 export function deviceMemory(): number | undefined {
-  return (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  const nav = navigator as Navigator & { deviceMemory?: number; brave?: unknown };
+  return nav.brave ? undefined : nav.deviceMemory;
 }
 
 /**

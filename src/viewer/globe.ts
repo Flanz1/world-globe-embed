@@ -43,7 +43,7 @@ import { imageToGlobe, polygonsOf, type Position } from "../shared/geo.ts";
 import { regionFit, regionLabelPoints, type RegionData } from "../shared/region.ts";
 import { paintSpec, type PaintSpec } from "../shared/raster.ts";
 import { hasContestedMarks, regionPaintSpec } from "../shared/region-paint.ts";
-import { deviceLimit, nextTier } from "../shared/tiers.ts";
+import { deviceLimit, deviceMemory, nextTier } from "../shared/tiers.ts";
 import { createGlobeTiles } from "./globe-tiles.ts";
 import type { PreviewMessage, StartContext } from "./contract.ts";
 import { RELOCK_MS, makeLabels, makeLegend, regionNote, setupLock, type Lock } from "./region-ui.ts";
@@ -63,7 +63,7 @@ function detectDevice() {
   const ua = navigator.userAgent;
   const mobileUA = /Android|iPhone|iPad|iPod|webOS/i.test(ua);
   const touchOnly = matchMedia("(pointer: coarse)").matches && !matchMedia("(any-pointer: fine)").matches;
-  const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  const mem = deviceMemory();
   const lowMem = mem !== undefined && mem <= 4;
   return { mobile: mobileUA || touchOnly || lowMem };
 }

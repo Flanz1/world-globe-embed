@@ -44,4 +44,10 @@ describe("deviceLimit", () => {
     vi.stubGlobal("navigator", { deviceMemory: 8 });
     expect(deviceLimit(false, 16384)).toBe(8192);
   });
+  it("ignores Brave's randomized deviceMemory", () => {
+    vi.stubGlobal("navigator", { deviceMemory: 2, brave: {} });
+    expect(deviceLimit(false)).toBe(8192);
+    expect(deviceLimit(false, 4096)).toBe(4096);
+    expect(deviceLimit(true)).toBe(4096);
+  });
 });
