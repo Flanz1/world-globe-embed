@@ -120,8 +120,10 @@ Region embeds take these parameters on top of the ones above:
 1. Open the repo on GitHub and go into the folder **`content/incoming`**.
 2. Click **Add file → Upload files** and drag in your map: an equirectangular PNG, JPEG or WebP. 2:1 (e.g. 4096×2048) looks best, but anything from square up to 4:1 is accepted. The globe stretches it to fit, and pole padding can fill in the rest (see below).
    - The file name becomes the map's id: `Aerthos v2.png` becomes `aerthos-v2`.
-   - Images 8192 px wide or more also get an extra-sharp 8192 px version, which zoomed-in embeds (especially region embeds) load after the 4096. Anything wider than 8192 is downscaled to 8192, so there's no point uploading bigger.
-   - Big images make the repo bigger. If you don't need the 8192 version, downscale to 4096 px first.
+   - Images 8192 px wide or more also get an extra-sharp 8192 px version, which zoomed-in embeds (especially region embeds) load after the 4096.
+   - Images 16384 or 32768 px wide or more also get **close-up tiles** at that size: the map cut into 2048 px squares, of which an embed at (or near) its closest zoom loads only the few under the view. Anything wider than 32768 is used for the 32768 tiles, so there's no point going bigger.
+   - GitHub refuses files over 100 MB, and the web upload stops at 25 MB, so for a big map use the admin page (below) or `npm run import-map` (see "Very large maps").
+   - Big images make the repo bigger. If you don't need the close-ups, downscale to 4096 or 8192 px first.
 3. Leave **Commit directly to the `main` branch** selected and click **Commit changes**.
 4. Open the **Actions** tab. A run called **Process maps** converts the image (usually 1 to 2 minutes). Once it's green, there's a new file `content/maps/aerthos-v2.json`.
    - If it's red, open the run to see why (for example a portrait image, or one wider than 4:1). Delete your file from `content/incoming`, fix the image and try again. **The site won't redeploy while a rejected image is still sitting in `content/incoming`.**
@@ -146,7 +148,7 @@ Open `/admin/` on the site and sign in with a token (see [Tokens for the admin p
 
 - see every map (with thumbnails) and every slot;
 - **switch a slot's map** with a preview;
-- **upload a map**, optionally switching a slot to it in the same commit (the image is downscaled to at most 8192 px in your browser first; 8192 px wide uploads also get the extra-sharp 8192 version);
+- **upload a map**, optionally switching a slot to it in the same commit (up to 16384 px wide the image is re-encoded in your browser first, which also strips its metadata. Wider images go up as they are, with their metadata stripped, and must be under 70 MB: save them as JPEG at quality 80–90. A 32768 px wide map is usually 40–70 MB);
 - **preview** any map or slot on the page itself as a real, spinnable globe. For a slot, you can adjust the north/south pole padding, pole colour and prime meridian live, use **Fit padding to image** for maps wider than 2:1, see whether the map is stretched or squashed, and **Save to slot**;
 - copy each slot's embed code;
 - follow the latest workflow runs, so you can see when your change is live.
@@ -251,6 +253,7 @@ env SLUG=aerthos QUERY='region=old-kingdom&view=flat' npm run measure
 # Screenshots and report.json go to .e2e/regions/
 npm run e2e:regions
 npm run e2e:tiers     # which texture sizes load, and in what order (1024 → 4096 → 8192 when zoomed in)
+npm run e2e:tiles     # close-up tiles at max zoom (synthetic 32768 map; env TILES_MAP=your.jpg for your own)
 npm run e2e:view      # a slot's default view (globe or flat) in the embed and the admin preview
 ```
 
@@ -262,7 +265,7 @@ content/
   maps/<map-id>.json    map metadata (written by process-maps)
   regions/<id>.json     region outlines (GeoJSON Features, written by the admin editor)
   incoming/             drop new images here
-public/maps/<map-id>/   processed WebPs: <hash>-1024.webp, -2048, -4096, -8192 (written by process-maps)
+public/maps/<map-id>/   processed WebPs: <hash>-1024.webp, -2048, -4096, -8192, and tiles <hash>-16384-<col>-<row>.webp, -32768-… (written by process-maps)
 schema/                 JSON schemas for slots.json, map metadata and regions
 src/viewer/boot.ts      tiny inline boot script (poster, params, starts loading)
 src/viewer/globe.ts     Three.js globe, loaded with import() after first paint
@@ -279,13 +282,29 @@ scripts/                processing, validation, page generation, sample, measure
 2. After first paint, the inline boot script creates the WebGL context and `import()`s the viewer (Three.js and the globe code). The 1024px texture is already downloading thanks to `<link rel="preload">`. For a region embed, `regions/<id>.json` is fetched at the same time, and the first frame is already centred on the region (its centre and zoom are inlined in the page).
 3. The globe crossfades in over the poster with the 1024px texture. It then loads the 2048px texture, or 4096px on large, high-DPI desktop screens or when zoomed in, and crossfades to it.
    - Zoomed in further (a small region embed, or zooming in by hand), it loads in two stages: the 4096px texture first, then the 8192px one, if the map has it. The flat view (`view=flat`) does the same.
-   - 8192 is desktop only. Phones, devices that report under 8 GB of memory, and GPUs whose largest texture is under 8192 stay at 4096. If the GPU runs out of memory on the 8192, the embed keeps the 4096.
+   - At (or near) the closest zoom, it then loads the close-up tiles under the view, if the map has them: the 16384 tiles first, then the 32768 ones on big or high-DPI screens. Only the few tiles on screen load (2048 px each, usually 50–300 KB), at most 16 are kept, and panning loads the next ones.
+   - 8192 and the tiles are desktop only. Phones, devices that report under 8 GB of memory, and GPUs whose largest texture is under 8192 stay at 4096. If the GPU runs out of memory, the embed keeps what it has.
 4. It renders only while something moves, and pauses completely when it's scrolled out of view or the tab is hidden.
 5. Without WebGL, it shows the flat 2048px map.
 
+## Very large maps
+
+Originals over 70 MB (for example a 49152 px PNG) can't go through GitHub at all. Process them on your own computer instead; only the small outputs get committed, and the original stays where it is:
+
+```fish
+cd world-globe-embed
+npm ci
+npm run import-map -- ~/Maps/world_map.png world-map   # path, then the map id (optional)
+git add content/maps/world-map.json public/maps/world-map
+git commit -m "Add map world-map"
+git push
+```
+
+It needs several GB of free memory for a 30000+ px image and takes a few minutes. On Windows the same commands work in PowerShell.
+
 ## GitHub Pages limits and pruning old maps
 
-- The published site can be up to **1 GB**, a single file up to **100 MB**, and there's a soft cap of **100 GB/month** of bandwidth. A 4096×2048 map is usually 0.3 to 3 MB for all three sizes, so hundreds of maps fit. An 8192×4096 upload adds an 8192 texture, typically 2 to 4 times the size of its 4096 one (so a few MB), which only zoomed-in desktop viewers download.
+- The published site can be up to **1 GB**, a single file up to **100 MB**, and there's a soft cap of **100 GB/month** of bandwidth. A 4096×2048 map is usually 0.3 to 3 MB for all three sizes, so hundreds of maps fit. An 8192×4096 upload adds an 8192 texture, typically 2 to 4 times the size of its 4096 one (so a few MB), which only zoomed-in desktop viewers download. Close-up tiles add about 6 MB (16384) and 23 MB (32768) per detailed map on the site, but a viewer only downloads the few under the view.
 - The **repo** should stay under about 1 GB too. Every upload stays in git history, which is why the admin page downscales before uploading.
 
 **To remove a map you no longer use:** make sure no slot uses it (`npm run validate` or the deploy will tell you), then delete both `content/maps/<id>.json` and the folder `public/maps/<id>/`. On GitHub, open the file or folder, click **⋯ → Delete**, and commit. The next deploy drops it from the site.

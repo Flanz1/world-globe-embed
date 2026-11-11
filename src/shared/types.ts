@@ -1,4 +1,5 @@
 /** Shapes shared by the viewer, the build scripts and the admin page. */
+import type { TileLevel, TileLevelWidth } from "./tiles.ts";
 
 /** Widths the processing workflow generates, smallest first. */
 export const TEXTURE_WIDTHS = [1024, 2048, 4096, 8192] as const;
@@ -78,6 +79,8 @@ export interface MapMeta {
   hash: string;
   /** Width → path relative to the site root, e.g. "maps/aerthos/ab12cd34ef56-1024.webp". */
   sizes: Partial<Record<`${TextureWidth}`, string>>;
+  /** Tile levels above 8192 (see shared/tiles.ts); `url` is a path prefix relative to the site root. */
+  tiles?: Partial<Record<`${TileLevelWidth}`, TileLevel>>;
   /** Tiny blurred preview as a data: URI. */
   lqip: string;
 }
@@ -88,6 +91,8 @@ export interface ViewerConfig extends ViewDefaults {
   title: string;
   /** Available textures, URLs relative to the slot page, smallest first. */
   textures: { w: number; url: string }[];
+  /** Tile levels, smallest first, URLs relative to the slot page. */
+  tiles?: TileLevel[];
   /** Map image width / height (the flat view keeps the image's own proportions). Defaults to 2. */
   aspect?: number;
 }

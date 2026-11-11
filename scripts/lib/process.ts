@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync, w
 import path from "node:path";
 import sharp, { type Sharp } from "sharp";
 import { TEXTURE_WIDTHS, type MapMeta, type TextureWidth } from "../../src/shared/types.ts";
+import { TILE_LEVELS, tileGrid, tileRect, tileUrl, type TileLevel } from "../../src/shared/tiles.ts";
 import { contentPaths, type ContentPaths } from "./paths.ts";
 
 export type ImageKind = "png" | "jpeg" | "webp";
@@ -24,6 +25,8 @@ export function sniff(buf: Uint8Array): ImageKind | null {
 export const MIN_ASPECT = 1;
 export const MAX_ASPECT = 4;
 export const MIN_WIDTH = 1024;
+/** Largest source accepted: 65535 × 32768, about 2.1 gigapixels (enough for a 49152 px wide map). */
+export const MAX_PIXELS = 65535 * 32768;
 
 export function checkAspect(width: number, height: number): { ok: boolean; aspect: number; message?: string } {
   const aspect = width / height;
@@ -71,7 +74,7 @@ export async function inspect(file: string): Promise<Inspection> {
     out.errors.push(`${name}: is not a PNG, JPEG or WebP image (checked by file contents, not extension)`);
     return out;
   }
-  const meta = await sharp(buf).metadata();
+  const meta = await sharp(buf, { limitInputPixels: MAX_PIXELS }).metadata();
   // EXIF orientation 5–8 means the stored image is rotated 90°.
   const swap = (meta.orientation ?? 1) >= 5;
   out.width = (swap ? meta.height : meta.width) ?? 0;
@@ -98,16 +101,23 @@ export interface ProcessOptions {
   now?: Date;
   /** Delete the source from content/incoming afterwards (default true). */
   removeSource?: boolean;
+  /** Map id to use instead of the one from the file name. */
+  id?: string;
 }
 
 export async function processImage(file: string, opts: ProcessOptions): Promise<MapMeta> {
   const paths = opts.paths ?? contentPaths();
   const info = await inspect(file);
+  if (opts.id) {
+    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(opts.id)) throw new Error(`"${opts.id}" isn't a valid map id: lowercase letters, digits and dashes only`);
+    info.id = opts.id;
+    info.errors = info.errors.filter((e) => !e.includes("the file name needs"));
+  }
   if (info.errors.length) throw new Error(info.errors.join("\n"));
   const buf = readFileSync(file);
   const hash = createHash("sha256").update(buf).digest("hex").slice(0, 12);
   // .rotate() applies EXIF orientation; sharp drops EXIF/ICC/XMP metadata on output by default.
-  const base = sharp(buf, { limitInputPixels: 16384 * 8192 }).rotate();
+  const base = sharp(buf, { limitInputPixels: MAX_PIXELS }).rotate();
   // Outputs keep the source's proportions; the viewer maps them onto the sphere.
   const aspect = info.width / info.height;
 
@@ -124,8 +134,29 @@ export async function processImage(file: string, opts: ProcessOptions): Promise<
       .toFile(path.join(outDir, name));
     sizes[`${w as TextureWidth}`] = `maps/${info.id}/${name}`;
   }
+  // Tile levels (16384, 32768) for sources at least that wide: resized once, then cut into 2048 px tiles.
+  const tiles: NonNullable<MapMeta["tiles"]> = {};
+  const tileFiles: string[] = [];
+  for (const w of TILE_LEVELS.filter((w) => w <= info.width)) {
+    const grid = tileGrid(w, aspect);
+    const level: TileLevel = { ...grid, url: `maps/${info.id}/${hash}-${w}` };
+    const { data, info: raw } = await base.clone().resize(grid.w, grid.h, { fit: "fill", kernel: "lanczos3" }).raw().toBuffer({ resolveWithObject: true });
+    for (let r = 0; r < grid.rows; r++)
+      for (let c = 0; c < grid.cols; c++) {
+        const [u0, v0, u1, v1] = tileRect(grid, c, r);
+        const left = Math.round(u0 * grid.w);
+        const top = Math.round(v0 * grid.h);
+        const file = tileUrl(level, c, r);
+        await sharp(data, { raw: { width: raw.width, height: raw.height, channels: raw.channels }, limitInputPixels: MAX_PIXELS })
+          .extract({ left, top, width: Math.round(u1 * grid.w) - left, height: Math.round(v1 * grid.h) - top })
+          .webp({ quality: 78, effort: 4, smartSubsample: true })
+          .toFile(path.join(paths.publicDir, file));
+        tileFiles.push(path.basename(file));
+      }
+    tiles[`${w}`] = level;
+  }
   // Remove textures from earlier uploads of the same map id.
-  const keep = new Set(Object.values(sizes).map((p) => path.basename(p!)));
+  const keep = new Set([...Object.values(sizes).map((p) => path.basename(p!)), ...tileFiles]);
   for (const f of readdirSync(outDir)) if (!keep.has(f)) rmSync(path.join(outDir, f));
 
   const metaFile = path.join(paths.mapsDir, `${info.id}.json`);
@@ -141,6 +172,7 @@ export async function processImage(file: string, opts: ProcessOptions): Promise<
     height: info.height,
     hash,
     sizes,
+    ...(Object.keys(tiles).length ? { tiles } : {}),
     lqip: await makeLqip(base, aspect),
   };
   mkdirSync(paths.mapsDir, { recursive: true });

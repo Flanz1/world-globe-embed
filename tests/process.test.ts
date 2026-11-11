@@ -56,6 +56,18 @@ describe("mapIdFromFilename", () => {
 });
 
 describe("processImage", () => {
+  it("cuts sources at least 16384 wide into 2048 px tiles at 16384", async () => {
+    const paths = tempProject();
+    const src = path.join(paths.incomingDir, "huge.jpg");
+    await gradient(16384, 4096).jpeg({ quality: 70 }).toFile(src);
+    const meta = await processImage(src, { paths, uploadedBy: "t" });
+    expect(Object.keys(meta.sizes)).toEqual(["1024", "2048", "4096", "8192"]);
+    expect(meta.tiles?.["16384"]).toEqual({ w: 16384, h: 4096, size: 2048, cols: 8, rows: 2, url: `maps/huge/${meta.hash}-16384` });
+    expect(meta.tiles?.["32768"]).toBeUndefined();
+    const t = await sharp(path.join(paths.publicDir, `maps/huge/${meta.hash}-16384-7-1.webp`)).metadata();
+    expect([t.format, t.width, t.height]).toEqual(["webp", 2048, 2048]);
+  }, 120_000);
+
   it("makes an 8192 texture only from sources at least 8192 wide", async () => {
     const paths = tempProject();
     const small = path.join(paths.incomingDir, "just-under.png");

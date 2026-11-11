@@ -11,6 +11,7 @@ import { geometryBounds, globeToImage, sphericalCentroid, type Position } from "
 import { FLAT_K_MAX, flatFit, flatMinK, regionLayers, type FlatView, type RegionData } from "../shared/region.ts";
 import { paintLayers } from "../shared/raster.ts";
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
+import { TILE_BUDGET, TileCache, levelFor, tileRect, tilesAt, tileUrl } from "../shared/tiles.ts";
 import type { FlatStartContext, PreviewMessage } from "./contract.ts";
 import { RELOCK_MS, makeLabel, makeLegend, regionNote, setupLock, type Lock } from "./region-ui.ts";
 
@@ -118,6 +119,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       g.imageSmoothingEnabled = true;
       g.imageSmoothingQuality = "high";
       for (const off of offsets) g.drawImage(img, sx(-180 + off, w), top, span, height);
+      drawTiles(w, h, offsets, span, top, height);
     }
     if (gridOn) drawGrid(w, h, offsets);
     if (reg) {
@@ -137,6 +139,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       label.place(x, y, x >= 0 && x <= w && y >= 0 && y <= h);
     }
     maybeUpgrade();
+    maybeTiles();
   }
   function schedule(): void {
     if (!raf) raf = requestAnimationFrame(render);
@@ -202,6 +205,70 @@ export async function start(ctx: FlatStartContext): Promise<void> {
         imgW = pick.w; // don't retry this size
         loading = false;
         root.dataset.state = "hires";
+      });
+  }
+
+  /* ── Tiles past 8192 (16384, then 32768), only those under the view; see shared/tiles.ts ── */
+  const tileLevels = cfg.tiles ?? [];
+  type FlatTile = { img: Img; level: number; c: number; r: number };
+  const tileCache = new TileCache<FlatTile>(TILE_BUDGET, (t) => "close" in t.img && t.img.close());
+  const tileKey = (l: number, c: number, r: number) => `${l}:${c}:${r}`;
+  let tileBusy = false;
+  let tilesOff = false;
+  let tileTop = -1;
+  function drawTiles(w: number, h: number, offsets: number[], span: number, top: number, height: number): void {
+    if (tileTop < 0) return;
+    const shown = [...tileCache.entries()].map(([, t]) => t).filter((t) => t.level <= tileTop).sort((a, b) => a.level - b.level);
+    for (const t of shown) {
+      const [u0, v0, u1, v1] = tileRect(tileLevels[t.level], t.c, t.r);
+      const y = top + v0 * height;
+      const th = (v1 - v0) * height;
+      if (y > h || y + th < 0) continue;
+      for (const off of offsets) {
+        const x = sx(-180 + off, w) + u0 * span;
+        const tw = (u1 - u0) * span;
+        if (x > w || x + tw < 0) continue;
+        g.drawImage(t.img, x, y, tw, th);
+      }
+    }
+  }
+  function maybeTiles(): void {
+    const top = tileLevels.length && imgW >= 8192 && texLimit >= 8192 ? levelFor(tileLevels, 360 * view.k * dpr()) : undefined;
+    tileTop = top ? tileLevels.indexOf(top) : -1;
+    if (!top || tileBusy || tilesOff) return;
+    const { w, h } = size();
+    const pts: [number, number][] = [];
+    for (const [fx, fy] of [[0.5, 0.5], ...[0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6, 1].flatMap((a) => [0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6, 1].map((b) => [a, b]))]) {
+      const lon = view.cx + (fx * w - w / 2) / view.k;
+      const lat = view.cy - (fy * h - h / 2) / (view.k * ky);
+      if (lat > 90 || lat < -90) continue;
+      pts.push([(lon + 180) / 360, (90 - lat) / 180]);
+    }
+    // Lower levels first: the 16384 tiles show while the 32768 ones load.
+    const need: [number, number, number][] = [];
+    for (let li = 0; li <= tileTop; li++) for (const [c, r] of tilesAt(tileLevels[li], pts)) need.push([li, c, r]);
+    const next = need.find(([l, c, r]) => !tileCache.has(tileKey(l, c, r)));
+    if (!next) {
+      root.dataset.tiles = String(top.w);
+      return;
+    }
+    const keep = new Set(need.map(([l, c, r]) => tileKey(l, c, r)));
+    const [l, c, r] = next;
+    tileBusy = true;
+    void fetch(tileUrl(tileLevels[l], c, r))
+      .then((res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        return res.blob();
+      })
+      .then(decode)
+      .then((im) => {
+        tileCache.set(tileKey(l, c, r), { img: im, level: l, c, r }, keep);
+        tileBusy = false;
+        schedule(); // the render calls maybeTiles again for the next one
+      })
+      .catch(() => {
+        tileBusy = false;
+        tilesOff = true; // a broken tile: keep what's there, load no more
       });
   }
 

@@ -1,4 +1,5 @@
 /** Loads and validates content/slots.json, content/maps/*.json and content/regions/*.json. */
+import { tileUrl } from "../../src/shared/tiles.ts";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { Ajv2020, type ErrorObject } from "ajv/dist/2020.js";
@@ -87,6 +88,11 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
     for (const [w, p] of Object.entries(meta.sizes)) {
       if (!existsSync(path.join(paths.publicDir, p)))
         errors.push(`${rel}: the ${w}px texture "public/${p}" is missing; re-upload the map so it gets processed again`);
+    }
+    for (const [w, l] of Object.entries(meta.tiles ?? {})) {
+      const missing: string[] = [];
+      for (let r = 0; r < l.rows; r++) for (let c = 0; c < l.cols; c++) if (!existsSync(path.join(paths.publicDir, tileUrl(l, c, r)))) missing.push(`${c}-${r}`);
+      if (missing.length) errors.push(`${rel}: ${missing.length} of the ${w}px tiles are missing (e.g. ${missing[0]}); re-upload the map so it gets processed again`);
     }
     maps.set(meta.id, meta);
   }
