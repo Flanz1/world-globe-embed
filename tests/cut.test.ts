@@ -10,6 +10,7 @@ const st = (parts: Parts, extra: Partial<EditorState> = {}): EditorState => ({
   styles: parts.map(() => -1),
   labels: parts.map(() => ""),
   contested: parts.map(() => -1),
+  locked: parts.map(() => false),
   props: { ...props, legend: [...props.legend] },
   ...extra,
 });
@@ -53,6 +54,13 @@ describe("cut tool", () => {
     valid(res.state.parts);
     const styled = toStyledGeometry(res.state.parts, res.state.styles, res.state.labels, res.state.contested);
     expect(styled.partLegend).toEqual([0, -1, 0, 0]);
+  });
+
+  it("pieces of a locked part stay locked; a removed part's lock goes with it", () => {
+    const s = st([[square(0, 0)], [square(30, 0)], [square(60, 0)]], { locked: [true, false, true] });
+    const res = cutParts(s, [rect(4, -5, 5, 15), rect(29, -1, 41, 11)]);
+    expect(res.state.parts).toHaveLength(3);
+    expect(res.state.locked).toEqual([true, true, true]);
   });
 
   it("keeps holes with the piece they're in", () => {

@@ -32,14 +32,14 @@ export function alertBox(title: string, text: string): void {
   m.foot.append(h("button", { type: "button", textContent: "OK", onclick: m.close }));
 }
 
-export function confirmBox(title: string, text: string, ok: string, cancel = "Cancel"): Promise<boolean> {
+export function confirmBox(title: string, text: string, ok: string, cancel = "Cancel", danger = false): Promise<boolean> {
   return new Promise((resolve) => {
-    const m = modal(title);
+    const m = modal(title, danger ? "danger" : "");
     let answer = false;
     m.body.append(h("p", { textContent: text }));
     m.foot.append(
       h("button", { type: "button", className: "ghost", textContent: cancel, onclick: m.close }),
-      h("button", { type: "button", textContent: ok, onclick: () => ((answer = true), m.close()) }),
+      h("button", { type: "button", className: danger ? "danger" : "", textContent: ok, onclick: () => ((answer = true), m.close()) }),
     );
     m.dlg.addEventListener("close", () => resolve(answer));
   });
