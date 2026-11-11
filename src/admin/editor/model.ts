@@ -6,14 +6,17 @@
  * (no repeated closing position) and *unwrapped* (longitudes continuous along the ring, so a ring
  * across the antimeridian may run from 170 to 190). toStoredGeometry() wraps and closes them on save.
  */
+import * as clip from "polygon-clipping";
 import {
   MAX_VERTICES,
   chaikin,
+  checkGeometry,
   findSelfIntersection,
   lonSpan,
   openRing,
   pointInRing,
   polygonsOf,
+  signedArea,
   simplifyRing,
   toStoredGeometry,
   unwrapRing,
@@ -221,6 +224,156 @@ export function addHole(parts: Parts, ring: Ring): Parts | null {
   const k = Math.round((out[p][0][0][0] - ring[0][0]) / 360) * 360;
   out[p].push(ring.map(([x, y]) => [x + k, y] as Position));
   return out;
+}
+
+/* ── Cutting and splitting ── */
+
+/** Gap a split line leaves between the pieces, in degrees: invisible, but survives 4-decimal rounding. */
+export const SPLIT_GAP = 0.001;
+
+export interface CutResult {
+  state: EditorState;
+  /** Old part index → new index, or -1 for a part the cut removed completely. */
+  index: number[];
+  /** Parts that changed (old indices). */
+  cut: number[];
+  /** New parts made by splitting. */
+  added: number;
+  /** Parts cut away completely. */
+  removed: number;
+  /** Contested zones that became normal parts because their part was cut away. */
+  orphaned: number;
+  /** Why the changed parts wouldn't save (e.g. a hole left touching the edge), or null. */
+  problem: string | null;
+}
+
+const closed = (r: Ring): clip.Ring => {
+  const out = r.map(([x, y]) => [x, y] as clip.Pair);
+  if (out.length) out.push([out[0][0], out[0][1]]);
+  return out;
+};
+const opened = (r: clip.Ring): Ring => openRing(r.map(([x, y]) => [x, y] as Position));
+const shiftRing = (r: Ring, k: number): Ring => (k ? r.map(([x, y]) => [x + k, y] as Position) : r);
+function lonRange(rings: Ring[]): [number, number] {
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const r of rings)
+    for (const [x] of r) {
+      lo = Math.min(lo, x);
+      hi = Math.max(hi, x);
+    }
+  return [lo, hi];
+}
+/** Area of a polygon (outer minus holes) in plain degree units, for ordering pieces. */
+const polyArea = (poly: Ring[]): number => poly.reduce((a, r, i) => a + (i ? -1 : 1) * Math.abs(signedArea(r)), 0);
+
+/**
+ * Cuts the shapes `cutters` (open rings, in any copy of the map) out of the parts. A cutter wholly
+ * inside a part makes a hole; one across a part's edge bites it; one that goes right across splits it
+ * into separate parts. The largest piece keeps the part's place, label and contested zones; the other
+ * pieces are added at the end with the same colour (and the same parent, for a contested zone).
+ *
+ * `onlySplit`: change only the parts that end up in more than one piece (the split-line tool, which
+ * mustn't leave hairline slits in parts it only grazes). `only`: limit to these parts.
+ */
+export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: boolean; only?: readonly number[] } = {}): CutResult {
+  const pieces: (Ring[][] | null)[] = s.parts.map((rings, p) => {
+    if (!rings[0] || rings[0].length < 3 || (opts.only && !opts.only.includes(p))) return null;
+    const [lo, hi] = lonRange([rings[0]]);
+    const mid = (lo + hi) / 2;
+    // Every cutter moves by the same whole turns, into the copy of the map nearest the part.
+    const use = cutters.filter((c) => c.length >= 3);
+    if (!use.length) return null;
+    const [clo, chi] = lonRange(use);
+    const k = Math.round((mid - (clo + chi) / 2) / 360) * 360;
+    const cut: clip.Polygon[] = use.map((c) => [closed(shiftRing(c, k))]);
+    const subject: clip.Polygon = rings.filter((r) => r.length >= 3).map(closed);
+    if (!clip.intersection(subject, cut).length) return null;
+    const out = clip
+      .difference(subject, cut)
+      .map((poly) => poly.map(opened).filter((r) => r.length >= 3))
+      .filter((poly) => poly.length && Math.abs(signedArea(poly[0])) > 1e-9);
+    if (opts.onlySplit && out.length < 2) return null;
+    return out.sort((a, b) => polyArea(b) - polyArea(a));
+  });
+
+  const parts: Parts = [];
+  const styles: number[] = [];
+  const labels: string[] = [];
+  const parentOld: number[] = [];
+  const index = s.parts.map(() => -1);
+  const extra: { rings: Ring[]; style: number; parent: number }[] = [];
+  const cut: number[] = [];
+  let removed = 0;
+  s.parts.forEach((rings, p) => {
+    const pc = pieces[p];
+    const style = s.styles[p] ?? OWN_COLOUR;
+    const parent = s.contested[p] ?? -1;
+    if (pc) cut.push(p);
+    if (pc && !pc.length) return void removed++;
+    index[p] = parts.length;
+    parts.push(pc ? pc[0] : rings.map((r) => r.map(([x, y]) => [x, y] as Position)));
+    styles.push(style);
+    labels.push(s.labels[p] ?? "");
+    parentOld.push(parent);
+    for (const more of pc?.slice(1) ?? []) extra.push({ rings: more, style, parent });
+  });
+  for (const e of extra) {
+    parts.push(e.rings);
+    styles.push(e.style);
+    labels.push("");
+    parentOld.push(e.parent);
+  }
+  let orphaned = 0;
+  const contested = parentOld.map((k) => {
+    if (k < 0) return -1;
+    if (index[k] >= 0) return index[k];
+    orphaned++;
+    return -1;
+  });
+  const next = cloneState(s);
+  next.parts = parts;
+  next.styles = styles;
+  next.labels = labels;
+  next.contested = contested;
+  // Check the changed parts as they'd be stored (rounded): a cut can leave a hole touching the edge.
+  const changedNew = [...cut.map((p) => index[p]).filter((i) => i >= 0), ...extra.map((_, i) => parts.length - extra.length + i)];
+  const bad = changedNew.length ? checkGeometry(toStoredGeometry(changedNew.map((i) => parts[i]))) : [];
+  const problem = bad.length ? "it would leave a hole touching the part's edge. Draw the cut a little further in, or further across." : null;
+  return { state: next, index, cut, added: extra.length, removed, orphaned, problem };
+}
+
+/**
+ * A thin strip along an open line (`gap` wide, in degrees of longitude; latitude scaled by ky like
+ * the map's pixels): one capped rectangle per segment, so cutting with them splits what the line
+ * crosses. Consecutive points are unwrapped first.
+ */
+export function lineStrips(line: Position[], gap = SPLIT_GAP, ky = 1): Ring[] {
+  const pts = unwrapRing(line.map(([x, y]) => [x, y] as Position));
+  const half = gap / 2;
+  const out: Ring[] = [];
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = [pts[i - 1][0], pts[i - 1][1] * ky];
+    const [bx, by] = [pts[i][0], pts[i][1] * ky];
+    const len = Math.hypot(bx - ax, by - ay);
+    if (len < 1e-9) continue;
+    const ux = ((bx - ax) / len) * half;
+    const uy = ((by - ay) / len) * half;
+    // Caps of half the width at both ends, so neighbouring strips overlap at the joints.
+    const corners: Position[] = [
+      [ax - ux + uy, ay - uy - ux],
+      [bx + ux + uy, by + uy - ux],
+      [bx + ux - uy, by + uy + ux],
+      [ax - ux - uy, ay - uy + ux],
+    ];
+    out.push(corners.map(([x, y]) => [x, y / ky] as Position));
+  }
+  return out;
+}
+
+/** Splits the parts a line crosses from edge to edge. Parts the line only enters aren't changed. */
+export function splitParts(s: EditorState, line: Position[], gap = SPLIT_GAP, ky = 1): CutResult {
+  return cutParts(s, lineStrips(line, gap, ky), { onlySplit: true });
 }
 
 /** Index of the part under a point (inside its outer ring and not in a hole), or -1. The topmost wins (see partsAt). */
