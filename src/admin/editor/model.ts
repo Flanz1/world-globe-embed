@@ -21,6 +21,7 @@ import {
   type RegionGeometry,
   type Ring,
 } from "../../shared/geo.ts";
+import { OWN_COLOUR, type LegendEntry } from "../../shared/region.ts";
 
 /** parts[p][0] is part p's outer ring, parts[p][1..] its holes. */
 export type Parts = Ring[][];
@@ -31,10 +32,14 @@ export interface RegionProps {
   fillOpacity: number;
   label: boolean;
   description: string;
+  legendTitle: string;
+  legend: LegendEntry[];
 }
 
 export interface EditorState {
   parts: Parts;
+  /** Per part: index into props.legend, or -1 (OWN_COLOUR) for the region's own colour. */
+  styles: number[];
   props: RegionProps;
 }
 
@@ -48,7 +53,11 @@ export interface VRef {
 export const vkey = (v: VRef): string => `${v.p}:${v.r}:${v.i}`;
 
 export const cloneParts = (parts: Parts): Parts => parts.map((rings) => rings.map((ring) => ring.map(([x, y]) => [x, y] as Position)));
-export const cloneState = (s: EditorState): EditorState => ({ parts: cloneParts(s.parts), props: { ...s.props } });
+export const cloneState = (s: EditorState): EditorState => ({
+  parts: cloneParts(s.parts),
+  styles: [...s.styles],
+  props: { ...s.props, legend: s.props.legend.map((e) => ({ ...e })) },
+});
 
 export function countVertices(parts: Parts): number {
   let n = 0;
@@ -143,7 +152,7 @@ export function insertVertex(parts: Parts, p: number, r: number, i: number, pos:
  * Deletes vertices. A ring may not drop below 3 vertices: a hole that would is removed, and an outer
  * ring that would takes its whole part with it.
  */
-export function deleteVertices(parts: Parts, refs: VRef[]): { parts: Parts; removedParts: number; removedHoles: number } {
+export function deleteVertices(parts: Parts, refs: VRef[]): { parts: Parts; removedParts: number; removedHoles: number; kept: number[] } {
   const byRing = new Map<string, Set<number>>();
   for (const v of refs) {
     const k = `${v.p}:${v.r}`;
@@ -152,6 +161,7 @@ export function deleteVertices(parts: Parts, refs: VRef[]): { parts: Parts; remo
   let removedParts = 0;
   let removedHoles = 0;
   const out: Parts = [];
+  const keptParts: number[] = [];
   parts.forEach((rings, p) => {
     const kept: Ring[] = [];
     let dropPart = false;
@@ -163,9 +173,12 @@ export function deleteVertices(parts: Parts, refs: VRef[]): { parts: Parts; remo
       else removedHoles++;
     });
     if (dropPart) removedParts++;
-    else out.push(kept);
+    else {
+      out.push(kept);
+      keptParts.push(p);
+    }
   });
-  return { parts: out, removedParts, removedHoles };
+  return { parts: out, removedParts, removedHoles, kept: keptParts };
 }
 
 /** Moves the whole shape, or one part (with its holes). Latitude is limited so nothing leaves ±90. */
@@ -233,6 +246,47 @@ export function simplifyParts(parts: Parts, tol: number, ky: number): { parts: P
 export function smoothParts(parts: Parts): Parts | null {
   const out = parts.map((rings) => rings.map((r) => chaikin(r)));
   return countVertices(out) > MAX_VERTICES ? null : out;
+}
+
+/* ── Part colours and the legend ── */
+
+/** Stored geometry plus the matching partLegend, dropping any part that doesn't survive storing (too few vertices). */
+export function toStyledGeometry(parts: Parts, styles: number[]): { geometry: RegionGeometry; partLegend: number[] } {
+  const keep: Parts = [];
+  const partLegend: number[] = [];
+  parts.forEach((rings, p) => {
+    if (polygonsOf(toStoredGeometry([rings])).length) {
+      keep.push(rings);
+      partLegend.push(styles[p] ?? OWN_COLOUR);
+    }
+  });
+  return { geometry: toStoredGeometry(keep), partLegend };
+}
+
+/** Removes legend entry `k`: its parts go back to the region's colour, later indices shift down. */
+export function removeLegendEntry(s: EditorState, k: number): EditorState {
+  const next = cloneState(s);
+  next.props.legend.splice(k, 1);
+  next.styles = next.styles.map((v) => (v === k ? OWN_COLOUR : v > k ? v - 1 : v));
+  return next;
+}
+
+/** Moves legend entry `k` by `d` places (up −1, down +1), keeping each part's colour. */
+export function moveLegendEntry(s: EditorState, k: number, d: number): EditorState {
+  const j = k + d;
+  if (j < 0 || j >= s.props.legend.length || j === k) return s;
+  const next = cloneState(s);
+  const [e] = next.props.legend.splice(k, 1);
+  next.props.legend.splice(j, 0, e);
+  next.styles = next.styles.map((v) => (v === k ? j : v === j ? k : v));
+  return next;
+}
+
+/** Colours offered for a new legend entry, in order, skipping ones already in use. */
+export const LEGEND_PALETTE = ["#2e86c1", "#28b463", "#f1c40f", "#8e44ad", "#e67e22", "#16a085", "#d35400", "#7f8c8d", "#c0392b", "#1abc9c", "#9b59b6", "#34495e"];
+export function nextLegendColour(used: string[]): string {
+  const u = new Set(used.map((c) => c.toLowerCase()));
+  return LEGEND_PALETTE.find((c) => !u.has(c)) ?? LEGEND_PALETTE[used.length % LEGEND_PALETTE.length];
 }
 
 /* ── Undo / redo ── */

@@ -19,12 +19,13 @@ import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { makeFixture, SLOT } from "./fixture.mjs";
+import { makeFixture, PROVINCES, SLOT } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { checkGeometry } from "../../src/shared/geo.ts";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
+const sharp = require("sharp");
 
 const OUT = path.resolve(".e2e/regions");
 const BRANCH = "test/region-overlays";
@@ -274,6 +275,48 @@ for (const view of want("embed") ? ["globe", "flat"] : []) {
     await e.ctx.close();
   });
 
+  await step(G, "colours and legend", async () => {
+    const pq = `v/${SLOT.slug}/?region=provinces${view === "flat" ? "&view=flat" : ""}`;
+    const e = await openEmbed(pq);
+    const key = await e.frame.evaluate(() => {
+      const k = document.querySelector(".rkey");
+      return k && {
+        visible: k.checkVisibility(),
+        head: k.querySelector(".rkey-head").textContent,
+        rows: [...k.querySelectorAll("li")].map((li) => [getComputedStyle(li.querySelector("i")).backgroundColor, li.textContent]),
+        imgs: document.images.length,
+      };
+    });
+    const rgb = (h) => `rgb(${parseInt(h.slice(1, 3), 16)}, ${parseInt(h.slice(3, 5), 16)}, ${parseInt(h.slice(5, 7), 16)})`;
+    check(G, "legend shows its title and one row per legend colour", key?.visible && key.head === "Provinces" && key.rows.length === 2, JSON.stringify(key));
+    check(G, "legend swatches use the legend colours", key && key.rows[0][0] === rgb(PROVINCES.colours[1]) && key.rows[1][0] === rgb(PROVINCES.colours[2]), JSON.stringify(key?.rows));
+    check(G, "hostile legend label is plain text, nothing runs", key && key.rows[1][1] === "<img src=x onerror=alert(3)>" && key.imgs === 0 && e.dialogs.length === 0);
+    // Each part is drawn in its own colour: count pixels close to each colour in the embed.
+    const shot = await canvasShot(e);
+    const { data, info } = await sharp(shot).raw().toBuffer({ resolveWithObject: true });
+    const counts = PROVINCES.colours.map((c) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+      let n = 0;
+      for (let i = 0; i < data.length; i += info.channels) if (Math.abs(data[i] - r) + Math.abs(data[i + 1] - g) + Math.abs(data[i + 2] - b) < 90) n++;
+      return n;
+    });
+    await e.page.screenshot({ path: path.join(OUT, `embed-${view}-legend.png`), clip: { x: e.box.x, y: e.box.y, width: e.box.width, height: e.box.height } });
+    check(G, "every part is drawn in its own colour", counts.every((n) => n > 200), counts.join(" / ") + " px");
+    await e.frame.click(".rkey-head");
+    const folded = await e.frame.evaluate(() => ({ exp: document.querySelector(".rkey-head").getAttribute("aria-expanded"), list: document.querySelector(".rkey ul").checkVisibility() }));
+    check(G, "legend folds away from its header", folded.exp === "false" && !folded.list, JSON.stringify(folded));
+    await e.frame.click(".rkey-head");
+    check(G, "and unfolds again", (await e.frame.getAttribute(".rkey-head", "aria-expanded")) === "true" && (await e.frame.isVisible(".rkey li")));
+    check(G, "no errors with the legend", e.errors.length === 0, e.errors.join(" | "));
+    await e.ctx.close();
+    const e2 = await openEmbed(`${pq}&key=0`);
+    check(G, "key=0 hides the legend", !(await e2.frame.evaluate(() => document.querySelector(".rkey")?.checkVisibility() ?? false)));
+    await e2.ctx.close();
+    const e3 = await openEmbed(q);
+    check(G, "a region without a legend shows none", !(await e3.frame.evaluate(() => document.querySelector(".rkey")?.checkVisibility() ?? false)));
+    await e3.ctx.close();
+  });
+
   await step(G, "hostile name stays text", async () => {
     const e = await openEmbed(`v/${SLOT.slug}/?region=evil-name${view === "flat" ? "&view=flat" : ""}`);
     const t = await e.frame.evaluate(() => ({ label: document.querySelector(".rlabel")?.textContent, scripts: document.scripts.length, imgs: document.images.length }));
@@ -359,7 +402,7 @@ await step(A, "sign in and Regions tab", async () => {
   check(A, "shows the target branch", (await page.textContent("#branch")) === `Writing to branch ${BRANCH} (not main)` && (await page.isVisible("#branch")), await page.textContent("#branch"));
   check(A, "Regions tab selected from #regions", (await page.isVisible("#tab-regions")) && !(await page.isVisible("#tab-maps")));
   const n = await page.locator("#regions .rcard").count();
-  check(A, "lists every region", n === 5, `${n} cards`);
+  check(A, "lists every region", n === 6, `${n} cards`);
   check(A, "'drawn on a different map' badge", (await page.locator('[data-region="old-map-region"] .badge.warn').textContent()) === "drawn on a different map");
   const evil = await page.locator('[data-region="evil-name"] .rname').textContent();
   check(A, "hostile name shown as plain text", evil === '"><script>alert(1)</script>' && dialogs.length === 0);
@@ -581,6 +624,53 @@ await step(A, "conflict detection", async () => {
   await page.waitForTimeout(200);
 });
 
+await step(A, "editor: colours and legend", async () => {
+  await page.click('[data-region="provinces"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open]");
+  await page.waitForTimeout(1200);
+  const panel = () =>
+    page.evaluate(() => {
+      const d = document.querySelector("dialog.editor");
+      return {
+        keys: [...d.querySelectorAll(".ed-key-row")].map((r) => [r.querySelector("input[type=color]").value, r.querySelector("input[type=text]").value]),
+        parts: [...d.querySelectorAll(".ed-part-row select")].map((s) => s.value),
+        options: [...(d.querySelector(".ed-part-row select")?.options ?? [])].map((o) => o.textContent),
+        title: d.querySelector('input[name="legend-title"]').value,
+      };
+    });
+  let pn = await panel();
+  check(A, "editor lists the legend and each part's colour", pn.keys.length === 2 && JSON.stringify(pn.parts) === '["-1","0","1"]' && pn.title === "Provinces", JSON.stringify(pn));
+  check(A, "part colour menu: region colour, then the legend labels as text", JSON.stringify(pn.options) === JSON.stringify(["Region colour", "Green March", "<img src=x onerror=alert(3)>"]) && dialogs.length === 0, JSON.stringify(pn.options));
+  await page.click('dialog.editor [data-act="key-add"]');
+  await page.keyboard.type("Capital");
+  pn = await panel();
+  check(A, "Add colour adds a row and focuses its label", pn.keys.length === 3 && pn.keys[2][1] === "Capital", JSON.stringify(pn.keys));
+  await page.selectOption('dialog.editor .ed-part-row select[data-part="0"]', "2");
+  await page.click('dialog.editor .ed-key-row:first-child [data-act="key-remove"]');
+  pn = await panel();
+  check(A, "removing a colour sends its parts back to the region colour and keeps the rest", pn.keys.length === 2 && JSON.stringify(pn.parts) === '["1","-1","0"]', JSON.stringify(pn));
+  await page.screenshot({ path: path.join(OUT, "editor-legend.png") });
+  await page.click("dialog.editor canvas.ed-canvas", { position: { x: 3, y: 3 }, button: "middle" });
+  await page.keyboard.press("Control+z");
+  pn = await panel();
+  check(A, "undo brings the removed colour back", pn.keys.length === 3 && JSON.stringify(pn.parts) === '["2","0","1"]', JSON.stringify(pn));
+  await page.keyboard.press("Control+Shift+z");
+  const n = mock.log.length;
+  await page.click("dialog.editor .ed-save");
+  await waitCommits(n);
+  const f = JSON.parse(mock.read(BRANCH, "content/regions/provinces.json"));
+  check(
+    A,
+    "saved file has the legend and one colour per part",
+    mock.log.length === n + 1 && f.properties.legendTitle === "Provinces" && JSON.stringify(f.properties.legend.map((e) => e.label)) === JSON.stringify(["<img src=x onerror=alert(3)>", "Capital"]) && JSON.stringify(f.properties.partLegend) === "[1,-1,0]",
+    JSON.stringify({ legend: f.properties.legend, partLegend: f.properties.partLegend }),
+  );
+  await page.click("dialog.editor .pv-head button.ghost");
+  await page.waitForTimeout(300);
+  const meta = await page.locator('[data-region="provinces"] .rinfo .muted.small').first().textContent();
+  check(A, "region card counts the colours", /3 colours/.test(meta), meta);
+});
+
 await step(A, "editor speed at 2,000 vertices", async () => {
   await page.click('[data-region="big-ring"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open]");
@@ -680,7 +770,7 @@ await step(A, "security and branch", async () => {
   check(A, "no page errors in the admin page", errors.length === 0, errors.join(" | ") || "none");
   check(A, "no alert() from region data", dialogs.length === 0, dialogs.join(" | ") || "none");
   check(A, "nothing written to main", mock.refs.get("main") === mainAtStart && mock.log.every((c) => c.branch === BRANCH), `${mock.log.length} commits, all on ${BRANCH}`);
-  check(A, "each action was one commit", mock.log.length === n0 + 4, mock.log.map((c) => c.message).join(" | "));
+  check(A, "each action was one commit", mock.log.length === n0 + 5, mock.log.map((c) => c.message).join(" | "));
 });
 await ctx.close();
 

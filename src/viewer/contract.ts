@@ -49,6 +49,8 @@ export interface RegionContext {
   subscribe?: (cb: (r: RegionData, centre: boolean) => void) => void;
   /** label=0|1, or null to use the region's own setting. */
   label: boolean | null;
+  /** Show the region's legend, if it has one (key=0 hides it). */
+  key: boolean;
   dim: boolean;
   /** Start locked on the selected position (lock=0 starts unlocked). */
   lock: boolean;

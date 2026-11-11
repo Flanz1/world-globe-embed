@@ -2,9 +2,9 @@
  * The Regions tab: every saved region as a card with a thumbnail, and the actions on it (edit, rename,
  * duplicate, delete, preview, copy embed code). Each action that writes is one commit.
  */
-import { checkGeometry, geometryBounds, vertexCount } from "../shared/geo.ts";
-import { paintRegion } from "../shared/raster.ts";
-import { REGION_COLOR, copyId, flatFit, regionData, type RegionFeature } from "../shared/region.ts";
+import { checkGeometry, geometryBounds, polygonsOf, vertexCount } from "../shared/geo.ts";
+import { paintLayers } from "../shared/raster.ts";
+import { REGION_COLOR, copyId, flatFit, normalizePartLegend, regionData, regionLayers, type RegionFeature } from "../shared/region.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
 import { $, h } from "./dom.ts";
 import { openEditor } from "./editor/editor.ts";
@@ -111,7 +111,11 @@ function thumbnail(f: RegionFeature, map: MapMeta | undefined): HTMLCanvasElemen
     const y = (lat: number) => (v.cy - lat) * v.k * ky + H / 2;
     const offs = [-360, 0, 360];
     if (img) for (const o of offs) g.drawImage(img, x(-180 + o), y(90), 360 * v.k, 180 * v.k * ky);
-    paintRegion(g, f.geometry, x, y, offs, { color: safeColor(f.properties.color), fillOpacity: 0.3, lineWidth: 1.5 }, { w: W, h: H });
+    const p = f.properties;
+    const legend = Array.isArray(p.legend) ? p.legend.map((e) => ({ label: "", color: safeColor(e?.color) })) : [];
+    const n = polygonsOf(f.geometry).length;
+    const layers = regionLayers({ color: safeColor(p.color), legend, parts: normalizePartLegend(Array.isArray(p.partLegend) ? p.partLegend : undefined, n, legend.length), geometry: f.geometry });
+    paintLayers(g, layers, x, y, offs, { fillOpacity: 0.3, lineWidth: 1.5 }, { w: W, h: H });
   };
   draw(null);
   if (map) void loadMapImage(map, 1024).then(draw, () => {});
@@ -149,7 +153,7 @@ function card(e: RegionEntry): HTMLElement {
       h(
         "div",
         { className: "muted small" },
-        `Slot ${p.slot} · ${vertexCount(f.geometry)} vertices`,
+        `Slot ${p.slot} · ${vertexCount(f.geometry)} vertices${p.legend?.length ? ` · ${p.legend.length + 1} colours` : ""}`,
         !slot ? h("span", { className: "badge error", textContent: "slot missing" }) : null,
         differs ? h("span", { className: "badge warn", textContent: "drawn on a different map", title: `Drawn on "${p.map}"; the slot now shows "${slot!.map}".` }) : null,
         e.problem ? h("span", { className: "badge error", textContent: "invalid shape", title: e.problem }) : null,
@@ -162,7 +166,7 @@ function card(e: RegionEntry): HTMLElement {
         btn("Rename", () => rename(e)),
         btn("Duplicate", () => duplicate(e)),
         btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot)),
-        btn("Copy embed code", () => openEmbedDialog({ region: { id: e.id, name: p.name, label: p.label }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot })),
+        btn("Copy embed code", () => openEmbedDialog({ region: { id: e.id, name: p.name, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot })),
         btn("Delete", () => del(e), "ghost danger"),
       ),
     ),

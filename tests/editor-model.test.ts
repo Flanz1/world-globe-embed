@@ -5,13 +5,17 @@ import {
   countVertices,
   deleteVertices,
   insertVertex,
+  moveLegendEntry,
   moveVertices,
+  nextLegendColour,
   partAt,
   partsFromGeometry,
+  removeLegendEntry,
   ringProblem,
   simplifyParts,
   smoothParts,
   toGeometry,
+  toStyledGeometry,
   translate,
   type EditorState,
   type Parts,
@@ -19,8 +23,8 @@ import {
 import { checkGeometry, type Position } from "../src/shared/geo.ts";
 
 const square = (x: number, y: number, s = 10): Position[] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]];
-const props = { name: "A", color: "#c0392b", fillOpacity: 0.35, label: true, description: "" };
-const st = (parts: Parts): EditorState => ({ parts, props: { ...props } });
+const props = { name: "A", color: "#c0392b", fillOpacity: 0.35, label: true, description: "", legendTitle: "", legend: [] };
+const st = (parts: Parts): EditorState => ({ parts, styles: parts.map(() => -1), props: { ...props, legend: [] } });
 
 describe("editor model", () => {
   it("round-trips stored geometry, unwrapping across the antimeridian", () => {
@@ -118,5 +122,60 @@ describe("undo/redo", () => {
     h.cancel();
     expect(h.state.parts[0][0][0]).toEqual([0, 0]);
     expect(h.canUndo).toBe(false);
+  });
+});
+
+describe("editor model: part colours and legend", () => {
+  const legendState = (): EditorState => ({
+    parts: [[square(0, 0)], [square(20, 0)], [square(40, 0)]],
+    styles: [0, 1, -1],
+    props: { ...props, legend: [{ label: "A", color: "#111111" }, { label: "B", color: "#222222" }] },
+  });
+
+  it("deleteVertices reports which parts it kept, so their colours follow them", () => {
+    const res = deleteVertices(legendState().parts, [{ p: 1, r: 0, i: 0 }, { p: 1, r: 0, i: 1 }]);
+    expect(res.removedParts).toBe(1);
+    expect(res.kept).toEqual([0, 2]);
+  });
+
+  it("toStyledGeometry keeps partLegend in step with the stored polygons", () => {
+    const s = legendState();
+    const out = toStyledGeometry(s.parts, s.styles);
+    expect(out.geometry.type).toBe("MultiPolygon");
+    expect(out.partLegend).toEqual([0, 1, -1]);
+    // A degenerate part (all one point) is dropped from both.
+    const degenerate = [s.parts[0], [[[5, 5], [5, 5], [5, 5]]] as Parts[number], s.parts[2]];
+    const d = toStyledGeometry(degenerate, [0, 1, -1]);
+    expect(d.partLegend).toEqual([0, -1]);
+    expect(d.geometry.type === "MultiPolygon" && d.geometry.coordinates.length).toBe(2);
+    // One part: a Polygon with a one-entry partLegend.
+    expect(toStyledGeometry([s.parts[0]], [1])).toMatchObject({ geometry: { type: "Polygon" }, partLegend: [1] });
+  });
+
+  it("removing a legend entry sends its parts back to the region colour and shifts later ones", () => {
+    const next = removeLegendEntry(legendState(), 0);
+    expect(next.props.legend.map((e) => e.label)).toEqual(["B"]);
+    expect(next.styles).toEqual([-1, 0, -1]);
+  });
+
+  it("reordering the legend keeps each part's colour", () => {
+    const s = legendState();
+    const next = moveLegendEntry(s, 0, 1);
+    expect(next.props.legend.map((e) => e.label)).toEqual(["B", "A"]);
+    expect(next.styles).toEqual([1, 0, -1]);
+    expect(moveLegendEntry(s, 0, -1)).toBe(s);
+  });
+
+  it("undo restores the legend and part colours", () => {
+    const h = new History(legendState());
+    h.apply("Remove legend colour", removeLegendEntry(h.state, 1));
+    expect(h.state.styles).toEqual([0, -1, -1]);
+    h.undo();
+    expect(h.state.styles).toEqual([0, 1, -1]);
+    expect(h.state.props.legend).toHaveLength(2);
+  });
+
+  it("new legend colours avoid ones in use", () => {
+    expect(nextLegendColour(["#2E86C1"])).toBe("#28b463");
   });
 });

@@ -71,7 +71,9 @@ export function regionJson(f: RegionFeature): string {
   const checked = parseRegionData(d);
   if (!checked || checked.name.length < 1 || vertexCount(checked.geometry) !== vertexCount(f.geometry))
     throw new Error(`region "${f.id}": data didn't pass the embed's own checks`);
-  const out: RegionData = checked;
+  // Without a legend, the legend fields are left out (the embed fills in the defaults), so plain regions stay small.
+  const { legend, legendTitle, parts, ...rest } = checked;
+  const out: Partial<RegionData> = legend.length ? { ...rest, legendTitle, legend, parts } : rest;
   return JSON.stringify(out);
 }
 

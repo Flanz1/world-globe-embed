@@ -52,23 +52,41 @@ export function paintRegion(
   s: RegionStyle,
   area: { w: number; h: number },
 ): void {
+  paintLayers(ctx, [{ color: s.color, geometry: g }], x, y, offsets, s, area);
+}
+
+/**
+ * Like paintRegion, for a region whose parts have different colours (see regionLayers): the dim
+ * covers everything outside all of them, then each layer is filled and outlined in its own colour.
+ */
+export function paintLayers(
+  ctx: Ctx,
+  layers: { color: string; geometry: RegionGeometry }[],
+  x: (lon: number) => number,
+  y: (lat: number) => number,
+  offsets: number[],
+  s: Omit<RegionStyle, "color">,
+  area: { w: number; h: number },
+): void {
   ctx.save();
   if (s.dim) {
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.beginPath();
     ctx.rect(0, 0, area.w, area.h);
-    traceGeometry(ctx, g, x, y, offsets);
+    for (const l of layers) traceGeometry(ctx, l.geometry, x, y, offsets);
     ctx.fill("evenodd");
   }
-  ctx.beginPath();
-  traceGeometry(ctx, g, x, y, offsets);
-  ctx.globalAlpha = Math.max(0, Math.min(1, s.fillOpacity));
-  ctx.fillStyle = s.color;
-  ctx.fill("evenodd");
-  ctx.globalAlpha = 1;
   ctx.lineJoin = "round";
   ctx.lineWidth = s.lineWidth;
-  ctx.strokeStyle = s.color;
-  ctx.stroke();
+  for (const l of layers) {
+    ctx.beginPath();
+    traceGeometry(ctx, l.geometry, x, y, offsets);
+    ctx.globalAlpha = Math.max(0, Math.min(1, s.fillOpacity));
+    ctx.fillStyle = l.color;
+    ctx.fill("evenodd");
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = l.color;
+    ctx.stroke();
+  }
   ctx.restore();
 }

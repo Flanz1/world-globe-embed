@@ -2,6 +2,7 @@
  * Region embed UI shared by the globe and flat viewers: the view lock, the region label and the
  * "Region not found" note. Region strings are only ever set with textContent.
  */
+import type { LegendEntry } from "../shared/region.ts";
 
 export interface Lock {
   readonly locked: boolean;
@@ -96,6 +97,54 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
         if (left + w > ux && top + h > uy) top = uy - h;
       }
       el.style.transform = `translate(${Math.round(left)}px,${Math.round(top)}px)`;
+    },
+  };
+}
+
+/**
+ * The region's legend: a colour swatch and a label per entry, top left, folded and unfolded with its
+ * header button. Labels are set with textContent; colours are validated #rgb/#rrggbb before they get here.
+ */
+export function makeLegend(stage: HTMLElement): { set(entries: readonly LegendEntry[], title: string): void } {
+  const box = document.createElement("div");
+  box.className = "rkey";
+  box.hidden = true;
+  const head = document.createElement("button");
+  head.type = "button";
+  head.className = "rkey-head";
+  head.setAttribute("aria-expanded", "true");
+  const list = document.createElement("ul");
+  list.id = "rkey-list";
+  head.setAttribute("aria-controls", list.id);
+  box.append(head, list);
+  stage.append(box);
+  let open = true;
+  const apply = () => {
+    head.setAttribute("aria-expanded", String(open));
+    head.title = open ? "Hide legend" : "Show legend";
+    list.hidden = !open;
+  };
+  head.addEventListener("click", () => {
+    open = !open;
+    apply();
+  });
+  // Clicks and drags on the legend shouldn't reach the viewer under it.
+  for (const t of ["pointerdown", "wheel"] as const) box.addEventListener(t, (e) => e.stopPropagation());
+  apply();
+  return {
+    set(entries, title) {
+      head.textContent = title || "Legend";
+      const rows = entries.map((e) => {
+        const li = document.createElement("li");
+        const sw = document.createElement("i");
+        sw.style.background = e.color;
+        const t = document.createElement("span");
+        t.textContent = e.label;
+        li.append(sw, t);
+        return li;
+      });
+      list.replaceChildren(...rows);
+      box.hidden = !entries.length;
     },
   };
 }
