@@ -4,7 +4,7 @@
  * collaborator's own token. The token is kept in sessionStorage (this tab only) unless the user
  * ticks "Remember", then in localStorage. It is never logged.
  */
-import type { MapMeta, Slot, SlotsFile } from "../shared/types.ts";
+import type { MapMeta, Slot, SlotsFile, ViewMode } from "../shared/types.ts";
 import { escapeHtml } from "../shared/page.ts";
 import { GitHub, GitHubError, type FileChange, type WorkflowRun } from "./github.ts";
 import { openPreview } from "./preview.ts";
@@ -55,10 +55,11 @@ function setStatus(text: string, kind: "muted" | "error" | "ok" = "muted"): void
   el.className = kind;
 }
 
-const embedCode = (slug: string, title: string) =>
+// No ?view= here: the page reads the slot's default view, so changing it later updates embeds already pasted.
+const embedCode = (slug: string, title: string, view: ViewMode) =>
   `<iframe src="${new URL(`v/${slug}/`, SITE).href}" width="100%" height="480" ` +
   `style="border:0;border-radius:8px;background:transparent" loading="lazy" allow="fullscreen" ` +
-  `title="${escapeHtml(title)} globe"></iframe>`;
+  `title="${escapeHtml(`${title} ${view === "flat" ? "map" : "globe"}`)}"></iframe>`;
 
 function thumb(map: MapMeta | undefined, cls = "thumb"): HTMLImageElement {
   const img = h("img", { className: cls, alt: map ? map.name : "", loading: "lazy", decoding: "async" });
@@ -116,17 +117,21 @@ function renderSlots(): void {
           onSave: (patch) => {
             const unchanged =
               patch.map === slot.map &&
+              patch.view === (slot.view ?? "globe") &&
               patch.north === (slot.north ?? 0) &&
               patch.south === (slot.south ?? 0) &&
               patch.pole.toLowerCase() === (slot.pole ?? "#e8dcc8").toLowerCase() &&
               patch.shift === (slot.shift ?? 0);
             if (unchanged) return setStatus("Nothing changed.");
             void act(`Saving ${slug}…`, () =>
-              gh!.commit(`Update slot "${slug}": map "${patch.map}", padding N ${patch.north}% / S ${patch.south}%, prime meridian ${patch.shift}°`, async () => [
+              gh!.commit(`Update slot "${slug}": map "${patch.map}", ${patch.view} view, padding N ${patch.north}% / S ${patch.south}%, prime meridian ${patch.shift}°`, async () => [
                 await slotsChange((s) => {
                   const cur = s.slots[slug];
                   if (!cur) throw new Error(`Slot "${slug}" no longer exists.`);
                   cur.map = patch.map;
+                  // Globe is the default, so only a flat default is written.
+                  if (patch.view === "flat") cur.view = "flat";
+                  else delete cur.view;
                   // Keep slots.json tidy: write padding only when it's used.
                   for (const k of ["north", "south", "shift"] as const) {
                     if (patch[k]) cur[k] = patch[k];
@@ -157,7 +162,7 @@ function renderSlots(): void {
         );
       });
       copy.addEventListener("click", () => {
-        void navigator.clipboard.writeText(embedCode(slug, title)).then(
+        void navigator.clipboard.writeText(embedCode(slug, title, slot.view ?? "globe")).then(
           () => setStatus(`Embed code for "${slug}" copied.`, "ok"),
           () => setStatus("Couldn't access the clipboard.", "error"),
         );

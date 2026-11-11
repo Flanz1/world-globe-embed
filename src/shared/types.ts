@@ -4,8 +4,12 @@
 export const TEXTURE_WIDTHS = [1024, 2048, 4096, 8192] as const;
 export type TextureWidth = (typeof TEXTURE_WIDTHS)[number];
 
+export type ViewMode = "globe" | "flat";
+
 /** Per-slot view defaults. Every field can be overridden by a query param. */
 export interface ViewDefaults {
+  /** Which view the embed opens in: the 3D globe or the flat map. */
+  view: ViewMode;
   grid: boolean;
   rotate: boolean;
   legend: boolean;
@@ -32,6 +36,7 @@ export interface ViewDefaults {
 }
 
 export const DEFAULT_VIEW: ViewDefaults = {
+  view: "globe",
   grid: false,
   rotate: true,
   legend: false,

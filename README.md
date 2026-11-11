@@ -22,10 +22,11 @@ Query parameters override the slot's defaults:
 
 | Param | Values | Meaning |
 |---|---|---|
+| `view` | `globe` / `flat` | Open on the 3D globe or the flat map (the slot's default view otherwise) |
 | `grid` | `0` / `1` | Grid overlay (15° lines, gold equator, red prime meridian) |
 | `legend` | `0` / `1` | Grid legend (shown only while the grid is on) |
 | `rotate` | `0` / `1` | Slow auto-spin on load |
-| `controls` | `0` / `1` | The small grid and fullscreen buttons |
+| `controls` | `0` / `1` | The small buttons in the corner (globe/flat switch, grid, fullscreen) |
 | `bg` | `transparent` or a hex colour like `%23101010` | Background (`#` must be written as `%23` in a URL) |
 | `lat`, `lon` | degrees | Point facing the viewer at load |
 | `zoom` | `0.47` to `2.2` | `1` is the default framing; larger is closer |
@@ -158,10 +159,11 @@ Each action is a single commit made under your own GitHub account.
 |---|---|---|
 | `map` | (required) | Map id, the file name in `content/maps/` without `.json` |
 | `title` | the map's name | Page title, and the iframe title in copied embed codes |
+| `view` | `"globe"` | `"flat"` opens the embed on the flat map. Set it with *Default view* in the admin preview. Readers can still switch with the corner button. Embed codes don't carry it, so changing it updates embeds you've already pasted |
 | `grid` | `false` | Grid overlay on load |
 | `legend` | `false` | Grid legend |
 | `rotate` | `true` | Auto-spin on load |
-| `controls` | `true` | Show the grid and fullscreen buttons |
+| `controls` | `true` | Show the globe/flat switch, grid and fullscreen buttons |
 | `bg` | `"transparent"` | Or a hex colour like `"#202020"` |
 | `lat`, `lon` | `15`, `0` | Point facing the viewer at load |
 | `zoom` | `1` | Initial zoom |
@@ -249,6 +251,7 @@ env SLUG=aerthos QUERY='region=old-kingdom&view=flat' npm run measure
 # Screenshots and report.json go to .e2e/regions/
 npm run e2e:regions
 npm run e2e:tiers     # which texture sizes load, and in what order (1024 → 4096 → 8192 when zoomed in)
+npm run e2e:view      # a slot's default view (globe or flat) in the embed and the admin preview
 ```
 
 ### Layout

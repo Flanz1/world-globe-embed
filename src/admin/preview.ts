@@ -3,7 +3,7 @@
  * iframe and adjusts pole padding live with postMessage, then optionally saves to a slot.
  */
 import type { PreviewMessage } from "../viewer/contract.ts";
-import type { MapMeta, Slot } from "../shared/types.ts";
+import type { MapMeta, Slot, ViewMode } from "../shared/types.ts";
 import { DEFAULT_VIEW } from "../shared/types.ts";
 
 export interface PreviewOptions {
@@ -14,7 +14,7 @@ export interface PreviewOptions {
   /** Map to show first (defaults to the slot's map). */
   mapId: string;
   /** Called with the fields to write into the slot. */
-  onSave?: (patch: { map: string; north: number; south: number; pole: string; shift: number }) => void;
+  onSave?: (patch: { map: string; view: ViewMode; north: number; south: number; pole: string; shift: number }) => void;
 }
 
 const SITE = new URL("../", location.href);
@@ -35,6 +35,16 @@ const hint = $<HTMLParagraphElement>("pv-hint");
 const note = $<HTMLParagraphElement>("pv-note");
 
 let current: PreviewOptions | null = null;
+let view: ViewMode = "globe";
+const viewBtns = [$<HTMLButtonElement>("pv-view-globe"), $<HTMLButtonElement>("pv-view-flat")];
+
+function showView(): void {
+  for (const b of viewBtns) {
+    const on = b.dataset.view === view;
+    b.className = on ? "" : "ghost";
+    b.setAttribute("aria-pressed", String(on));
+  }
+}
 const shift = $<HTMLInputElement>("pv-shift");
 const shiftN = $<HTMLInputElement>("pv-shift-n");
 
@@ -78,6 +88,7 @@ function send(): void {
 function load(): void {
   const q = new URLSearchParams({
     map: mapSel.value,
+    view,
     north: north.value,
     south: south.value,
     pole: pole.value,
@@ -109,6 +120,15 @@ shiftN.addEventListener("change", () => {
   send();
 });
 grid.addEventListener("change", send);
+// The globe and the flat map are different viewers, so switching reloads the iframe (with the current settings).
+for (const b of viewBtns)
+  b.addEventListener("click", () => {
+    const v: ViewMode = b.dataset.view === "flat" ? "flat" : "globe";
+    if (v === view) return;
+    view = v;
+    showView();
+    load();
+  });
 mapSel.addEventListener("change", load);
 fit.addEventListener("click", () => {
   const m = current?.maps.find((x) => x.id === mapSel.value);
@@ -120,7 +140,7 @@ fit.addEventListener("click", () => {
 save.addEventListener("click", () => {
   if (!current?.onSave) return;
   const v = values();
-  current.onSave({ map: mapSel.value, north: v.north, south: v.south, pole: v.pole, shift: v.shift });
+  current.onSave({ map: mapSel.value, view, north: v.north, south: v.south, pole: v.pole, shift: v.shift });
   dialog.close();
 });
 
@@ -135,10 +155,12 @@ export function openPreview(opts: PreviewOptions): void {
   south.value = String(s.south ?? DEFAULT_VIEW.south);
   pole.value = s.pole && /^#[0-9a-f]{6}$/i.test(s.pole) ? s.pole : DEFAULT_VIEW.pole;
   grid.checked = s.grid ?? false;
+  view = s.view === "flat" ? "flat" : "globe";
+  showView();
   $("pv-title").textContent = opts.slug ? `Preview: ${opts.slug}` : "Preview";
   save.hidden = !opts.slug;
   note.textContent = opts.slug
-    ? "Saving commits the map, padding and prime meridian to this slot. Drag and zoom here don't change the embed's starting view."
+    ? "Saving commits the map, default view, padding and prime meridian to this slot. Drag and zoom here don't change the embed's starting view."
     : "Maps show up here once they're deployed.";
   load();
   dialog.showModal();

@@ -111,6 +111,11 @@
     <iframe id="pv-frame" title="Globe preview"></iframe>
     <div class="pv-controls">
       <label>Map <select id="pv-map" class="map-select"></select></label>
+      <div class="pv-view" role="group" aria-labelledby="pv-view-l">
+        <span id="pv-view-l">Default view</span>
+        <div class="seg"><button id="pv-view-globe" type="button" data-view="globe" aria-pressed="true">Globe</button><button id="pv-view-flat" type="button" data-view="flat" aria-pressed="false" class="ghost">Flat map</button></div>
+        <span class="muted small">What the embed shows first. Readers can still switch with the button in its corner.</span>
+      </div>
       <label>North pole padding <span class="range"><input id="pv-north" type="range" min="0" max="49" step="0.5"><output id="pv-north-v"></output></span></label>
       <label>South pole padding <span class="range"><input id="pv-south" type="range" min="0" max="49" step="0.5"><output id="pv-south-v"></output></span></label>
       <label class="inline">Pole colour <input id="pv-pole" type="color"></label>
