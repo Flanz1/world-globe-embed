@@ -148,7 +148,7 @@ Open `/admin/` on the site and sign in with a token (see [Tokens for the admin p
 
 - see every map (with thumbnails) and every slot;
 - **switch a slot's map** with a preview;
-- **upload a map**, optionally switching a slot to it in the same commit (up to 16384 px wide the image is re-encoded in your browser first, which also strips its metadata. Wider images go up as they are, with their metadata stripped, and must be under 70 MB: save them as JPEG at quality 80–90. A 32768 px wide map is usually 40–70 MB);
+- **upload a map**, optionally switching a slot to it in the same commit (up to 16384 px wide the image is re-encoded in your browser first, which also strips its metadata. Wider images go up as they are, with their metadata stripped, in 8 MB parts that process-maps joins again, and must be under 100 MB: save them as JPEG at quality 80–90. A 32768 px wide map is usually 40–70 MB);
 - **preview** any map or slot on the page itself as a real, spinnable globe. For a slot, you can adjust the north/south pole padding, pole colour and prime meridian live, use **Fit padding to image** for maps wider than 2:1, see whether the map is stretched or squashed, and **Save to slot**;
 - copy each slot's embed code;
 - follow the latest workflow runs, so you can see when your change is live.
@@ -254,6 +254,7 @@ env SLUG=aerthos QUERY='region=old-kingdom&view=flat' npm run measure
 npm run e2e:regions
 npm run e2e:tiers     # which texture sizes load, and in what order (1024 → 4096 → 8192 when zoomed in)
 npm run e2e:tiles     # close-up tiles at max zoom (synthetic 32768 map; env TILES_MAP=your.jpg for your own)
+npm run e2e:upload    # a big admin upload in 8 MB parts, with the progress bar (env UPLOAD_FILE=your.jpg for your own)
 npm run e2e:view      # a slot's default view (globe or flat) in the embed and the admin preview
 ```
 
@@ -289,7 +290,7 @@ scripts/                processing, validation, page generation, sample, measure
 
 ## Very large maps
 
-Originals over 70 MB (for example a 49152 px PNG) can't go through GitHub at all. Process them on your own computer instead; only the small outputs get committed, and the original stays where it is:
+Originals over 100 MB (for example a 49152 px PNG) are too big for the admin page. Process them on your own computer instead; only the small outputs get committed, and the original stays where it is:
 
 ```fish
 cd world-globe-embed

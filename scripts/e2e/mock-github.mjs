@@ -11,7 +11,9 @@ import path from "node:path";
 export const blobSha = (buf) => createHash("sha1").update(Buffer.concat([Buffer.from(`blob ${buf.length}\0`), buf])).digest("hex");
 
 export class MockGitHub {
-  constructor({ repo = "Flanz1/world-globe-embed", root, branches = ["main", "test/region-overlays"], defaultBranch = "main" }) {
+  constructor({ repo = "Flanz1/world-globe-embed", root, branches = ["main", "test/region-overlays"], defaultBranch = "main", maxBlobRequest = 40 * 1024 * 1024 }) {
+    /** Like GitHub, refuse blob uploads whose request body is bigger than this ("input too large"). */
+    this.maxBlobRequest = maxBlobRequest;
     this.repo = repo;
     this.defaultBranch = defaultBranch;
     this.blobs = new Map();
@@ -96,6 +98,7 @@ export class MockGitHub {
       return c ? json(200, { sha: m[1], tree: { sha: c.tree } }) : json(404, { message: "Not Found" });
     }
     if (method === "POST" && p === `${base}/git/blobs`) {
+      if ((req.postData()?.length ?? 0) > this.maxBlobRequest) return json(422, { message: "Sorry, your input was too large to process. Consider creating the blob in a local clone of the repository and then pushing it to GitHub." });
       return json(201, { sha: this.putBlob(Buffer.from(body.content, body.encoding === "base64" ? "base64" : "utf8")) });
     }
     if (method === "POST" && p === `${base}/git/trees`) {

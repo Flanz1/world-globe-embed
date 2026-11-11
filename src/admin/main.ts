@@ -10,7 +10,7 @@ import { GitHub, GitHubError, type FileChange, type WorkflowRun } from "./github
 import { openPreview } from "./preview.ts";
 import { $, SITE, h } from "./dom.ts";
 import { initRegions, loadRegions, renderRegions } from "./regions.ts";
-import { prepareImage } from "./upload-image.ts";
+import { PART_BYTES, prepareImage } from "./upload-image.ts";
 
 declare const __REPO__: string;
 /** Branch the admin page reads from and commits to; empty = the repository's default branch. Set with VITE_CONTENT_BRANCH at build time. */
@@ -313,23 +313,60 @@ function wireUpload(): void {
     const replacing = maps.some((m) => m.id === id);
     if (replacing && !confirm(`A map called "${id}" already exists. Replace its image?`)) return;
     void act("Preparing image…", async () => {
-      const img = await prepareImage(file);
-      $("#upload-info").textContent = `Uploading ${img.w}×${img.h} ${img.ext.toUpperCase()}, ${(img.blob.size / 1048576).toFixed(1)} MB…${img.note}`;
-      const b64 = await blobToBase64(img.blob);
-      const msg = slot ? `Upload map "${id}" and show it in slot "${slot}"` : `Upload map "${id}"`;
-      const sha = await gh!.commit(msg, async () => {
-        const changes: FileChange[] = [{ path: `content/incoming/${id}.${img.ext}`, content: b64, base64: true }];
-        if (slot)
-          changes.push(
-            await slotsChange((s) => {
-              if (s.slots[slot]) s.slots[slot].map = id;
-            }),
-          );
-        return changes;
-      });
-      $("#upload-info").textContent = `Uploaded ${img.w}×${img.h}. The processing workflow converts it, then the site redeploys.${img.note}`;
-      form.reset();
-      return sha;
+      const bar = $<HTMLProgressElement>("#upload-progress");
+      const info = $("#upload-info");
+      /** Progress from 0 to 1, or undefined for "busy, no estimate". */
+      const step = (text: string, frac?: number) => {
+        bar.hidden = false;
+        if (frac === undefined) bar.removeAttribute("value");
+        else bar.value = frac;
+        info.textContent = text;
+      };
+      try {
+        step("Reading the image…");
+        const img = await prepareImage(file);
+        const mb = (n: number) => `${(n / 1048576).toFixed(1)} MB`;
+        const size = img.blob.size;
+        const name = `content/incoming/${id}.${img.ext}`;
+        // Big files go up in parts: GitHub's API refuses single uploads of a few tens of MB.
+        const parts = Math.max(1, Math.ceil(size / PART_BYTES));
+        const changes: FileChange[] = [];
+        let done = 0;
+        for (let i = 0; i < parts; i++) {
+          const part = img.blob.slice(i * PART_BYTES, Math.min(size, (i + 1) * PART_BYTES));
+          const label = parts > 1 ? ` (part ${i + 1} of ${parts})` : "";
+          const say = (sent: number) => step(`Uploading ${img.w}×${img.h} ${img.ext.toUpperCase()}, ${mb(done + sent)} of ${mb(size)}${label}…${img.note}`, (done + sent) / size);
+          say(0);
+          const sha = await gh!.createBlob(await blobToBase64(part), (loaded, total) => say((loaded / total) * part.size));
+          done += part.size;
+          changes.push({ path: parts > 1 ? `${name}.part${String(i + 1).padStart(3, "0")}` : name, content: "", sha });
+        }
+        if (parts > 1) {
+          const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", await img.blob.arrayBuffer()));
+          const sha256 = [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
+          changes.push({ path: `${name}.parts.json`, content: JSON.stringify({ parts, bytes: size, sha256 }, null, 2) + "\n" });
+        }
+        step("Saving the commit…", 1);
+        const msg = slot ? `Upload map "${id}" and show it in slot "${slot}"` : `Upload map "${id}"`;
+        const sha = await gh!.commit(msg, async () => {
+          const all = [...changes];
+          if (slot)
+            all.push(
+              await slotsChange((s) => {
+                if (s.slots[slot]) s.slots[slot].map = id;
+              }),
+            );
+          return all;
+        });
+        bar.hidden = true;
+        info.textContent = `Uploaded ${img.w}×${img.h} (${mb(size)}). The processing workflow converts it (a few minutes for a big map), then the site redeploys.${img.note}`;
+        form.reset();
+        return sha;
+      } catch (e) {
+        bar.hidden = true;
+        info.textContent = "";
+        throw e;
+      }
     });
   });
 }

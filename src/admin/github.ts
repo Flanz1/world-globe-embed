@@ -20,6 +20,8 @@ export interface FileChange {
   base64?: boolean;
   /** Remove the file in this commit instead of writing it. */
   delete?: boolean;
+  /** A blob already uploaded with createBlob (then `content` is ignored). */
+  sha?: string;
 }
 
 /** The last commit that touched a file. */
@@ -85,6 +87,36 @@ export class GitHub {
 
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     return (await this.send<T>(path, init)).data;
+  }
+
+  /**
+   * Uploads one blob (base64) and returns its sha, reporting upload progress. Uses XHR because fetch
+   * can't report upload progress. Big files go up as several of these (see the admin upload).
+   */
+  createBlob(base64: string, onProgress?: (loaded: number, total: number) => void): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open("POST", `${API}/repos/${this.repo}/git/blobs`);
+      x.setRequestHeader("Accept", "application/vnd.github+json");
+      x.setRequestHeader("X-GitHub-Api-Version", "2022-11-28");
+      x.setRequestHeader("Authorization", `Bearer ${this.token}`);
+      x.setRequestHeader("Content-Type", "application/json");
+      if (onProgress) x.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded, e.total);
+      x.onerror = () => reject(new GitHubError(0, "The upload was cut off (network error). Try again."));
+      x.onload = () => {
+        let body: { sha?: string; message?: string } = {};
+        try {
+          body = JSON.parse(x.responseText) as typeof body;
+        } catch {
+          /* no JSON body */
+        }
+        if (x.status >= 200 && x.status < 300 && body.sha) return resolve(body.sha);
+        let msg = body.message ?? x.statusText;
+        if (x.status === 401) msg = "The token was rejected (expired or mistyped?).";
+        reject(new GitHubError(x.status, msg));
+      };
+      x.send(JSON.stringify({ content: base64, encoding: "base64" }));
+    });
   }
 
   private async send<T>(path: string, init: RequestInit = {}): Promise<{ data: T; headers: Headers }> {
@@ -192,6 +224,7 @@ export class GitHub {
         changes.map(async (c) => {
           // A null sha removes the file from the tree.
           if (c.delete) return { path: c.path, mode: "100644", type: "blob", sha: null };
+          if (c.sha) return { path: c.path, mode: "100644", type: "blob", sha: c.sha };
           const blob = await this.request<{ sha: string }>(`/repos/${this.repo}/git/blobs`, {
             method: "POST",
             body: JSON.stringify({ content: c.base64 ? c.content : utf8ToBase64(c.content), encoding: "base64" }),
