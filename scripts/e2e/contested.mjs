@@ -10,7 +10,8 @@
  * 3. Pixel identity: a region without zones or overlaps renders exactly like a build of origin/main
  *    (skipped with a note if origin/main can't be checked out).
  * 4. Editor against the mocked GitHub API: contested zones (polygon, freehand, picker, Parts list),
- *    live dashes on overlap, plain drag / Ctrl+drag / Alt+click / arrow keys, undo/redo, one-commit save.
+ *    live dashes on overlap, plain drag / Ctrl+drag / Alt+click / arrow keys, undo/redo, one-commit save,
+ *    deleting whole parts behind a warning.
  *
  * Screenshots and report.json go to .e2e/contested/. Exits non-zero if any check fails.
  */
@@ -548,6 +549,52 @@ if (want("editor")) {
     check(A, "saved with the right partContested", JSON.stringify(f.properties.partContested) === "[-1,-1,0,1]", JSON.stringify(f.properties.partContested));
     check(A, "main untouched", mock.refs.get("main") === mainAtStart);
     await page.screenshot({ path: path.join(OUT, "editor-saved.png") });
+  });
+  await step(A, "delete a whole part (always asks first)", async () => {
+    const warn = "dialog.small-dlg.danger[open]";
+    const s0 = await ed.state();
+    // Parts list button, cancelled: nothing changes.
+    await page.click('dialog.editor .ed-part-row[data-row="3"] [data-act="part-delete"]');
+    await page.waitForSelector(warn);
+    const text = await page.textContent(`${warn} .dlg-body`);
+    check(A, "Delete in the Parts list shows a warning first", /This deletes Part 4 with all \d+ of its vertices/.test(text) && /undo/i.test(text), text);
+    await page.click(`${warn} button:has-text("Keep it")`);
+    await page.waitForTimeout(150);
+    check(A, "'Keep it' leaves the region as it was", JSON.stringify(await ed.state()) === JSON.stringify(s0));
+    // Confirmed: part 4 (a zone of part 2) goes, the rest keep their colours, labels and zones.
+    await page.click('dialog.editor .ed-part-row[data-row="3"] [data-act="part-delete"]');
+    await page.click(`${warn} button:has-text("Delete part")`);
+    await page.waitForTimeout(150);
+    const s1 = await ed.state();
+    check(A, "'Delete part' removes the whole part", s1.parts.length === 3 && JSON.stringify(s1.parts) === JSON.stringify(s0.parts.slice(0, 3)) && JSON.stringify(s1.contested) === "[-1,-1,0]" && JSON.stringify(s1.labels) === JSON.stringify(s0.labels.slice(0, 3)), JSON.stringify(s1.contested));
+    // Right-click inside part 1 (which has a zone): menu → warning names the zone → confirm.
+    await page.click('dialog.editor .ed-part-row[data-row="0"] [data-act="part-select"]');
+    const b = partBox(s1, 0);
+    const [x, y] = await ed.xy((b[0] + b[2]) / 2, (b[1] + b[3]) / 2);
+    await page.mouse.click(x, y, { button: "right" });
+    const item = await page.textContent("dialog.editor .ed-menu:not([hidden]) button");
+    check(A, "right-click inside a part offers 'Delete part 1…'", item === "Delete part 1…", item);
+    await page.click("dialog.editor .ed-menu button");
+    await page.waitForSelector(warn);
+    await page.screenshot({ path: path.join(OUT, "editor-delete-warning.png") });
+    const text2 = await page.textContent(`${warn} .dlg-body`);
+    check(A, "the warning says its contested zone becomes a normal part", /contested zone stays and becomes a normal part/.test(text2), text2);
+    await page.click(`${warn} button:has-text("Delete part")`);
+    await page.waitForTimeout(150);
+    const s2 = await ed.state();
+    check(A, "deleting a parent keeps its zone as a normal part", s2.parts.length === 2 && JSON.stringify(s2.contested) === "[-1,-1]" && JSON.stringify(s2.parts) === JSON.stringify(s1.parts.slice(1)), JSON.stringify(s2.contested));
+    // Delete key on a selected part also asks; Esc keeps it.
+    await page.click('dialog.editor .ed-part-row[data-row="0"] [data-act="part-select"]');
+    await page.focus("dialog.editor canvas.ed-canvas");
+    await page.keyboard.press("Delete");
+    await page.waitForSelector(warn);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(150);
+    check(A, "Delete key on a selected part asks, Esc keeps it", JSON.stringify(await ed.state()) === JSON.stringify(s2) && (await page.locator(warn).count()) === 0);
+    // Undo brings both parts back.
+    await page.keyboard.press("Control+z");
+    await page.keyboard.press("Control+z");
+    check(A, "undo brings deleted parts back", JSON.stringify(await ed.state()) === JSON.stringify(s0));
   });
   check(A, "no errors or dialogs in the admin page", editorErrors.length === 0 && dialogs.length === 0, [...editorErrors, ...dialogs].join(" | ") || "none");
   await ctx.close();
