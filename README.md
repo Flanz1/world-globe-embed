@@ -45,8 +45,8 @@ A region is an outline (a kingdom, a province, a battlefield) drawn on a slot's 
 
 1. Open the admin page and sign in, then pick the **Regions** tab (the address ends in `#regions`, so a reload stays there).
 2. Choose a slot and press **New region**, or press **Edit** on an existing card.
-3. Draw on the flat map. It wraps round left and right, so a region can cross the ±180° edge.
-4. Give it a name and colour in the side panel. The globe preview on the right updates as you draw, and **Centre on region** turns it to face the region.
+3. Draw on the flat map. A new region starts on the freehand tool (drag to draw, let go to close); press `P` for the polygon tool. The map wraps round left and right, so a region can cross the ±180° edge.
+4. Give it a name, and a colour under **Colours and legend**, in the side panel. The globe preview on the right updates as you draw, and **Centre on region** turns it to face the region.
 5. Press **Save**. Each save is one commit that changes only `content/regions/<id>.json`. If someone changed the same file on GitHub since you opened it, the editor refuses to overwrite it and offers to reload.
 
 | Keys and mouse | Does |
@@ -70,7 +70,7 @@ A region is an outline (a kingdom, a province, a battlefield) drawn on a slot's 
 
 **Add part** draws another separate piece (islands), **Cut hole** draws a hole inside a part (a lake). **Simplify…** removes vertices with a live preview and before/after counts, **Smooth** rounds the corners (one pass per click). An edit that would make an outline cross itself is refused and the vertex snaps back. The limit is 5,000 vertices per region.
 
-**Colours and legend.** A region can use several colours, for example one per province or per faction. In the editor's side panel, under **Colours and legend**, press **Add colour** and give each colour a label; then pick a colour for each part in the **Parts** list (hover a part's row to see it outlined on the map). Parts left on "Region colour" use the region's main colour. The embed shows the labelled colours as a small legend in the top-left corner, under the legend title you set (default "Legend"); readers can fold it away by clicking its header. Up to 16 colours per region. Removing a colour sends its parts back to the region colour; undo brings it back.
+**Colours and legend.** A region can use several colours, for example one per province or per faction. In the editor's side panel, under **Colours and legend**, press **Add colour** and give each colour a label; then pick a colour for each part in the **Parts** list. Each part has a numbered badge on the map that matches its row; pointing at either one highlights the other. Parts left on "Default colour" use the colour set at the top of that section. The embed shows the labelled colours as a small legend in the top-left corner, under the legend title you set (default "Legend"); readers can fold it away by clicking its header. Up to 16 colours per region. Removing a colour sends its parts back to the default colour; undo brings it back.
 
 **Rename** changes only the name: the id, and so every embed already pasted, stays the same. **Duplicate** opens an unsaved copy with a new id. **Delete** asks you to type the region's name; embeds of a deleted region fall back to the plain globe with a small "Region not found" note.
 

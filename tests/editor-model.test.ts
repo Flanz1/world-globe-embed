@@ -6,6 +6,7 @@ import {
   deleteVertices,
   insertVertex,
   moveLegendEntry,
+  partAnchor,
   moveVertices,
   nextLegendColour,
   partAt,
@@ -20,7 +21,7 @@ import {
   type EditorState,
   type Parts,
 } from "../src/admin/editor/model.ts";
-import { checkGeometry, type Position } from "../src/shared/geo.ts";
+import { checkGeometry, pointInRing, type Position } from "../src/shared/geo.ts";
 
 const square = (x: number, y: number, s = 10): Position[] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]];
 const props = { name: "A", color: "#c0392b", fillOpacity: 0.35, label: true, description: "", legendTitle: "", legend: [] };
@@ -177,5 +178,22 @@ describe("editor model: part colours and legend", () => {
 
   it("new legend colours avoid ones in use", () => {
     expect(nextLegendColour(["#2E86C1"])).toBe("#28b463");
+  });
+});
+
+describe("editor model: part badges", () => {
+  it("partAnchor is inside the part, even for a C shape and around a hole", () => {
+    expect(partAnchor([square(0, 0)])).toEqual([5, 5]);
+    // C shape: the centroid falls in the gap.
+    const c: Position[] = [[0, 0], [10, 0], [10, 2], [2, 2], [2, 8], [10, 8], [10, 10], [0, 10]];
+    const a = partAnchor([c])!;
+    expect(pointInRing(a, c)).toBe(true);
+    // Square with a hole in the middle: the badge goes beside the hole.
+    const hole = square(3, 3, 4);
+    const b = partAnchor([square(0, 0), hole])!;
+    expect(pointInRing(b, square(0, 0)) && !pointInRing(b, hole)).toBe(true);
+    // Across the antimeridian (unwrapped): stays in the part's own coordinates.
+    expect(partAnchor([square(175, 0)])).toEqual([180, 5]);
+    expect(partAnchor([[[0, 0], [1, 1]]])).toBeNull();
   });
 });
