@@ -6,9 +6,13 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
-import { inspect, listIncoming, processImage } from "./lib/process.ts";
+import { inspect, joinParts, listIncoming, processImage } from "./lib/process.ts";
+
+// Big uploads arrive in parts: join them first. Who uploaded a joined file = who committed its manifest.
+const { joined, errors: partErrors } = joinParts();
 
 function uploader(file: string): string {
+  file = joined.get(file) ?? file;
   try {
     const name = execFileSync("git", ["log", "-1", "--format=%an", "--", file], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
     if (name) return name;
@@ -21,13 +25,13 @@ function uploader(file: string): string {
 const summary = (md: string) => process.env.GITHUB_STEP_SUMMARY && appendFileSync(process.env.GITHUB_STEP_SUMMARY, md + "\n");
 
 const files = listIncoming();
-if (!files.length) {
+if (!files.length && !partErrors.length) {
   console.log("No images in content/incoming/. Nothing to do.");
   process.exit(0);
 }
 
 const checks = await Promise.all(files.map(inspect));
-const errors = checks.flatMap((c) => c.errors);
+const errors = [...partErrors, ...checks.flatMap((c) => c.errors)];
 const seen = new Map<string, string>();
 for (const c of checks) {
   const other = seen.get(c.id);

@@ -6,8 +6,11 @@
 
 /** Widest image re-encoded in the browser; process-maps makes the 16384 tiles from sources this wide. */
 export const REENCODE_MAX = 16384;
-/** Biggest file sent as is. GitHub caps a file at 100 MB, and the upload is base64 (4/3 larger). */
-export const PASS_MAX_BYTES = 70 * 1024 * 1024;
+/** Biggest file sent as is (in parts, see PART_BYTES): GitHub warns about repos growing past a few GB. */
+export const PASS_MAX_BYTES = 100 * 1024 * 1024;
+/** Files bigger than this go up in parts of this size, which process-maps joins again. GitHub's API
+ * refuses single uploads of a few tens of MB ("input too large"), well under its 100 MB file limit. */
+export const PART_BYTES = 8 * 1024 * 1024;
 
 export type Kind = "png" | "jpeg" | "webp";
 
