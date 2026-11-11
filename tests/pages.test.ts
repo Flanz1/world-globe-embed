@@ -174,8 +174,8 @@ describe("regions in the build", () => {
   });
 
   it("embed URL options: flat, label off, dim, start unlocked, custom domain", () => {
-    const code = regionEmbedCode("https://maps.example.org/", "aerthos", "Aerthos", { id: "vael", name: "Vael", label: true }, { view: "flat", height: 600, label: false, dim: true, lock: false });
-    expect(code).toContain('src="https://maps.example.org/v/aerthos/?region=vael&amp;view=flat&amp;label=0&amp;dim=1&amp;lock=0"');
+    const code = regionEmbedCode("https://maps.example.org/", "aerthos", "Aerthos", { id: "vael", name: "Vael", label: true }, { view: "flat", height: 600, label: false, dim: true, lock: false, key: false });
+    expect(code).toContain('src="https://maps.example.org/v/aerthos/?region=vael&amp;view=flat&amp;label=0&amp;dim=1&amp;lock=0&amp;key=0"');
     expect(code).toContain('height="600"');
   });
 });

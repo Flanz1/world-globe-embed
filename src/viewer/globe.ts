@@ -40,10 +40,10 @@ import {
 } from "three";
 import { BASE_DISTANCE, FOV_DEG, MAX_DISTANCE, MIN_DISTANCE, clamp, clampPadding, distanceForZoom, parseHex } from "../shared/params.ts";
 import { imageToGlobe, sphericalCentroid, type Position } from "../shared/geo.ts";
-import { regionFit, type RegionData } from "../shared/region.ts";
-import { paintRegion } from "../shared/raster.ts";
+import { regionFit, regionLayers, type RegionData } from "../shared/region.ts";
+import { paintLayers } from "../shared/raster.ts";
 import type { PreviewMessage, StartContext } from "./contract.ts";
-import { RELOCK_MS, makeLabel, regionNote, setupLock, type Lock } from "./region-ui.ts";
+import { RELOCK_MS, makeLabel, makeLegend, regionNote, setupLock, type Lock } from "./region-ui.ts";
 
 const DEG = Math.PI / 180;
 /** Auto-spin speed in radians per second (about 2 minutes per turn, like the desktop app). */
@@ -293,20 +293,22 @@ export async function start(ctx: StartContext): Promise<void> {
     const g = o.canvas.getContext("2d")!;
     g.clearRect(0, 0, W, H);
     // Map-image frame → texture pixels, exactly like the map texture's own UVs.
-    paintRegion(
+    paintLayers(
       g,
-      reg.geometry,
+      regionLayers(reg),
       (lon) => ((lon + 180) / 360) * W,
       (lat) => ((90 - lat) / 180) * H,
       [-360, 0, 360],
-      { color: reg.color, fillOpacity: reg.fillOpacity, lineWidth: (W / 2048) * 2.5, dim: dimOn() },
+      { fillOpacity: reg.fillOpacity, lineWidth: (W / 2048) * 2.5, dim: dimOn() },
       { w: W, h: H },
     );
     o.tex.needsUpdate = true;
     regCentre = sphericalCentroid(reg.geometry);
     label?.setText((R?.label ?? reg.label) ? reg.name : "");
+    regionKey?.set(R?.key ? reg.legend : [], reg.legendTitle);
   }
   const label = R ? makeLabel(stage) : null;
+  const regionKey = R ? makeLegend(stage) : null;
   const tmpV = new Vector3();
   function placeLabel(): void {
     if (!label || !regCentre) return;

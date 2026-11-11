@@ -6,6 +6,7 @@ import {
   geometryBounds,
   imageToGlobe,
   mapGeometry,
+  polygonsOf,
   type GlobeFrame,
   type Position,
   type RegionGeometry,
@@ -18,6 +19,18 @@ export const REGION_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 export const DEFAULT_FILL_OPACITY = 0.35;
 export const NAME_MAX = 80;
 export const DESCRIPTION_MAX = 500;
+/** Most legend entries per region, and the longest legend label. */
+export const LEGEND_MAX = 16;
+export const LEGEND_LABEL_MAX = 60;
+export const LEGEND_TITLE_MAX = 40;
+/** partLegend value for a part drawn in the region's own colour. */
+export const OWN_COLOUR = -1;
+
+/** One legend row: a colour some of the region's parts are drawn in, and what it means. */
+export interface LegendEntry {
+  label: string;
+  color: string;
+}
 
 export interface RegionProperties {
   name: string;
@@ -27,6 +40,15 @@ export interface RegionProperties {
   fillOpacity?: number;
   label?: boolean;
   description?: string;
+  /** Heading of the embed's legend; "Legend" when empty or missing. */
+  legendTitle?: string;
+  /** Extra colours, each with a label, shown as a legend in the embed. */
+  legend?: LegendEntry[];
+  /**
+   * One entry per polygon of the geometry (a Polygon counts as one), in order: the index of the legend
+   * entry whose colour that part is drawn in, or -1 for the region's own colour. Missing means all -1.
+   */
+  partLegend?: number[];
   updated?: string;
 }
 
@@ -47,6 +69,11 @@ export interface RegionData {
   color: string;
   fillOpacity: number;
   label: boolean;
+  /** Legend heading (may be empty) and rows (may be empty: no legend). */
+  legendTitle: string;
+  legend: LegendEntry[];
+  /** Per polygon: legend index, or -1 for `color`. Same length as the geometry's polygon list. */
+  parts: number[];
   geometry: RegionGeometry;
 }
 
@@ -69,8 +96,50 @@ export function regionData(f: RegionFeature): RegionData {
     color: p.color,
     fillOpacity: p.fillOpacity ?? DEFAULT_FILL_OPACITY,
     label: p.label ?? true,
+    legendTitle: p.legendTitle ?? "",
+    legend: (p.legend ?? []).map((e) => ({ label: e.label, color: e.color })),
+    parts: normalizePartLegend(p.partLegend, polygonsOf(f.geometry).length, p.legend?.length ?? 0),
     geometry: f.geometry,
   };
+}
+
+/** partLegend padded or cut to `n` parts, with anything out of range turned into -1. */
+export function normalizePartLegend(v: readonly number[] | undefined, n: number, legendLength: number): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const k = v?.[i];
+    out.push(typeof k === "number" && Number.isInteger(k) && k >= 0 && k < legendLength ? k : OWN_COLOUR);
+  }
+  return out;
+}
+
+/** Problems with a saved region's legend and partLegend (beyond what the schema checks). */
+export function checkLegend(p: RegionProperties, g: RegionGeometry, where: string): string[] {
+  const errors: string[] = [];
+  const n = p.legend?.length ?? 0;
+  const parts = polygonsOf(g).length;
+  if (p.partLegend) {
+    if (p.partLegend.length !== parts)
+      errors.push(`${where}: "partLegend" has ${p.partLegend.length} entr${p.partLegend.length === 1 ? "y" : "ies"} but the geometry has ${parts} part${parts === 1 ? "" : "s"}; it needs one per part`);
+    p.partLegend.forEach((k, i) => {
+      if (k !== OWN_COLOUR && (k < 0 || k >= n)) errors.push(`${where}: "partLegend" entry ${i} is ${k}, but the legend has ${n} entr${n === 1 ? "y" : "ies"} (use -1 for the region's own colour)`);
+    });
+  }
+  return errors;
+}
+
+/** A region as fill layers: its parts grouped by colour, region colour first, then legend order. */
+export function regionLayers(r: Pick<RegionData, "color" | "legend" | "parts" | "geometry">): { color: string; geometry: RegionGeometry }[] {
+  const polys = polygonsOf(r.geometry);
+  const groups = new Map<number, Ring[][]>();
+  polys.forEach((poly, i) => {
+    const k = r.parts[i] ?? OWN_COLOUR;
+    const key = k >= 0 && k < r.legend.length ? k : OWN_COLOUR;
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(poly);
+  });
+  return [...groups.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([k, coordinates]) => ({ color: k === OWN_COLOUR ? r.color : r.legend[k].color, geometry: { type: "MultiPolygon" as const, coordinates } }));
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -130,7 +199,7 @@ export function parseGeometry(v: unknown): RegionGeometry | null {
  */
 export function parseRegionData(v: unknown): RegionData | null {
   if (!isObj(v)) return null;
-  const { id, slot, name, color, fillOpacity, label, geometry } = v;
+  const { id, slot, name, color, fillOpacity, label, geometry, legend, legendTitle, parts } = v;
   if (typeof id !== "string" || !REGION_ID.test(id)) return null;
   if (typeof slot !== "string" || !REGION_ID.test(slot)) return null;
   if (typeof name !== "string" || name.length > NAME_MAX) return null;
@@ -139,7 +208,22 @@ export function parseRegionData(v: unknown): RegionData | null {
   if (typeof label !== "boolean") return null;
   const g = parseGeometry(geometry);
   if (!g) return null;
-  return { id, slot, name, color, fillOpacity, label, geometry: g };
+  if (legendTitle !== undefined && (typeof legendTitle !== "string" || legendTitle.length > LEGEND_TITLE_MAX)) return null;
+  const lg: LegendEntry[] = [];
+  if (legend !== undefined) {
+    if (!Array.isArray(legend) || legend.length > LEGEND_MAX) return null;
+    for (const e of legend) {
+      if (!isObj(e) || typeof e.label !== "string" || e.label.length > LEGEND_LABEL_MAX) return null;
+      if (typeof e.color !== "string" || !REGION_COLOR.test(e.color)) return null;
+      lg.push({ label: e.label, color: e.color });
+    }
+  }
+  const n = polygonsOf(g).length;
+  if (parts !== undefined) {
+    if (!Array.isArray(parts) || parts.length !== n) return null;
+    if (!parts.every((k) => typeof k === "number" && Number.isInteger(k) && k >= OWN_COLOUR && k < lg.length)) return null;
+  }
+  return { id, slot, name, color, fillOpacity, label, legendTitle: legendTitle ?? "", legend: lg, parts: parts ? [...(parts as number[])] : new Array<number>(n).fill(OWN_COLOUR), geometry: g };
 }
 
 /* ── Framing ── */

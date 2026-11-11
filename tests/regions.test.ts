@@ -6,7 +6,7 @@ import { loadContent } from "../scripts/lib/content.ts";
 import { contentPaths } from "../scripts/lib/paths.ts";
 import type { MapMeta } from "../src/shared/types.ts";
 import type { RegionFeature } from "../src/shared/region.ts";
-import { copyId, parseRegionData, regionFit, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
+import { copyId, normalizePartLegend, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
 import { ZOOM_MAX, ZOOM_MIN } from "../src/shared/params.ts";
 
 const LQIP = "data:image/webp;base64,UklGRg==";
@@ -160,7 +160,7 @@ describe("region validation", () => {
 describe("region helpers", () => {
   it("parseRegionData accepts good data and rejects anything off", () => {
     const d = { id: "a", slot: "s", name: "A", color: "#abc", fillOpacity: 0.3, label: true, geometry: good().geometry };
-    expect(parseRegionData(d)).toEqual(d);
+    expect(parseRegionData(d)).toEqual({ ...d, legendTitle: "", legend: [], parts: [-1] });
     expect(parseRegionData({ ...d, color: "#abc;x" })).toBeNull();
     expect(parseRegionData({ ...d, id: "../x" })).toBeNull();
     expect(parseRegionData({ ...d, fillOpacity: Number.NaN })).toBeNull();
@@ -193,5 +193,77 @@ describe("region helpers", () => {
     expect(v.cx).toBe(180);
     expect(v.cy).toBe(5);
     expect(v.k).toBeCloseTo(Math.min(900 / 26, 480 / 13), 6);
+  });
+});
+
+describe("region colours and legend", () => {
+  const multi = (): RegionFeature => {
+    const f = good();
+    f.geometry = {
+      type: "MultiPolygon",
+      coordinates: [
+        [[[12.5, 40.1], [17.9, 35.3], [18.2, 41.0], [12.5, 40.1]]],
+        [[[20, 10], [25, 10], [25, 15], [20, 10]]],
+        [[[30, 10], [35, 10], [35, 15], [30, 10]]],
+      ],
+    };
+    f.properties.legendTitle = "Provinces";
+    f.properties.legend = [
+      { label: "North", color: "#2e86c1" },
+      { label: "<b>South</b>", color: "#28b463" },
+    ];
+    f.properties.partLegend = [-1, 1, 0];
+    return f;
+  };
+
+  it("a region with a legend validates", () => {
+    const res = loadContent(project({ "kingdom-of-vael.json": multi() }));
+    expect(res.errors).toEqual([]);
+    expect(res.content?.regions?.size).toBe(1);
+  });
+
+  it("partLegend must have one entry per part and point at real legend entries", () => {
+    const short = multi();
+    short.properties.partLegend = [0, 1];
+    expect(loadContent(project({ "kingdom-of-vael.json": short })).errors.join("\n")).toMatch(/"partLegend" has 2 entries but the geometry has 3 parts/);
+    const bad = multi();
+    bad.properties.partLegend = [0, 1, 5];
+    expect(loadContent(project({ "kingdom-of-vael.json": bad })).errors.join("\n")).toMatch(/entry 2 is 5, but the legend has 2 entries/);
+    const colour = multi();
+    colour.properties.legend![0].color = "red;background:url(x)";
+    expect(loadContent(project({ "kingdom-of-vael.json": colour })).errors.length).toBeGreaterThan(0);
+  });
+
+  it("regionData and regionLayers group the parts by colour, region colour first", () => {
+    const d = regionData(multi());
+    expect(d.parts).toEqual([-1, 1, 0]);
+    const layers = regionLayers(d);
+    expect(layers.map((l) => l.color)).toEqual(["#c0392b", "#2e86c1", "#28b463"]);
+    expect(layers.map((l) => (l.geometry.type === "MultiPolygon" ? l.geometry.coordinates.length : 1))).toEqual([1, 1, 1]);
+    expect(layers[1].geometry).toEqual({ type: "MultiPolygon", coordinates: [multi().geometry.coordinates[2]] });
+  });
+
+  it("normalizePartLegend pads, cuts and drops bad indices", () => {
+    expect(normalizePartLegend(undefined, 2, 3)).toEqual([-1, -1]);
+    expect(normalizePartLegend([2, 0, 1], 2, 3)).toEqual([2, 0]);
+    expect(normalizePartLegend([3, -2, 0.5], 3, 3)).toEqual([-1, -1, -1]);
+  });
+
+  it("parseRegionData checks the legend and the part colours", () => {
+    const d = regionData(multi());
+    const wire = JSON.parse(JSON.stringify(d));
+    expect(parseRegionData(wire)).toEqual(d);
+    expect(parseRegionData({ ...wire, legend: [{ label: "x", color: "#zzz" }] })).toBeNull();
+    expect(parseRegionData({ ...wire, legend: [{ label: "x".repeat(61), color: "#abc" }] })).toBeNull();
+    expect(parseRegionData({ ...wire, legend: Array.from({ length: 17 }, () => ({ label: "x", color: "#abc" })) })).toBeNull();
+    expect(parseRegionData({ ...wire, parts: [0, 1] })).toBeNull();
+    expect(parseRegionData({ ...wire, parts: [0, 1, 2] })).toBeNull();
+    expect(parseRegionData({ ...wire, legendTitle: 5 })).toBeNull();
+    // Old data without the legend fields still loads.
+    const old = { ...wire };
+    delete old.legend;
+    delete old.legendTitle;
+    delete old.parts;
+    expect(parseRegionData(old)?.parts).toEqual([-1, -1, -1]);
   });
 });

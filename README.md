@@ -70,6 +70,8 @@ A region is an outline (a kingdom, a province, a battlefield) drawn on a slot's 
 
 **Add part** draws another separate piece (islands), **Cut hole** draws a hole inside a part (a lake). **Simplify…** removes vertices with a live preview and before/after counts, **Smooth** rounds the corners (one pass per click). An edit that would make an outline cross itself is refused and the vertex snaps back. The limit is 5,000 vertices per region.
 
+**Colours and legend.** A region can use several colours, for example one per province or per faction. In the editor's side panel, under **Colours and legend**, press **Add colour** and give each colour a label; then pick a colour for each part in the **Parts** list (hover a part's row to see it outlined on the map). Parts left on "Region colour" use the region's main colour. The embed shows the labelled colours as a small legend in the top-left corner, under the legend title you set (default "Legend"); readers can fold it away by clicking its header. Up to 16 colours per region. Removing a colour sends its parts back to the region colour; undo brings it back.
+
 **Rename** changes only the name: the id, and so every embed already pasted, stays the same. **Duplicate** opens an unsaved copy with a new id. **Delete** asks you to type the region's name; embeds of a deleted region fall back to the plain globe with a small "Region not found" note.
 
 ### How regions are stored
@@ -79,6 +81,7 @@ Each region is a GeoJSON Feature in `content/regions/<id>.json`, checked against
 - Coordinates are `[longitude, latitude]` in the **map image's** frame: longitude −180 at the image's left edge to 180 at its right edge, latitude 90 at the top to −90 at the bottom. Pole padding and the prime-meridian shift are applied when drawing, so changing a slot's padding or shift keeps regions on the same land.
 - An edge between two points always takes the shorter way round, so `170 → -170` crosses the ±180° line (20°), never the long way (340°). A single ring may span at most 180° of longitude and can't go round a pole; split anything bigger into parts.
 - Outer rings run counter-clockwise and holes clockwise, every ring is closed, nothing crosses itself, and coordinates have at most 4 decimals.
+- `properties.legend` is an optional list of `{ "label", "color" }` entries (at most 16), and `properties.partLegend` gives one number per part (per polygon, in order): the index of the legend entry that part is drawn in, or `-1` for the region's own `color`. Leave both out for a single-colour region. `properties.legendTitle` is the legend's heading.
 - `properties.slot` must name an existing slot. `properties.map` records which map it was drawn on; if the slot now shows a different map, validation warns (it doesn't fail) and the admin card says "drawn on a different map".
 
 ### Embedding a region
@@ -100,6 +103,7 @@ Region embeds take these parameters on top of the ones above:
 | `label` | `0` / `1` | Region name label (default: the region's own setting) |
 | `dim` | `0` / `1` | Dim everything outside the region |
 | `lock` | `0` / `1` | `1` (default) starts locked on the region; `0` starts unlocked |
+| `key` | `0` / `1` | `0` hides the region's colour legend (shown by default when the region has one). Not the same as `legend`, which is the grid legend |
 | `lat`, `lon`, `zoom` | as above | Override the automatic framing (in the flat view: centre in map degrees and a zoom multiplier) |
 
 `rotate` defaults to off for region embeds.

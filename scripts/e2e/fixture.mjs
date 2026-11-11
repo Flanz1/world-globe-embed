@@ -5,7 +5,7 @@
  *
  *   node scripts/e2e/fixture.mjs   → prints the temp dir
  */
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -21,6 +21,15 @@ export const MAP = { id: "landmarks", w: 3600, h: 2000 };
 export const SLOT = { slug: "align", north: 12, south: 6, shift: 40 };
 /** Magenta ellipse that is a circle of 6° in lon/lat degrees, at image lon 150, lat 40. */
 export const DISC = { lon: 150, lat: 40, r: 6 };
+/** Three boxes in one region, each drawn in its own colour (two from the legend), over plain sea. */
+export const PROVINCES = {
+  colours: ["#ff3b30", "#00e676", "#2979ff"],
+  boxes: [
+    [60, -40, 70, -30],
+    [72, -40, 82, -30],
+    [84, -40, 94, -30],
+  ],
+};
 /** Yellow box across the antimeridian: lon 170 → -170, lat -30 → -10. */
 export const BOX = { west: 170, east: -170, south: -30, north: -10 };
 
@@ -90,8 +99,10 @@ export async function makeFixture({ quiet = false } = {}) {
   slots.slots[SLOT.slug] = { map: MAP.id, title: "Alignment test", north: SLOT.north, south: SLOT.south, shift: SLOT.shift, pole: "#334455" };
   writeFileSync(slotsFile, JSON.stringify(slots, null, 2) + "\n");
 
+  // Only the test regions: the repo's own content/regions would change the counts the checks expect.
   const regionsDir = path.join(dir, "content/regions");
-  if (!existsSync(regionsDir)) mkdirSync(regionsDir, { recursive: true });
+  rmSync(regionsDir, { recursive: true, force: true });
+  mkdirSync(regionsDir, { recursive: true });
   const write = (r) => writeFileSync(path.join(regionsDir, `${r.id}.json`), JSON.stringify(r, null, 2) + "\n");
   write(region("landmark-disc", "Magenta Isle", { type: "Polygon", coordinates: [discRing()] }));
   write(
@@ -110,6 +121,24 @@ export async function makeFixture({ quiet = false } = {}) {
   writeFileSync(
     path.join(regionsDir, "old-map-region.json"),
     JSON.stringify({ ...region("old-map-region", "Old Province", { type: "Polygon", coordinates: [[[0, 0], [20, 0], [20, 15], [0, 15], [0, 0]]] }), properties: { name: "Old Province", slot: "aerthos", map: "world-map", color: "#2e86de" } }, null, 2) + "\n",
+  );
+  // Several colours with a legend (one label hostile), for the legend checks.
+  write(
+    region(
+      "provinces",
+      "Three Provinces",
+      { type: "MultiPolygon", coordinates: PROVINCES.boxes.map(([w, s, e, n]) => [[[w, s], [e, s], [e, n], [w, n], [w, s]]]) },
+      {
+        color: PROVINCES.colours[0],
+        fillOpacity: 0.9,
+        legendTitle: "Provinces",
+        legend: [
+          { label: "Green March", color: PROVINCES.colours[1] },
+          { label: '<img src=x onerror=alert(3)>', color: PROVINCES.colours[2] },
+        ],
+        partLegend: [-1, 0, 1],
+      },
+    ),
   );
   // 2,000 vertices, for the editor's live-preview speed check.
   const big = [];

@@ -8,10 +8,10 @@
  */
 import { clamp, clampPadding } from "../shared/params.ts";
 import { geometryBounds, globeToImage, sphericalCentroid, type Position } from "../shared/geo.ts";
-import { FLAT_K_MAX, flatFit, flatMinK, type FlatView, type RegionData } from "../shared/region.ts";
-import { paintRegion } from "../shared/raster.ts";
+import { FLAT_K_MAX, flatFit, flatMinK, regionLayers, type FlatView, type RegionData } from "../shared/region.ts";
+import { paintLayers } from "../shared/raster.ts";
 import type { FlatStartContext } from "./contract.ts";
-import { RELOCK_MS, makeLabel, regionNote, setupLock, type Lock } from "./region-ui.ts";
+import { RELOCK_MS, makeLabel, makeLegend, regionNote, setupLock, type Lock } from "./region-ui.ts";
 
 type Img = ImageBitmap | HTMLImageElement;
 
@@ -50,6 +50,8 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   let img: Img | null = null;
   let imgW = 0;
   let reg: RegionData | null = null;
+  /** The region's parts grouped by colour, worked out once per region rather than per frame. */
+  let layers: ReturnType<typeof regionLayers> = [];
   let regCentre: Position | null = null;
   let gridOn = cfg.grid;
   let lock: Lock | null = null;
@@ -120,8 +122,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     if (reg) {
       // A region may unwrap up to 180° either side of its first vertex, so draw one copy more each way.
       const all = [offsets[0] - 360, ...offsets, offsets[offsets.length - 1] + 360];
-      paintRegion(g, reg.geometry, (lon) => sx(lon, w), (lat) => sy(lat, h), all, {
-        color: reg.color,
+      paintLayers(g, layers, (lon) => sx(lon, w), (lat) => sy(lat, h), all, {
         fillOpacity: reg.fillOpacity,
         lineWidth: 2,
         dim: !!R?.dim,
@@ -304,6 +305,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   };
 
   const label = R ? makeLabel(stage) : null;
+  const regionKey = R ? makeLegend(stage) : null;
   if (R) {
     lock = setupLock(canvas, R.lock, (locked) => {
       if (!locked) return;
@@ -312,6 +314,8 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     });
     const setRegion = (r: RegionData) => {
       reg = r;
+      layers = regionLayers(r);
+      regionKey?.set(R.key ? r.legend : [], r.legendTitle);
       regCentre = sphericalCentroid(r.geometry);
       label?.setText((R.label ?? r.label) ? r.name : "");
     };

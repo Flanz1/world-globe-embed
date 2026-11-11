@@ -10,6 +10,8 @@ export interface EmbedOptions {
   label: boolean;
   dim: boolean;
   lock: boolean;
+  /** Show the region's legend (key=0 hides it). */
+  key: boolean;
 }
 
 export const defaultEmbedOptions = (region: { label?: boolean }): EmbedOptions => ({
@@ -18,6 +20,7 @@ export const defaultEmbedOptions = (region: { label?: boolean }): EmbedOptions =
   label: region.label ?? true,
   dim: false,
   lock: true,
+  key: true,
 });
 
 /** v/<slot>/?region=<id>&view=… with only the params that differ from the defaults. */
@@ -26,6 +29,7 @@ export function regionEmbedUrl(site: string | URL, slot: string, region: { id: s
   if (o.label !== (region.label ?? true)) q.set("label", o.label ? "1" : "0");
   if (o.dim) q.set("dim", "1");
   if (!o.lock) q.set("lock", "0");
+  if (o.key === false) q.set("key", "0");
   return new URL(`v/${encodeURIComponent(slot)}/?${q}`, site).href;
 }
 

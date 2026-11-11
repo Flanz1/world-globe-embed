@@ -22,8 +22,24 @@ import {
   type Position,
   type RegionGeometry,
 } from "../../shared/geo.ts";
-import { paintRegion, traceGeometry, traceRing } from "../../shared/raster.ts";
-import { REGION_COLOR, REGION_ID, DEFAULT_FILL_OPACITY, flatFit, flatMinK, slugify, uniqueId, type RegionData, type RegionFeature } from "../../shared/region.ts";
+import { paintLayers, traceGeometry, traceRing } from "../../shared/raster.ts";
+import {
+  DEFAULT_FILL_OPACITY,
+  LEGEND_LABEL_MAX,
+  LEGEND_MAX,
+  LEGEND_TITLE_MAX,
+  OWN_COLOUR,
+  REGION_COLOR,
+  REGION_ID,
+  flatFit,
+  flatMinK,
+  normalizePartLegend,
+  regionLayers,
+  slugify,
+  uniqueId,
+  type RegionData,
+  type RegionFeature,
+} from "../../shared/region.ts";
 import { clampPadding } from "../../shared/params.ts";
 import type { MapMeta, SlotsFile } from "../../shared/types.ts";
 import { h } from "../dom.ts";
@@ -38,12 +54,16 @@ import {
   countVertices,
   deleteVertices,
   insertVertex,
+  moveLegendEntry,
+  nextLegendColour,
   partAt,
   partsFromGeometry,
+  removeLegendEntry,
   ringProblem,
   simplifyParts,
   smoothParts,
   toGeometry,
+  toStyledGeometry,
   translate,
   vkey,
   type EditorState,
@@ -90,6 +110,28 @@ const expandHex = (c: string) => (/^#[0-9a-f]{3}$/i.test(c) ? `#${c[1]}${c[1]}${
 
 class Conflict extends Error {}
 
+/** Editor state for a saved region (or the empty state for a new one). */
+function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"): EditorState {
+  const fp = f?.properties;
+  const legend = (fp?.legend ?? [])
+    .slice(0, LEGEND_MAX)
+    .map((e) => ({ label: String(e.label ?? "").slice(0, LEGEND_LABEL_MAX), color: REGION_COLOR.test(e.color) ? expandHex(e.color) : "#7f8c8d" }));
+  const parts = f ? partsFromGeometry(f.geometry) : [];
+  return {
+    parts,
+    styles: normalizePartLegend(fp?.partLegend, parts.length, legend.length),
+    props: {
+      name: fp?.name ?? "",
+      color: fp && REGION_COLOR.test(fp.color) ? expandHex(fp.color) : fallbackColour,
+      fillOpacity: fp?.fillOpacity ?? DEFAULT_FILL_OPACITY,
+      label: fp?.label ?? true,
+      description: fp?.description ?? "",
+      legendTitle: (fp?.legendTitle ?? "").slice(0, LEGEND_TITLE_MAX),
+      legend,
+    },
+  };
+}
+
 export const SHORTCUTS: [string, string][] = [
   ["V / P / F", "Select, polygon and freehand tools"],
   ["Click (polygon)", "Add a point; double-click, Enter or click the first point to close"],
@@ -123,17 +165,7 @@ export function openEditor(o: EditorOptions): void {
   const snapPts: Position[] = [];
   for (const n of neighbours) for (const poly of polygonsOf(n.geometry)) for (const r of poly) for (const p of r) snapPts.push(p);
 
-  const fp = o.feature?.properties;
-  const hist = new History({
-    parts: o.feature ? partsFromGeometry(o.feature.geometry) : [],
-    props: {
-      name: fp?.name ?? "",
-      color: fp && REGION_COLOR.test(fp.color) ? expandHex(fp.color) : "#c0392b",
-      fillOpacity: fp?.fillOpacity ?? DEFAULT_FILL_OPACITY,
-      label: fp?.label ?? true,
-      description: fp?.description ?? "",
-    },
-  });
+  const hist = new History(stateOf(o.feature));
   let id = o.feature?.id ?? "";
   let sha = o.sha;
   let isNew = o.isNew;
@@ -167,6 +199,10 @@ export function openEditor(o: EditorOptions): void {
   const labelIn = h("input", { type: "checkbox", checked: hist.state.props.label, name: "label" });
   const descIn = h("textarea", { maxLength: 500, rows: 3, value: hist.state.props.description, name: "description" });
   const stats = h("p", { className: "muted small ed-stats" });
+  const keyTitleIn = h("input", { type: "text", maxLength: LEGEND_TITLE_MAX, placeholder: "Legend", value: hist.state.props.legendTitle, name: "legend-title" });
+  const keyRows = h("div", { className: "ed-key" });
+  const addKeyBtn = btn("Add colour", "Add a colour with a label to the legend", () => addLegendEntry(), "key-add");
+  const partRows = h("div", { className: "ed-parts" });
   const saveBtn = h("button", { type: "button", textContent: "Save", className: "ed-save" });
   const closeBtn = h("button", { type: "button", className: "ghost", textContent: "Close" });
 
@@ -220,6 +256,17 @@ export function openEditor(o: EditorOptions): void {
         h("div", { className: "row" }, h("label", { className: "inline" }, "Colour", colorIn), h("label", { className: "inline grow" }, "Fill", opacityIn, opacityOut)),
         h("label", { className: "check" }, labelIn, "Show label in embed"),
         h("label", {}, "Description (plain text)", descIn),
+        h(
+          "fieldset",
+          { className: "ed-colours" },
+          h("legend", { textContent: "Colours and legend" }),
+          h("p", { className: "muted small", textContent: "Add colours with a label, then pick a colour for each part below. The embed shows them as a legend." }),
+          h("label", {}, "Legend title", keyTitleIn),
+          keyRows,
+          addKeyBtn,
+          h("p", { className: "muted small", textContent: "Parts (hover one to see it on the map)" }),
+          partRows,
+        ),
         stats,
       ),
     ),
@@ -296,7 +343,11 @@ export function openEditor(o: EditorOptions): void {
   let pinch: { d: number; mx: number; my: number } | null = null;
 
   const parts = () => hist.state.parts;
-  const setParts = (label: string, next: Parts, merge?: string) => hist.apply(label, { ...hist.state, parts: next }, merge);
+  /** Geometry edits. `styles` must be given whenever parts are added or removed. */
+  const setParts = (label: string, next: Parts, merge?: string, styles = hist.state.styles) =>
+    hist.apply(label, { ...hist.state, parts: next, styles: normalizePartLegend(styles, next.length, hist.state.props.legend.length) }, merge);
+  /** Part highlighted from the side panel's part list, or -1. */
+  let hoverPart = -1;
 
   function setMsg(text: string, kind: "muted" | "error" | "ok" = "muted"): void {
     msg.textContent = text;
@@ -350,7 +401,19 @@ export function openEditor(o: EditorOptions): void {
     const p = simplifyPreview ?? parts();
     const s = hist.state.props;
     if (p.length) {
-      paintRegion(g, asGeometry(parts()), sx, sy, offs, { color: s.color, fillOpacity: simplifyPreview ? s.fillOpacity * 0.4 : s.fillOpacity, lineWidth: 2 }, { w, h: hh });
+      const layers = regionLayers({ color: s.color, legend: s.legend, parts: hist.state.styles, geometry: asGeometry(parts()) });
+      paintLayers(g, layers, sx, sy, offs, { fillOpacity: simplifyPreview ? s.fillOpacity * 0.4 : s.fillOpacity, lineWidth: 2 }, { w, h: hh });
+      const hp = parts()[hoverPart];
+      if (hp) {
+        g.save();
+        g.setLineDash([6, 4]);
+        g.lineWidth = 2.5;
+        g.strokeStyle = "#ffffff";
+        g.beginPath();
+        for (const ring of hp) traceRing(g, ring, sx, sy, offs);
+        g.stroke();
+        g.restore();
+      }
       if (simplifyPreview) {
         g.save();
         g.setLineDash([5, 4]);
@@ -511,7 +574,9 @@ export function openEditor(o: EditorOptions): void {
     color: hist.state.props.color,
     fillOpacity: hist.state.props.fillOpacity,
     label: hist.state.props.label,
-    geometry: toGeometry(parts()),
+    legendTitle: hist.state.props.legendTitle.slice(0, LEGEND_TITLE_MAX),
+    legend: hist.state.props.legend.map((e) => ({ label: e.label.slice(0, LEGEND_LABEL_MAX), color: e.color })),
+    ...(({ geometry, partLegend }) => ({ geometry, parts: partLegend }))(toStyledGeometry(parts(), hist.state.styles)),
   });
   let previewRaf = 0;
   let lastSent = -1;
@@ -540,6 +605,8 @@ export function openEditor(o: EditorOptions): void {
     opacityOut.value = `${Math.round(s.fillOpacity * 100)}%`;
     labelIn.checked = s.label;
     if (document.activeElement !== descIn) descIn.value = s.description;
+    if (document.activeElement !== keyTitleIn) keyTitleIn.value = s.legendTitle;
+    syncColours();
     idIn.disabled = !isNew;
     title.textContent = `${isNew ? "New region" : "Edit region"}: ${s.name || "(unnamed)"}`;
   }
@@ -567,6 +634,98 @@ export function openEditor(o: EditorOptions): void {
   opacityIn.addEventListener("input", () => (setProp("fillOpacity", Number(opacityIn.value), "Fill opacity"), changed()));
   labelIn.addEventListener("change", () => (setProp("label", labelIn.checked, "Label"), changed()));
   descIn.addEventListener("input", () => (setProp("description", descIn.value, "Description"), changed()));
+  keyTitleIn.addEventListener("input", () => (setProp("legendTitle", keyTitleIn.value.slice(0, LEGEND_TITLE_MAX), "Legend title"), changed()));
+
+  /* ── Colours and legend ── */
+  const entryName = (k: number) => (k === OWN_COLOUR ? "Region colour" : hist.state.props.legend[k]?.label.trim() || `Colour ${k + 1}`);
+  function setLegend(label: string, legend: EditorState["props"]["legend"], merge?: string): void {
+    hist.apply(label, { ...hist.state, props: { ...hist.state.props, legend } }, merge);
+    changed();
+  }
+  function addLegendEntry(): void {
+    const l = hist.state.props.legend;
+    if (l.length >= LEGEND_MAX) return setMsg(`A legend can have at most ${LEGEND_MAX} colours.`, "error");
+    setLegend("Add legend colour", [...l.map((e) => ({ ...e })), { label: "", color: nextLegendColour([hist.state.props.color, ...l.map((e) => e.color)]) }]);
+    (keyRows.querySelectorAll<HTMLInputElement>("input[type=text]")[l.length] ?? null)?.focus();
+  }
+  function setPartStyle(p: number, k: number): void {
+    const styles = [...hist.state.styles];
+    styles[p] = k;
+    hist.apply("Part colour", { ...hist.state, styles });
+    changed();
+  }
+  /** Rebuilds the legend and part rows only when their structure changes, so typing keeps focus. */
+  let colourSig = "";
+  function syncColours(): void {
+    const s = hist.state;
+    const sig = JSON.stringify([s.props.legend.length, s.parts.length, s.parts.map((r) => [r[0]?.length ?? 0, r.length])]);
+    if (sig !== colourSig) {
+      colourSig = sig;
+      keyRows.replaceChildren(
+        ...s.props.legend.map((e, k) => {
+          const c = h("input", { type: "color", value: e.color, ariaLabel: `Colour ${k + 1}`, dataset: { key: String(k) } });
+          const t = h("input", { type: "text", maxLength: LEGEND_LABEL_MAX, placeholder: `Colour ${k + 1}`, value: e.label, ariaLabel: `Label for colour ${k + 1}`, dataset: { key: String(k) } });
+          c.addEventListener("input", () => {
+            const legend = hist.state.props.legend.map((x) => ({ ...x }));
+            legend[k].color = c.value.toLowerCase();
+            setLegend("Legend colour", legend, `key-colour:${k}`);
+          });
+          t.addEventListener("input", () => {
+            const legend = hist.state.props.legend.map((x) => ({ ...x }));
+            legend[k].label = t.value.slice(0, LEGEND_LABEL_MAX);
+            setLegend("Legend label", legend, `key-label:${k}`);
+          });
+          const used = hist.state.styles.filter((v) => v === k).length;
+          return h(
+            "div",
+            { className: "ed-key-row" },
+            c,
+            t,
+            h("span", { className: "muted small", textContent: `${used} part${used === 1 ? "" : "s"}`, title: "Parts drawn in this colour" }),
+            btn("↑", "Move up", () => (hist.apply("Reorder legend", moveLegendEntry(hist.state, k, -1)), changed())),
+            btn("↓", "Move down", () => (hist.apply("Reorder legend", moveLegendEntry(hist.state, k, 1)), changed())),
+            btn("×", "Remove this colour (its parts go back to the region colour)", () => (hist.apply("Remove legend colour", removeLegendEntry(hist.state, k)), changed()), "key-remove"),
+          );
+        }),
+      );
+      partRows.replaceChildren(
+        ...s.parts.map((rings, p) => {
+          const sel = h("select", { ariaLabel: `Colour of part ${p + 1}`, dataset: { part: String(p) } });
+          for (const k of [OWN_COLOUR, ...s.props.legend.map((_, i) => i)]) sel.append(h("option", { value: String(k), textContent: entryName(k) }));
+          sel.addEventListener("change", () => setPartStyle(p, Number(sel.value)));
+          const sw = h("i", { className: "ed-swatch" });
+          const row = h("div", { className: "ed-part-row" }, sw, h("span", { textContent: `Part ${p + 1}`, title: `${rings[0]?.length ?? 0} vertices${rings.length > 1 ? `, ${rings.length - 1} hole(s)` : ""}` }), sel);
+          row.addEventListener("pointerenter", () => ((hoverPart = p), draw()));
+          row.addEventListener("pointerleave", () => ((hoverPart = -1), draw()));
+          return row;
+        }),
+      );
+      if (!s.parts.length) partRows.append(h("p", { className: "muted small", textContent: "No parts yet." }));
+    }
+    // Values that change without changing the structure.
+    keyRows.querySelectorAll<HTMLInputElement>("input").forEach((el) => {
+      const e = s.props.legend[Number(el.dataset.key)];
+      if (!e || document.activeElement === el) return;
+      if (el.type === "color") el.value = e.color;
+      else el.value = e.label;
+    });
+    partRows.querySelectorAll<HTMLDivElement>(".ed-part-row").forEach((row, p) => {
+      const k = s.styles[p] ?? OWN_COLOUR;
+      const sel = row.querySelector("select")!;
+      // Option texts follow the legend labels as they're typed (rebuilding the rows would lose focus).
+      for (const opt of sel.options) {
+        const t = entryName(Number(opt.value));
+        if (opt.textContent !== t) opt.textContent = t;
+      }
+      if (document.activeElement !== sel) sel.value = String(k);
+      (row.querySelector(".ed-swatch") as HTMLElement).style.background = k === OWN_COLOUR ? s.props.color : (s.props.legend[k]?.color ?? s.props.color);
+    });
+    keyRows.querySelectorAll<HTMLSpanElement>(".ed-key-row > span").forEach((el, k) => {
+      const used = s.styles.filter((v) => v === k).length;
+      el.textContent = `${used} part${used === 1 ? "" : "s"}`;
+    });
+    addKeyBtn.disabled = s.props.legend.length >= LEGEND_MAX;
+  }
 
   /** After any state change: redraw, update the panel and the globe. */
   function changed(): void {
@@ -620,7 +779,7 @@ export function openEditor(o: EditorOptions): void {
         return false;
       }
       setParts("Cut hole", addHole(parts(), ring)!);
-    } else setParts(parts().length ? "Add part" : "Draw outline", addPart(parts(), ring));
+    } else setParts(parts().length ? "Add part" : "Draw outline", addPart(parts(), ring), undefined, [...hist.state.styles, OWN_COLOUR]);
     setMsg(`${target === "hole" ? "Hole" : "Outline"} added. Drag vertices to refine it.`, "ok");
     target = "part";
     drawing = null;
@@ -690,7 +849,7 @@ export function openEditor(o: EditorOptions): void {
     const res = deleteVertices(parts(), refs);
     const prob = ringProblem(res.parts);
     if (prob) return setMsg(`Can't delete that: ${prob.message.toLowerCase()}`, "error");
-    setParts(label, res.parts);
+    setParts(label, res.parts, undefined, res.kept.map((p) => hist.state.styles[p] ?? OWN_COLOUR));
     selection.clear();
     setMsg(
       res.removedParts
@@ -1103,7 +1262,7 @@ export function openEditor(o: EditorOptions): void {
 
   function embed(): void {
     if (isNew) return alertBox("Save first", "Save the region before copying its embed code: the embed loads the saved region by its id.");
-    openEmbedDialog({ region: { id, name: hist.state.props.name, label: hist.state.props.label }, slot: slotName, slotTitle: slot.title ?? map?.name ?? slotName });
+    openEmbedDialog({ region: { id, name: hist.state.props.name, label: hist.state.props.label, hasLegend: hist.state.props.legend.length > 0 }, slot: slotName, slotTitle: slot.title ?? map?.name ?? slotName });
   }
 
   /* ── Save ── */
@@ -1118,7 +1277,7 @@ export function openEditor(o: EditorOptions): void {
       if (o.takenIds.has(id)) return setMsg(`The id "${id}" is taken. Choose another one.`, "error"), idIn.focus();
     }
     if (!s.parts.length) return setMsg("Draw the region first.", "error");
-    const geometry = toGeometry(s.parts);
+    const { geometry, partLegend } = toStyledGeometry(s.parts, s.styles);
     const errs = checkGeometry(geometry);
     if (errs.length) return setMsg(errs[0], "error");
     const props = s.props;
@@ -1134,6 +1293,10 @@ export function openEditor(o: EditorOptions): void {
         fillOpacity: Math.round(props.fillOpacity * 100) / 100,
         label: props.label,
         ...(props.description.trim() ? { description: props.description.trim().slice(0, 500) } : {}),
+        ...(props.legend.length && props.legendTitle.trim() ? { legendTitle: props.legendTitle.trim().slice(0, LEGEND_TITLE_MAX) } : {}),
+        ...(props.legend.length
+          ? { legend: props.legend.map((e) => ({ label: e.label.trim().slice(0, LEGEND_LABEL_MAX), color: e.color })), partLegend }
+          : {}),
         updated: stamp(),
       },
       geometry,
@@ -1184,16 +1347,7 @@ export function openEditor(o: EditorOptions): void {
       const f = await o.gh.readFile(regionPath(id));
       const fresh = JSON.parse(f.text) as RegionFeature;
       sha = f.sha;
-      hist.apply("Reload from GitHub", {
-        parts: partsFromGeometry(fresh.geometry),
-        props: {
-          name: fresh.properties.name,
-          color: REGION_COLOR.test(fresh.properties.color) ? expandHex(fresh.properties.color) : hist.state.props.color,
-          fillOpacity: fresh.properties.fillOpacity ?? DEFAULT_FILL_OPACITY,
-          label: fresh.properties.label ?? true,
-          description: fresh.properties.description ?? "",
-        },
-      });
+      hist.apply("Reload from GitHub", stateOf(fresh, hist.state.props.color));
       saved = JSON.stringify(hist.state);
       setMsg("Reloaded the latest version from GitHub.", "ok");
       changed();
