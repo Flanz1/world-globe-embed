@@ -53,7 +53,7 @@ A region is an outline (a kingdom, a province, a battlefield) drawn on a slot's 
 | Keys and mouse | Does |
 |---|---|
 | `V` / `P` / `F` | Select, polygon and freehand tools |
-| Click (polygon) | Add a point; double-click, `Enter` or click the first point to close |
+| Click (polygon) | Add a point; double-click, `Enter` or click the first point to close (a split line: double-click or `Enter`) |
 | `Backspace` while drawing | Remove the last point |
 | `Esc` | Cancel the outline being drawn, or clear the selection (vertices first, then the selected part) |
 | Drag a vertex | Move it; hold `Shift` to snap to a neighbouring region's vertex |
@@ -71,7 +71,7 @@ A region is an outline (a kingdom, a province, a battlefield) drawn on a slot's 
 | `G` | Grid |
 | `?` | This list, in the editor |
 
-**Add part** draws another separate piece (islands), **Cut hole** draws a hole inside a part (a lake). **Simplify…** removes vertices with a live preview and before/after counts, **Smooth** rounds the corners (one pass per click). An edit that would make an outline cross itself is refused and the vertex snaps back. The limit is 5,000 vertices per region.
+**Add part** draws another separate piece (islands). **Cut** cuts away the shape you draw: wholly inside a part it makes a hole (a lake), across a part's edge it bites a piece off, and right across a part it splits it into separate parts. **Split** does the same with a line: draw it right across one or more parts, from outside to outside, and each part it crosses falls into separate parts (a line that only goes partway in is refused). Both work with the freehand or polygon tool (with the polygon tool, `Enter` or a double-click finishes a split line), and across the ±180° edge. The largest piece keeps the part's number, label and contested zones; the other pieces are added at the end of the **Parts** list with the same colour (pieces of a contested zone stay zones of the same part). A part cut away completely is removed, and its zones become normal parts. Each cut or split is one undo step. **Simplify…** removes vertices with a live preview and before/after counts, **Smooth** rounds the corners (one pass per click). An edit that would make an outline cross itself is refused and the vertex snaps back. The limit is 5,000 vertices per region.
 
 **Colours and legend.** A region can use several colours, for example one per province or per faction. In the editor's side panel, under **Colours and legend**, press **Add colour** and give each colour a label; then pick a colour for each part in the **Parts** list. Each part has a numbered badge on the map that matches its row; pointing at either one highlights the other. Parts left on "Default colour" use the colour set at the top of that section. The embed shows the labelled colours as a small legend in the top-left corner, under the legend title you set (default "Legend"); readers can fold it away by clicking its header. Up to 16 colours per region. Removing a colour sends its parts back to the default colour; undo brings it back.
 
@@ -266,6 +266,7 @@ env SLUG=aerthos QUERY='region=old-kingdom&view=flat' npm run measure
 # Screenshots and report.json go to .e2e/regions/
 npm run e2e:regions
 npm run e2e:contested # contested zones, dashed overlaps (embeds and editor), moving parts; .e2e/contested/
+npm run e2e:cut       # Cut and Split in the region editor (holes, splits, zones, antimeridian); .e2e/cut/
 npm run e2e:locks     # locked parts in the region editor: no moving, vertices and midpoints still edit; .e2e/locks/
 npm run e2e:tiers     # which texture sizes load, and in what order (1024 → 4096 → 8192 when zoomed in)
 npm run e2e:tiles     # close-up tiles at max zoom (synthetic 32768 map; env TILES_MAP=your.jpg for your own)

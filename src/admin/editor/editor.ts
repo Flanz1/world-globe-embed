@@ -11,11 +11,11 @@ import {
   areaPercent,
   checkGeometry,
   closeRing,
+  douglasPeucker,
   geometryBounds,
   globeToImage,
   imageToGlobe,
   mapGeometry,
-  pointInRing,
   polygonsOf,
   round,
   simplifyRing,
@@ -59,8 +59,9 @@ import { alertBox, confirmBox, modal, openEmbedDialog, previewUrl, sendRegion } 
 import { regionPath, serialize, stamp } from "../regions.ts";
 import {
   History,
-  addHole,
   addPart,
+  cutParts,
+  splitParts,
   countVertices,
   deleteParts,
   deleteVertices,
@@ -84,6 +85,7 @@ import {
   toStyledGeometry,
   translate,
   vkey,
+  type CutResult,
   type EditorState,
   type Parts,
   type RingProblem,
@@ -108,6 +110,8 @@ export interface EditorOptions {
 }
 
 type Tool = "select" | "polygon" | "freehand";
+/** What the polygon and freehand tools draw: a part, a shape to cut away, a split line or a contested zone. */
+type DrawTarget = "part" | "cut" | "split" | "contested";
 
 const HANDLE = 5;
 const HIT = 8;
@@ -156,7 +160,7 @@ function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"): Edit
 
 export const SHORTCUTS: [string, string][] = [
   ["V / P / F", "Select, polygon and freehand tools"],
-  ["Click (polygon)", "Add a point; double-click, Enter or click the first point to close"],
+  ["Click (polygon)", "Add a point; double-click, Enter or click the first point to close (a split line: double-click or Enter)"],
   ["Backspace (drawing)", "Remove the last point"],
   ["Esc", "Cancel the outline being drawn, or clear the selection"],
   ["Drag a vertex", "Move it; hold Shift to snap to a neighbouring region's vertex"],
@@ -256,7 +260,8 @@ export function openEditor(o: EditorOptions): void {
       toolBtn("freehand", "Freehand", "F"),
       h("span", { className: "sep" }),
       btn("Add part", "Draw another polygon (an island or exclave)", () => startDraw("part"), "add-part"),
-      btn("Cut hole", "Draw a hole inside a part", () => startDraw("hole"), "cut-hole"),
+      btn("Cut", "Draw a shape to cut away: inside a part it makes a hole, across a part's edge it bites it, right across it splits it into separate parts", () => startDraw("cut"), "cut-hole"),
+      btn("Split", "Draw a line right across a part to split it into separate parts", () => startDraw("split"), "split"),
       btn("Add contested zone", "Draw land a part claims but doesn't firmly hold (dashed in the embed)", () => addContested(), "add-contested"),
       h("span", { className: "sep" }),
       undoBtn,
@@ -452,7 +457,7 @@ export function openEditor(o: EditorOptions): void {
 
   /* ── State ── */
   let tool: Tool = "select";
-  let target: "part" | "hole" | "contested" = "part";
+  let target: DrawTarget = "part";
   /** The part a contested zone being drawn will extend. */
   let zoneParent = -1;
   /** The selected part (-1 for none): click inside it, its badge or its row. Separate from the vertex selection. */
@@ -889,7 +894,7 @@ export function openEditor(o: EditorOptions): void {
   function updateStatus(): void {
     const n = countVertices(parts());
     const parts_ = parts().length;
-    const what = target === "hole" ? "Cut hole" : target === "contested" ? `Contested zone of part ${zoneParent + 1}` : "";
+    const what = target === "cut" ? "Cut" : target === "split" ? "Split" : target === "contested" ? `Contested zone of part ${zoneParent + 1}` : "";
     let line = `${tool === "select" ? "Select" : `${tool === "polygon" ? "Polygon" : "Freehand"}${what ? ` (${what})` : ""}`} · ${n} vertices`;
     if (tool === "select" && selPart >= 0) line += ` · ${pickHint || `Part ${selPart + 1} selected`}`;
     if (cursor) {
@@ -1185,7 +1190,7 @@ export function openEditor(o: EditorOptions): void {
   }
 
   /* ── Tools ── */
-  /** The drawing tool Add part and Cut hole use: freehand until the polygon tool is picked. */
+  /** The drawing tool Add part, Cut and Split use: freehand until the polygon tool is picked. */
   let drawTool: "polygon" | "freehand" = "freehand";
   function setTool(t: Tool): void {
     if (drawing && t !== "polygon") drawing = null;
@@ -1196,14 +1201,21 @@ export function openEditor(o: EditorOptions): void {
     toggleSimplify(false);
     changed();
   }
-  function drawHint(t: "part" | "hole" | "contested"): string {
+  function drawHint(t: DrawTarget): string {
     const zone = t === "contested" ? `Contested zone of part ${zoneParent + 1}: ` : "";
-    if (drawTool === "freehand")
-      return t === "hole" ? "Drag inside a part to draw the hole; let go to close it." : `${zone}Drag on the map to draw the outline; let go to close it. Press P for the polygon tool.`;
-    return t === "hole" ? "Click inside a part to start the hole." : `${zone}Click to add points. Double-click, Enter or click the first point to close.`;
+    if (t === "split")
+      return drawTool === "freehand"
+        ? "Drag a line right across a part, from outside it to outside it; let go to split it. Press P for the polygon tool."
+        : "Click points along a line right across a part, starting and ending outside it. Double-click or Enter to split.";
+    if (t === "cut")
+      return drawTool === "freehand"
+        ? "Drag around the area to cut away; let go to cut. Inside a part it makes a hole, right across a part it splits it."
+        : "Click points around the area to cut away. Double-click, Enter or click the first point to cut.";
+    if (drawTool === "freehand") return `${zone}Drag on the map to draw the outline; let go to close it. Press P for the polygon tool.`;
+    return `${zone}Click to add points. Double-click, Enter or click the first point to close.`;
   }
-  function startDraw(t: "part" | "hole" | "contested"): void {
-    if (t === "hole" && !parts().length) return setMsg("Draw a part first, then cut a hole inside it.", "error");
+  function startDraw(t: DrawTarget): void {
+    if ((t === "cut" || t === "split") && !parts().length) return setMsg(`Draw a part first, then ${t} it.`, "error");
     target = t;
     drawing = null;
     tool = drawTool;
@@ -1262,28 +1274,66 @@ export function openEditor(o: EditorOptions): void {
       setMsg(`That would go over the ${MAX_VERTICES}-vertex limit.`, "error");
       return false;
     }
-    if (target === "hole") {
-      const p = parts().findIndex((rings) => rings[0] && pointInRing(ring[0], rings[0]));
-      if (p < 0 || !ring.every((pt) => pointInRing(pt, parts()[p][0]))) {
-        setMsg("A hole has to be drawn completely inside a part.", "error");
-        return false;
-      }
-      setParts("Cut hole", addHole(parts(), ring)!);
-    } else if (target === "contested" && zoneParent >= 0 && zoneParent < parts().length) {
+    if (target === "cut") return applyCut(cutParts(hist.state, [ring]), "Cut");
+    if (target === "contested" && zoneParent >= 0 && zoneParent < parts().length) {
       setParts("Add contested zone", addPart(parts(), ring), undefined, [...hist.state.styles, OWN_COLOUR], [...hist.state.labels, ""], [...hist.state.contested, zoneParent]);
     } else setParts(parts().length ? "Add part" : "Draw outline", addPart(parts(), ring), undefined, [...hist.state.styles, OWN_COLOUR], [...hist.state.labels, ""], [...hist.state.contested, -1]);
     setMsg(
-      target === "hole" ? "Hole added. Drag vertices to refine it." : target === "contested" ? `Contested zone of part ${zoneParent + 1} added (part ${parts().length}).` : "Outline added. Drag vertices to refine it.",
+      target === "contested" ? `Contested zone of part ${zoneParent + 1} added (part ${parts().length}).` : "Outline added. Drag vertices to refine it.",
       "ok",
     );
-    if (target !== "hole") selPart = parts().length - 1;
+    selPart = parts().length - 1;
+    endDraw();
+    return true;
+  }
+  function endDraw(): void {
     target = "part";
     zoneParent = -1;
     drawing = null;
     tool = "select";
     canvas.style.cursor = "default";
     changed();
+  }
+
+  /** Commits a cut or split (one undo step) and says what it did. False if it changed nothing. */
+  function applyCut(res: CutResult, label: string): boolean {
+    if (!res.cut.length) {
+      setMsg(
+        label === "Split" ? "The line has to go right across a part, from outside it to outside it." : "That doesn't overlap any part, so there's nothing to cut.",
+        "error",
+      );
+      return false;
+    }
+    if (countVertices(res.state.parts) > MAX_VERTICES) {
+      setMsg(`That would go over the ${MAX_VERTICES}-vertex limit.`, "error");
+      return false;
+    }
+    const prob = res.problem ?? ringProblem(res.state.parts)?.message.toLowerCase();
+    if (prob) {
+      setMsg(`Can't ${label.toLowerCase()} there: ${prob}`, "error");
+      return false;
+    }
+    hist.apply(label, res.state);
+    selection.clear();
+    if (selPart >= 0) selPart = res.index[selPart] ?? -1;
+    const total = res.state.parts.length;
+    const first = total - res.added + 1;
+    const bits: string[] = [];
+    if (res.added) bits.push(res.added === 1 ? `part ${first} is new` : `parts ${first}–${total} are new`);
+    if (res.removed) bits.push(`${res.removed} cut away`);
+    if (res.orphaned) bits.push(`${res.orphaned} zone${res.orphaned === 1 ? "" : "s"} now normal`);
+    setMsg(bits.length ? `${label}: ${bits.join(", ")}.` : "Cut. Drag vertices to refine it.", "ok");
+    endDraw();
     return true;
+  }
+
+  /** Finishes a split line from the polygon or freehand tool. */
+  function finishLine(line: Position[]): boolean {
+    if (line.length < 2) {
+      setMsg("A split line needs at least 2 points.", "error");
+      return false;
+    }
+    return applyCut(splitParts(hist.state, line, undefined, ky), "Split");
   }
 
   /* ── Hit testing (screen pixels, nearest copy of each point) ── */
@@ -1505,15 +1555,10 @@ export function openEditor(o: EditorOptions): void {
     const w0: Position = [wx(x), wy(y)];
     if (simplifyPreview) return;
     if (tool === "polygon") {
-      if (!drawing) {
-        if (target === "hole") {
-          const p = partAt(parts(), w0);
-          if (p < 0 && !parts().some((rings) => rings[0] && pointInRing(w0, rings[0]))) return setMsg("Start the hole inside a part.", "error");
-        }
-        drawing = [w0];
-      } else {
+      if (!drawing) drawing = [w0];
+      else {
         const f = drawing[0];
-        if (drawing.length >= 3 && Math.hypot(sx(f[0]) - x, sy(f[1]) - y) <= HIT) return void finishRing(drawing);
+        if (target !== "split" && drawing.length >= 3 && Math.hypot(sx(f[0]) - x, sy(f[1]) - y) <= HIT) return void finishRing(drawing);
         const last = drawing[drawing.length - 1];
         if (Math.hypot(sx(last[0]) - x, sy(last[1]) - y) > 2) drawing.push(w0);
       }
@@ -1694,11 +1739,17 @@ export function openEditor(o: EditorOptions): void {
       return changed();
     }
     if (d.kind === "free") {
-      if (d.pts.length < 3) return draw();
       // Simplify the sketch: Douglas–Peucker at about 2 screen pixels.
       const tol = 2 / view.k;
-      const ring = simplifyRing(d.pts.map(([px, py]) => [px, py * ky]), tol).map(([px, py]) => [px, py / ky] as Position);
-      if (!finishRing(ring)) draw();
+      const simple = (pts: Position[]) => simplifyRing(pts.map(([px, py]) => [px, py * ky]), tol).map(([px, py]) => [px, py / ky] as Position);
+      if (target === "split") {
+        if (d.pts.length < 2) return draw();
+        const line = douglasPeucker(d.pts.map(([px, py]) => [px, py * ky]), tol).map(([px, py]) => [px, py / ky] as Position);
+        if (!finishLine(line)) draw();
+        return;
+      }
+      if (d.pts.length < 3) return draw();
+      if (!finishRing(simple(d.pts))) draw();
       return;
     }
     if (d.kind === "shape") {
@@ -1737,7 +1788,9 @@ export function openEditor(o: EditorOptions): void {
     e.preventDefault();
     // The double-click's second click added a point on top of the previous one; drop it.
     const pts = drawing.filter((p, i) => i === 0 || Math.hypot(sx(p[0]) - sx(drawing![i - 1][0]), sy(p[1]) - sy(drawing![i - 1][1])) > 3);
-    if (pts.length >= 3) finishRing(pts);
+    if (target === "split") {
+      if (pts.length >= 2) finishLine(pts);
+    } else if (pts.length >= 3) finishRing(pts);
   });
   canvas.addEventListener(
     "wheel",
@@ -1806,7 +1859,7 @@ export function openEditor(o: EditorOptions): void {
     }
     if (e.key === "Enter" && drawing) {
       e.preventDefault();
-      return void finishRing(drawing);
+      return void (target === "split" ? finishLine(drawing) : finishRing(drawing));
     }
     if (e.key === "Backspace" && drawing) {
       e.preventDefault();
