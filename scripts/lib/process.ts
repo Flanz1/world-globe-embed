@@ -120,7 +120,7 @@ export async function processImage(file: string, opts: ProcessOptions): Promise<
     await base
       .clone()
       .resize(w, Math.round(w / aspect), { fit: "fill", kernel: "lanczos3" })
-      .webp({ quality: w === 4096 ? 80 : 82, effort: 5, smartSubsample: true })
+      .webp({ quality: w >= 8192 ? 76 : w === 4096 ? 80 : 82, effort: 5, smartSubsample: true })
       .toFile(path.join(outDir, name));
     sizes[`${w as TextureWidth}`] = `maps/${info.id}/${name}`;
   }

@@ -1,5 +1,5 @@
 /** Same-origin map images for the admin page's canvases (thumbnails and the region editor), cached. */
-import type { MapMeta } from "../shared/types.ts";
+import type { MapMeta, TextureWidth } from "../shared/types.ts";
 import { SITE } from "./dom.ts";
 
 const cache = new Map<string, Promise<HTMLImageElement>>();
@@ -23,7 +23,7 @@ export function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 /** URL of a map's texture of the given width (or the nearest smaller one); LQIP if none is deployed. */
-export function mapImageUrl(map: MapMeta, want: 1024 | 2048 | 4096): string {
+export function mapImageUrl(map: MapMeta, want: TextureWidth): string {
   for (const w of [want, 2048, 1024] as const) {
     if (w <= want && map.sizes[`${w}`]) return new URL(map.sizes[`${w}`]!, SITE).href;
   }
@@ -31,8 +31,8 @@ export function mapImageUrl(map: MapMeta, want: 1024 | 2048 | 4096): string {
 }
 
 /** Loads the map at `want` width, falling back to smaller sizes and finally the LQIP (e.g. not deployed yet). */
-export async function loadMapImage(map: MapMeta, want: 1024 | 2048 | 4096): Promise<HTMLImageElement> {
-  const tries = ([4096, 2048, 1024] as const).filter((w) => w <= want && map.sizes[`${w}`]).map((w) => new URL(map.sizes[`${w}`]!, SITE).href);
+export async function loadMapImage(map: MapMeta, want: TextureWidth): Promise<HTMLImageElement> {
+  const tries = ([8192, 4096, 2048, 1024] as const).filter((w) => w <= want && map.sizes[`${w}`]).map((w) => new URL(map.sizes[`${w}`]!, SITE).href);
   for (const u of tries) {
     try {
       return await loadImage(u);

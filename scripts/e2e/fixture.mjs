@@ -5,7 +5,7 @@
  *
  *   node scripts/e2e/fixture.mjs   → prints the temp dir
  */
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -90,8 +90,10 @@ export async function makeFixture({ quiet = false } = {}) {
   slots.slots[SLOT.slug] = { map: MAP.id, title: "Alignment test", north: SLOT.north, south: SLOT.south, shift: SLOT.shift, pole: "#334455" };
   writeFileSync(slotsFile, JSON.stringify(slots, null, 2) + "\n");
 
+  // Only the test regions: real ones saved to content/regions would change the counts the checks expect.
   const regionsDir = path.join(dir, "content/regions");
-  if (!existsSync(regionsDir)) mkdirSync(regionsDir, { recursive: true });
+  rmSync(regionsDir, { recursive: true, force: true });
+  mkdirSync(regionsDir, { recursive: true });
   const write = (r) => writeFileSync(path.join(regionsDir, `${r.id}.json`), JSON.stringify(r, null, 2) + "\n");
   write(region("landmark-disc", "Magenta Isle", { type: "Polygon", coordinates: [discRing()] }));
   write(
