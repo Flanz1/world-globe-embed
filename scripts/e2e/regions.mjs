@@ -578,6 +578,45 @@ await step(A, "duplicate", async () => {
   await page.waitForSelector('[data-region="test-kingdom-copy"]', { timeout: 10000 });
 });
 
+await step(A, "combine", async () => {
+  const n = mock.log.length;
+  const before = ["test-kingdom", "test-kingdom-copy"].map((id) => mock.read(BRANCH, `content/regions/${id}.json`));
+  await page.click("#r-combine");
+  await page.waitForSelector("dialog.combine-dlg[open]");
+  const go = page.locator('dialog.combine-dlg [data-action="combine"]');
+  check(A, "combine is disabled until two regions are ticked", await go.isDisabled());
+  await page.check('dialog.combine-dlg input[value="test-kingdom"]');
+  await page.check('dialog.combine-dlg input[value="test-kingdom-copy"]');
+  await page.screenshot({ path: path.join(OUT, "combine-dialog.png") });
+  // A region on another map: warn and offer a choice of base, then leave it out again.
+  await page.check('dialog.combine-dlg input[value="old-map-region"]');
+  const bases = await page.locator('dialog.combine-dlg input[name="combine-base"]').count();
+  const warnText = (await page.locator("dialog.combine-dlg .combine-base p.warn").textContent().catch(() => "")) ?? "";
+  check(A, "combine warns about different base maps and offers a choice", bases === 2 && /different maps/.test(warnText), `${bases} bases; ${warnText}`);
+  await page.screenshot({ path: path.join(OUT, "combine-different-maps.png") });
+  await page.uncheck('dialog.combine-dlg input[value="old-map-region"]');
+  const id = await page.inputValue("dialog.combine-dlg input[type=text]");
+  check(A, "combine suggests a free id", id === "test-kingdom-test-kingdom-copy", id);
+  await go.click();
+  await page.waitForSelector("dialog.editor[open]");
+  check(A, "combine opens the editor on the new region", (await ed.id()) === id, await ed.id());
+  await page.click("dialog.editor .ed-save");
+  await waitCommits(n);
+  const c = commitsSince(n);
+  const after = ["test-kingdom", "test-kingdom-copy"].map((rid) => mock.read(BRANCH, `content/regions/${rid}.json`));
+  const f = JSON.parse(mock.read(BRANCH, `content/regions/${id}.json`) ?? "null");
+  const src = before.map((t) => JSON.parse(t));
+  const parts = (g) => (g.type === "Polygon" ? 1 : g.coordinates.length);
+  check(
+    A,
+    "combine: one commit adding the new region with every part; originals untouched",
+    c.length === 1 && JSON.stringify(c[0].changes) === JSON.stringify([{ path: `content/regions/${id}.json`, deleted: false }]) && f && parts(f.geometry) === parts(src[0].geometry) + parts(src[1].geometry) && JSON.stringify(after) === JSON.stringify(before) && checkGeometry(f.geometry).length === 0,
+    c.map((x) => x.message).join(" | "),
+  );
+  await page.click("dialog.editor .pv-head button.ghost");
+  await page.waitForSelector(`[data-region="${id}"]`, { timeout: 10000 });
+});
+
 await step(A, "delete", async () => {
   const n = mock.log.length;
   await page.click('[data-region="test-kingdom-copy"] [data-action="delete"]');
@@ -777,7 +816,7 @@ await step(A, "security and branch", async () => {
   check(A, "no page errors in the admin page", errors.length === 0, errors.join(" | ") || "none");
   check(A, "no alert() from region data", dialogs.length === 0, dialogs.join(" | ") || "none");
   check(A, "nothing written to main", mock.refs.get("main") === mainAtStart && mock.log.every((c) => c.branch === BRANCH), `${mock.log.length} commits, all on ${BRANCH}`);
-  check(A, "each action was one commit", mock.log.length === n0 + 4, mock.log.map((c) => c.message).join(" | "));
+  check(A, "each action was one commit", mock.log.length === n0 + 5, mock.log.map((c) => c.message).join(" | "));
 });
 await ctx.close();
 
