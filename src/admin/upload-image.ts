@@ -126,7 +126,7 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
       ext,
       w: info.width,
       h: info.height,
-      note: " Too big to shrink in the browser, so it's sent as is (without its metadata); the workflow makes every size from it.",
+      note: "",
     };
   }
 

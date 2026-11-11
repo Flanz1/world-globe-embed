@@ -359,7 +359,7 @@ function wireUpload(): void {
           return all;
         });
         bar.hidden = true;
-        info.textContent = `Uploaded ${img.w}×${img.h} (${mb(size)}). The processing workflow converts it (a few minutes for a big map), then the site redeploys.${img.note}`;
+        info.textContent = `Uploaded ${img.w}×${img.h} (${mb(size)}). It'll be on the site in a few minutes, once it's processed.${img.note}`;
         form.reset();
         return sha;
       } catch (e) {
