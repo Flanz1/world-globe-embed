@@ -64,6 +64,7 @@ import {
   countVertices,
   deleteParts,
   deleteVertices,
+  fullyChosenRings,
   insertVertex,
   moveLegendEntry,
   partAnchor,
@@ -72,8 +73,10 @@ import {
   partsAt,
   partsFromGeometry,
   planMove,
+  pointSegmentDistance,
   remapContested,
   removeLegendEntry,
+  ringRefs,
   setContested,
   setLocked,
   zonesOf,
@@ -111,6 +114,7 @@ type Tool = "select" | "polygon" | "freehand";
 
 const HANDLE = 5;
 const HIT = 8;
+const EDGE_HIT = 6;
 const SNAP_PX = 8;
 
 /** Git's blob SHA-1 of a text file, to know the file's SHA after our own commit without asking GitHub. */
@@ -161,6 +165,7 @@ export const SHORTCUTS: [string, string][] = [
   ["Esc", "Cancel the outline being drawn, or clear the selection"],
   ["Drag a vertex", "Move it; hold Shift to snap to a neighbouring region's vertex"],
   ["Drag a midpoint", "Insert a vertex there"],
+  ["Click a line", "Select every vertex of that outline or hole (Shift adds); Delete then removes it"],
   ["Alt+click / right-click", "Delete a vertex"],
   ["Shift+click, box drag", "Select several vertices"],
   ["Delete / Backspace", "Delete the selected vertices, else the selected part (asks first)"],
@@ -475,6 +480,8 @@ export function openEditor(o: EditorOptions): void {
     | { kind: "free"; pts: Position[] }
     | null;
   let drag: Drag = null;
+  /** The ring whose line is under a press; a click (no drag) on it selects all that ring's vertices. */
+  let edgePick: { p: number; r: number } | null = null;
   const pointers = new Map<number, { x: number; y: number }>();
   let pinch: { d: number; mx: number; my: number } | null = null;
 
@@ -1325,6 +1332,33 @@ export function openEditor(o: EditorOptions): void {
     );
     return best;
   }
+  /** The ring whose line passes within EDGE_HIT pixels of the point, nearest first; vertices and midpoints are tested before this. */
+  function hitEdge(x: number, y: number): { p: number; r: number } | null {
+    const cl = wx(x);
+    let best: { p: number; r: number } | null = null;
+    let bestD = EDGE_HIT;
+    parts().forEach((rings, p) =>
+      rings.forEach((ring, r) => {
+        for (let i = 0; i < ring.length; i++) {
+          const a = ring[i];
+          const b = ring[(i + 1) % ring.length];
+          const shift = nearest((a[0] + b[0]) / 2, cl) - (a[0] + b[0]) / 2;
+          const d = pointSegmentDistance(x, y, sx(a[0] + shift), sy(a[1]), sx(b[0] + shift), sy(b[1]));
+          if (d <= bestD) {
+            bestD = d;
+            best = { p, r };
+          }
+        }
+      }),
+    );
+    return best;
+  }
+  /** Selects every vertex of a ring (Shift adds to the selection). */
+  function pickRing(ring: { p: number; r: number }, add: boolean): void {
+    if (!add) selection.clear();
+    for (const v of ringRefs(parts(), ring.p, ring.r)) selection.set(vkey(v), v);
+    setMsg(ring.r === 0 ? `Outline of part ${ring.p + 1} selected: Delete removes the whole part (asks first).` : `Hole in part ${ring.p + 1} selected: Delete removes it.`);
+  }
   /** Nearest neighbour-region vertex within SNAP_PX of a position (in the same copy), or null. */
   function snapTarget(pos: Position): Position | null {
     let best: Position | null = null;
@@ -1363,9 +1397,9 @@ export function openEditor(o: EditorOptions): void {
       res.removedParts
         ? `A ring needs at least 3 vertices, so the whole part was deleted (undo brings it back).${orphans}`
         : res.removedHoles
-          ? "A hole needs at least 3 vertices, so the hole was deleted."
+          ? "Hole deleted (undo brings it back)."
           : "",
-      res.removedParts || res.removedHoles ? "error" : "muted",
+      res.removedParts ? "error" : res.removedHoles ? "ok" : "muted",
     );
     changed();
   }
@@ -1524,6 +1558,7 @@ export function openEditor(o: EditorOptions): void {
       return draw();
     }
     // Select tool.
+    edgePick = null;
     const v = hitVertex(x, y);
     if (v) {
       if (e.altKey) return deleteRefs([v]);
@@ -1551,6 +1586,8 @@ export function openEditor(o: EditorOptions): void {
       changed();
       return;
     }
+    // On a line: a click selects its ring, a drag falls through to the usual part move / box select.
+    if (!e.altKey) edgePick = hitEdge(x, y);
     const here = partsAt(parts(), w0, hist.state.contested);
     const badge = hitBadge(x, y);
     if (e.altKey && here.length) {
@@ -1605,7 +1642,7 @@ export function openEditor(o: EditorOptions): void {
     }
     if (!drag) {
       if (tool === "select") {
-        const over = hitVertex(x, y) || hitMidpoint(x, y);
+        const over = hitVertex(x, y) || hitMidpoint(x, y) || hitEdge(x, y);
         const under = cursor ? partAt(parts(), cursor, hist.state.contested) : -1;
         canvas.style.cursor = spaceHeld ? "grab" : over ? "pointer" : under >= 0 && !hist.state.locked[under] ? "move" : "default";
         setHoverPart(under);
@@ -1678,7 +1715,10 @@ export function openEditor(o: EditorOptions): void {
       if (!d.add) selection.clear();
       // A plain click on empty map clears the selected part too.
       // (Not a click on a locked part: that click selected it.)
-      if (x1 - x0 <= 2 && y1 - y0 <= 2 && !d.add && d.refused === undefined) selectPart(-1);
+      const click = x1 - x0 <= 2 && y1 - y0 <= 2;
+      if (click && !d.add && d.refused === undefined && !edgePick) selectPart(-1);
+      if (click && edgePick) pickRing(edgePick, d.add);
+      edgePick = null;
       if (x1 - x0 > 2 || y1 - y0 > 2) {
         const cl = wx((x0 + x1) / 2);
         parts().forEach((rings, p) =>
@@ -1704,7 +1744,11 @@ export function openEditor(o: EditorOptions): void {
     if (d.kind === "shape") {
       canvas.style.cursor = "default";
       if (d.moved) hist.commit(d.part === null ? "Move region" : d.part.length > 1 ? "Move part and its zones" : "Move part");
-      else hist.cancel();
+      else {
+        hist.cancel();
+        if (edgePick) pickRing(edgePick, e.shiftKey);
+      }
+      edgePick = null;
       dragBase = null;
       return changed();
     }
@@ -1816,6 +1860,10 @@ export function openEditor(o: EditorOptions): void {
     }
     if ((e.key === "Delete" || e.key === "Backspace") && tool === "select" && selection.size) {
       e.preventDefault();
+      // A fully selected outline is a whole part: that goes through the same warning as deleting the part.
+      const outlines = fullyChosenRings(parts(), [...selection.values()]).filter((q) => q.r === 0);
+      if (outlines.length === 1) return void askDeletePart(outlines[0].p);
+      if (outlines.length > 1) return setMsg("Several whole outlines are selected. Select one outline at a time to delete a part.", "error");
       return deleteRefs([...selection.values()]);
     }
     if ((e.key === "Delete" || e.key === "Backspace") && tool === "select" && selPart >= 0 && !drawing) {
@@ -2013,6 +2061,7 @@ export function openEditor(o: EditorOptions): void {
     toScreen: (lon: number, lat: number) => [sx(lon), sy(lat)],
     id: () => id,
     selectedPart: () => selPart,
+    selectedVertices: () => [...selection.values()],
     clashes: () => clashState().clashes,
   };
 }

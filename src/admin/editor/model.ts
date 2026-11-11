@@ -200,6 +200,35 @@ export function deleteVertices(parts: Parts, refs: VRef[]): { parts: Parts; remo
   return { parts: out, removedParts, removedHoles, kept: keptParts };
 }
 
+/** Every vertex of one ring (outer ring r = 0, or a hole), as vertex refs. */
+export function ringRefs(parts: Parts, p: number, r: number): VRef[] {
+  return (parts[p]?.[r] ?? []).map((_, i) => ({ p, r, i }));
+}
+
+/** The rings (`{p, r}`) that every one of whose vertices is in `refs`. */
+export function fullyChosenRings(parts: Parts, refs: readonly VRef[]): { p: number; r: number }[] {
+  const count = new Map<string, number>();
+  const seen = new Set<string>();
+  for (const v of refs) {
+    const key = `${v.p}:${v.r}:${v.i}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    count.set(`${v.p}:${v.r}`, (count.get(`${v.p}:${v.r}`) ?? 0) + 1);
+  }
+  const out: { p: number; r: number }[] = [];
+  parts.forEach((rings, p) => rings.forEach((ring, r) => ring.length && count.get(`${p}:${r}`) === ring.length && out.push({ p, r })));
+  return out;
+}
+
+/** Distance from point (px, py) to the segment (ax, ay)-(bx, by), in the units of the arguments. */
+export function pointSegmentDistance(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
 /**
  * Moves the whole shape (null), one part, or several parts (with their holes). Latitude is limited so
  * nothing that moves leaves ±90.

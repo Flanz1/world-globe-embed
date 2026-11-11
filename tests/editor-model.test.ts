@@ -5,6 +5,7 @@ import {
   countVertices,
   deleteParts,
   deleteVertices,
+  fullyChosenRings,
   insertVertex,
   moveLegendEntry,
   partAnchor,
@@ -18,7 +19,9 @@ import {
   partAt,
   partsFromGeometry,
   planMove,
+  pointSegmentDistance,
   removeLegendEntry,
+  ringRefs,
   setLocked,
   ringProblem,
   simplifyParts,
@@ -380,5 +383,32 @@ describe("editor model: deleting whole parts", () => {
 
   it("can delete the last part, leaving an empty region", () => {
     expect(deleteParts([[sq(0)]], [0])).toEqual({ parts: [], kept: [] });
+  });
+});
+
+describe("selecting a ring by its line", () => {
+  const holed: Parts = [[square(0, 0, 20), square(5, 5, 5)], [square(50, 0)]];
+  it("ringRefs lists every vertex of the chosen ring", () => {
+    expect(ringRefs(holed, 0, 1)).toEqual([0, 1, 2, 3].map((i) => ({ p: 0, r: 1, i })));
+    expect(ringRefs(holed, 5, 0)).toEqual([]);
+  });
+  it("fullyChosenRings finds only rings with every vertex selected", () => {
+    expect(fullyChosenRings(holed, ringRefs(holed, 0, 1))).toEqual([{ p: 0, r: 1 }]);
+    expect(fullyChosenRings(holed, [...ringRefs(holed, 0, 0), ...ringRefs(holed, 1, 0)])).toEqual([{ p: 0, r: 0 }, { p: 1, r: 0 }]);
+    expect(fullyChosenRings(holed, ringRefs(holed, 0, 1).slice(1))).toEqual([]);
+    expect(fullyChosenRings(holed, [...ringRefs(holed, 0, 1), ...ringRefs(holed, 0, 1)])).toEqual([{ p: 0, r: 1 }]);
+  });
+  it("deleting a fully selected hole removes just that hole", () => {
+    const res = deleteVertices(holed, ringRefs(holed, 0, 1));
+    expect(res.removedHoles).toBe(1);
+    expect(res.removedParts).toBe(0);
+    expect(res.parts[0]).toHaveLength(1);
+    expect(res.parts).toHaveLength(2);
+    expect(res.kept).toEqual([0, 1]);
+  });
+  it("pointSegmentDistance measures to the segment, clamped at its ends", () => {
+    expect(pointSegmentDistance(5, 3, 0, 0, 10, 0)).toBe(3);
+    expect(pointSegmentDistance(13, 4, 0, 0, 10, 0)).toBe(5);
+    expect(pointSegmentDistance(3, 4, 0, 0, 0, 0)).toBe(5);
   });
 });
