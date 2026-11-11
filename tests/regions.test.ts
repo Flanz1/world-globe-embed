@@ -6,7 +6,7 @@ import { loadContent } from "../scripts/lib/content.ts";
 import { contentPaths } from "../scripts/lib/paths.ts";
 import type { MapMeta } from "../src/shared/types.ts";
 import type { RegionFeature } from "../src/shared/region.ts";
-import { copyId, normalizePartContested, normalizePartLabels, normalizePartLegend, regionLabelPoints, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
+import { copyId, normalizePartContested, normalizePartLocked, normalizePartLabels, normalizePartLegend, regionLabelPoints, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
 import { ZOOM_MAX, ZOOM_MIN } from "../src/shared/params.ts";
 
 const LQIP = "data:image/webp;base64,UklGRg==";
@@ -251,6 +251,18 @@ describe("region colours and legend", () => {
     expect(errs([-1, -2, -1])).toMatch(/partContested/);
     // Missing: all normal, still valid.
     expect(loadContent(project({ "kingdom-of-vael.json": multi() })).errors).toEqual([]);
+  });
+
+  it("partLocked: booleans pass the schema; anything else fails; normalize pads and cuts", () => {
+    const ok = multi();
+    ok.properties.partLocked = [true, false, false];
+    expect(loadContent(project({ "kingdom-of-vael.json": ok })).errors).toEqual([]);
+    const bad = multi();
+    (bad.properties as unknown as Record<string, unknown>).partLocked = [1, 0, 0];
+    expect(loadContent(project({ "kingdom-of-vael.json": bad })).errors.join("\n")).toMatch(/partLocked/);
+    expect(normalizePartLocked([true, "yes", 1], 4)).toEqual([true, false, false, false]);
+    expect(normalizePartLocked([true, true, true], 2)).toEqual([true, true]);
+    expect(normalizePartLocked(undefined, 2)).toEqual([false, false]);
   });
 
   it("normalizePartContested drops anything that isn't a zone of a normal part", () => {

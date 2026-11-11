@@ -47,6 +47,8 @@ export interface EditorState {
   labels: string[];
   /** Per part: -1 for a normal part, or the (normal) part this contested zone extends. */
   contested: number[];
+  /** Per part: true when it's locked (can't be moved as a whole; its vertices still edit). */
+  locked: boolean[];
   props: RegionProps;
 }
 
@@ -65,6 +67,7 @@ export const cloneState = (s: EditorState): EditorState => ({
   styles: [...s.styles],
   labels: [...s.labels],
   contested: [...(s.contested ?? [])],
+  locked: [...(s.locked ?? [])],
   props: { ...s.props, legend: s.props.legend.map((e) => ({ ...e })) },
 });
 
@@ -155,6 +158,16 @@ export function insertVertex(parts: Parts, p: number, r: number, i: number, pos:
   const out = cloneParts(parts);
   out[p][r].splice(i + 1, 0, [pos[0], pos[1]]);
   return { parts: out, v: { p, r, i: i + 1 } };
+}
+
+/**
+ * Deletes whole parts (outer ring and holes) by index. `kept[i]` is the old index of new part i, so
+ * colours, labels and contested zones can follow (see remapContested).
+ */
+export function deleteParts(parts: Parts, ps: readonly number[]): { parts: Parts; kept: number[] } {
+  const drop = new Set(ps);
+  const kept = parts.map((_, p) => p).filter((p) => !drop.has(p));
+  return { parts: kept.map((p) => parts[p].map((ring) => ring.map(([x, y]) => [x, y] as Position))), kept };
 }
 
 /**
@@ -397,6 +410,39 @@ export function partsAt(parts: Parts, pos: Position, contested: readonly number[
   return out.sort((a, b) => zone(a) - zone(b) || b - a);
 }
 
+/* ── Locked parts ── */
+
+/** Sets part p's lock. */
+export function setLocked(s: EditorState, p: number, on: boolean): EditorState {
+  const next = cloneState(s);
+  while (next.locked.length < next.parts.length) next.locked.push(false);
+  if (p >= 0 && p < next.parts.length) next.locked[p] = on;
+  return next;
+}
+
+/** Part labels as the editor names them in messages: "Part 3" or "Part 3 (Label)". */
+const partName = (p: number, labels: readonly string[]) => `Part ${p + 1}${labels[p]?.trim() ? ` (${labels[p].trim()})` : ""}`;
+
+/**
+ * The parts a drag or nudge may move, given the locks. `grabbed` is the part that was grabbed (null for
+ * the whole region) and `set` what would move with it (its contested zones). A locked part refuses the
+ * move, and so does the whole region when any part is locked; locked zones just stay where they are.
+ */
+export function planMove(
+  locked: readonly boolean[],
+  labels: readonly string[],
+  n: number,
+  grabbed: number | null,
+  set: readonly number[] = grabbed === null ? [] : [grabbed],
+): { parts: number[] | null } | { refused: string } {
+  if (grabbed === null) {
+    const first = Array.from({ length: n }, (_, p) => p).find((p) => locked[p]);
+    return first === undefined ? { parts: null } : { refused: `${partName(first, labels)} is locked, so the whole region can't move. Unlock it in the Parts list first.` };
+  }
+  if (locked[grabbed]) return { refused: `${partName(grabbed, labels)} is locked: drag its vertices or midpoints to reshape it, or unlock it to move it.` };
+  return { parts: set.filter((p) => p === grabbed || !locked[p]) };
+}
+
 /* ── Contested zones ── */
 
 /**
@@ -471,7 +517,7 @@ export function smoothParts(parts: Parts): Parts | null {
 
 
 /**
- * Stored geometry plus the matching partLegend, partLabels and partContested, dropping any part that
+ * Stored geometry plus the matching partLegend, partLabels, partContested and partLocked, dropping any part that
  * doesn't survive storing (too few vertices). Zones of a dropped part become normal parts.
  */
 export function toStyledGeometry(
@@ -479,20 +525,23 @@ export function toStyledGeometry(
   styles: number[],
   labels: string[] = [],
   contested: number[] = [],
-): { geometry: RegionGeometry; partLegend: number[]; partLabels: string[]; partContested: number[] } {
+  locked: boolean[] = [],
+): { geometry: RegionGeometry; partLegend: number[]; partLabels: string[]; partContested: number[]; partLocked: boolean[] } {
   const keep: Parts = [];
   const kept: number[] = [];
   const partLegend: number[] = [];
   const partLabels: string[] = [];
+  const partLocked: boolean[] = [];
   parts.forEach((rings, p) => {
     if (polygonsOf(toStoredGeometry([rings])).length) {
       keep.push(rings);
       kept.push(p);
       partLegend.push(styles[p] ?? OWN_COLOUR);
       partLabels.push(labels[p] ?? "");
+      partLocked.push(locked[p] === true);
     }
   });
-  return { geometry: toStoredGeometry(keep), partLegend, partLabels, partContested: remapContested(contested, kept).contested };
+  return { geometry: toStoredGeometry(keep), partLegend, partLabels, partContested: remapContested(contested, kept).contested, partLocked };
 }
 
 /** Removes legend entry `k`: its parts go back to the region's colour, later indices shift down. */

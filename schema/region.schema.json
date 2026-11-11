@@ -128,6 +128,14 @@
             "maximum": 999
           }
         },
+        "partLocked": {
+          "type": "array",
+          "maxItems": 1000,
+          "description": "One entry per polygon of the geometry, in order: true for a part locked in the admin editor, so it can't be dragged or nudged as a whole (its vertices and midpoints still edit). Editor-only; the embed ignores it. Leave it out when no part is locked.",
+          "items": {
+            "type": "boolean"
+          }
+        },
         "updated": {
           "type": "string",
           "maxLength": 40,

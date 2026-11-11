@@ -24,6 +24,7 @@
     "e2e:regions": "tsx scripts/e2e/regions.mjs",
     "e2e:contested": "tsx scripts/e2e/contested.mjs",
     "e2e:cut": "tsx scripts/e2e/cut.mjs",
+    "e2e:locks": "tsx scripts/e2e/locks.mjs",
     "e2e:tiers": "node scripts/e2e/tiers.mjs",
     "e2e:tiles": "node scripts/e2e/tiles.mjs",
     "e2e:upload": "tsx scripts/e2e/upload.mjs",
