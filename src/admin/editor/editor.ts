@@ -403,7 +403,9 @@ export function openEditor(o: EditorOptions): void {
   }
   function maybeTiles(): void {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const top = tileLevels.length && imgW >= 8192 ? levelFor(tileLevels, 360 * view.k * dpr) : undefined;
+    // Once any tile level is wanted, go all the way to the finest one (16384 shows while 32768 loads),
+    // whatever the screen: tracing borders wants the sharpest map, not the one that just fills the pixels.
+    const top = tileLevels.length && imgW >= 8192 && levelFor(tileLevels, 360 * view.k * dpr) ? tileLevels[tileLevels.length - 1] : undefined;
     tileTop = top ? tileLevels.indexOf(top) : -1;
     if (!top || tileBusy || tilesOff) return;
     const { w, h: hh } = size();

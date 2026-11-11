@@ -210,7 +210,7 @@ for (const view of ["globe", "flat"]) {
 {
   const mock = new MockGitHub({ root: dir });
   // A small laptop: under 1100 px wide, and Chrome reporting 4 GB (as it does for many 8 GB laptops).
-  const ctx = await browser.newContext({ viewport: { width: 1024, height: 700 }, deviceScaleFactor: 2 });
+  const ctx = await browser.newContext({ viewport: { width: 1024, height: 700 }, deviceScaleFactor: 1 });
   await ctx.addInitScript(() => Object.defineProperty(Navigator.prototype, "deviceMemory", { get: () => 4 }));
   await ctx.route("https://api.github.com/**", (r) => mock.handle(r));
   const page = await ctx.newPage();
@@ -230,7 +230,7 @@ for (const view of ["globe", "flat"]) {
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(1500);
   const shown = () => page.evaluate(() => document.querySelector("dialog.editor")?.dataset.tiles ?? "");
-  await page.evaluate(([cx, cy]) => document.querySelector("dialog.editor").wgeEditor.setView(cx, cy, 120), [(w0 + e0) / 2, (s0 + n0) / 2]);
+  await page.evaluate(([cx, cy]) => document.querySelector("dialog.editor").wgeEditor.setView(cx, cy, 36), [(w0 + e0) / 2, (s0 + n0) / 2]); // just past the 16384 threshold on a 1x screen
   const box = await page.locator("dialog.editor canvas.ed-canvas").boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.wheel(0, -1); // a zoom gesture: the editor upgrades on zoom
@@ -239,7 +239,7 @@ for (const view of ["globe", "flat"]) {
   await page.screenshot({ path: path.join(OUT, "editor-tiles.png") });
   const edTiles = requested.filter((x) => x.includes(":"));
   check("editor (small laptop, 4 GB reported): zoomed far in, it loads the 8192 map, then the tiles under the view", whole(requested).includes("8192") && edTiles.length > 0 && edTiles.length <= 16, requested.join(" "));
-  check("editor: shows the finest level", (await shown()) === top, `data-tiles=${await shown()}`);
+  check("editor: goes all the way to the finest level, even on a 1x screen", (await shown()) === top, `data-tiles=${await shown()}`);
   check("editor: no errors", errors.length === 0, errors.join("; "));
   await ctx.close();
 }
