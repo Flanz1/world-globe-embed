@@ -55,6 +55,11 @@ export interface RegionProperties {
   partLegend?: number[];
   /** One label per part (polygon), in order; "" for a part without one. */
   partLabels?: string[];
+  /**
+   * One entry per part, in order: -1 for a normal part, or k for a contested zone extending part k (a
+   * normal part). The embed draws contested zones dashed and hatched. Missing means all -1.
+   */
+  partContested?: number[];
   updated?: string;
 }
 
@@ -82,8 +87,18 @@ export interface RegionData {
   parts: number[];
   /** Per polygon: its label ("" for none). All empty means: show `name` once, at the region's middle. */
   labels: string[];
+  /** Per polygon: -1, or the normal part this contested zone extends. */
+  contested: number[];
   geometry: RegionGeometry;
+  /**
+   * Polygons (outer ring then holes, open rings) of other regions on the same slot that overlap this
+   * one, added by the build. The embed dashes this region's border inside them; it never draws them.
+   */
+  clash?: Ring[][];
 }
+
+/** Most vertices in a region's `clash` data. */
+export const CLASH_MAX_VERTICES = 2000;
 
 /** Inlined per region into its slot page so the poster can face it before anything loads. */
 export interface RegionIndexEntry {
@@ -108,8 +123,42 @@ export function regionData(f: RegionFeature): RegionData {
     legend: (p.legend ?? []).map((e) => ({ label: e.label, color: e.color })),
     parts: normalizePartLegend(p.partLegend, polygonsOf(f.geometry).length, p.legend?.length ?? 0),
     labels: normalizePartLabels(p.partLabels, polygonsOf(f.geometry).length),
+    contested: normalizePartContested(p.partContested, polygonsOf(f.geometry).length),
     geometry: f.geometry,
   };
+}
+
+/**
+ * partContested padded or cut to `n` parts. Anything that isn't a valid zone becomes -1 (normal): out
+ * of range, pointing at itself, or pointing at a part that is itself a contested zone.
+ */
+export function normalizePartContested(v: readonly unknown[] | undefined, n: number): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const k = v?.[i];
+    out.push(typeof k === "number" && Number.isInteger(k) && k >= 0 && k < n && k !== i ? k : OWN_COLOUR);
+  }
+  // No chains: a zone must extend a normal part.
+  const first = [...out];
+  return first.map((k) => (k >= 0 && first[k] !== OWN_COLOUR ? OWN_COLOUR : k));
+}
+
+/** Problems with a saved region's partContested (beyond what the schema checks). */
+export function checkParts(p: RegionProperties, g: RegionGeometry, where: string): string[] {
+  const errors: string[] = [];
+  const c = p.partContested;
+  if (!c) return errors;
+  const n = polygonsOf(g).length;
+  if (c.length !== n)
+    errors.push(`${where}: "partContested" has ${c.length} entr${c.length === 1 ? "y" : "ies"} but the geometry has ${n} part${n === 1 ? "" : "s"}; it needs one per part (-1 for a normal part)`);
+  c.forEach((k, i) => {
+    if (typeof k !== "number" || !Number.isInteger(k)) return void errors.push(`${where}: "partContested" entry ${i} must be a whole number`);
+    if (k === OWN_COLOUR) return;
+    if (k < 0 || k >= n) errors.push(`${where}: "partContested" entry ${i} is ${k}, but there ${n === 1 ? "is 1 part" : `are ${n} parts`} (use -1 for a normal part, or the index of the part it extends, counted from 0)`);
+    else if (k === i) errors.push(`${where}: "partContested" entry ${i} points at itself; a contested zone extends another part`);
+    else if (c[k] !== OWN_COLOUR) errors.push(`${where}: "partContested" entry ${i} points at part ${k}, which is itself a contested zone; a zone must extend a normal part`);
+  });
+  return errors;
 }
 
 /** partLabels padded or cut to `n` parts (missing or non-text entries become ""). */
@@ -173,7 +222,7 @@ export function regionLayers(r: Pick<RegionData, "color" | "legend" | "parts" | 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 function parseRing(v: unknown, budget: { n: number }): Ring | null {
-  if (!Array.isArray(v) || v.length > MAX_VERTICES + 1) return null;
+  if (!Array.isArray(v) || v.length > MAX_VERTICES + 1 || v.length > budget.n) return null;
   const out: Ring = [];
   for (const p of v) {
     if (!Array.isArray(p) || p.length !== 2) return null;
@@ -221,13 +270,29 @@ export function parseGeometry(v: unknown): RegionGeometry | null {
 }
 
 /**
+ * A region's `clash` data from outside the page: polygons of at least 3-position rings, finite numbers in
+ * range, at most CLASH_MAX_VERTICES positions in all. Anything else gives [] (the region still loads).
+ */
+export function parseClash(v: unknown): Ring[][] {
+  if (!Array.isArray(v) || v.length > 1000) return [];
+  const budget = { n: CLASH_MAX_VERTICES };
+  const out: Ring[][] = [];
+  for (const p of v) {
+    const poly = parsePolygon(p, budget);
+    if (!poly || poly.some((r) => r.length < 3)) return [];
+    out.push(poly);
+  }
+  return out;
+}
+
+/**
  * Validates region data from outside the page (a fetched regions/<id>.json, or a postMessage from the
  * admin page). Everything is checked and copied; anything unexpected gives null. Strings are only ever
  * used as text.
  */
 export function parseRegionData(v: unknown): RegionData | null {
   if (!isObj(v)) return null;
-  const { id, slot, name, color, fillOpacity, label, geometry, legend, legendTitle, parts, labels } = v;
+  const { id, slot, name, color, fillOpacity, label, geometry, legend, legendTitle, parts, labels, contested, clash } = v;
   if (typeof id !== "string" || !REGION_ID.test(id)) return null;
   if (typeof slot !== "string" || !REGION_ID.test(slot)) return null;
   if (typeof name !== "string" || name.length > NAME_MAX) return null;
@@ -266,7 +331,10 @@ export function parseRegionData(v: unknown): RegionData | null {
     legend: lg,
     parts: parts ? [...(parts as number[])] : new Array<number>(n).fill(OWN_COLOUR),
     labels: labels ? [...(labels as string[])] : new Array<string>(n).fill(""),
+    // Older data has neither; malformed entries become normal parts, malformed clash data is dropped.
+    contested: normalizePartContested(Array.isArray(contested) && contested.length === n ? contested : undefined, n),
     geometry: g,
+    ...(clash !== undefined ? { clash: parseClash(clash) } : {}),
   };
 }
 

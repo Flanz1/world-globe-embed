@@ -6,7 +6,7 @@ import { loadContent } from "../scripts/lib/content.ts";
 import { contentPaths } from "../scripts/lib/paths.ts";
 import type { MapMeta } from "../src/shared/types.ts";
 import type { RegionFeature } from "../src/shared/region.ts";
-import { copyId, normalizePartLabels, normalizePartLegend, regionLabelPoints, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
+import { copyId, normalizePartContested, normalizePartLabels, normalizePartLegend, regionLabelPoints, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
 import { ZOOM_MAX, ZOOM_MIN } from "../src/shared/params.ts";
 
 const LQIP = "data:image/webp;base64,UklGRg==";
@@ -160,7 +160,7 @@ describe("region validation", () => {
 describe("region helpers", () => {
   it("parseRegionData accepts good data and rejects anything off", () => {
     const d = { id: "a", slot: "s", name: "A", color: "#abc", fillOpacity: 0.3, label: true, geometry: good().geometry };
-    expect(parseRegionData(d)).toEqual({ ...d, legendTitle: "", legend: [], parts: [-1], labels: [""] });
+    expect(parseRegionData(d)).toEqual({ ...d, legendTitle: "", legend: [], parts: [-1], labels: [""], contested: [-1] });
     expect(parseRegionData({ ...d, color: "#abc;x" })).toBeNull();
     expect(parseRegionData({ ...d, id: "../x" })).toBeNull();
     expect(parseRegionData({ ...d, fillOpacity: Number.NaN })).toBeNull();
@@ -232,6 +232,66 @@ describe("region colours and legend", () => {
     const colour = multi();
     colour.properties.legend![0].color = "red;background:url(x)";
     expect(loadContent(project({ "kingdom-of-vael.json": colour })).errors.length).toBeGreaterThan(0);
+  });
+
+  it("partContested: valid zones pass; each wrong form fails with a readable message", () => {
+    const ok = multi();
+    ok.properties.partContested = [-1, 0, 0];
+    expect(loadContent(project({ "kingdom-of-vael.json": ok })).errors).toEqual([]);
+    const errs = (c: unknown[]) => {
+      const f = multi();
+      (f.properties as unknown as Record<string, unknown>).partContested = c;
+      return loadContent(project({ "kingdom-of-vael.json": f })).errors.join("\n");
+    };
+    expect(errs([-1, 0])).toMatch(/"partContested" has 2 entries but the geometry has 3 parts/);
+    expect(errs([-1, 1, -1])).toMatch(/entry 1 points at itself/);
+    expect(errs([-1, 7, -1])).toMatch(/entry 1 is 7, but there are 3 parts/);
+    expect(errs([-1, 0, 1])).toMatch(/entry 2 points at part 1, which is itself a contested zone/);
+    expect(errs([-1, 0.5, -1])).toMatch(/partContested/);
+    expect(errs([-1, -2, -1])).toMatch(/partContested/);
+    // Missing: all normal, still valid.
+    expect(loadContent(project({ "kingdom-of-vael.json": multi() })).errors).toEqual([]);
+  });
+
+  it("normalizePartContested drops anything that isn't a zone of a normal part", () => {
+    expect(normalizePartContested([-1, 0, 0], 3)).toEqual([-1, 0, 0]);
+    expect(normalizePartContested([-1, 1, 9, "x", 0.5], 5)).toEqual([-1, -1, -1, -1, -1]);
+    // A chain: 2 → 1 → 0. Part 1 is a zone of 0, so 2 can't be a zone of 1.
+    expect(normalizePartContested([-1, 0, 1], 3)).toEqual([-1, 0, -1]);
+    expect(normalizePartContested(undefined, 2)).toEqual([-1, -1]);
+    expect(regionData({ ...multi(), properties: { ...multi().properties, partContested: [-1, 0, -1] } }).contested).toEqual([-1, 0, -1]);
+  });
+
+  it("parseRegionData keeps contested zones and validates clash data, dropping it when malformed", () => {
+    const d = regionData(multi());
+    const ok = parseRegionData({ ...d, contested: [-1, 0, 0], clash: [[[[0, 0], [5, 0], [5, 5]]]] })!;
+    expect(ok.contested).toEqual([-1, 0, 0]);
+    expect(ok.clash).toEqual([[[[0, 0], [5, 0], [5, 5]]]]);
+    // Older data without either still loads.
+    const older: Record<string, unknown> = { ...d };
+    delete older.contested;
+    expect(parseRegionData(older)!.contested).toEqual([-1, -1, -1]);
+    expect(parseRegionData(older)!.clash).toBeUndefined();
+    // Bad contested entries become normal parts.
+    expect(parseRegionData({ ...d, contested: [5, "x", -1] })!.contested).toEqual([-1, -1, -1]);
+    expect(parseRegionData({ ...d, contested: [-1, 0] })!.contested).toEqual([-1, -1, -1]);
+    // Malformed clash: dropped, the region itself still loads.
+    const huge = Array.from({ length: 2100 }, (_, i) => [i % 180, 0]);
+    for (const clash of [
+      "x",
+      { a: 1 },
+      [[[[0, 0], [5, "0"], [5, 5]]]],
+      [[[[0, 0], [5, NaN], [5, 5]]]],
+      [[[[0, 0], [5, 0], [500, 5]]]],
+      [[[[0, 0], [5, 0]]]],
+      [[[[0, 0, 1], [5, 0], [5, 5]]]],
+      [[huge]],
+      [{ type: "Polygon" }],
+    ]) {
+      const r = parseRegionData({ ...d, clash });
+      expect(r, JSON.stringify(clash).slice(0, 40)).not.toBeNull();
+      expect(r!.clash).toEqual([]);
+    }
   });
 
   it("regionData and regionLayers group the parts by colour, region colour first", () => {

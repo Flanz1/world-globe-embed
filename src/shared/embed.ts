@@ -12,6 +12,8 @@ export interface EmbedOptions {
   lock: boolean;
   /** Show the region's legend (key=0 hides it). */
   key: boolean;
+  /** Mark overlaps with other regions on the same slot (clash=0 turns it off). */
+  clash: boolean;
 }
 
 export const defaultEmbedOptions = (region: { label?: boolean }): EmbedOptions => ({
@@ -21,6 +23,7 @@ export const defaultEmbedOptions = (region: { label?: boolean }): EmbedOptions =
   dim: false,
   lock: true,
   key: true,
+  clash: true,
 });
 
 /** v/<slot>/?region=<id>&view=… with only the params that differ from the defaults. */
@@ -30,6 +33,7 @@ export function regionEmbedUrl(site: string | URL, slot: string, region: { id: s
   if (o.dim) q.set("dim", "1");
   if (!o.lock) q.set("lock", "0");
   if (o.key === false) q.set("key", "0");
+  if (o.clash === false) q.set("clash", "0");
   return new URL(`v/${encodeURIComponent(slot)}/?${q}`, site).href;
 }
 

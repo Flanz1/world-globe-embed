@@ -105,7 +105,7 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
  * The region's legend: a colour swatch and a label per entry, top left, folded and unfolded with its
  * header button. Labels are set with textContent; colours are validated #rgb/#rrggbb before they get here.
  */
-export function makeLegend(stage: HTMLElement): { set(entries: readonly LegendEntry[], title: string): void } {
+export function makeLegend(stage: HTMLElement): { set(entries: readonly LegendEntry[], title: string, contested?: boolean): void } {
   const box = document.createElement("div");
   box.className = "rkey";
   box.hidden = true;
@@ -132,7 +132,7 @@ export function makeLegend(stage: HTMLElement): { set(entries: readonly LegendEn
   for (const t of ["pointerdown", "wheel"] as const) box.addEventListener(t, (e) => e.stopPropagation());
   apply();
   return {
-    set(entries, title) {
+    set(entries, title, contested = false) {
       head.textContent = title || "Legend";
       const rows = entries.map((e) => {
         const li = document.createElement("li");
@@ -143,8 +143,19 @@ export function makeLegend(stage: HTMLElement): { set(entries: readonly LegendEn
         li.append(sw, t);
         return li;
       });
+      if (contested) {
+        // Dashed borders and hatching: contested zones and overlaps.
+        const li = document.createElement("li");
+        li.className = "rkey-contested";
+        const sw = document.createElement("i");
+        sw.className = "dash";
+        const t = document.createElement("span");
+        t.textContent = "Contested";
+        li.append(sw, t);
+        rows.push(li);
+      }
       list.replaceChildren(...rows);
-      box.hidden = !entries.length;
+      box.hidden = !rows.length;
     },
   };
 }

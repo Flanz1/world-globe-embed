@@ -7,6 +7,11 @@ import {
   insertVertex,
   moveLegendEntry,
   partAnchor,
+  partsAt,
+  contestedProblem,
+  remapContested,
+  setContested,
+  zonesOf,
   moveVertices,
   nextLegendColour,
   partAt,
@@ -25,7 +30,7 @@ import { checkGeometry, pointInRing, type Position } from "../src/shared/geo.ts"
 
 const square = (x: number, y: number, s = 10): Position[] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]];
 const props = { color: "#c0392b", fillOpacity: 0.35, label: true, description: "", legendTitle: "", legend: [] };
-const st = (parts: Parts): EditorState => ({ parts, styles: parts.map(() => -1), labels: parts.map(() => ""), props: { ...props, legend: [] } });
+const st = (parts: Parts): EditorState => ({ parts, styles: parts.map(() => -1), labels: parts.map(() => ""), contested: parts.map(() => -1), props: { ...props, legend: [] } });
 
 describe("editor model", () => {
   it("round-trips stored geometry, unwrapping across the antimeridian", () => {
@@ -131,6 +136,7 @@ describe("editor model: part colours and legend", () => {
     parts: [[square(0, 0)], [square(20, 0)], [square(40, 0)]],
     styles: [0, 1, -1],
     labels: ["North", "", "South"],
+    contested: [-1, -1, -1],
     props: { ...props, legend: [{ label: "A", color: "#111111" }, { label: "B", color: "#222222" }] },
   });
 
@@ -198,5 +204,92 @@ describe("editor model: part badges", () => {
     // Across the antimeridian (unwrapped): stays in the part's own coordinates.
     expect(partAnchor([square(175, 0)])).toEqual([180, 5]);
     expect(partAnchor([[[0, 0], [1, 1]]])).toBeNull();
+  });
+});
+
+describe("editor model: contested zones", () => {
+  // Part 0 (normal), 1 (zone of 0), 2 (normal), 3 (zone of 2).
+  const zoneState = (): EditorState => ({
+    parts: [[square(0, 0)], [square(8, 0, 6)], [square(40, 0)], [square(48, 0, 6)]],
+    styles: [-1, -1, -1, -1],
+    labels: ["A", "", "B", ""],
+    contested: [-1, 0, -1, 2],
+    props: { ...props, legend: [] },
+  });
+
+  it("survives deleting a vertex that removes a part", () => {
+    const s = zoneState();
+    // Part 2 loses two of its four vertices: it's removed, its zone (3) becomes normal.
+    const res = deleteVertices(s.parts, [{ p: 2, r: 0, i: 0 }, { p: 2, r: 0, i: 1 }]);
+    expect(res.kept).toEqual([0, 1, 3]);
+    expect(remapContested(s.contested, res.kept)).toEqual({ contested: [-1, 0, -1], orphaned: 1 });
+    // Removing a zone leaves the others pointing at the right parts.
+    const res2 = deleteVertices(s.parts, [{ p: 1, r: 0, i: 0 }, { p: 1, r: 0, i: 1 }]);
+    expect(remapContested(s.contested, res2.kept)).toEqual({ contested: [-1, -1, 1], orphaned: 0 });
+  });
+
+  it("deleting a parent makes its zones normal parts", () => {
+    const s = zoneState();
+    const res = deleteVertices(s.parts, [0, 1, 2].map((i) => ({ p: 0, r: 0, i })));
+    expect(res.kept).toEqual([1, 2, 3]);
+    expect(remapContested(s.contested, res.kept)).toEqual({ contested: [-1, -1, 1], orphaned: 1 });
+  });
+
+  it("toStyledGeometry remaps partContested when it drops a degenerate part", () => {
+    const s = zoneState();
+    // Part 0 collapses to fewer than 3 distinct stored vertices.
+    const parts: Parts = [[[[0, 0], [0, 0.000001], [0.000001, 0]]], ...s.parts.slice(1)];
+    const out = toStyledGeometry(parts, s.styles, s.labels, s.contested);
+    expect(out.partLabels).toEqual(["", "B", ""]);
+    expect(out.partContested).toEqual([-1, -1, 1]);
+    expect(toStyledGeometry(s.parts, s.styles, s.labels, s.contested).partContested).toEqual([-1, 0, -1, 2]);
+  });
+
+  it("checks what can become a zone of what", () => {
+    const s = zoneState();
+    expect(contestedProblem(s.contested, 1, 1)).toMatch(/itself/);
+    expect(contestedProblem(s.contested, 2, 1)).toMatch(/itself a contested zone/);
+    expect(contestedProblem(s.contested, 0, 2)).toMatch(/has contested zones/);
+    expect(contestedProblem(s.contested, 1, 2)).toBeNull();
+    expect(contestedProblem(s.contested, 1, -1)).toBeNull();
+    expect(setContested(s, 0, 2)).toBeTypeOf("string");
+    expect((setContested(s, 1, 2) as EditorState).contested).toEqual([-1, 2, -1, 2]);
+    expect(zonesOf([-1, 0, -1, 0], 0)).toEqual([1, 3]);
+  });
+
+  it("partsAt puts contested zones on top, then later parts", () => {
+    const s = zoneState();
+    expect(partsAt(s.parts, [9, 2], s.contested)).toEqual([1, 0]);
+    expect(partAt(s.parts, [9, 2], s.contested)).toBe(1);
+    expect(partsAt(s.parts, [2, 2], s.contested)).toEqual([0]);
+  });
+
+  it("translate moves one part, a part and its zones, or everything", () => {
+    const s = zoneState();
+    const one = translate(s.parts, 0, 5, 0);
+    expect(one[0][0][0]).toEqual([5, 0]);
+    expect(one[1][0][0]).toEqual([8, 0]);
+    const withZones = translate(s.parts, [0, ...zonesOf(s.contested, 0)], 5, 0);
+    expect(withZones[1][0][0]).toEqual([13, 0]);
+    expect(withZones[2][0][0]).toEqual([40, 0]);
+    // Latitude clamp only looks at the parts that move.
+    const up = translate([[square(0, 85)], [square(20, 0)]], [1], 0, 50);
+    expect(up[1][0][0]).toEqual([20, 50]);
+  });
+
+  it("undo and redo restore partContested with the geometry", () => {
+    const h = new History(zoneState());
+    h.apply("Make normal part", setContested(h.state, 1, -1) as EditorState);
+    const res = deleteVertices(h.state.parts, [0, 1, 2].map((i) => ({ p: 2, r: 0, i })));
+    h.apply("Delete", { ...h.state, parts: res.parts, styles: res.kept.map(() => -1), labels: res.kept.map((p) => h.state.labels[p]), contested: remapContested(h.state.contested, res.kept).contested });
+    expect(h.state.contested).toEqual([-1, -1, -1]);
+    h.undo();
+    expect(h.state.contested).toEqual([-1, -1, -1, 2]);
+    h.undo();
+    expect(h.state.contested).toEqual([-1, 0, -1, 2]);
+    h.redo();
+    h.redo();
+    expect(h.state.contested).toEqual([-1, -1, -1]);
+    expect(h.state.parts).toHaveLength(3);
   });
 });

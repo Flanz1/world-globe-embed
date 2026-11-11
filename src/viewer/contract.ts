@@ -36,6 +36,8 @@ export interface RegionMessage {
   region: RegionData;
   /** Turn the view to face the region again. */
   centre?: boolean;
+  /** With centre: face just this part (index into the region's polygons). */
+  focus?: number;
 }
 
 export type { ViewMode } from "../shared/types.ts";
@@ -46,11 +48,13 @@ export interface RegionContext {
   /** Resolves with the validated region, or null if it doesn't exist (or isn't on this slot). */
   data: Promise<RegionData | null>;
   /** Preview page only: later live updates from the admin page. */
-  subscribe?: (cb: (r: RegionData, centre: boolean) => void) => void;
+  subscribe?: (cb: (r: RegionData, centre: boolean, focus: number) => void) => void;
   /** label=0|1, or null to use the region's own setting. */
   label: boolean | null;
   /** Show the region's legend, if it has one (key=0 hides it). */
   key: boolean;
+  /** Mark overlaps with other regions from the build-time clash data (clash=0 turns it off). */
+  clash: boolean;
   dim: boolean;
   /** Start locked on the selected position (lock=0 starts unlocked). */
   lock: boolean;

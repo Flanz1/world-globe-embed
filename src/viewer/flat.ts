@@ -7,9 +7,10 @@
  * Region embeds start locked on the region; unlocked, drag pans and wheel/pinch zoom.
  */
 import { clamp, clampPadding } from "../shared/params.ts";
-import { geometryBounds, globeToImage, type Position } from "../shared/geo.ts";
-import { FLAT_K_MAX, flatFit, flatMinK, regionLabelPoints, regionLayers, type FlatView, type RegionData } from "../shared/region.ts";
-import { paintLayers } from "../shared/raster.ts";
+import { geometryBounds, globeToImage, polygonsOf, type Position } from "../shared/geo.ts";
+import { FLAT_K_MAX, flatFit, flatMinK, regionLabelPoints, type FlatView, type RegionData } from "../shared/region.ts";
+import { paintSpec, type PaintSpec } from "../shared/raster.ts";
+import { hasContestedMarks, regionPaintSpec } from "../shared/region-paint.ts";
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
 import { TILE_BUDGET, TileCache, levelFor, tileRect, tilesAt, tileUrl } from "../shared/tiles.ts";
 import type { FlatStartContext, PreviewMessage } from "./contract.ts";
@@ -52,8 +53,8 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   let img: Img | null = null;
   let imgW = 0;
   let reg: RegionData | null = null;
-  /** The region's parts grouped by colour, worked out once per region rather than per frame. */
-  let layers: ReturnType<typeof regionLayers> = [];
+  /** How to paint the region (colours, contested zones, overlaps), worked out once per region rather than per frame. */
+  let spec: PaintSpec | null = null;
   let labelAt: Position[] = [];
   let gridOn = cfg.grid;
   let lock: Lock | null = null;
@@ -122,10 +123,10 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       drawTiles(w, h, offsets, span, top, height);
     }
     if (gridOn) drawGrid(w, h, offsets);
-    if (reg) {
+    if (reg && spec) {
       // A region may unwrap up to 180° either side of its first vertex, so draw one copy more each way.
       const all = [offsets[0] - 360, ...offsets, offsets[offsets.length - 1] + 360];
-      paintLayers(g, layers, (lon) => sx(lon, w), (lat) => sy(lat, h), all, {
+      paintSpec(g, spec, (lon) => sx(lon, w), (lat) => sy(lat, h), all, {
         fillOpacity: reg.fillOpacity,
         lineWidth: 2,
         dim: !!R?.dim,
@@ -385,15 +386,16 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     });
     const setRegion = (r: RegionData) => {
       reg = r;
-      layers = regionLayers(r);
-      regionKey?.set(R.key ? r.legend : [], r.legendTitle);
+      spec = regionPaintSpec(r, R.clash);
+      regionKey?.set(R.key ? r.legend : [], r.legendTitle, R.key && hasContestedMarks(spec));
       const pts = (R.label ?? r.label) ? regionLabelPoints(r) : [];
       labelAt = pts.map((p) => p.at);
       labels?.set(pts.map((p) => p.text));
     };
-    const fitTo = (r: RegionData, animate: boolean) => {
+    const fitTo = (r: RegionData, animate: boolean, focus = -1) => {
       // Same bounds the page generator inlines, recomputed (the admin preview has no index).
-      bounds = geometryBounds(r.geometry);
+      const part = focus >= 0 ? polygonsOf(r.geometry)[focus] : undefined;
+      bounds = geometryBounds(part ? { type: "Polygon", coordinates: part } : r.geometry);
       goHome(animate);
     };
     void R.data.then((r) => {
@@ -406,9 +408,9 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       if (!R.fitted && !touched) fitTo(r, false);
       schedule();
     });
-    R.subscribe?.((r, centre) => {
+    R.subscribe?.((r, centre, focus) => {
       setRegion(r);
-      if (centre) fitTo(r, true);
+      if (centre) fitTo(r, true, focus);
       schedule();
     });
   }

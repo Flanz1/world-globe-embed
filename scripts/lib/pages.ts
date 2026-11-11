@@ -1,7 +1,17 @@
 import { buildViewerConfig, previewMaps, renderSlotPage } from "../../src/shared/page.ts";
 import { DEFAULT_VIEW } from "../../src/shared/types.ts";
-import { checkGeometry, mapGeometry, round, vertexCount } from "../../src/shared/geo.ts";
-import { parseRegionData, regionData, regionIndexEntry, type RegionData, type RegionFeature, type RegionIndexEntry } from "../../src/shared/region.ts";
+import { checkGeometry, mapGeometry, polygonsOf, round, vertexCount, type Ring } from "../../src/shared/geo.ts";
+import { capClash, clashPolygon } from "../../src/shared/region-paint.ts";
+import { findClashes, prepare } from "../../src/shared/clash.ts";
+import {
+  checkParts,
+  parseRegionData,
+  regionData,
+  regionIndexEntry,
+  type RegionData,
+  type RegionFeature,
+  type RegionIndexEntry,
+} from "../../src/shared/region.ts";
 import type { Content } from "./content.ts";
 
 export interface GeneratedPage {
@@ -62,23 +72,67 @@ export function generateSlotPages(
 
 /**
  * The data an embed loads for ?region=<id>: regions/<id>.json, minified, coordinates rounded to 4 decimals.
- * Re-checked here (the page generator never trusts the schema alone).
+ * Re-checked here (the page generator never trusts the schema alone). `clash` is the other regions'
+ * polygons that overlap this one (see clashData).
  */
-export function regionJson(f: RegionFeature): string {
+export function regionJson(f: RegionFeature, clash: Ring[][] = []): string {
   const problems = checkGeometry(f.geometry, `region "${f.id}"`);
   if (problems.length) throw new Error(problems.join("\n"));
-  const d = regionData({ ...f, geometry: mapGeometry(f.geometry, ([x, y]) => [round(x), round(y)]) });
+  const partProblems = checkParts(f.properties, f.geometry, `region "${f.id}"`);
+  if (partProblems.length) throw new Error(partProblems.join("\n"));
+  const d: RegionData = { ...regionData({ ...f, geometry: mapGeometry(f.geometry, ([x, y]) => [round(x), round(y)]) }), ...(clash.length ? { clash } : {}) };
   const checked = parseRegionData(d);
-  if (!checked || vertexCount(checked.geometry) !== vertexCount(f.geometry))
+  if (!checked || vertexCount(checked.geometry) !== vertexCount(f.geometry) || (checked.clash?.length ?? 0) !== clash.length)
     throw new Error(`region "${f.id}": data didn't pass the embed's own checks`);
-  // Without a legend (or part labels), those fields are left out (the embed fills in the defaults), so plain regions stay small.
-  const { legend, legendTitle, parts, labels, ...rest } = checked;
-  const out: Partial<RegionData> = { ...rest, ...(legend.length ? { legendTitle, legend, parts } : {}), ...(labels.some((t) => t) ? { labels } : {}) };
+  // Without a legend (or part labels, contested zones, clashes), those fields are left out (the embed fills in the defaults), so plain regions stay small.
+  const { legend, legendTitle, parts, labels, contested, clash: cl, ...rest } = checked;
+  const out: Partial<RegionData> = {
+    ...rest,
+    ...(legend.length ? { legendTitle, legend, parts } : {}),
+    ...(labels.some((t) => t) ? { labels } : {}),
+    ...(contested.some((k) => k !== -1) ? { contested } : {}),
+    ...(cl?.length ? { clash: cl } : {}),
+  };
   return JSON.stringify(out);
 }
 
+/**
+ * For each region, the polygons of other regions on the same slot that clash with any of its parts,
+ * capped at CLASH_MAX_VERTICES (simplified with Douglas–Peucker at growing tolerances when bigger).
+ */
+export function clashData(regions: Iterable<RegionFeature>): Map<string, Ring[][]> {
+  const bySlot = new Map<string, RegionFeature[]>();
+  for (const r of regions) (bySlot.get(r.properties.slot) ?? bySlot.set(r.properties.slot, []).get(r.properties.slot)!).push(r);
+  const out = new Map<string, Ring[][]>();
+  for (const list of bySlot.values()) {
+    if (list.length < 2) continue;
+    const polys = list.map((r) => polygonsOf(r.geometry));
+    const preps = polys.map((ps) => ps.map((p) => prepare(p)));
+    // Every polygon of the slot in one list, tagged with its region, so one sweep finds all cross-region pairs.
+    const flat: { r: number; p: number }[] = [];
+    polys.forEach((ps, r) => ps.forEach((_, p) => flat.push({ r, p })));
+    const all = flat.map(({ r, p }) => preps[r][p]);
+    const hits = list.map(() => new Set<number>());
+    for (const [i, j] of findClashes(all)) {
+      const a = flat[i];
+      const b = flat[j];
+      if (a.r === b.r) continue;
+      hits[a.r].add(j);
+      hits[b.r].add(i);
+    }
+    list.forEach((reg, r) => {
+      if (!hits[r].size) return;
+      const rings = [...hits[r]].sort((x, y) => x - y).map((k) => clashPolygon(polys[flat[k].r][flat[k].p]));
+      out.set(reg.id, capClash(rings));
+    });
+  }
+  return out;
+}
+
 export function generateRegionFiles(content: Content): { path: string; json: string }[] {
-  return [...(content.regions ?? new Map<string, RegionFeature>()).values()].map((r) => ({ path: `regions/${r.id}.json`, json: regionJson(r) }));
+  const regions = [...(content.regions ?? new Map<string, RegionFeature>()).values()];
+  const clashes = clashData(regions);
+  return regions.map((r) => ({ path: `regions/${r.id}.json`, json: regionJson(r, clashes.get(r.id) ?? []) }));
 }
 
 /**
