@@ -9,7 +9,8 @@
  * - a region embed at max zoom loads 1024 → 4096 → 8192, then only the tiles under the view,
  *   16384 before 32768, and shows them (globe and flat);
  * - the default zoom loads no tiles, and a phone loads none;
- * - panning at max zoom loads the new tiles under the view and keeps within the tile budget.
+ * - panning at max zoom loads the new tiles under the view and keeps within the tile budget;
+ * - the admin region editor zoomed far in shows the same tiles (against the in-memory GitHub API).
  *
  * Screenshots (the region at 8192 and with tiles) and report.json go to .e2e/tiles/.
  */
@@ -20,6 +21,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { MockGitHub } from "./mock-github.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const require = createRequire(path.join(ROOT, "package.json"));
@@ -202,6 +204,42 @@ for (const view of ["globe", "flat"]) {
   const phone = await open(q, { context: devices["Pixel 7"] });
   check(`${view}: a phone loads no tiles and no 8192`, phone.requested.every((x) => !x.includes(":") && x !== "8192"), phone.requested.join(" "));
   await phone.ctx.close();
+}
+
+// The admin region editor: zoomed far in, it goes 2048 → 4096 → 8192, then the tiles under the view.
+{
+  const mock = new MockGitHub({ root: dir });
+  const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 });
+  await ctx.route("https://api.github.com/**", (r) => mock.handle(r));
+  const page = await ctx.newPage();
+  const errors = [];
+  const requested = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  page.on("request", (r) => {
+    const l = label(r.url());
+    if (l) requested.push(l);
+  });
+  await page.goto(`${SITE}/admin/#regions`);
+  await page.fill("#token", "ghp_e2etoken");
+  await page.click('#signin-form button[type="submit"]');
+  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await page.selectOption("#r-new-slot", "tiles");
+  await page.locator(".r-new-row .r-new").click();
+  await page.waitForSelector("dialog.editor[open]");
+  await page.waitForTimeout(1500);
+  const shown = () => page.evaluate(() => document.querySelector("dialog.editor")?.dataset.tiles ?? "");
+  await page.evaluate(([cx, cy]) => document.querySelector("dialog.editor").wgeEditor.setView(cx, cy, 120), [(w0 + e0) / 2, (s0 + n0) / 2]);
+  const box = await page.locator("dialog.editor canvas.ed-canvas").boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -1); // a zoom gesture: the editor upgrades on zoom
+  for (let i = 0; i < 60 && (await shown()) !== top; i++) await page.waitForTimeout(500);
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: path.join(OUT, "editor-tiles.png") });
+  const edTiles = requested.filter((x) => x.includes(":"));
+  check("editor: zoomed far in, it loads the 8192 map, then the tiles under the view", whole(requested).includes("8192") && edTiles.length > 0 && edTiles.length <= 16, requested.join(" "));
+  check("editor: shows the finest level", (await shown()) === top, `data-tiles=${await shown()}`);
+  check("editor: no errors", errors.length === 0, errors.join("; "));
+  await ctx.close();
 }
 
 await browser.close();
