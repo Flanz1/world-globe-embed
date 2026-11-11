@@ -209,7 +209,9 @@ for (const view of ["globe", "flat"]) {
 // The admin region editor: zoomed far in, it goes 2048 → 4096 → 8192, then the tiles under the view.
 {
   const mock = new MockGitHub({ root: dir });
-  const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 });
+  // A small laptop: under 1100 px wide, and Chrome reporting 4 GB (as it does for many 8 GB laptops).
+  const ctx = await browser.newContext({ viewport: { width: 1024, height: 700 }, deviceScaleFactor: 2 });
+  await ctx.addInitScript(() => Object.defineProperty(Navigator.prototype, "deviceMemory", { get: () => 4 }));
   await ctx.route("https://api.github.com/**", (r) => mock.handle(r));
   const page = await ctx.newPage();
   const errors = [];
@@ -236,7 +238,7 @@ for (const view of ["globe", "flat"]) {
   await page.waitForTimeout(600);
   await page.screenshot({ path: path.join(OUT, "editor-tiles.png") });
   const edTiles = requested.filter((x) => x.includes(":"));
-  check("editor: zoomed far in, it loads the 8192 map, then the tiles under the view", whole(requested).includes("8192") && edTiles.length > 0 && edTiles.length <= 16, requested.join(" "));
+  check("editor (small laptop, 4 GB reported): zoomed far in, it loads the 8192 map, then the tiles under the view", whole(requested).includes("8192") && edTiles.length > 0 && edTiles.length <= 16, requested.join(" "));
   check("editor: shows the finest level", (await shown()) === top, `data-tiles=${await shown()}`);
   check("editor: no errors", errors.length === 0, errors.join("; "));
   await ctx.close();

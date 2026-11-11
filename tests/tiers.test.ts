@@ -39,9 +39,18 @@ describe("deviceLimit", () => {
     expect(deviceLimit(false)).toBe(8192);
     expect(deviceLimit(false, 4096)).toBe(4096);
     expect(deviceLimit(true)).toBe(4096);
-    vi.stubGlobal("navigator", { deviceMemory: 4 });
+    vi.stubGlobal("navigator", { deviceMemory: 2 });
     expect(deviceLimit(false)).toBe(4096);
+    // Chrome reports 4 for many 8 GB laptops (rounded down after the graphics' share).
+    vi.stubGlobal("navigator", { deviceMemory: 4 });
+    expect(deviceLimit(false)).toBe(8192);
     vi.stubGlobal("navigator", { deviceMemory: 8 });
     expect(deviceLimit(false, 16384)).toBe(8192);
+  });
+  it("ignores Brave's randomized deviceMemory", () => {
+    vi.stubGlobal("navigator", { deviceMemory: 2, brave: {} });
+    expect(deviceLimit(false)).toBe(8192);
+    expect(deviceLimit(false, 4096)).toBe(4096);
+    expect(deviceLimit(true)).toBe(4096);
   });
 });

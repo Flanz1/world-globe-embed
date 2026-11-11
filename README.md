@@ -295,7 +295,7 @@ scripts/                processing, validation, page generation, sample, measure
 3. The globe crossfades in over the poster with the 1024px texture. It then loads the 2048px texture, or 4096px on large, high-DPI desktop screens or when zoomed in, and crossfades to it.
    - Zoomed in further (a small region embed, or zooming in by hand), it loads in two stages: the 4096px texture first, then the 8192px one, if the map has it. The flat view (`view=flat`) does the same.
    - At (or near) the closest zoom, it then loads the close-up tiles under the view, if the map has them: the 16384 tiles first, then the 32768 ones on big or high-DPI screens. Only the few tiles on screen load (2048 px each, usually 50–300 KB), at most 16 are kept, and panning loads the next ones.
-   - 8192 and the tiles are desktop only. Phones, devices that report under 8 GB of memory, and GPUs whose largest texture is under 8192 stay at 4096. If the GPU runs out of memory, the embed keeps what it has.
+   - 8192 and the tiles are desktop only. Phones, devices that report under 4 GB of memory (Brave's randomized value is ignored), and GPUs whose largest texture is under 8192 stay at 4096. If the GPU runs out of memory, the embed keeps what it has.
 4. It renders only while something moves, and pauses completely when it's scrolled out of view or the tab is hidden.
 5. Without WebGL, it shows the flat 2048px map.
 

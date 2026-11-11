@@ -26,18 +26,24 @@ export function nextTier<T extends Tier>(textures: readonly T[], current: number
   return textures.filter((t) => t.w > current && t.w <= cap).pop();
 }
 
-/** deviceMemory where the browser reports it (Chromium), in GB. */
+/**
+ * deviceMemory where the browser reports it truthfully (Chromium), in GB. Brave's fingerprinting
+ * protection reports a random, often lower, value, which kept a desktop with plenty of memory at
+ * 4096 and without tiles, so it's ignored there (`navigator.brave` only exists in Brave).
+ */
 export function deviceMemory(): number | undefined {
-  return (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  const nav = navigator as Navigator & { deviceMemory?: number; brave?: unknown };
+  return nav.brave ? undefined : nav.deviceMemory;
 }
 
 /**
  * Largest texture width this device should hold. An 8192 × 4096 texture is 128 MB decoded and about
  * 170 MB on the GPU with mipmaps, so it's desktop only, needs a GPU that takes 8192 textures, and is
- * skipped where the browser says the device has under 8 GB of memory.
+ * skipped where the browser says the device has under 4 GB of memory. (Chrome rounds to a power of
+ * two and reports 4 for many "8 GB" laptops whose graphics take part of the RAM, so 8 was too strict.)
  */
 export function deviceLimit(mobile: boolean, maxTextureSize = Infinity): number {
   const mem = deviceMemory();
-  const big = !mobile && (mem === undefined || mem >= 8);
+  const big = !mobile && (mem === undefined || mem >= 4);
   return Math.min(big ? 8192 : 4096, maxTextureSize);
 }
