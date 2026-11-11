@@ -3,6 +3,7 @@ import {
   History,
   addHole,
   countVertices,
+  deleteParts,
   deleteVertices,
   insertVertex,
   moveLegendEntry,
@@ -356,5 +357,28 @@ describe("editor model: locked parts", () => {
     expect(toStyledGeometry(parts, s.styles, s.labels, s.contested, s.locked).partLocked).toEqual([true, true]);
     expect(toStyledGeometry(s.parts, s.styles, s.labels, s.contested, s.locked).partLocked).toEqual([false, true, true]);
     expect(toStyledGeometry(s.parts, s.styles).partLocked).toEqual([false, false, false]);
+  });
+});
+
+describe("editor model: deleting whole parts", () => {
+  const sq = (x: number): Position[] => [[x, 0], [x + 4, 0], [x + 4, 4], [x, 4]];
+  it("drops the part with its holes and reports which parts it kept", () => {
+    const parts: Parts = [[sq(0)], [sq(10), [[11, 1], [12, 1], [12, 2]]], [sq(20)]];
+    const res = deleteParts(parts, [1]);
+    expect(res.kept).toEqual([0, 2]);
+    expect(res.parts).toEqual([[sq(0)], [sq(20)]]);
+    // Input is left alone (undo keeps the old state).
+    expect(parts).toHaveLength(3);
+    res.parts[0][0][0][0] = 99;
+    expect(parts[0][0][0][0]).toBe(0);
+  });
+
+  it("deleting a parent keeps its contested zones as normal parts", () => {
+    const res = deleteParts([[sq(0)], [sq(2)], [sq(20)], [sq(22)]], [0]);
+    expect(remapContested([-1, 0, -1, 2], res.kept)).toEqual({ contested: [-1, -1, 1], orphaned: 1 });
+  });
+
+  it("can delete the last part, leaving an empty region", () => {
+    expect(deleteParts([[sq(0)]], [0])).toEqual({ parts: [], kept: [] });
   });
 });

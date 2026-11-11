@@ -6,7 +6,8 @@
  * Builds the e2e fixture (scripts/e2e/fixture.mjs) plus a two-part region whose first part is saved
  * locked, opens it in the editor against the mocked GitHub API and checks that a locked part can't be
  * dragged, nudged or moved with the whole region, while its vertices and midpoints still edit; that the
- * Lock button and the L key toggle it; and that saving writes partLocked in one commit.
+ * Lock button and the L key toggle it; that deleting a part leaves the other parts' locks on the right
+ * parts; and that saving writes partLocked in one commit.
  *
  * Screenshots and report.json go to .e2e/locks/. Exits non-zero if any check fails.
  */
@@ -185,6 +186,21 @@ await step(A, "toggle the lock", async () => {
   check(A, "undo brings the lock back", same(s.locked, [true, true]) && same(s.parts, before), JSON.stringify(s.locked));
   await page.mouse.move(2, 2);
   await page.screenshot({ path: path.join(OUT, "editor-both-locked.png") });
+});
+
+await step(A, "deleting a part keeps the other parts' locks", async () => {
+  await ed.lockBtn(0).click();
+  let s = await ed.state();
+  check(A, "unlock part 1 from its row", same(s.locked, [false, true]), JSON.stringify(s.locked));
+  await page.click('dialog.editor .ed-part-row[data-row="0"] [data-act="part-delete"]');
+  await page.click('dialog.small-dlg.danger[open] button:has-text("Delete part")');
+  await page.waitForTimeout(150);
+  s = await ed.state();
+  check(A, "after deleting part 1, the remaining part is still locked", s.parts.length === 1 && same(s.locked, [true]), JSON.stringify(s.locked));
+  await page.click('dialog.editor [data-act="undo"]');
+  await page.click('dialog.editor [data-act="undo"]');
+  s = await ed.state();
+  check(A, "undo brings the part and both locks back", s.parts.length === 2 && same(s.locked, [true, true]), JSON.stringify(s.locked));
 });
 
 await step(A, "save", async () => {
