@@ -288,7 +288,7 @@ const UPLOAD_MAX = 8192;
 
 /** Downscales to ≤8192 px wide and re-encodes (which also drops EXIF). Falls back to 4096 where the
  * browser can't make a canvas that big (iOS Safari caps canvases at about 16.7 million pixels). */
-async function prepareImage(file: File): Promise<{ blob: Blob; ext: string; w: number; h: number }> {
+async function prepareImage(file: File): Promise<{ blob: Blob; ext: string; w: number; h: number; note: string }> {
   const bmp = await createImageBitmap(file);
   const aspect = bmp.width / bmp.height;
   if (aspect < 1 || aspect > 4)
@@ -307,7 +307,14 @@ async function prepareImage(file: File): Promise<{ blob: Blob; ext: string; w: n
       let blob = await encode("image/webp", 0.92);
       if (!blob || blob.type !== "image/webp") blob = await encode("image/png");
       canvas.width = canvas.height = 0; // free the canvas memory now, not at GC
-      if (blob) return { blob, ext: blob.type === "image/webp" ? "webp" : "png", w, h: hgt };
+      if (blob) {
+        // Say so when the 8192 attempt failed, so a smaller upload than expected isn't a mystery.
+        const note =
+          max < UPLOAD_MAX && bmp.width > max
+            ? ` Your browser couldn't make an image ${Math.min(bmp.width, UPLOAD_MAX)} px wide, so it was shrunk to ${w} px and this map won't get the 8192 version. Try Chrome or Edge on a desktop.`
+            : "";
+        return { blob, ext: blob.type === "image/webp" ? "webp" : "png", w, h: hgt, note };
+      }
     }
   } finally {
     bmp.close();
@@ -340,7 +347,7 @@ function wireUpload(): void {
     if (replacing && !confirm(`A map called "${id}" already exists. Replace its image?`)) return;
     void act("Preparing image…", async () => {
       const img = await prepareImage(file);
-      $("#upload-info").textContent = `Uploading ${img.w}×${img.h} ${img.ext.toUpperCase()}, ${(img.blob.size / 1048576).toFixed(1)} MB…`;
+      $("#upload-info").textContent = `Uploading ${img.w}×${img.h} ${img.ext.toUpperCase()}, ${(img.blob.size / 1048576).toFixed(1)} MB…${img.note}`;
       const b64 = await blobToBase64(img.blob);
       const msg = slot ? `Upload map "${id}" and show it in slot "${slot}"` : `Upload map "${id}"`;
       const sha = await gh!.commit(msg, async () => {
@@ -353,7 +360,7 @@ function wireUpload(): void {
           );
         return changes;
       });
-      $("#upload-info").textContent = "Uploaded. The processing workflow converts it, then the site redeploys.";
+      $("#upload-info").textContent = `Uploaded ${img.w}×${img.h}. The processing workflow converts it, then the site redeploys.${img.note}`;
       form.reset();
       return sha;
     });
