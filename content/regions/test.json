@@ -3,7 +3,6 @@
   "type": "Feature",
   "id": "test",
   "properties": {
-    "name": "Test",
     "slot": "aerthos",
     "map": "map-preview",
     "color": "#c0392b",
@@ -24,7 +23,11 @@
       0,
       1
     ],
-    "updated": "2026-11-11T01:02:00Z"
+    "partLabels": [
+      "Test1",
+      "Test2"
+    ],
+    "updated": "2026-11-11T01:52:19Z"
   },
   "geometry": {
     "type": "MultiPolygon",
