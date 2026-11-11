@@ -47,7 +47,7 @@ A region is an outline (a kingdom, a province, a battlefield) drawn on a slot's 
 1. Open the admin page and sign in, then pick the **Regions** tab (the address ends in `#regions`, so a reload stays there).
 2. Choose a slot and press **New region**, or press **Edit** on an existing card.
 3. Draw on the flat map. A new region starts on the freehand tool (drag to draw, let go to close); press `P` for the polygon tool. The map wraps round left and right, so a region can cross the ±180° edge.
-4. Give it a name, and a colour under **Colours and legend**, in the side panel. The globe preview on the right updates as you draw, and **Centre on region** turns it to face the region.
+4. Set its **Id** (lowercase letters, digits and dashes; embeds use it, so it can't change after the first save), and a colour under **Colours and legend**, in the side panel. Each part can have its own label: type it into that part's row in the **Parts** list and the embed shows it on that part. Leave a row empty for no label. The globe preview on the right updates as you draw, and **Centre on region** turns it to face the region.
 5. Press **Save**. Each save is one commit that changes only `content/regions/<id>.json`. If someone changed the same file on GitHub since you opened it, the editor refuses to overwrite it and offers to reload.
 
 | Keys and mouse | Does |
@@ -73,7 +73,7 @@ A region is an outline (a kingdom, a province, a battlefield) drawn on a slot's 
 
 **Colours and legend.** A region can use several colours, for example one per province or per faction. In the editor's side panel, under **Colours and legend**, press **Add colour** and give each colour a label; then pick a colour for each part in the **Parts** list. Each part has a numbered badge on the map that matches its row; pointing at either one highlights the other. Parts left on "Default colour" use the colour set at the top of that section. The embed shows the labelled colours as a small legend in the top-left corner, under the legend title you set (default "Legend"); readers can fold it away by clicking its header. Up to 16 colours per region. Removing a colour sends its parts back to the default colour; undo brings it back.
 
-**Rename** changes only the name: the id, and so every embed already pasted, stays the same. **Duplicate** opens an unsaved copy with a new id. **Delete** asks you to type the region's name; embeds of a deleted region fall back to the plain globe with a small "Region not found" note.
+Regions are identified by their id; there is no separate name. Regions saved before part labels existed show their old name once, in the middle of the region, until you open and save them: the editor then moves that name into part 1's label. **Duplicate** opens an unsaved copy with a new id. **Delete** asks you to type the region's id; embeds of a deleted region fall back to the plain globe with a small "Region not found" note.
 
 ### How regions are stored
 
@@ -83,6 +83,7 @@ Each region is a GeoJSON Feature in `content/regions/<id>.json`, checked against
 - An edge between two points always takes the shorter way round, so `170 → -170` crosses the ±180° line (20°), never the long way (340°). A single ring may span at most 180° of longitude and can't go round a pole; split anything bigger into parts.
 - Outer rings run counter-clockwise and holes clockwise, every ring is closed, nothing crosses itself, and coordinates have at most 4 decimals.
 - `properties.legend` is an optional list of `{ "label", "color" }` entries (at most 16), and `properties.partLegend` gives one number per part (per polygon, in order): the index of the legend entry that part is drawn in, or `-1` for the region's own `color`. Leave both out for a single-colour region. `properties.legendTitle` is the legend's heading.
+- `properties.partLabels` is an optional list with one text per part (`""` for none), shown on each part in the embed. `properties.name` is optional and only used by older regions without part labels.
 - `properties.slot` must name an existing slot. `properties.map` records which map it was drawn on; if the slot now shows a different map, validation warns (it doesn't fail) and the admin card says "drawn on a different map".
 
 ### Embedding a region
@@ -101,7 +102,7 @@ Region embeds take these parameters on top of the ones above:
 |---|---|---|
 | `region` | a region id | The region to show (it must belong to this slot) |
 | `view` | `globe` / `flat` | 3D globe (default) or the flat map; the flat view never loads Three.js |
-| `label` | `0` / `1` | Region name label (default: the region's own setting) |
+| `label` | `0` / `1` | Part labels (default: the region's own "Show part labels in embed" setting) |
 | `dim` | `0` / `1` | Dim everything outside the region |
 | `lock` | `0` / `1` | `1` (default) starts locked on the region; `0` starts unlocked |
 | `key` | `0` / `1` | `0` hides the region's colour legend (shown by default when the region has one). Not the same as `legend`, which is the grid legend |

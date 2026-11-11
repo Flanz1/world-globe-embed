@@ -10,7 +10,7 @@ import { $, h } from "./dom.ts";
 import { openEditor } from "./editor/editor.ts";
 import type { FileCommit, GitHub } from "./github.ts";
 import { loadMapImage } from "./images.ts";
-import { openDelete, openEmbedDialog, openRegionPreview, openRename } from "./region-dialogs.ts";
+import { openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
 
 export interface RegionEntry {
   id: string;
@@ -35,8 +35,6 @@ export interface RegionsDeps {
 export const regionPath = (id: string) => `content/regions/${id}.json`;
 export const stamp = () => new Date().toISOString().replace(/\.\d+Z$/, "Z");
 export const serialize = (f: RegionFeature) => JSON.stringify(f, null, 2) + "\n";
-/** Commit messages are one line; names can contain anything. */
-export const oneLine = (s: string) => s.replace(/[\r\n]+/g, " ").slice(0, 100);
 
 let deps: RegionsDeps;
 let entries: RegionEntry[] = [];
@@ -149,7 +147,8 @@ function card(e: RegionEntry): HTMLElement {
     h(
       "div",
       { className: "rinfo" },
-      h("div", {}, swatch, h("strong", { className: "rname", textContent: p.name }), " ", h("code", { textContent: e.id })),
+      h("div", {}, swatch, h("strong", { className: "rname", textContent: e.id })),
+      labelsText(p) ? h("div", { className: "muted small rlabels", textContent: labelsText(p) }) : null,
       h(
         "div",
         { className: "muted small" },
@@ -163,10 +162,9 @@ function card(e: RegionEntry): HTMLElement {
         "div",
         { className: "actions" },
         btn("Edit", () => edit(e), ""),
-        btn("Rename", () => rename(e)),
         btn("Duplicate", () => duplicate(e)),
         btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot)),
-        btn("Copy embed code", () => openEmbedDialog({ region: { id: e.id, name: p.name, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot })),
+        btn("Copy embed code", () => openEmbedDialog({ region: { id: e.id, name: e.id, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot })),
         btn("Delete", () => del(e), "ghost danger"),
       ),
     ),
@@ -193,20 +191,27 @@ export function renderRegions(): void {
   const sort = ui.sort().value;
   const shown = entries
     .filter((e) => !slot || e.feature?.properties.slot === slot)
-    .filter((e) => !q || e.id.includes(q) || (e.feature?.properties.name ?? "").toLowerCase().includes(q))
+    .filter((e) => !q || e.id.includes(q) || labelsText(e.feature?.properties).toLowerCase().includes(q))
     .sort((a, b) => {
       if (sort === "updated") {
         const da = a.commit?.date || a.feature?.properties.updated || "";
         const db = b.commit?.date || b.feature?.properties.updated || "";
         return db.localeCompare(da);
       }
-      return (a.feature?.properties.name ?? a.id).localeCompare(b.feature?.properties.name ?? b.id);
+      return a.id.localeCompare(b.id);
     });
   $("#regions-empty").hidden = entries.length > 0;
   $("#regions-tools").hidden = entries.length === 0;
   $("#regions").replaceChildren(
     ...(entries.length && !shown.length ? [h("p", { className: "muted", textContent: "No regions match." })] : shown.map(card)),
   );
+}
+
+/** The part labels (or, for an older region, its name), for the card and the search. */
+function labelsText(p: RegionFeature["properties"] | undefined): string {
+  if (!p) return "";
+  const labels = Array.isArray(p.partLabels) ? p.partLabels.filter((t) => typeof t === "string" && t.trim()) : [];
+  return labels.length ? labels.join(" · ") : (p.name ?? "");
 }
 
 /* ── Actions ── */
@@ -229,30 +234,13 @@ function duplicate(e: RegionEntry): void {
   if (!e.feature) return;
   const taken = new Set(entries.map((x) => x.id));
   const id = copyId(e.id, taken);
-  const name = `${e.feature.properties.name} (copy)`.slice(0, 80);
-  const feature: RegionFeature = { ...e.feature, id, properties: { ...e.feature.properties, name } };
+  const feature: RegionFeature = { ...e.feature, id };
   openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature, sha: null, isNew: true, neighbours: others(), takenIds: taken, afterCommit: deps.afterCommit });
 }
 
-function rename(e: RegionEntry): void {
-  if (!e.feature) return;
-  const old = e.feature.properties.name;
-  openRename(old, e.id, (name) => {
-    void deps.act(`Renaming ${e.id}…`, () =>
-      deps.gh().commit(`Rename region "${oneLine(old)}" to "${oneLine(name)}" (${e.id})`, async () => {
-        const fresh = JSON.parse(await deps.gh().readText(e.path)) as RegionFeature;
-        fresh.properties.name = name;
-        fresh.properties.updated = stamp();
-        return [{ path: e.path, content: serialize(fresh) }];
-      }),
-    );
-  });
-}
-
 function del(e: RegionEntry): void {
-  const name = e.feature?.properties.name ?? e.id;
-  openDelete(name, e.id, () => {
-    void deps.act(`Deleting ${e.id}…`, () => deps.gh().commit(`Delete region "${oneLine(name)}" (${e.id})`, async () => [{ path: e.path, content: "", delete: true }]));
+  openDelete(e.id, () => {
+    void deps.act(`Deleting ${e.id}…`, () => deps.gh().commit(`Delete region ${e.id}`, async () => [{ path: e.path, content: "", delete: true }]));
   });
 }
 

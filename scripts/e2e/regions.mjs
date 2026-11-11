@@ -301,6 +301,8 @@ for (const view of want("embed") ? ["globe", "flat"] : []) {
       return n;
     });
     await e.page.screenshot({ path: path.join(OUT, `embed-${view}-legend.png`), clip: { x: e.box.x, y: e.box.y, width: e.box.width, height: e.box.height } });
+    const lbls = await e.frame.evaluate(() => [...document.querySelectorAll(".rlabel")].filter((l) => !l.hidden).map((l) => l.textContent));
+    check(G, "each labelled part shows its own label (and the unlabelled one none)", JSON.stringify(lbls) === '["Red Reach","Blue Coast"]', JSON.stringify(lbls));
     check(G, "every part is drawn in its own colour", counts.every((n) => n > 200), counts.join(" / ") + " px");
     await e.frame.click(".rkey-head");
     const folded = await e.frame.evaluate(() => ({ exp: document.querySelector(".rkey-head").getAttribute("aria-expanded"), list: document.querySelector(".rkey ul").checkVisibility() }));
@@ -404,10 +406,11 @@ await step(A, "sign in and Regions tab", async () => {
   const n = await page.locator("#regions .rcard").count();
   check(A, "lists every region", n === 6, `${n} cards`);
   check(A, "'drawn on a different map' badge", (await page.locator('[data-region="old-map-region"] .badge.warn').textContent()) === "drawn on a different map");
-  const evil = await page.locator('[data-region="evil-name"] .rname').textContent();
+  const evil = await page.locator('[data-region="evil-name"] .rlabels').textContent();
   check(A, "hostile name shown as plain text", evil === '"><script>alert(1)</script>' && dialogs.length === 0);
+  check(A, "cards are titled by id, with no Rename button", (await page.locator('[data-region="evil-name"] .rname').textContent()) === "evil-name" && (await page.locator('[data-action="rename"]').count()) === 0);
   await page.fill("#r-search", "dateline");
-  check(A, "search filters by name/id", (await page.locator("#regions .rcard").count()) === 1);
+  check(A, "search filters by id/labels", (await page.locator("#regions .rcard").count()) === 1);
   await page.fill("#r-search", "");
   await page.selectOption("#r-slot", "aerthos");
   check(A, "slot filter", (await page.locator("#regions .rcard").count()) === 1);
@@ -415,7 +418,7 @@ await step(A, "sign in and Regions tab", async () => {
   await page.selectOption("#r-sort", "updated");
   await page.selectOption("#r-sort", "name");
   const names = await page.locator("#regions .rname").allTextContents();
-  check(A, "sort by name", JSON.stringify(names) === JSON.stringify([...names].sort((a, b) => a.localeCompare(b))), names.join(", "));
+  check(A, "sort by id", JSON.stringify(names) === JSON.stringify([...names].sort((a, b) => a.localeCompare(b))), names.join(", "));
   await page.screenshot({ path: path.join(OUT, "admin-regions-tab.png"), fullPage: true });
   await page.reload();
   await page.waitForSelector("#regions .rcard", { timeout: 15000 });
@@ -432,9 +435,10 @@ await step(A, "editor: draw and edit", async () => {
   await page.locator(".r-new-row .r-new").click();
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(500);
-  // Name first, so undo-all walks back through it too.
-  await page.fill('dialog.editor input[name="name"]', "Test Kingdom");
-  check(A, "id follows the name for a new region", (await ed.id()) === "test-kingdom");
+  check(A, "no Name field; a new region gets a free id to start with", (await page.locator('dialog.editor input[name="name"]').count()) === 0 && (await ed.id()) === "region");
+  await page.fill('dialog.editor input[name="id"]', "Test Kingdom");
+  await page.locator('dialog.editor input[name="id"]').dispatchEvent("change");
+  check(A, "the id field turns what's typed into a valid id", (await ed.id()) === "test-kingdom", await ed.id());
   await page.click("dialog.editor canvas.ed-canvas", { position: { x: 5, y: 5 }, button: "middle" });
   await ed.setView(180, 0, 22);
   const startTool = await page.getAttribute("dialog.editor button.tool[aria-pressed=true]", "data-tool").catch(() => null);
@@ -515,7 +519,7 @@ await step(A, "editor: draw and edit", async () => {
     undos++;
   }
   s = await ed.state();
-  check(A, "undo all the way back to the start", s.parts.length === 0 && s.props.name === "" && s.props.color === "#c0392b", `${undos} steps; ${s.parts.length} parts, name "${s.props.name}"`);
+  check(A, "undo all the way back to the start", s.parts.length === 0 && s.props.color === "#c0392b", `${undos} steps; ${s.parts.length} parts`);
   let redos = 0;
   while (!(await page.isDisabled('dialog.editor [data-act="redo"]')) && redos < 50) {
     await page.keyboard.press(redos % 2 ? "Control+y" : "Control+Shift+z");
@@ -534,7 +538,7 @@ await step(A, "editor: save", async () => {
   check(A, "save is exactly one commit", c.length === 1, c.map((x) => x.message).join(" | ") || `editor says: ${await ed.msg()}; last requests: ${mock.requests.slice(-4).join(", ")}`);
   check(A, "…on the configured branch", c[0]?.branch === BRANCH, c[0]?.branch);
   check(A, "…touching only content/regions/test-kingdom.json", JSON.stringify(c[0]?.changes) === JSON.stringify([{ path: "content/regions/test-kingdom.json", deleted: false }]), JSON.stringify(c[0]?.changes));
-  check(A, "…with the message from the brief", c[0]?.message === 'Save region "Test Kingdom" (test-kingdom)', c[0]?.message);
+  check(A, "…with the message from the brief", c[0]?.message === "Save region test-kingdom", c[0]?.message);
   const f = JSON.parse(mock.read(BRANCH, "content/regions/test-kingdom.json"));
   const lons = f.geometry.coordinates[0].map((p) => p[0]);
   const errs = checkGeometry(f.geometry);
@@ -559,20 +563,6 @@ await step(A, "editor: save", async () => {
   await page.waitForSelector('[data-region="test-kingdom"]', { timeout: 10000 });
 });
 
-await step(A, "rename", async () => {
-  const n = mock.log.length;
-  await page.click('[data-region="test-kingdom"] [data-action="rename"]');
-  const note = await page.textContent("dialog.small-dlg .dlg-body p");
-  await page.fill("dialog.small-dlg input", "Renamed Kingdom");
-  await page.click('dialog.small-dlg button:has-text("Rename")');
-  await waitCommits(n);
-  const c = commitsSince(n);
-  const f = JSON.parse(mock.read(BRANCH, "content/regions/test-kingdom.json"));
-  check(A, "rename: one commit, same file, same id, new name", c.length === 1 && JSON.stringify(c[0].changes) === JSON.stringify([{ path: "content/regions/test-kingdom.json", deleted: false }]) && f.id === "test-kingdom" && f.properties.name === "Renamed Kingdom", c.map((x) => x.message).join(" | "));
-  check(A, "rename dialog says the id and embeds stay", /id \(test-kingdom\) and every existing embed stay the same/.test(note), note);
-  await page.waitForSelector('[data-region="test-kingdom"] .rname:has-text("Renamed Kingdom")', { timeout: 10000 });
-});
-
 await step(A, "duplicate", async () => {
   const n = mock.log.length;
   await page.click('[data-region="test-kingdom"] [data-action="duplicate"]');
@@ -583,7 +573,7 @@ await step(A, "duplicate", async () => {
   const c = commitsSince(n);
   const orig = JSON.parse(mock.read(BRANCH, "content/regions/test-kingdom.json"));
   const copy = JSON.parse(mock.read(BRANCH, "content/regions/test-kingdom-copy.json") ?? "null");
-  check(A, "duplicate: one commit adding the copy with the same shape", c.length === 1 && copy && JSON.stringify(copy.geometry) === JSON.stringify(orig.geometry) && copy.properties.name === "Renamed Kingdom (copy)", c.map((x) => x.message).join(" | "));
+  check(A, "duplicate: one commit adding the copy with the same shape", c.length === 1 && copy && JSON.stringify(copy.geometry) === JSON.stringify(orig.geometry) && JSON.stringify(copy.properties.partLabels) === JSON.stringify(orig.properties.partLabels), c.map((x) => x.message).join(" | "));
   await page.click("dialog.editor .pv-head button.ghost");
   await page.waitForSelector('[data-region="test-kingdom-copy"]', { timeout: 10000 });
 });
@@ -592,9 +582,9 @@ await step(A, "delete", async () => {
   const n = mock.log.length;
   await page.click('[data-region="test-kingdom-copy"] [data-action="delete"]');
   const btn = page.locator('dialog.small-dlg button:has-text("Delete region")');
-  check(A, "delete is disabled until the name is typed", await btn.isDisabled());
+  check(A, "delete is disabled until the id is typed", await btn.isDisabled());
   const warning = await page.textContent("dialog.small-dlg .dlg-body p.error");
-  await page.fill("dialog.small-dlg input", "Renamed Kingdom (copy)");
+  await page.fill("dialog.small-dlg input", "test-kingdom-copy");
   await btn.click();
   await waitCommits(n);
   const c = commitsSince(n);
@@ -621,7 +611,7 @@ await step(A, "conflict detection", async () => {
   await page.click('dialog.small-dlg button:has-text("Reload from GitHub")');
   await page.waitForTimeout(400);
   const s = await ed.state();
-  check(A, "reload brings in the newer version", s.props.name === "Changed elsewhere");
+  check(A, "reload brings in the newer version (an older region's name becomes part 1's label)", s.labels[0] === "Changed elsewhere", JSON.stringify(s.labels));
   await page.click('dialog.editor [data-act="centre"]');
   await page.click("dialog.editor .pv-head button.ghost");
   await page.waitForTimeout(200);
@@ -655,6 +645,9 @@ await step(A, "editor: colours and legend", async () => {
   await page.screenshot({ path: path.join(OUT, "editor-badges.png") });
   await page.locator("dialog.editor .ed-colours").screenshot({ path: path.join(OUT, "editor-colours-panel.png") });
   await page.mouse.move(5, 5);
+  const plabels = await page.$$eval("dialog.editor .ed-part-row input[type=text]", (els) => els.map((e) => e.value));
+  check(A, "each Parts row has its label", JSON.stringify(plabels) === '["Red Reach","","Blue Coast"]', JSON.stringify(plabels));
+  await page.fill('dialog.editor input[data-part-label="1"]', "Green March <i>");
   await page.click('dialog.editor [data-act="key-add"]');
   await page.keyboard.type("Capital");
   pn = await panel();
@@ -676,12 +669,12 @@ await step(A, "editor: colours and legend", async () => {
   check(
     A,
     "saved file has the legend and one colour per part",
-    mock.log.length === n + 1 && f.properties.legendTitle === "Provinces" && JSON.stringify(f.properties.legend.map((e) => e.label)) === JSON.stringify(["<img src=x onerror=alert(3)>", "Capital"]) && JSON.stringify(f.properties.partLegend) === "[1,-1,0]",
-    JSON.stringify({ legend: f.properties.legend, partLegend: f.properties.partLegend }),
+    mock.log.length === n + 1 && f.properties.legendTitle === "Provinces" && JSON.stringify(f.properties.legend.map((e) => e.label)) === JSON.stringify(["<img src=x onerror=alert(3)>", "Capital"]) && JSON.stringify(f.properties.partLegend) === "[1,-1,0]" && JSON.stringify(f.properties.partLabels) === JSON.stringify(["Red Reach", "Green March <i>", "Blue Coast"]) && !("name" in f.properties),
+    JSON.stringify({ legend: f.properties.legend, partLegend: f.properties.partLegend, partLabels: f.properties.partLabels }),
   );
   await page.click("dialog.editor .pv-head button.ghost");
   await page.waitForTimeout(300);
-  const meta = await page.locator('[data-region="provinces"] .rinfo .muted.small').first().textContent();
+  const meta = await page.locator('[data-region="provinces"] .rinfo .muted.small', { hasText: "vertices" }).first().textContent();
   check(A, "region card counts the colours", /3 colours/.test(meta), meta);
 });
 
@@ -758,14 +751,14 @@ await step(A, "preview and embed code", async () => {
   await pf().waitForFunction(() => document.documentElement.dataset.state === "hires" && document.documentElement.classList.contains("flatview"), null, { timeout: 20000 });
   await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(OUT, "admin-preview-flat.png") });
-  const want = await page.textContent('[data-region="landmark-disc"] .rname');
+  const want = await page.textContent('[data-region="landmark-disc"] .rlabels');
   const got = await pf().evaluate(() => document.querySelector(".rlabel")?.textContent);
   check(A, "Preview: globe/flat switch shows the region embed", got === want, `${got}`);
   await page.click("dialog.rpreview .pv-head button");
 
   await page.click('[data-region="evil-name"] [data-action="copy-embed-code"]');
   const code = await page.inputValue("dialog.embed-dlg textarea");
-  check(A, "embed snippet escapes a hostile name", code.includes("title=\"&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt; (Alignment test)\"") && !code.includes("<script"), code);
+  check(A, "embed snippet is titled by id and has nothing unescaped", code.includes('title="evil-name (Alignment test)"') && !code.includes("<script"), code);
   await page.click('dialog.embed-dlg input[data-opt="lock"]');
   await page.click('dialog.embed-dlg input[value="flat"]');
   const code2 = await page.inputValue("dialog.embed-dlg textarea");
@@ -784,7 +777,7 @@ await step(A, "security and branch", async () => {
   check(A, "no page errors in the admin page", errors.length === 0, errors.join(" | ") || "none");
   check(A, "no alert() from region data", dialogs.length === 0, dialogs.join(" | ") || "none");
   check(A, "nothing written to main", mock.refs.get("main") === mainAtStart && mock.log.every((c) => c.branch === BRANCH), `${mock.log.length} commits, all on ${BRANCH}`);
-  check(A, "each action was one commit", mock.log.length === n0 + 5, mock.log.map((c) => c.message).join(" | "));
+  check(A, "each action was one commit", mock.log.length === n0 + 4, mock.log.map((c) => c.message).join(" | "));
 });
 await ctx.close();
 

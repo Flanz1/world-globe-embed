@@ -6,7 +6,9 @@ import {
   geometryBounds,
   imageToGlobe,
   mapGeometry,
+  partAnchors,
   polygonsOf,
+  sphericalCentroid,
   type GlobeFrame,
   type Position,
   type RegionGeometry,
@@ -23,6 +25,7 @@ export const DESCRIPTION_MAX = 500;
 export const LEGEND_MAX = 16;
 export const LEGEND_LABEL_MAX = 60;
 export const LEGEND_TITLE_MAX = 40;
+export const PART_LABEL_MAX = 80;
 /** partLegend value for a part drawn in the region's own colour. */
 export const OWN_COLOUR = -1;
 
@@ -33,7 +36,8 @@ export interface LegendEntry {
 }
 
 export interface RegionProperties {
-  name: string;
+  /** Legacy display name: shown as one label at the middle of the region when there are no partLabels. */
+  name?: string;
   slot: string;
   map: string;
   color: string;
@@ -49,6 +53,8 @@ export interface RegionProperties {
    * entry whose colour that part is drawn in, or -1 for the region's own colour. Missing means all -1.
    */
   partLegend?: number[];
+  /** One label per part (polygon), in order; "" for a part without one. */
+  partLabels?: string[];
   updated?: string;
 }
 
@@ -74,6 +80,8 @@ export interface RegionData {
   legend: LegendEntry[];
   /** Per polygon: legend index, or -1 for `color`. Same length as the geometry's polygon list. */
   parts: number[];
+  /** Per polygon: its label ("" for none). All empty means: show `name` once, at the region's middle. */
+  labels: string[];
   geometry: RegionGeometry;
 }
 
@@ -92,15 +100,21 @@ export function regionData(f: RegionFeature): RegionData {
   return {
     id: f.id,
     slot: p.slot,
-    name: p.name,
+    name: p.name ?? "",
     color: p.color,
     fillOpacity: p.fillOpacity ?? DEFAULT_FILL_OPACITY,
     label: p.label ?? true,
     legendTitle: p.legendTitle ?? "",
     legend: (p.legend ?? []).map((e) => ({ label: e.label, color: e.color })),
     parts: normalizePartLegend(p.partLegend, polygonsOf(f.geometry).length, p.legend?.length ?? 0),
+    labels: normalizePartLabels(p.partLabels, polygonsOf(f.geometry).length),
     geometry: f.geometry,
   };
+}
+
+/** partLabels padded or cut to `n` parts (missing or non-text entries become ""). */
+export function normalizePartLabels(v: readonly unknown[] | undefined, n: number): string[] {
+  return Array.from({ length: n }, (_, i) => (typeof v?.[i] === "string" ? (v[i] as string).slice(0, PART_LABEL_MAX) : ""));
 }
 
 /** partLegend padded or cut to `n` parts, with anything out of range turned into -1. */
@@ -125,7 +139,21 @@ export function checkLegend(p: RegionProperties, g: RegionGeometry, where: strin
       if (k !== OWN_COLOUR && (k < 0 || k >= n)) errors.push(`${where}: "partLegend" entry ${i} is ${k}, but the legend has ${n} entr${n === 1 ? "y" : "ies"} (use -1 for the region's own colour)`);
     });
   }
+  if (p.partLabels && p.partLabels.length !== parts)
+    errors.push(`${where}: "partLabels" has ${p.partLabels.length} entr${p.partLabels.length === 1 ? "y" : "ies"} but the geometry has ${parts} part${parts === 1 ? "" : "s"}; it needs one per part ("" for no label)`);
   return errors;
+}
+
+/**
+ * Where the embed puts text: one label per part that has one (at a point inside that part), or, for a
+ * region without part labels, its name once at the middle of the region. Map-image frame.
+ */
+export function regionLabelPoints(r: Pick<RegionData, "name" | "labels" | "geometry">): { text: string; at: Position }[] {
+  if (r.labels.some((t) => t.trim())) {
+    const at = partAnchors(r.geometry);
+    return r.labels.flatMap((t, i) => (t.trim() && at[i] ? [{ text: t, at: at[i]! }] : []));
+  }
+  return r.name.trim() ? [{ text: r.name, at: sphericalCentroid(r.geometry) }] : [];
 }
 
 /** A region as fill layers: its parts grouped by colour, region colour first, then legend order. */
@@ -199,7 +227,7 @@ export function parseGeometry(v: unknown): RegionGeometry | null {
  */
 export function parseRegionData(v: unknown): RegionData | null {
   if (!isObj(v)) return null;
-  const { id, slot, name, color, fillOpacity, label, geometry, legend, legendTitle, parts } = v;
+  const { id, slot, name, color, fillOpacity, label, geometry, legend, legendTitle, parts, labels } = v;
   if (typeof id !== "string" || !REGION_ID.test(id)) return null;
   if (typeof slot !== "string" || !REGION_ID.test(slot)) return null;
   if (typeof name !== "string" || name.length > NAME_MAX) return null;
@@ -223,7 +251,23 @@ export function parseRegionData(v: unknown): RegionData | null {
     if (!Array.isArray(parts) || parts.length !== n) return null;
     if (!parts.every((k) => typeof k === "number" && Number.isInteger(k) && k >= OWN_COLOUR && k < lg.length)) return null;
   }
-  return { id, slot, name, color, fillOpacity, label, legendTitle: legendTitle ?? "", legend: lg, parts: parts ? [...(parts as number[])] : new Array<number>(n).fill(OWN_COLOUR), geometry: g };
+  if (labels !== undefined) {
+    if (!Array.isArray(labels) || labels.length !== n) return null;
+    if (!labels.every((t) => typeof t === "string" && t.length <= PART_LABEL_MAX)) return null;
+  }
+  return {
+    id,
+    slot,
+    name,
+    color,
+    fillOpacity,
+    label,
+    legendTitle: legendTitle ?? "",
+    legend: lg,
+    parts: parts ? [...(parts as number[])] : new Array<number>(n).fill(OWN_COLOUR),
+    labels: labels ? [...(labels as string[])] : new Array<string>(n).fill(""),
+    geometry: g,
+  };
 }
 
 /* ── Framing ── */

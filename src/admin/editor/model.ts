@@ -22,12 +22,12 @@ import {
   type Ring,
 } from "../../shared/geo.ts";
 import { OWN_COLOUR, type LegendEntry } from "../../shared/region.ts";
+export { partAnchor } from "../../shared/geo.ts";
 
 /** parts[p][0] is part p's outer ring, parts[p][1..] its holes. */
 export type Parts = Ring[][];
 
 export interface RegionProps {
-  name: string;
   color: string;
   fillOpacity: number;
   label: boolean;
@@ -40,6 +40,8 @@ export interface EditorState {
   parts: Parts;
   /** Per part: index into props.legend, or -1 (OWN_COLOUR) for the region's own colour. */
   styles: number[];
+  /** Per part: the label the embed shows on it ("" for none). */
+  labels: string[];
   props: RegionProps;
 }
 
@@ -56,6 +58,7 @@ export const cloneParts = (parts: Parts): Parts => parts.map((rings) => rings.ma
 export const cloneState = (s: EditorState): EditorState => ({
   parts: cloneParts(s.parts),
   styles: [...s.styles],
+  labels: [...s.labels],
   props: { ...s.props, legend: s.props.legend.map((e) => ({ ...e })) },
 });
 
@@ -250,66 +253,20 @@ export function smoothParts(parts: Parts): Parts | null {
 
 /* ── Part colours and the legend ── */
 
-/**
- * A point inside a part (inside its outer ring, outside its holes), in the part's own unwrapped
- * coordinates, for the editor's numbered badge: the outer ring's centroid when that lands inside,
- * otherwise the middle of the widest inside stretch along the centroid's latitude.
- */
-export function partAnchor(rings: Ring[]): Position | null {
-  const outer = rings[0];
-  if (!outer || outer.length < 3) return null;
-  let a = 0;
-  let cx = 0;
-  let cy = 0;
-  for (let i = 0, n = outer.length; i < n; i++) {
-    const [x0, y0] = outer[i];
-    const [x1, y1] = outer[(i + 1) % n];
-    const c = x0 * y1 - x1 * y0;
-    a += c;
-    cx += (x0 + x1) * c;
-    cy += (y0 + y1) * c;
-  }
-  let c: Position;
-  if (Math.abs(a) < 1e-12) {
-    const n = outer.length;
-    c = [outer.reduce((t, p) => t + p[0], 0) / n, outer.reduce((t, p) => t + p[1], 0) / n];
-  } else c = [cx / (3 * a), cy / (3 * a)];
-  const inside = (p: Position) => pointInRing(p, outer) && !rings.slice(1).some((h) => pointInRing(p, h));
-  if (inside(c)) return c;
-  // Scan along the centroid's latitude (nudged off any vertex) for the widest stretch inside the part.
-  const y = c[1] + 1e-7;
-  const xs: number[] = [];
-  for (const ring of rings)
-    for (let i = 0, n = ring.length; i < n; i++) {
-      const [x0, y0] = ring[i];
-      const [x1, y1] = ring[(i + 1) % n];
-      if (y0 > y !== y1 > y) xs.push(x0 + ((y - y0) / (y1 - y0)) * (x1 - x0));
-    }
-  xs.sort((p, q) => p - q);
-  let best: Position | null = null;
-  let width = 0;
-  for (let i = 0; i + 1 < xs.length; i += 2) {
-    const w = xs[i + 1] - xs[i];
-    const m: Position = [(xs[i] + xs[i + 1]) / 2, y];
-    if (w > width && inside(m)) {
-      width = w;
-      best = m;
-    }
-  }
-  return best ?? outer[0];
-}
 
 /** Stored geometry plus the matching partLegend, dropping any part that doesn't survive storing (too few vertices). */
-export function toStyledGeometry(parts: Parts, styles: number[]): { geometry: RegionGeometry; partLegend: number[] } {
+export function toStyledGeometry(parts: Parts, styles: number[], labels: string[] = []): { geometry: RegionGeometry; partLegend: number[]; partLabels: string[] } {
   const keep: Parts = [];
   const partLegend: number[] = [];
+  const partLabels: string[] = [];
   parts.forEach((rings, p) => {
     if (polygonsOf(toStoredGeometry([rings])).length) {
       keep.push(rings);
       partLegend.push(styles[p] ?? OWN_COLOUR);
+      partLabels.push(labels[p] ?? "");
     }
   });
-  return { geometry: toStoredGeometry(keep), partLegend };
+  return { geometry: toStoredGeometry(keep), partLegend, partLabels };
 }
 
 /** Removes legend entry `k`: its parts go back to the region's colour, later indices shift down. */

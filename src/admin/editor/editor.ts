@@ -33,7 +33,9 @@ import {
   REGION_ID,
   flatFit,
   flatMinK,
+  normalizePartLabels,
   normalizePartLegend,
+  PART_LABEL_MAX,
   regionLayers,
   slugify,
   uniqueId,
@@ -47,7 +49,7 @@ import { h } from "../dom.ts";
 import type { GitHub } from "../github.ts";
 import { loadMapImage } from "../images.ts";
 import { alertBox, confirmBox, modal, openEmbedDialog, previewUrl, sendRegion } from "../region-dialogs.ts";
-import { oneLine, regionPath, serialize, stamp } from "../regions.ts";
+import { regionPath, serialize, stamp } from "../regions.ts";
 import {
   History,
   addHole,
@@ -119,11 +121,13 @@ function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"): Edit
     .slice(0, LEGEND_MAX)
     .map((e) => ({ label: String(e.label ?? "").slice(0, LEGEND_LABEL_MAX), color: REGION_COLOR.test(e.color) ? expandHex(e.color) : "#7f8c8d" }));
   const parts = f ? partsFromGeometry(f.geometry) : [];
+  // Older regions have one name instead of part labels: it becomes the first part's label.
+  const legacy = !fp?.partLabels && fp?.name && (fp.label ?? true) ? [fp.name] : undefined;
   return {
     parts,
     styles: normalizePartLegend(fp?.partLegend, parts.length, legend.length),
+    labels: normalizePartLabels(fp?.partLabels ?? legacy, parts.length),
     props: {
-      name: fp?.name ?? "",
       color: fp && REGION_COLOR.test(fp.color) ? expandHex(fp.color) : fallbackColour,
       fillOpacity: fp?.fillOpacity ?? DEFAULT_FILL_OPACITY,
       label: fp?.label ?? true,
@@ -168,7 +172,7 @@ export function openEditor(o: EditorOptions): void {
   for (const n of neighbours) for (const poly of polygonsOf(n.geometry)) for (const r of poly) for (const p of r) snapPts.push(p);
 
   const hist = new History(stateOf(o.feature));
-  let id = o.feature?.id ?? "";
+  let id = o.feature?.id ?? uniqueId("region", o.takenIds);
   let sha = o.sha;
   let isNew = o.isNew;
   let saved = isNew ? "" : JSON.stringify(hist.state);
@@ -193,7 +197,6 @@ export function openEditor(o: EditorOptions): void {
   const simplifyBtn = btn("Simplify…", "Fewer vertices, same shape", () => toggleSimplify(), "simplify");
   const smoothBtn = btn("Smooth", "Round the corners (one Chaikin pass; doubles the vertices)", () => smooth(), "smooth");
 
-  const nameIn = h("input", { type: "text", maxLength: 80, required: true, placeholder: "e.g. Kingdom of Vael", value: hist.state.props.name, name: "name" });
   const idIn = h("input", { type: "text", maxLength: 64, spellcheck: false, value: id, name: "id", pattern: "[a-z0-9][a-z0-9\\-]{0,63}" });
   const colorIn = h("input", { type: "color", value: hist.state.props.color, name: "color", ariaLabel: "Default colour" });
   const opacityIn = h("input", { type: "range", min: "0", max: "1", step: "0.05", value: String(hist.state.props.fillOpacity), name: "opacity" });
@@ -252,11 +255,10 @@ export function openEditor(o: EditorOptions): void {
         frameEl,
         h("div", { className: "row" }, btn("Centre on region", "Turn the globe preview to face the region", () => sendPreview(true), "centre"), btn("Embed code…", "Copy the iframe code for this region", () => embed(), "embed")),
         msg,
-        h("label", {}, "Name", nameIn),
         h("label", {}, "Id (permanent; embeds use it)", idIn),
         h("p", { className: "muted small", textContent: `Slot: ${slotName} · map: ${slot.map}` }),
         h("label", { className: "inline grow ed-fill" }, "Fill", opacityIn, opacityOut),
-        h("label", { className: "check" }, labelIn, "Show label in embed"),
+        h("label", { className: "check" }, labelIn, "Show part labels in embed"),
         h("label", {}, "Description (plain text)", descIn),
         h(
           "fieldset",
@@ -272,7 +274,7 @@ export function openEditor(o: EditorOptions): void {
           ),
           keyRows,
           addKeyBtn,
-          h("p", { className: "muted small", textContent: "Parts (hover one to see it on the map)" }),
+          h("p", { className: "muted small", textContent: "Parts: a label (shown on that part in the embed) and a colour for each. The numbers match the badges on the map." }),
           partRows,
         ),
         stats,
@@ -365,8 +367,12 @@ export function openEditor(o: EditorOptions): void {
 
   const parts = () => hist.state.parts;
   /** Geometry edits. `styles` must be given whenever parts are added or removed. */
-  const setParts = (label: string, next: Parts, merge?: string, styles = hist.state.styles) =>
-    hist.apply(label, { ...hist.state, parts: next, styles: normalizePartLegend(styles, next.length, hist.state.props.legend.length) }, merge);
+  const setParts = (label: string, next: Parts, merge?: string, styles = hist.state.styles, labels = hist.state.labels) =>
+    hist.apply(
+      label,
+      { ...hist.state, parts: next, styles: normalizePartLegend(styles, next.length, hist.state.props.legend.length), labels: normalizePartLabels(labels, next.length) },
+      merge,
+    );
   /** Part under the pointer, on the map or in the side panel's Parts list, or -1. */
   let hoverPart = -1;
   function setHoverPart(p: number): void {
@@ -637,13 +643,15 @@ export function openEditor(o: EditorOptions): void {
   const regionNow = (): RegionData => ({
     id: previewId(),
     slot: slotName,
-    name: hist.state.props.name.slice(0, 80),
+    name: "",
     color: hist.state.props.color,
     fillOpacity: hist.state.props.fillOpacity,
     label: hist.state.props.label,
     legendTitle: hist.state.props.legendTitle.slice(0, LEGEND_TITLE_MAX),
     legend: hist.state.props.legend.map((e) => ({ label: e.label.slice(0, LEGEND_LABEL_MAX), color: e.color })),
-    ...(({ geometry, partLegend }) => ({ geometry, parts: partLegend }))(toStyledGeometry(parts(), hist.state.styles)),
+    ...(({ geometry, partLegend, partLabels }) => ({ geometry, parts: partLegend, labels: partLabels.map((t) => t.slice(0, PART_LABEL_MAX)) }))(
+      toStyledGeometry(parts(), hist.state.styles, hist.state.labels),
+    ),
   });
   let previewRaf = 0;
   let lastSent = -1;
@@ -666,7 +674,6 @@ export function openEditor(o: EditorOptions): void {
   /* ── Side panel ↔ state ── */
   function syncPanel(): void {
     const s = hist.state.props;
-    if (document.activeElement !== nameIn) nameIn.value = s.name;
     colorIn.value = s.color;
     opacityIn.value = String(s.fillOpacity);
     opacityOut.value = `${Math.round(s.fillOpacity * 100)}%`;
@@ -675,22 +682,13 @@ export function openEditor(o: EditorOptions): void {
     if (document.activeElement !== keyTitleIn) keyTitleIn.value = s.legendTitle;
     syncColours();
     idIn.disabled = !isNew;
-    title.textContent = `${isNew ? "New region" : "Edit region"}: ${s.name || "(unnamed)"}`;
+    title.textContent = `${isNew ? "New region" : "Edit region"}: ${id || "(no id yet)"}`;
   }
   const setProp = <K extends keyof EditorState["props"]>(k: K, v: EditorState["props"][K], label: string) =>
     hist.apply(label, { ...hist.state, props: { ...hist.state.props, [k]: v } }, `prop:${k}`);
-  nameIn.addEventListener("input", () => {
-    setProp("name", nameIn.value, "Rename");
-    if (isNew && !idTouched) {
-      id = uniqueId(nameIn.value || "region", o.takenIds);
-      idIn.value = id;
-    }
-    changed();
-  });
-  let idTouched = !!o.feature;
   idIn.addEventListener("input", () => {
-    idTouched = true;
     id = idIn.value.trim();
+    title.textContent = `New region: ${id || "(no id yet)"}`;
   });
   idIn.addEventListener("change", () => {
     id = slugify(idIn.value) || id;
@@ -761,7 +759,22 @@ export function openEditor(o: EditorOptions): void {
           for (const k of [OWN_COLOUR, ...s.props.legend.map((_, i) => i)]) sel.append(h("option", { value: String(k), textContent: entryName(k) }));
           sel.addEventListener("change", () => setPartStyle(p, Number(sel.value)));
           const sw = h("i", { className: "ed-swatch ed-badge", textContent: String(p + 1), ariaHidden: "true" });
-          const row = h("div", { className: "ed-part-row", dataset: { row: String(p) } }, sw, h("span", { textContent: `Part ${p + 1}`, title: `${rings[0]?.length ?? 0} vertices${rings.length > 1 ? `, ${rings.length - 1} hole(s)` : ""}` }), sel);
+          const lbl = h("input", {
+            type: "text",
+            maxLength: PART_LABEL_MAX,
+            placeholder: `Part ${p + 1} label`,
+            value: s.labels[p] ?? "",
+            ariaLabel: `Label for part ${p + 1}`,
+            title: `${rings[0]?.length ?? 0} vertices${rings.length > 1 ? `, ${rings.length - 1} hole(s)` : ""}`,
+            dataset: { partLabel: String(p) },
+          });
+          lbl.addEventListener("input", () => {
+            const labels = [...hist.state.labels];
+            labels[p] = lbl.value.slice(0, PART_LABEL_MAX);
+            hist.apply("Part label", { ...hist.state, labels }, `part-label:${p}`);
+            changed();
+          });
+          const row = h("div", { className: "ed-part-row", dataset: { row: String(p) } }, sw, lbl, sel);
           row.addEventListener("pointerenter", () => setHoverPart(p));
           row.addEventListener("pointerleave", () => setHoverPart(-1));
           return row;
@@ -779,6 +792,8 @@ export function openEditor(o: EditorOptions): void {
     partRows.querySelectorAll<HTMLDivElement>(".ed-part-row").forEach((row, p) => {
       const k = s.styles[p] ?? OWN_COLOUR;
       const sel = row.querySelector("select")!;
+      const lbl = row.querySelector<HTMLInputElement>("input[type=text]")!;
+      if (document.activeElement !== lbl) lbl.value = s.labels[p] ?? "";
       // Option texts follow the legend labels as they're typed (rebuilding the rows would lose focus).
       for (const opt of sel.options) {
         const t = entryName(Number(opt.value));
@@ -856,7 +871,7 @@ export function openEditor(o: EditorOptions): void {
         return false;
       }
       setParts("Cut hole", addHole(parts(), ring)!);
-    } else setParts(parts().length ? "Add part" : "Draw outline", addPart(parts(), ring), undefined, [...hist.state.styles, OWN_COLOUR]);
+    } else setParts(parts().length ? "Add part" : "Draw outline", addPart(parts(), ring), undefined, [...hist.state.styles, OWN_COLOUR], [...hist.state.labels, ""]);
     setMsg(`${target === "hole" ? "Hole" : "Outline"} added. Drag vertices to refine it.`, "ok");
     target = "part";
     drawing = null;
@@ -926,7 +941,13 @@ export function openEditor(o: EditorOptions): void {
     const res = deleteVertices(parts(), refs);
     const prob = ringProblem(res.parts);
     if (prob) return setMsg(`Can't delete that: ${prob.message.toLowerCase()}`, "error");
-    setParts(label, res.parts, undefined, res.kept.map((p) => hist.state.styles[p] ?? OWN_COLOUR));
+    setParts(
+      label,
+      res.parts,
+      undefined,
+      res.kept.map((p) => hist.state.styles[p] ?? OWN_COLOUR),
+      res.kept.map((p) => hist.state.labels[p] ?? ""),
+    );
     selection.clear();
     setMsg(
       res.removedParts
@@ -1342,7 +1363,7 @@ export function openEditor(o: EditorOptions): void {
 
   function embed(): void {
     if (isNew) return alertBox("Save first", "Save the region before copying its embed code: the embed loads the saved region by its id.");
-    openEmbedDialog({ region: { id, name: hist.state.props.name, label: hist.state.props.label, hasLegend: hist.state.props.legend.length > 0 }, slot: slotName, slotTitle: slot.title ?? map?.name ?? slotName });
+    openEmbedDialog({ region: { id, name: id, label: hist.state.props.label, hasLegend: hist.state.props.legend.length > 0 }, slot: slotName, slotTitle: slot.title ?? map?.name ?? slotName });
   }
 
   /* ── Save ── */
@@ -1350,14 +1371,12 @@ export function openEditor(o: EditorOptions): void {
   async function save(): Promise<void> {
     if (saving) return;
     const s = hist.state;
-    const name = s.props.name.trim();
-    if (!name) return setMsg("Give the region a name first.", "error"), nameIn.focus();
     if (isNew) {
       if (!REGION_ID.test(id)) return setMsg("The id must be lowercase letters, digits and dashes.", "error"), idIn.focus();
       if (o.takenIds.has(id)) return setMsg(`The id "${id}" is taken. Choose another one.`, "error"), idIn.focus();
     }
     if (!s.parts.length) return setMsg("Draw the region first.", "error");
-    const { geometry, partLegend } = toStyledGeometry(s.parts, s.styles);
+    const { geometry, partLegend, partLabels } = toStyledGeometry(s.parts, s.styles, s.labels);
     const errs = checkGeometry(geometry);
     if (errs.length) return setMsg(errs[0], "error");
     const props = s.props;
@@ -1366,7 +1385,6 @@ export function openEditor(o: EditorOptions): void {
       type: "Feature",
       id,
       properties: {
-        name,
         slot: slotName,
         map: slot.map,
         color: props.color,
@@ -1377,6 +1395,7 @@ export function openEditor(o: EditorOptions): void {
         ...(props.legend.length
           ? { legend: props.legend.map((e) => ({ label: e.label.trim().slice(0, LEGEND_LABEL_MAX), color: e.color })), partLegend }
           : {}),
+        ...(partLabels.some((t) => t.trim()) ? { partLabels: partLabels.map((t) => t.trim().slice(0, PART_LABEL_MAX)) } : {}),
         updated: stamp(),
       },
       geometry,
@@ -1387,7 +1406,7 @@ export function openEditor(o: EditorOptions): void {
     saveBtn.disabled = true;
     setMsg("Saving…");
     try {
-      const commitSha = await o.gh.commit(`Save region "${oneLine(name)}" (${id})`, async () => {
+      const commitSha = await o.gh.commit(`Save region ${id}`, async () => {
         const cur = await o.gh.fileSha(path);
         if (cur !== sha) throw new Conflict(cur ? "changed" : "gone");
         return [{ path, content: text }];

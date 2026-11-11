@@ -7,13 +7,13 @@
  * Region embeds start locked on the region; unlocked, drag pans and wheel/pinch zoom.
  */
 import { clamp, clampPadding } from "../shared/params.ts";
-import { geometryBounds, globeToImage, sphericalCentroid, type Position } from "../shared/geo.ts";
-import { FLAT_K_MAX, flatFit, flatMinK, regionLayers, type FlatView, type RegionData } from "../shared/region.ts";
+import { geometryBounds, globeToImage, type Position } from "../shared/geo.ts";
+import { FLAT_K_MAX, flatFit, flatMinK, regionLabelPoints, regionLayers, type FlatView, type RegionData } from "../shared/region.ts";
 import { paintLayers } from "../shared/raster.ts";
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
 import { TILE_BUDGET, TileCache, levelFor, tileRect, tilesAt, tileUrl } from "../shared/tiles.ts";
 import type { FlatStartContext, PreviewMessage } from "./contract.ts";
-import { RELOCK_MS, makeLabel, makeLegend, regionNote, setupLock, type Lock } from "./region-ui.ts";
+import { RELOCK_MS, makeLabels, makeLegend, regionNote, setupLock, type Lock } from "./region-ui.ts";
 
 type Img = ImageBitmap | HTMLImageElement;
 
@@ -54,7 +54,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   let reg: RegionData | null = null;
   /** The region's parts grouped by colour, worked out once per region rather than per frame. */
   let layers: ReturnType<typeof regionLayers> = [];
-  let regCentre: Position | null = null;
+  let labelAt: Position[] = [];
   let gridOn = cfg.grid;
   let lock: Lock | null = null;
   /** The reader moved the view this visit (so live updates and resizes don't yank it back). */
@@ -131,13 +131,13 @@ export async function start(ctx: FlatStartContext): Promise<void> {
         dim: !!R?.dim,
       }, { w, h });
     }
-    if (label && regCentre) {
-      // The copy of the centroid nearest the middle of the view.
-      const lon = regCentre[0] + 360 * Math.round((view.cx - regCentre[0]) / 360);
+    labelAt.forEach((at, i) => {
+      // The copy of the label point nearest the middle of the view.
+      const lon = at[0] + 360 * Math.round((view.cx - at[0]) / 360);
       const x = sx(lon, w);
-      const y = sy(regCentre[1], h);
-      label.place(x, y, x >= 0 && x <= w && y >= 0 && y <= h);
-    }
+      const y = sy(at[1], h);
+      labels?.place(i, x, y, x >= 0 && x <= w && y >= 0 && y <= h);
+    });
     maybeUpgrade();
     maybeTiles();
   }
@@ -375,7 +375,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     schedule();
   };
 
-  const label = R ? makeLabel(stage) : null;
+  const labels = R ? makeLabels(stage) : null;
   const regionKey = R ? makeLegend(stage) : null;
   if (R) {
     lock = setupLock(canvas, R.lock, (locked) => {
@@ -387,8 +387,9 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       reg = r;
       layers = regionLayers(r);
       regionKey?.set(R.key ? r.legend : [], r.legendTitle);
-      regCentre = sphericalCentroid(r.geometry);
-      label?.setText((R.label ?? r.label) ? r.name : "");
+      const pts = (R.label ?? r.label) ? regionLabelPoints(r) : [];
+      labelAt = pts.map((p) => p.at);
+      labels?.set(pts.map((p) => p.text));
     };
     const fitTo = (r: RegionData, animate: boolean) => {
       // Same bounds the page generator inlines, recomputed (the admin preview has no index).

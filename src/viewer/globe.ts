@@ -39,13 +39,13 @@ import {
   WebGLRenderer,
 } from "three";
 import { BASE_DISTANCE, FOV_DEG, MAX_DISTANCE, MIN_DISTANCE, clamp, clampPadding, distanceForZoom, parseHex } from "../shared/params.ts";
-import { imageToGlobe, sphericalCentroid, type Position } from "../shared/geo.ts";
-import { regionFit, regionLayers, type RegionData } from "../shared/region.ts";
+import { imageToGlobe, type Position } from "../shared/geo.ts";
+import { regionFit, regionLabelPoints, regionLayers, type RegionData } from "../shared/region.ts";
 import { paintLayers } from "../shared/raster.ts";
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
 import { createGlobeTiles } from "./globe-tiles.ts";
 import type { PreviewMessage, StartContext } from "./contract.ts";
-import { RELOCK_MS, makeLabel, makeLegend, regionNote, setupLock, type Lock } from "./region-ui.ts";
+import { RELOCK_MS, makeLabels, makeLegend, regionNote, setupLock, type Lock } from "./region-ui.ts";
 
 const DEG = Math.PI / 180;
 /** Auto-spin speed in radians per second (about 2 minutes per turn, like the desktop app). */
@@ -240,7 +240,7 @@ export async function start(ctx: StartContext): Promise<void> {
   /* ── Region overlay: the region rasterised into the same equirectangular UV space as the map,
    * on a band with the same padding and the same shift offset, so the two line up exactly. ── */
   let reg: RegionData | null = null;
-  let regCentre: Position | null = null;
+  let labelAt: Position[] = [];
   let overlay: { mesh: Mesh; canvas: HTMLCanvasElement; tex: CanvasTexture; mat: MeshPhongMaterial; dimCaps: Group } | null = null;
   const dimMat = new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5, depthWrite: false });
   const dimOn = () => !!R?.dim;
@@ -312,24 +312,27 @@ export async function start(ctx: StartContext): Promise<void> {
       { w: W, h: H },
     );
     o.tex.needsUpdate = true;
-    regCentre = sphericalCentroid(reg.geometry);
-    label?.setText((R?.label ?? reg.label) ? reg.name : "");
+    const pts = (R?.label ?? reg.label) ? regionLabelPoints(reg) : [];
+    labelAt = pts.map((p) => p.at);
+    labels?.set(pts.map((p) => p.text));
     regionKey?.set(R?.key ? reg.legend : [], reg.legendTitle);
   }
-  const label = R ? makeLabel(stage) : null;
+  const labels = R ? makeLabels(stage) : null;
   const regionKey = R ? makeLegend(stage) : null;
   const tmpV = new Vector3();
   function placeLabel(): void {
-    if (!label || !regCentre) return;
-    const [lon, lat] = imageToGlobe(regCentre, { north: pad.north, south: pad.south, shift });
-    // Same lat/lon → xyz convention as buildGrid.
-    const c = Math.cos(lat * DEG);
-    tmpV.set(OVERLAY_R * c * Math.cos(lon * DEG), OVERLAY_R * Math.sin(lat * DEG), -OVERLAY_R * c * Math.sin(lon * DEG));
-    tmpV.applyQuaternion(world.quaternion);
-    // Visible when it's on the camera's side of the horizon (cos θ > 1/d for a unit sphere).
-    const facing = tmpV.z / OVERLAY_R > 1 / view.distance + 0.04;
-    tmpV.project(camera);
-    label.place(((tmpV.x + 1) / 2) * stage.clientWidth, ((1 - tmpV.y) / 2) * stage.clientHeight, facing);
+    if (!labels) return;
+    labelAt.forEach((at, i) => {
+      const [lon, lat] = imageToGlobe(at, { north: pad.north, south: pad.south, shift });
+      // Same lat/lon → xyz convention as buildGrid.
+      const c = Math.cos(lat * DEG);
+      tmpV.set(OVERLAY_R * c * Math.cos(lon * DEG), OVERLAY_R * Math.sin(lat * DEG), -OVERLAY_R * c * Math.sin(lon * DEG));
+      tmpV.applyQuaternion(world.quaternion);
+      // Visible when it's on the camera's side of the horizon (cos θ > 1/d for a unit sphere).
+      const facing = tmpV.z / OVERLAY_R > 1 / view.distance + 0.04;
+      tmpV.project(camera);
+      labels.place(i, ((tmpV.x + 1) / 2) * stage.clientWidth, ((1 - tmpV.y) / 2) * stage.clientHeight, facing);
+    });
   }
 
   /* ── View state ── */
