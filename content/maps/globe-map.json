@@ -1,0 +1,36 @@
+{
+  "$schema": "../../schema/map.schema.json",
+  "id": "globe-map",
+  "name": "Globe Map",
+  "uploadedBy": "LoopSimon",
+  "date": "2026-11-11T02:17:10.917Z",
+  "aspect": 1.732,
+  "width": 32768,
+  "height": 18923,
+  "hash": "720b306987be",
+  "sizes": {
+    "1024": "maps/globe-map/720b306987be-1024.webp",
+    "2048": "maps/globe-map/720b306987be-2048.webp",
+    "4096": "maps/globe-map/720b306987be-4096.webp",
+    "8192": "maps/globe-map/720b306987be-8192.webp"
+  },
+  "tiles": {
+    "16384": {
+      "w": 16384,
+      "h": 9462,
+      "size": 2048,
+      "cols": 8,
+      "rows": 5,
+      "url": "maps/globe-map/720b306987be-16384"
+    },
+    "32768": {
+      "w": 32768,
+      "h": 18923,
+      "size": 2048,
+      "cols": 16,
+      "rows": 10,
+      "url": "maps/globe-map/720b306987be-32768"
+    }
+  },
+  "lqip": "data:image/webp;base64,UklGRq4BAABXRUJQVlA4IKIBAAAQCACdASowABwAPtFgpU8oJaMiJWzJABoJQBhugYt4zeChpmdSojCFYnsStK7M4lFSu8pZgXw+bLqinE4T4aoSVJE8TzJC5O4AAP7mnPIyLuqriHT/avWDJDzxHkO0kDqFZPMjVSsChm6B74wEjC0saw+a6YjR+1MgORwR+PuPvCG6h10N27lP5qhkY/TVBhKrOmPtO8OHFqqqnVmW3LZzj5HO0NuR378YyeXOTNXTi5inUfWcPp3o7ixa0rbPn9iAoEHzKyIsBt6TM3XEwCCbj2SmxrU8Fmg33pI2+7v9Mv6PB2LR15VDXgBForblsftbYdDpBGr8CiqFUWsbtWEvaQtvzrg9Mk3Pt9Wdb56yTOVECUsC3fbmeKeOzYDjzlGn5xt3sWJpIltIdc9WzMdLG1s84R9YAogKqR7oxuJEfTAXivCsuQUeuBHRmRxzoJnuxNtigIv+iPclIZ0bMqq6qFb30EoNiZ2sAaXEt/E7tmzUqZ6Z7T/WjeoGr+KiTqXQnS4v1JJDYL/M6+7Mi3bwYU/PFFyEmRZ44c7NUoCHgAAA"
+}
