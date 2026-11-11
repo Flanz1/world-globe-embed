@@ -137,6 +137,7 @@ export async function makeFixture({ quiet = false } = {}) {
           { label: '<img src=x onerror=alert(3)>', color: PROVINCES.colours[2] },
         ],
         partLegend: [-1, 0, 1],
+        partLabels: ["Red Reach", "", "Blue Coast"],
       },
     ),
   );

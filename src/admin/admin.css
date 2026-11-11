@@ -140,10 +140,11 @@ dialog.editor[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr
 .ed-key-default { grid-template-columns: auto 1fr; }
 .ed-fill { display: flex; align-items: center; gap: 8px; }
 .ed-key-row button { padding: 2px 7px; }
-.ed-part-row { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: center; padding: 2px 4px; border-radius: 6px; }
+.ed-part-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 45%); gap: 8px; align-items: center; padding: 2px 4px; border-radius: 6px; }
+.ed-part-row input[type=text] { min-width: 0; }
 .ed-part-row:hover, .ed-part-row.hot { background: rgba(255, 255, 255, .08); }
 .ed-part-row.hot .ed-badge { outline: 2px solid var(--accent); outline-offset: 1px; }
-.ed-part-row select { min-width: 0; justify-self: end; max-width: 100%; }
+.ed-part-row select { min-width: 0; width: 100%; }
 .ed-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, .3); }
 .ed-badge { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font: 600 11px/1 system-ui, sans-serif; font-style: normal; box-sizing: border-box; background: rgba(20, 18, 14, .85); color: #fff; border: 2.5px solid; }
 @media (max-width: 860px) {

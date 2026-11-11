@@ -149,4 +149,21 @@ export function makeLegend(stage: HTMLElement): { set(entries: readonly LegendEn
   };
 }
 
+/** Several labels (one per labelled part), each placed like makeLabel's. */
+export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; place(i: number, x: number, y: number, visible: boolean): void } {
+  const pool: ReturnType<typeof makeLabel>[] = [];
+  return {
+    set(texts) {
+      while (pool.length < texts.length) pool.push(makeLabel(stage));
+      pool.forEach((l, i) => {
+        l.setText(texts[i] ?? "");
+        if (i >= texts.length) l.place(0, 0, false);
+      });
+    },
+    place(i, x, y, visible) {
+      pool[i]?.place(x, y, visible);
+    },
+  };
+}
+
 export const prefersReducedMotion = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;

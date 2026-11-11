@@ -6,7 +6,7 @@ import { loadContent } from "../scripts/lib/content.ts";
 import { contentPaths } from "../scripts/lib/paths.ts";
 import type { MapMeta } from "../src/shared/types.ts";
 import type { RegionFeature } from "../src/shared/region.ts";
-import { copyId, normalizePartLegend, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
+import { copyId, normalizePartLabels, normalizePartLegend, regionLabelPoints, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
 import { ZOOM_MAX, ZOOM_MIN } from "../src/shared/params.ts";
 
 const LQIP = "data:image/webp;base64,UklGRg==";
@@ -160,7 +160,7 @@ describe("region validation", () => {
 describe("region helpers", () => {
   it("parseRegionData accepts good data and rejects anything off", () => {
     const d = { id: "a", slot: "s", name: "A", color: "#abc", fillOpacity: 0.3, label: true, geometry: good().geometry };
-    expect(parseRegionData(d)).toEqual({ ...d, legendTitle: "", legend: [], parts: [-1] });
+    expect(parseRegionData(d)).toEqual({ ...d, legendTitle: "", legend: [], parts: [-1], labels: [""] });
     expect(parseRegionData({ ...d, color: "#abc;x" })).toBeNull();
     expect(parseRegionData({ ...d, id: "../x" })).toBeNull();
     expect(parseRegionData({ ...d, fillOpacity: Number.NaN })).toBeNull();
@@ -265,5 +265,50 @@ describe("region colours and legend", () => {
     delete old.legendTitle;
     delete old.parts;
     expect(parseRegionData(old)?.parts).toEqual([-1, -1, -1]);
+  });
+});
+
+describe("part labels", () => {
+  const multi = (): RegionFeature => {
+    const f = good();
+    f.geometry = {
+      type: "MultiPolygon",
+      coordinates: [
+        [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]],
+        [[[20, 0], [30, 0], [30, 10], [20, 10], [20, 0]]],
+        [[[175, 0], [-175, 0], [-175, 10], [175, 10], [175, 0]]],
+      ],
+    };
+    delete f.properties.name;
+    f.properties.partLabels = ["West", "", "<b>Date line</b>"];
+    return f;
+  };
+
+  it("a region needs no name; partLabels must have one entry per part", () => {
+    expect(loadContent(project({ "kingdom-of-vael.json": multi() })).errors).toEqual([]);
+    const short = multi();
+    short.properties.partLabels = ["a"];
+    expect(loadContent(project({ "kingdom-of-vael.json": short })).errors.join("\n")).toMatch(/"partLabels" has 1 entry but the geometry has 3 parts/);
+  });
+
+  it("each labelled part gets a label inside it; an older region shows its name once", () => {
+    const pts = regionLabelPoints(regionData(multi()));
+    expect(pts.map((p) => p.text)).toEqual(["West", "<b>Date line</b>"]);
+    expect(pts[0].at).toEqual([5, 5]);
+    expect(pts[1].at[0]).toBeCloseTo(180, 6);
+    const old = regionLabelPoints(regionData(good()));
+    expect(old.map((p) => p.text)).toEqual(["Kingdom of Vael"]);
+    const none = good();
+    delete none.properties.name;
+    expect(regionLabelPoints(regionData(none))).toEqual([]);
+  });
+
+  it("parseRegionData checks the labels", () => {
+    const wire = JSON.parse(JSON.stringify(regionData(multi())));
+    expect(parseRegionData(wire)?.labels).toEqual(["West", "", "<b>Date line</b>"]);
+    expect(parseRegionData({ ...wire, labels: ["a"] })).toBeNull();
+    expect(parseRegionData({ ...wire, labels: ["a", 1, "c"] })).toBeNull();
+    expect(parseRegionData({ ...wire, labels: ["x".repeat(81), "", ""] })).toBeNull();
+    expect(normalizePartLabels(["a", 3 as unknown as string], 3)).toEqual(["a", "", ""]);
   });
 });

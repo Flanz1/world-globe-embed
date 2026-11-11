@@ -56,7 +56,7 @@ export interface EmbedTarget {
 /** The "Copy embed code" popover: options on the left, live snippet, Copy button with confirmation. */
 export function openEmbedDialog(t: EmbedTarget): void {
   const o: EmbedOptions = defaultEmbedOptions(t.region);
-  const m = modal(`Embed "${t.region.name}"`, "embed-dlg");
+  const m = modal(`Embed "${t.region.id}"`, "embed-dlg");
   const code = h("textarea", { className: "code", readOnly: true, rows: 5, spellcheck: false, ariaLabel: "Embed code" });
   const copied = h("span", { className: "ok small", role: "status" });
   const update = () => {
@@ -106,39 +106,18 @@ export function openEmbedDialog(t: EmbedTarget): void {
   update();
 }
 
-/* ── Rename / delete ── */
+/* ── Delete ── */
 
-export function openRename(current: string, id: string, onSave: (name: string) => void): void {
-  const m = modal("Rename region");
-  const input = h("input", { type: "text", value: current, maxLength: 80, required: true, ariaLabel: "New name" });
-  const err = h("p", { className: "error small", role: "alert" });
-  m.body.append(
-    h("label", {}, "Name", input),
-    h("p", { className: "muted small", textContent: `Only the name changes. The id (${id}) and every existing embed stay the same.` }),
-    err,
-  );
-  const go = () => {
-    const name = input.value.trim();
-    if (!name) return void (err.textContent = "The name can't be empty.");
-    if (name === current) return m.close();
-    m.close();
-    onSave(name);
-  };
-  input.addEventListener("keydown", (e) => e.key === "Enter" && go());
-  m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), h("button", { type: "button", textContent: "Rename", onclick: go }));
-  input.select();
-}
-
-export function openDelete(name: string, id: string, onDelete: () => void): void {
+export function openDelete(id: string, onDelete: () => void): void {
   const m = modal("Delete region", "danger");
-  const input = h("input", { type: "text", autocomplete: "off", spellcheck: false, ariaLabel: "Type the region name to confirm" });
+  const input = h("input", { type: "text", autocomplete: "off", spellcheck: false, ariaLabel: "Type the region id to confirm" });
   const btn = h("button", { type: "button", className: "danger", textContent: "Delete region", disabled: true });
   m.body.append(
-    h("p", {}, "This deletes ", h("strong", { textContent: name }), " (", h("code", { textContent: id }), ") in one commit."),
+    h("p", {}, "This deletes ", h("code", { textContent: id }), " in one commit."),
     h("p", { className: "error", textContent: "Embeds that show this region will stop showing it: they fall back to the plain globe with a small “Region not found” note." }),
-    h("label", {}, "Type the region's name to confirm", input),
+    h("label", {}, "Type the region's id to confirm", input),
   );
-  input.addEventListener("input", () => (btn.disabled = input.value !== name));
+  input.addEventListener("input", () => (btn.disabled = input.value !== id));
   btn.addEventListener("click", () => {
     m.close();
     onDelete();
@@ -169,7 +148,7 @@ export function sendRegion(frame: HTMLIFrameElement, region: RegionData, centre 
 }
 
 export function openRegionPreview(region: RegionData, slot: Slot, slotTitle: string): void {
-  const m = modal(`Preview: ${region.name}`, "rpreview");
+  const m = modal(`Preview: ${region.id}`, "rpreview");
   const frame = h("iframe", { title: "Region embed preview", className: "rp-frame" });
   const state = { view: "globe" as "globe" | "flat", label: region.label, dim: false };
   const load = () => {
@@ -206,6 +185,6 @@ export function openRegionPreview(region: RegionData, slot: Slot, slotTitle: str
     frame,
     h("p", { className: "muted small", textContent: `Exactly what the embed shows on ${slotTitle}: it starts locked; press the padlock to move it.` }),
   );
-  m.foot.append(h("button", { type: "button", textContent: "Embed code…", onclick: () => openEmbedDialog({ region: { ...region, hasLegend: region.legend.length > 0 }, slot: region.slot, slotTitle }) }));
+  m.foot.append(h("button", { type: "button", textContent: "Embed code…", onclick: () => openEmbedDialog({ region: { ...region, name: region.id, hasLegend: region.legend.length > 0 }, slot: region.slot, slotTitle }) }));
   load();
 }

@@ -24,8 +24,8 @@ import {
 import { checkGeometry, pointInRing, type Position } from "../src/shared/geo.ts";
 
 const square = (x: number, y: number, s = 10): Position[] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]];
-const props = { name: "A", color: "#c0392b", fillOpacity: 0.35, label: true, description: "", legendTitle: "", legend: [] };
-const st = (parts: Parts): EditorState => ({ parts, styles: parts.map(() => -1), props: { ...props, legend: [] } });
+const props = { color: "#c0392b", fillOpacity: 0.35, label: true, description: "", legendTitle: "", legend: [] };
+const st = (parts: Parts): EditorState => ({ parts, styles: parts.map(() => -1), labels: parts.map(() => ""), props: { ...props, legend: [] } });
 
 describe("editor model", () => {
   it("round-trips stored geometry, unwrapping across the antimeridian", () => {
@@ -88,9 +88,9 @@ describe("editor model", () => {
 describe("undo/redo", () => {
   it("covers every edit, merges typing, and makes a drag one step", () => {
     const h = new History(st([[square(0, 0)]]));
-    // Typing the name: merges into one step.
-    h.apply("Name", { ...h.state, props: { ...h.state.props, name: "Ka" } }, "name", 1000);
-    h.apply("Name", { ...h.state, props: { ...h.state.props, name: "Kal" } }, "name", 1500);
+    // Typing the description: merges into one step.
+    h.apply("Description", { ...h.state, props: { ...h.state.props, description: "Ka" } }, "description", 1000);
+    h.apply("Description", { ...h.state, props: { ...h.state.props, description: "Kal" } }, "description", 1500);
     expect(h.depth).toBe(1);
     // A drag: many previews, one step.
     h.begin();
@@ -100,11 +100,11 @@ describe("undo/redo", () => {
     h.apply("Colour", { ...h.state, props: { ...h.state.props, color: "#123456" } });
     expect(h.depth).toBe(3);
     expect(h.undo() && h.undo() && h.undo()).toBe(true);
-    expect(h.state.props.name).toBe("A");
+    expect(h.state.props.description).toBe("");
     expect(h.state.parts[0][0][0]).toEqual([0, 0]);
     expect(h.undo()).toBe(false);
     expect(h.redo() && h.redo() && h.redo()).toBe(true);
-    expect(h.state.props).toMatchObject({ name: "Kal", color: "#123456" });
+    expect(h.state.props).toMatchObject({ description: "Kal", color: "#123456" });
     expect(h.state.parts[0][0][0][0]).toBeCloseTo(3, 10);
   });
 
@@ -130,6 +130,7 @@ describe("editor model: part colours and legend", () => {
   const legendState = (): EditorState => ({
     parts: [[square(0, 0)], [square(20, 0)], [square(40, 0)]],
     styles: [0, 1, -1],
+    labels: ["North", "", "South"],
     props: { ...props, legend: [{ label: "A", color: "#111111" }, { label: "B", color: "#222222" }] },
   });
 
@@ -141,13 +142,15 @@ describe("editor model: part colours and legend", () => {
 
   it("toStyledGeometry keeps partLegend in step with the stored polygons", () => {
     const s = legendState();
-    const out = toStyledGeometry(s.parts, s.styles);
+    const out = toStyledGeometry(s.parts, s.styles, s.labels);
     expect(out.geometry.type).toBe("MultiPolygon");
     expect(out.partLegend).toEqual([0, 1, -1]);
+    expect(out.partLabels).toEqual(["North", "", "South"]);
     // A degenerate part (all one point) is dropped from both.
     const degenerate = [s.parts[0], [[[5, 5], [5, 5], [5, 5]]] as Parts[number], s.parts[2]];
-    const d = toStyledGeometry(degenerate, [0, 1, -1]);
+    const d = toStyledGeometry(degenerate, [0, 1, -1], ["a", "b", "c"]);
     expect(d.partLegend).toEqual([0, -1]);
+    expect(d.partLabels).toEqual(["a", "c"]);
     expect(d.geometry.type === "MultiPolygon" && d.geometry.coordinates.length).toBe(2);
     // One part: a Polygon with a one-entry partLegend.
     expect(toStyledGeometry([s.parts[0]], [1])).toMatchObject({ geometry: { type: "Polygon" }, partLegend: [1] });

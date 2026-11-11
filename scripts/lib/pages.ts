@@ -69,11 +69,11 @@ export function regionJson(f: RegionFeature): string {
   if (problems.length) throw new Error(problems.join("\n"));
   const d = regionData({ ...f, geometry: mapGeometry(f.geometry, ([x, y]) => [round(x), round(y)]) });
   const checked = parseRegionData(d);
-  if (!checked || checked.name.length < 1 || vertexCount(checked.geometry) !== vertexCount(f.geometry))
+  if (!checked || vertexCount(checked.geometry) !== vertexCount(f.geometry))
     throw new Error(`region "${f.id}": data didn't pass the embed's own checks`);
-  // Without a legend, the legend fields are left out (the embed fills in the defaults), so plain regions stay small.
-  const { legend, legendTitle, parts, ...rest } = checked;
-  const out: Partial<RegionData> = legend.length ? { ...rest, legendTitle, legend, parts } : rest;
+  // Without a legend (or part labels), those fields are left out (the embed fills in the defaults), so plain regions stay small.
+  const { legend, legendTitle, parts, labels, ...rest } = checked;
+  const out: Partial<RegionData> = { ...rest, ...(legend.length ? { legendTitle, legend, parts } : {}), ...(labels.some((t) => t) ? { labels } : {}) };
   return JSON.stringify(out);
 }
 

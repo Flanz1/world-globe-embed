@@ -567,3 +567,69 @@ export function toStoredGeometry(parts: Position[][][]): RegionGeometry {
     .filter((rings) => rings.length > 0);
   return polys.length === 1 ? { type: "Polygon", coordinates: polys[0] } : { type: "MultiPolygon", coordinates: polys };
 }
+
+/**
+ * A point inside a part (inside its outer ring, outside its holes), in the part's own unwrapped
+ * coordinates, for a part's badge or label: the outer ring's centroid when that lands inside,
+ * otherwise the middle of the widest inside stretch along the centroid's latitude.
+ */
+export function partAnchor(rings: Ring[]): Position | null {
+  const outer = rings[0];
+  if (!outer || outer.length < 3) return null;
+  let a = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0, n = outer.length; i < n; i++) {
+    const [x0, y0] = outer[i];
+    const [x1, y1] = outer[(i + 1) % n];
+    const c = x0 * y1 - x1 * y0;
+    a += c;
+    cx += (x0 + x1) * c;
+    cy += (y0 + y1) * c;
+  }
+  let c: Position;
+  if (Math.abs(a) < 1e-12) {
+    const n = outer.length;
+    c = [outer.reduce((t, p) => t + p[0], 0) / n, outer.reduce((t, p) => t + p[1], 0) / n];
+  } else c = [cx / (3 * a), cy / (3 * a)];
+  const inside = (p: Position) => pointInRing(p, outer) && !rings.slice(1).some((h) => pointInRing(p, h));
+  if (inside(c)) return c;
+  // Scan along the centroid's latitude (nudged off any vertex) for the widest stretch inside the part.
+  const y = c[1] + 1e-7;
+  const xs: number[] = [];
+  for (const ring of rings)
+    for (let i = 0, n = ring.length; i < n; i++) {
+      const [x0, y0] = ring[i];
+      const [x1, y1] = ring[(i + 1) % n];
+      if (y0 > y !== y1 > y) xs.push(x0 + ((y - y0) / (y1 - y0)) * (x1 - x0));
+    }
+  xs.sort((p, q) => p - q);
+  let best: Position | null = null;
+  let width = 0;
+  for (let i = 0; i + 1 < xs.length; i += 2) {
+    const w = xs[i + 1] - xs[i];
+    const m: Position = [(xs[i] + xs[i + 1]) / 2, y];
+    if (w > width && inside(m)) {
+      width = w;
+      best = m;
+    }
+  }
+  return best ?? outer[0];
+}
+
+/**
+ * A label point for each polygon of `g` (see partAnchor), in map-image lon/lat. Rings are unwrapped
+ * first, with holes moved next to their outer ring, so parts across ±180° work; the longitude may
+ * leave ±180 by up to one turn.
+ */
+export function partAnchors(g: RegionGeometry): (Position | null)[] {
+  return polygonsOf(g).map((poly) => {
+    const rings = poly.map((r) => openRing(unwrapRing(r)));
+    const lon0 = rings[0]?.[0]?.[0] ?? 0;
+    return partAnchor(rings.map((r, i) => {
+      if (i === 0 || !r.length) return r;
+      const k = Math.round((lon0 - r[0][0]) / 360) * 360;
+      return k ? r.map(([x, y]) => [x + k, y] as Position) : r;
+    }));
+  });
+}
