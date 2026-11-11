@@ -60,6 +60,11 @@ export interface RegionProperties {
    * normal part). The embed draws contested zones dashed and hatched. Missing means all -1.
    */
   partContested?: number[];
+  /**
+   * One entry per part, in order: true for a part locked in the admin editor (it can't be dragged or
+   * nudged as a whole; its vertices still can). Editor-only: the embed ignores it. Missing means all false.
+   */
+  partLocked?: boolean[];
   updated?: string;
 }
 
@@ -141,6 +146,11 @@ export function normalizePartContested(v: readonly unknown[] | undefined, n: num
   // No chains: a zone must extend a normal part.
   const first = [...out];
   return first.map((k) => (k >= 0 && first[k] !== OWN_COLOUR ? OWN_COLOUR : k));
+}
+
+/** partLocked padded or cut to `n` parts; anything but `true` is unlocked. */
+export function normalizePartLocked(v: readonly unknown[] | undefined, n: number): boolean[] {
+  return Array.from({ length: n }, (_, i) => v?.[i] === true);
 }
 
 /** Problems with a saved region's partContested (beyond what the schema checks). */

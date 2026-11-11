@@ -16,7 +16,9 @@ import {
   nextLegendColour,
   partAt,
   partsFromGeometry,
+  planMove,
   removeLegendEntry,
+  setLocked,
   ringProblem,
   simplifyParts,
   smoothParts,
@@ -30,7 +32,7 @@ import { checkGeometry, pointInRing, type Position } from "../src/shared/geo.ts"
 
 const square = (x: number, y: number, s = 10): Position[] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]];
 const props = { color: "#c0392b", fillOpacity: 0.35, label: true, description: "", legendTitle: "", legend: [] };
-const st = (parts: Parts): EditorState => ({ parts, styles: parts.map(() => -1), labels: parts.map(() => ""), contested: parts.map(() => -1), props: { ...props, legend: [] } });
+const st = (parts: Parts): EditorState => ({ parts, styles: parts.map(() => -1), labels: parts.map(() => ""), contested: parts.map(() => -1), locked: parts.map(() => false), props: { ...props, legend: [] } });
 
 describe("editor model", () => {
   it("round-trips stored geometry, unwrapping across the antimeridian", () => {
@@ -137,6 +139,7 @@ describe("editor model: part colours and legend", () => {
     styles: [0, 1, -1],
     labels: ["North", "", "South"],
     contested: [-1, -1, -1],
+    locked: [false, false, false],
     props: { ...props, legend: [{ label: "A", color: "#111111" }, { label: "B", color: "#222222" }] },
   });
 
@@ -214,6 +217,7 @@ describe("editor model: contested zones", () => {
     styles: [-1, -1, -1, -1],
     labels: ["A", "", "B", ""],
     contested: [-1, 0, -1, 2],
+    locked: [false, false, false, false],
     props: { ...props, legend: [] },
   });
 
@@ -291,5 +295,66 @@ describe("editor model: contested zones", () => {
     h.redo();
     expect(h.state.contested).toEqual([-1, -1, -1]);
     expect(h.state.parts).toHaveLength(3);
+  });
+});
+
+describe("editor model: locked parts", () => {
+  // Part 0 (normal), 1 (zone of 0), 2 (normal).
+  const lockState = (locked: boolean[]): EditorState => ({
+    parts: [[square(0, 0)], [square(8, 0, 6)], [square(40, 0)]],
+    styles: [-1, -1, -1],
+    labels: ["Heartland", "", ""],
+    contested: [-1, 0, -1],
+    locked,
+    props: { ...props, legend: [] },
+  });
+
+  it("setLocked toggles one part and is one undo step", () => {
+    const h = new History(lockState([false, false, false]));
+    h.apply("Lock part", setLocked(h.state, 2, true));
+    expect(h.state.locked).toEqual([false, false, true]);
+    h.undo();
+    expect(h.state.locked).toEqual([false, false, false]);
+    h.redo();
+    expect(h.state.locked).toEqual([false, false, true]);
+    // Out of range does nothing; a short array is padded.
+    expect(setLocked(h.state, 9, true).locked).toEqual([false, false, true]);
+    expect(setLocked({ ...h.state, locked: [] }, 1, true).locked).toEqual([false, true, false]);
+  });
+
+  it("a locked part refuses to move; unlocked parts still move", () => {
+    const s = lockState([true, false, false]);
+    const r = planMove(s.locked, s.labels, 3, 0, [0, 1]);
+    expect("refused" in r && r.refused).toMatch(/Part 1 \(Heartland\) is locked/);
+    expect(planMove(s.locked, s.labels, 3, 2)).toEqual({ parts: [2] });
+  });
+
+  it("the whole region refuses to move while any part is locked", () => {
+    const r = planMove([false, false, true], ["", "", ""], 3, null);
+    expect("refused" in r && r.refused).toMatch(/Part 3 is locked, so the whole region can't move/);
+    expect(planMove([false, false, false], [], 3, null)).toEqual({ parts: null });
+    // A lock past the last part (stale) doesn't count.
+    expect(planMove([false, false, false, true], [], 3, null)).toEqual({ parts: null });
+  });
+
+  it("a part moving with its zones leaves a locked zone where it is", () => {
+    const s = lockState([false, true, false]);
+    expect(planMove(s.locked, s.labels, 3, 0, [0, 1])).toEqual({ parts: [0] });
+  });
+
+  it("vertex and midpoint edits ignore the lock (they don't go through planMove)", () => {
+    const s = lockState([true, false, false]);
+    const moved = moveVertices(s.parts, [{ p: 0, r: 0, i: 0 }], 1, 1);
+    expect(moved[0][0][0]).toEqual([1, 1]);
+    const ins = insertVertex(s.parts, 0, 0, 0, [5, 0]);
+    expect(ins.parts[0][0]).toHaveLength(5);
+  });
+
+  it("toStyledGeometry keeps partLocked in step when it drops a degenerate part", () => {
+    const s = lockState([false, true, true]);
+    const parts: Parts = [[[[0, 0], [0, 0.000001], [0.000001, 0]]], ...s.parts.slice(1)];
+    expect(toStyledGeometry(parts, s.styles, s.labels, s.contested, s.locked).partLocked).toEqual([true, true]);
+    expect(toStyledGeometry(s.parts, s.styles, s.labels, s.contested, s.locked).partLocked).toEqual([false, true, true]);
+    expect(toStyledGeometry(s.parts, s.styles).partLocked).toEqual([false, false, false]);
   });
 });
