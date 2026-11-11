@@ -1,17 +1,19 @@
 /**
  * The Regions tab: every saved region as a card with a thumbnail, and the actions on it (edit, rename,
- * duplicate, delete, preview, copy embed code). Each action that writes is one commit.
+ * duplicate, delete, preview, copy embed code), and combining several regions into a new one. Each
+ * action that writes is one commit.
  */
+import { baseKey, combineRegions, combinedId, regionBases, type RegionBase } from "../shared/combine.ts";
 import { checkGeometry, geometryBounds, polygonsOf, vertexCount } from "../shared/geo.ts";
 import { paintSpec } from "../shared/raster.ts";
-import { REGION_COLOR, copyId, flatFit, normalizePartContested, normalizePartLegend, regionData, type RegionFeature } from "../shared/region.ts";
+import { REGION_COLOR, REGION_ID, copyId, flatFit, normalizePartContested, normalizePartLegend, regionData, type RegionFeature } from "../shared/region.ts";
 import { paintSpecOf, regionClashes } from "../shared/region-paint.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
 import { $, h } from "./dom.ts";
 import { openEditor } from "./editor/editor.ts";
 import type { FileCommit, GitHub } from "./github.ts";
 import { loadMapImage } from "./images.ts";
-import { openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
+import { modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
 
 export interface RegionEntry {
   id: string;
@@ -249,6 +251,111 @@ function duplicate(e: RegionEntry): void {
   openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature, sha: null, isNew: true, neighbours: others(), takenIds: taken, afterCommit: deps.afterCommit });
 }
 
+/**
+ * "Combine regions": pick two or more regions; their areas, labels, colours, legends and contested
+ * zones are copied into one new region, opened in the editor unsaved. The originals stay as they are.
+ */
+export function openCombine(): void {
+  const usable = entries.filter((e) => e.feature && !e.problem).sort((a, b) => a.id.localeCompare(b.id));
+  const m = modal("Combine regions", "combine-dlg");
+  if (usable.length < 2) {
+    m.body.append(h("p", { textContent: "You need at least two regions to combine." }));
+    m.foot.append(h("button", { type: "button", textContent: "OK", onclick: m.close }));
+    return;
+  }
+  /** Ticked regions in the order they were ticked: the first one's colour and settings lead. */
+  const picked: RegionEntry[] = [];
+  const taken = new Set(entries.map((x) => x.id));
+  let idTouched = false;
+  let base: RegionBase | null = null;
+  const idIn = h("input", { type: "text", maxLength: 64, autocomplete: "off", spellcheck: false, ariaLabel: "Id of the new region" });
+  idIn.addEventListener("input", () => ((idTouched = true), update()));
+  const baseBox = h("fieldset", { className: "combine-base", hidden: true });
+  const out = h("div", { className: "combine-out", role: "status", ariaLive: "polite" });
+  const go = h("button", { type: "button", textContent: "Combine", disabled: true, dataset: { action: "combine" } });
+  const list = h(
+    "div",
+    { className: "combine-list" },
+    ...usable.map((e) => {
+      const p = e.feature!.properties;
+      const sw = h("span", { className: "swatch", ariaHidden: "true" });
+      sw.style.backgroundColor = safeColor(p.color);
+      const box = h("input", { type: "checkbox", value: e.id });
+      box.addEventListener("change", () => {
+        const i = picked.indexOf(e);
+        if (box.checked && i < 0) picked.push(e);
+        if (!box.checked && i >= 0) picked.splice(i, 1);
+        update();
+      });
+      return h("label", { className: "check" }, box, sw, h("span", { textContent: e.id }), h("span", { className: "muted small", textContent: ` slot ${p.slot} · map ${p.map}` }));
+    }),
+  );
+
+  function update(): void {
+    const sources = picked.map((e) => e.feature!);
+    const bases = regionBases(sources);
+    if (!base || !bases.some((b) => baseKey(b) === baseKey(base!))) base = bases[0] ?? null;
+    // Several bases: say so and let the user pick which one the new region goes on.
+    baseBox.hidden = bases.length < 2;
+    const maps = new Set(bases.map((b) => b.map));
+    baseBox.replaceChildren(
+      h("legend", { textContent: "Base map" }),
+      h("p", {
+        className: maps.size > 1 ? "warn small" : "muted small",
+        textContent:
+          maps.size > 1
+            ? "These regions were drawn on different maps. Pick the map the new region goes on: areas from the other maps are copied as they are and only line up if the maps share the same layout."
+            : "These regions are on different slots. Pick the slot the new region goes on.",
+      }),
+      ...bases.map((b) =>
+        h(
+          "label",
+          { className: "check" },
+          h("input", { type: "radio", name: "combine-base", checked: !!base && baseKey(b) === baseKey(base), onchange: () => ((base = b), update()) }),
+          `Slot ${b.slot}, map ${b.map}`,
+          h("span", { className: "muted small", textContent: ` (${b.ids.join(", ")})` }),
+        ),
+      ),
+    );
+    if (!idTouched) idIn.value = sources.length ? combinedId(sources, taken) : "";
+    const id = idIn.value.trim();
+    const problems: string[] = [];
+    if (sources.length < 2) problems.push("Tick at least two regions.");
+    else if (!REGION_ID.test(id)) problems.push("The id may only use lowercase letters, digits and dashes (up to 64), starting with a letter or digit.");
+    else if (taken.has(id)) problems.push(`The id "${id}" is taken. Choose another one.`);
+    if (base && sources.length >= 2 && !deps.slots().slots[base.slot]) problems.push(`The slot "${base.slot}" doesn't exist any more.`);
+    const r = sources.length >= 2 && base ? combineRegions(sources, { id: REGION_ID.test(id) ? id : "combined", base }) : null;
+    if (r) problems.push(...r.errors);
+    go.disabled = problems.length > 0 || !r?.feature;
+    out.replaceChildren(
+      ...problems.map((t) => h("p", { className: sources.length < 2 ? "muted small" : "error small", textContent: t })),
+      ...(r?.notes ?? []).map((t) => h("p", { className: "warn small", textContent: t })),
+      ...(r?.feature ? [h("p", { className: "muted small", textContent: `${polygonsOf(r.feature.geometry).length} parts · ${vertexCount(r.feature.geometry)} vertices · ${(r.feature.properties.legend?.length ?? 0) + 1} colour${r.feature.properties.legend?.length ? "s" : ""}. The originals are not changed.` })] : []),
+    );
+  }
+
+  go.addEventListener("click", () => {
+    const sources = picked.map((e) => e.feature!);
+    const id = idIn.value.trim();
+    if (!base || go.disabled) return;
+    const r = combineRegions(sources, { id, base });
+    if (!r.feature) return;
+    r.feature.properties.map = deps.slots().slots[base.slot]?.map ?? base.map;
+    m.close();
+    openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature: r.feature, sha: null, isNew: true, neighbours: others(), takenIds: taken, afterCommit: deps.afterCommit });
+  });
+
+  m.body.append(
+    h("p", { className: "small", textContent: "Tick the regions to combine. Their areas, labels, colours, legends and contested zones are copied into one new region, which opens in the editor for you to check and save. The first region you tick sets the main colour." }),
+    list,
+    h("label", {}, "New region id ", idIn),
+    baseBox,
+    out,
+  );
+  m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), go);
+  update();
+}
+
 function del(e: RegionEntry): void {
   openDelete(e.id, () => {
     void deps.act(`Deleting ${e.id}…`, () => deps.gh().commit(`Delete region ${e.id}`, async () => [{ path: e.path, content: "", delete: true }]));
@@ -260,5 +367,6 @@ export function initRegions(d: RegionsDeps): void {
   ui.search().addEventListener("input", renderRegions);
   ui.slot().addEventListener("change", renderRegions);
   ui.sort().addEventListener("change", renderRegions);
+  $("#r-combine").addEventListener("click", openCombine);
   for (const b of document.querySelectorAll<HTMLButtonElement>(".r-new")) b.addEventListener("click", () => newRegion($<HTMLSelectElement>("#r-new-slot").value));
 }
