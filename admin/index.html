@@ -65,7 +65,7 @@
 
     <section class="card">
       <h2>Upload a map</h2>
-      <p class="muted">An equirectangular image, ideally twice as wide as tall (2:1); anything from square up to 4:1 works, and pole padding can fill in the rest. Up to 16384 px wide it's re-encoded in your browser before upload. 8192 px wide or more gets an extra-sharp 8192 version, and 16384 or 32768 px wide also gets close-up tiles at that size. Images wider than 16384 px go up as they are and must be under 100 MB: save them as JPEG (quality 80–90). Big files go up in 8 MB parts, with a progress bar.</p>
+      <p class="muted">An equirectangular map, ideally twice as wide as tall. Anything from square to 4:1 works, and pole padding fills the rest. Bigger maps stay sharp when zoomed in: 8192 px wide or more gets an extra-sharp version, and 16384 or 32768 px wide also gets close-up detail. Maps over 16384 px wide are uploaded unchanged, so save them as JPEG (quality 80–90) and keep them under 100 MB.</p>
       <form id="upload" class="row">
         <label>Image <input name="file" type="file" accept="image/png,image/jpeg,image/webp" required></label>
         <label>Map id <input name="id" required pattern="[a-z0-9][a-z0-9\-]{0,63}" placeholder="from the file name"></label>
