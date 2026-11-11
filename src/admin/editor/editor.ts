@@ -56,6 +56,7 @@ import {
   deleteVertices,
   insertVertex,
   moveLegendEntry,
+  partAnchor,
   nextLegendColour,
   partAt,
   partsFromGeometry,
@@ -194,7 +195,7 @@ export function openEditor(o: EditorOptions): void {
 
   const nameIn = h("input", { type: "text", maxLength: 80, required: true, placeholder: "e.g. Kingdom of Vael", value: hist.state.props.name, name: "name" });
   const idIn = h("input", { type: "text", maxLength: 64, spellcheck: false, value: id, name: "id", pattern: "[a-z0-9][a-z0-9\\-]{0,63}" });
-  const colorIn = h("input", { type: "color", value: hist.state.props.color, name: "color" });
+  const colorIn = h("input", { type: "color", value: hist.state.props.color, name: "color", ariaLabel: "Default colour" });
   const opacityIn = h("input", { type: "range", min: "0", max: "1", step: "0.05", value: String(hist.state.props.fillOpacity), name: "opacity" });
   const opacityOut = h("output", {});
   const labelIn = h("input", { type: "checkbox", checked: hist.state.props.label, name: "label" });
@@ -254,7 +255,7 @@ export function openEditor(o: EditorOptions): void {
         h("label", {}, "Name", nameIn),
         h("label", {}, "Id (permanent; embeds use it)", idIn),
         h("p", { className: "muted small", textContent: `Slot: ${slotName} · map: ${slot.map}` }),
-        h("div", { className: "row" }, h("label", { className: "inline" }, "Colour", colorIn), h("label", { className: "inline grow" }, "Fill", opacityIn, opacityOut)),
+        h("label", { className: "inline grow ed-fill" }, "Fill", opacityIn, opacityOut),
         h("label", { className: "check" }, labelIn, "Show label in embed"),
         h("label", {}, "Description (plain text)", descIn),
         h(
@@ -263,6 +264,12 @@ export function openEditor(o: EditorOptions): void {
           h("legend", { textContent: "Colours and legend" }),
           h("p", { className: "muted small", textContent: "Add colours with a label, then pick a colour for each part below. The embed shows them as a legend." }),
           h("label", {}, "Legend title", keyTitleIn),
+          h(
+            "div",
+            { className: "ed-key-row ed-key-default" },
+            colorIn,
+            h("span", { textContent: "Default colour", title: "Parts without a colour of their own use this one. It isn't listed in the legend." }),
+          ),
           keyRows,
           addKeyBtn,
           h("p", { className: "muted small", textContent: "Parts (hover one to see it on the map)" }),
@@ -360,8 +367,14 @@ export function openEditor(o: EditorOptions): void {
   /** Geometry edits. `styles` must be given whenever parts are added or removed. */
   const setParts = (label: string, next: Parts, merge?: string, styles = hist.state.styles) =>
     hist.apply(label, { ...hist.state, parts: next, styles: normalizePartLegend(styles, next.length, hist.state.props.legend.length) }, merge);
-  /** Part highlighted from the side panel's part list, or -1. */
+  /** Part under the pointer, on the map or in the side panel's Parts list, or -1. */
   let hoverPart = -1;
+  function setHoverPart(p: number): void {
+    if (p === hoverPart) return;
+    hoverPart = p;
+    partRows.querySelectorAll<HTMLElement>(".ed-part-row").forEach((row, i) => row.classList.toggle("hot", i === p));
+    draw();
+  }
 
   function setMsg(text: string, kind: "muted" | "error" | "ok" = "muted"): void {
     msg.textContent = text;
@@ -460,6 +473,7 @@ export function openEditor(o: EditorOptions): void {
       }
     }
     if (tool === "select" && !simplifyPreview) drawHandles(offs);
+    if (parts().length > 1 && !simplifyPreview) drawBadges(offs);
     if (drawing || drag?.kind === "free") {
       const pts = drawing ?? (drag as { pts: Position[] }).pts;
       g.save();
@@ -485,6 +499,45 @@ export function openEditor(o: EditorOptions): void {
       g.restore();
     }
     updateStatus();
+  }
+
+  /** The colour part p is drawn in. */
+  const partColour = (p: number): string => {
+    const k = hist.state.styles[p] ?? OWN_COLOUR;
+    return k === OWN_COLOUR ? hist.state.props.color : (hist.state.props.legend[k]?.color ?? hist.state.props.color);
+  };
+  // Badge positions, recomputed only when the parts change (not on every pan or hover).
+  let anchors: { version: number; at: (Position | null)[] } = { version: -1, at: [] };
+  /** Numbered badges ("1", "2", …) on each part, matching the Parts list in the side panel. */
+  function drawBadges(offs: number[]): void {
+    if (anchors.version !== hist.version) anchors = { version: hist.version, at: parts().map((rings) => partAnchor(rings)) };
+    const { w, h: hh } = size();
+    g.save();
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    anchors.at.forEach((a, p) => {
+      if (!a) return;
+      const hot = p === hoverPart;
+      const r = hot ? 14 : 11;
+      const fill = partColour(p);
+      g.font = `600 ${hot ? 13 : 11}px system-ui, sans-serif`;
+      for (const off of offs) {
+        const x = sx(a[0] + off);
+        const y = sy(a[1]);
+        if (x < -r || x > w + r || y < -r || y > hh + r) continue;
+        // A dark chip with a ring in the part's colour reads on any fill and any map.
+        g.beginPath();
+        g.arc(x, y, r, 0, Math.PI * 2);
+        g.fillStyle = "rgba(20,18,14,.85)";
+        g.fill();
+        g.lineWidth = hot ? 3.5 : 2.5;
+        g.strokeStyle = hot ? "#fff" : fill;
+        g.stroke();
+        g.fillStyle = "#fff";
+        g.fillText(String(p + 1), x, y + 0.5);
+      }
+    });
+    g.restore();
   }
 
   function drawHandles(offs: number[]): void {
@@ -644,14 +697,14 @@ export function openEditor(o: EditorOptions): void {
     idIn.value = id;
     changed();
   });
-  colorIn.addEventListener("input", () => (setProp("color", colorIn.value.toLowerCase(), "Colour"), changed()));
+  colorIn.addEventListener("input", () => (setProp("color", colorIn.value.toLowerCase(), "Default colour"), changed()));
   opacityIn.addEventListener("input", () => (setProp("fillOpacity", Number(opacityIn.value), "Fill opacity"), changed()));
   labelIn.addEventListener("change", () => (setProp("label", labelIn.checked, "Label"), changed()));
   descIn.addEventListener("input", () => (setProp("description", descIn.value, "Description"), changed()));
   keyTitleIn.addEventListener("input", () => (setProp("legendTitle", keyTitleIn.value.slice(0, LEGEND_TITLE_MAX), "Legend title"), changed()));
 
   /* ── Colours and legend ── */
-  const entryName = (k: number) => (k === OWN_COLOUR ? "Region colour" : hist.state.props.legend[k]?.label.trim() || `Colour ${k + 1}`);
+  const entryName = (k: number) => (k === OWN_COLOUR ? "Default colour" : hist.state.props.legend[k]?.label.trim() || `Colour ${k + 1}`);
   function setLegend(label: string, legend: EditorState["props"]["legend"], merge?: string): void {
     hist.apply(label, { ...hist.state, props: { ...hist.state.props, legend } }, merge);
     changed();
@@ -698,7 +751,7 @@ export function openEditor(o: EditorOptions): void {
             h("span", { className: "muted small", textContent: `${used} part${used === 1 ? "" : "s"}`, title: "Parts drawn in this colour" }),
             btn("↑", "Move up", () => (hist.apply("Reorder legend", moveLegendEntry(hist.state, k, -1)), changed())),
             btn("↓", "Move down", () => (hist.apply("Reorder legend", moveLegendEntry(hist.state, k, 1)), changed())),
-            btn("×", "Remove this colour (its parts go back to the region colour)", () => (hist.apply("Remove legend colour", removeLegendEntry(hist.state, k)), changed()), "key-remove"),
+            btn("×", "Remove this colour (its parts go back to the default colour)", () => (hist.apply("Remove legend colour", removeLegendEntry(hist.state, k)), changed()), "key-remove"),
           );
         }),
       );
@@ -707,10 +760,10 @@ export function openEditor(o: EditorOptions): void {
           const sel = h("select", { ariaLabel: `Colour of part ${p + 1}`, dataset: { part: String(p) } });
           for (const k of [OWN_COLOUR, ...s.props.legend.map((_, i) => i)]) sel.append(h("option", { value: String(k), textContent: entryName(k) }));
           sel.addEventListener("change", () => setPartStyle(p, Number(sel.value)));
-          const sw = h("i", { className: "ed-swatch" });
-          const row = h("div", { className: "ed-part-row" }, sw, h("span", { textContent: `Part ${p + 1}`, title: `${rings[0]?.length ?? 0} vertices${rings.length > 1 ? `, ${rings.length - 1} hole(s)` : ""}` }), sel);
-          row.addEventListener("pointerenter", () => ((hoverPart = p), draw()));
-          row.addEventListener("pointerleave", () => ((hoverPart = -1), draw()));
+          const sw = h("i", { className: "ed-swatch ed-badge", textContent: String(p + 1), ariaHidden: "true" });
+          const row = h("div", { className: "ed-part-row", dataset: { row: String(p) } }, sw, h("span", { textContent: `Part ${p + 1}`, title: `${rings[0]?.length ?? 0} vertices${rings.length > 1 ? `, ${rings.length - 1} hole(s)` : ""}` }), sel);
+          row.addEventListener("pointerenter", () => setHoverPart(p));
+          row.addEventListener("pointerleave", () => setHoverPart(-1));
           return row;
         }),
       );
@@ -732,7 +785,9 @@ export function openEditor(o: EditorOptions): void {
         if (opt.textContent !== t) opt.textContent = t;
       }
       if (document.activeElement !== sel) sel.value = String(k);
-      (row.querySelector(".ed-swatch") as HTMLElement).style.background = k === OWN_COLOUR ? s.props.color : (s.props.legend[k]?.color ?? s.props.color);
+      const badge = row.querySelector(".ed-swatch") as HTMLElement;
+      badge.style.borderColor = partColour(p);
+      row.classList.toggle("hot", p === hoverPart);
     });
     keyRows.querySelectorAll<HTMLSpanElement>(".ed-key-row > span").forEach((el, k) => {
       const used = s.styles.filter((v) => v === k).length;
@@ -753,21 +808,29 @@ export function openEditor(o: EditorOptions): void {
   }
 
   /* ── Tools ── */
+  /** The drawing tool Add part and Cut hole use: freehand until the polygon tool is picked. */
+  let drawTool: "polygon" | "freehand" = "freehand";
   function setTool(t: Tool): void {
     if (drawing && t !== "polygon") drawing = null;
     tool = t;
+    if (t !== "select") drawTool = t;
     if (t !== "polygon" && t !== "freehand") target = "part";
     canvas.style.cursor = t === "select" ? "default" : "crosshair";
     toggleSimplify(false);
     changed();
   }
+  function drawHint(t: "part" | "hole"): string {
+    if (drawTool === "freehand")
+      return t === "hole" ? "Drag inside a part to draw the hole; let go to close it." : "Drag on the map to draw the outline; let go to close it. Press P for the polygon tool.";
+    return t === "hole" ? "Click inside a part to start the hole." : "Click to add points. Double-click, Enter or click the first point to close.";
+  }
   function startDraw(t: "part" | "hole"): void {
     if (t === "hole" && !parts().length) return setMsg("Draw a part first, then cut a hole inside it.", "error");
     target = t;
     drawing = null;
-    tool = "polygon";
+    tool = drawTool;
     canvas.style.cursor = "crosshair";
-    setMsg(t === "hole" ? "Click inside a part to start the hole." : "Click to add points. Double-click, Enter or click the first point to close.");
+    setMsg(drawHint(t));
     changed();
   }
 
@@ -1047,7 +1110,9 @@ export function openEditor(o: EditorOptions): void {
     if (!drag) {
       if (tool === "select") {
         const over = hitVertex(x, y) || hitMidpoint(x, y);
-        canvas.style.cursor = spaceHeld ? "grab" : over ? "pointer" : partAt(parts(), cursor) >= 0 ? "move" : "default";
+        const under = cursor ? partAt(parts(), cursor) : -1;
+        canvas.style.cursor = spaceHeld ? "grab" : over ? "pointer" : under >= 0 ? "move" : "default";
+        setHoverPart(under);
       }
       return draw();
     }
@@ -1159,6 +1224,7 @@ export function openEditor(o: EditorOptions): void {
   canvas.addEventListener("pointercancel", endPointer);
   canvas.addEventListener("pointerleave", () => {
     cursor = null;
+    setHoverPart(-1);
     draw();
   });
   canvas.addEventListener("dblclick", (e) => {
@@ -1399,8 +1465,8 @@ export function openEditor(o: EditorOptions): void {
   dlg.showModal();
   measure();
   fitView();
-  setTool(parts().length ? "select" : "polygon");
-  if (!parts().length) setMsg("Click on the map to start the outline. Double-click, Enter or click the first point to close it.");
+  setTool(parts().length ? "select" : "freehand");
+  if (!parts().length) setMsg(drawHint("part"));
   syncPanel();
   canvas.focus();
   // Test hook: lets the browser tests read the editor's state; exposes nothing the page doesn't already have.

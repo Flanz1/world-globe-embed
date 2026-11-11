@@ -437,6 +437,9 @@ await step(A, "editor: draw and edit", async () => {
   check(A, "id follows the name for a new region", (await ed.id()) === "test-kingdom");
   await page.click("dialog.editor canvas.ed-canvas", { position: { x: 5, y: 5 }, button: "middle" });
   await ed.setView(180, 0, 22);
+  const startTool = await page.getAttribute("dialog.editor button.tool[aria-pressed=true]", "data-tool").catch(() => null);
+  check(A, "a new region starts on the freehand tool", startTool === "freehand", String(startTool));
+  await page.click('dialog.editor [data-tool="polygon"]');
   // Polygon across the antimeridian: 172°E → 172°W.
   const pts = [[172, -6], [188, -6], [188, 6], [172, 6]];
   for (const [lon, lat] of pts) {
@@ -632,7 +635,7 @@ await step(A, "editor: colours and legend", async () => {
     page.evaluate(() => {
       const d = document.querySelector("dialog.editor");
       return {
-        keys: [...d.querySelectorAll(".ed-key-row")].map((r) => [r.querySelector("input[type=color]").value, r.querySelector("input[type=text]").value]),
+        keys: [...d.querySelectorAll(".ed-key .ed-key-row")].map((r) => [r.querySelector("input[type=color]").value, r.querySelector("input[type=text]").value]),
         parts: [...d.querySelectorAll(".ed-part-row select")].map((s) => s.value),
         options: [...(d.querySelector(".ed-part-row select")?.options ?? [])].map((o) => o.textContent),
         title: d.querySelector('input[name="legend-title"]').value,
@@ -640,13 +643,24 @@ await step(A, "editor: colours and legend", async () => {
     });
   let pn = await panel();
   check(A, "editor lists the legend and each part's colour", pn.keys.length === 2 && JSON.stringify(pn.parts) === '["-1","0","1"]' && pn.title === "Provinces", JSON.stringify(pn));
-  check(A, "part colour menu: region colour, then the legend labels as text", JSON.stringify(pn.options) === JSON.stringify(["Region colour", "Green March", "<img src=x onerror=alert(3)>"]) && dialogs.length === 0, JSON.stringify(pn.options));
+  check(A, "part colour menu: default colour, then the legend labels as text", JSON.stringify(pn.options) === JSON.stringify(["Default colour", "Green March", "<img src=x onerror=alert(3)>"]) && dialogs.length === 0, JSON.stringify(pn.options));
+  // Numbered badges: the Parts list numbers its rows, and pointing at a part on the map lights up its row.
+  const badges = await page.$$eval("dialog.editor .ed-part-row .ed-badge", (els) => els.map((e) => e.textContent));
+  check(A, "Parts list rows carry numbered badges", JSON.stringify(badges) === '["1","2","3"]', JSON.stringify(badges));
+  const [bx, by] = await ed.xy(89, -35);
+  await page.mouse.move(bx, by);
+  await page.waitForTimeout(100);
+  const hot = await page.$$eval("dialog.editor .ed-part-row", (els) => els.map((e) => e.classList.contains("hot")));
+  check(A, "pointing at part 3 on the map highlights its row", JSON.stringify(hot) === "[false,false,true]", JSON.stringify(hot));
+  await page.screenshot({ path: path.join(OUT, "editor-badges.png") });
+  await page.locator("dialog.editor .ed-colours").screenshot({ path: path.join(OUT, "editor-colours-panel.png") });
+  await page.mouse.move(5, 5);
   await page.click('dialog.editor [data-act="key-add"]');
   await page.keyboard.type("Capital");
   pn = await panel();
   check(A, "Add colour adds a row and focuses its label", pn.keys.length === 3 && pn.keys[2][1] === "Capital", JSON.stringify(pn.keys));
   await page.selectOption('dialog.editor .ed-part-row select[data-part="0"]', "2");
-  await page.click('dialog.editor .ed-key-row:first-child [data-act="key-remove"]');
+  await page.click('dialog.editor .ed-key .ed-key-row:first-child [data-act="key-remove"]');
   pn = await panel();
   check(A, "removing a colour sends its parts back to the region colour and keeps the rest", pn.keys.length === 2 && JSON.stringify(pn.parts) === '["1","-1","0"]', JSON.stringify(pn));
   await page.screenshot({ path: path.join(OUT, "editor-legend.png") });
