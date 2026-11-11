@@ -61,6 +61,7 @@ import {
   addHole,
   addPart,
   countVertices,
+  deleteParts,
   deleteVertices,
   insertVertex,
   moveLegendEntry,
@@ -158,7 +159,8 @@ export const SHORTCUTS: [string, string][] = [
   ["Drag a midpoint", "Insert a vertex there"],
   ["Alt+click / right-click", "Delete a vertex"],
   ["Shift+click, box drag", "Select several vertices"],
-  ["Delete / Backspace", "Delete the selected vertices"],
+  ["Delete / Backspace", "Delete the selected vertices, else the selected part (asks first)"],
+  ["Right-click inside a part", "Delete that whole part (asks first)"],
   ["Click inside a part", "Select that part (or click its badge or its row in the Parts list)"],
   ["Alt+click inside", "Select the next part under the pointer, where parts overlap"],
   ["Drag inside a part", "Move that part; Ctrl+drag (Cmd on macOS) moves the whole region"],
@@ -1058,6 +1060,7 @@ export function openEditor(o: EditorOptions): void {
           });
           const pick = h("button", { type: "button", className: "ghost tiny", textContent: "Select", title: `Select part ${p + 1}`, dataset: { act: "part-select" }, onclick: () => (setTool("select"), selectPart(p)) });
           const centre = h("button", { type: "button", className: "ghost tiny", textContent: "Centre", title: `Show part ${p + 1} on the map and the globe`, dataset: { act: "part-centre" }, onclick: () => centrePart(p) });
+          const del = h("button", { type: "button", className: "ghost tiny danger", textContent: "Delete", title: `Delete part ${p + 1} (asks first)`, dataset: { act: "part-delete" }, onclick: () => void askDeletePart(p) });
           const row = h(
             "div",
             { className: `ed-part-row${zone ? " zone" : ""}`, dataset: { row: String(p) } },
@@ -1065,7 +1068,7 @@ export function openEditor(o: EditorOptions): void {
             lbl,
             sel,
             h("label", { className: "ed-of" }, h("span", { className: "muted small", textContent: "Contested of" }), of),
-            h("span", { className: "ed-part-acts" }, pick, centre),
+            h("span", { className: "ed-part-acts" }, pick, centre, del),
           );
           row.addEventListener("pointerenter", () => setHoverPart(p));
           row.addEventListener("pointerleave", () => setHoverPart(-1));
@@ -1308,6 +1311,40 @@ export function openEditor(o: EditorOptions): void {
           : "",
       res.removedParts || res.removedHoles ? "error" : "muted",
     );
+    changed();
+  }
+  /** Deletes a whole part after a warning, every time. Undo brings it back. */
+  async function askDeletePart(p: number): Promise<void> {
+    const s = hist.state;
+    if (p < 0 || p >= s.parts.length) return;
+    const name = `Part ${p + 1}${s.labels[p]?.trim() ? ` (${s.labels[p].trim()})` : ""}`;
+    const rings = s.parts[p];
+    const verts = rings.reduce((n, r) => n + r.length, 0);
+    const zones = s.contested.filter((k) => k === p).length;
+    const text = [
+      `This deletes ${name} with all ${verts} of its vertices${rings.length > 1 ? ` and ${rings.length - 1} hole(s)` : ""}.`,
+      zones ? `${zones === 1 ? "Its contested zone stays and becomes a normal part" : `Its ${zones} contested zones stay and become normal parts`}.` : "",
+      s.parts.length === 1 ? "It's the only part, so the region will have no outline left." : "",
+      "You can undo this with Ctrl+Z until you close the editor.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    if (!(await confirmBox(`Delete ${name}?`, text, "Delete part", "Keep it", true))) return;
+    // The state may have moved on while the warning was open; only go ahead if it's the same part.
+    if (hist.state !== s) return setMsg("The region changed while the warning was open, so nothing was deleted.", "error");
+    const res = deleteParts(s.parts, [p]);
+    const remapped = remapContested(s.contested, res.kept);
+    setParts(
+      `Delete part ${p + 1}`,
+      res.parts,
+      undefined,
+      res.kept.map((k) => s.styles[k] ?? OWN_COLOUR),
+      res.kept.map((k) => s.labels[k] ?? ""),
+      remapped.contested,
+    );
+    selection.clear();
+    selPart = -1;
+    setMsg(`${name} deleted (undo brings it back).`);
     changed();
   }
   function nudge(dxPx: number, dyPx: number): void {
@@ -1650,7 +1687,21 @@ export function openEditor(o: EditorOptions): void {
     if (tool !== "select") return;
     const { x, y } = local(e);
     const v = hitVertex(x, y);
-    if (!v) return hideMenu();
+    if (!v) {
+      // Inside a part: offer to delete the whole part.
+      const here = partsAt(parts(), [wx(x), wy(y)], hist.state.contested);
+      const badge = hitBadge(x, y);
+      const p = badge >= 0 ? badge : here.includes(selPart) ? selPart : (here[0] ?? -1);
+      if (p < 0) return hideMenu();
+      selectPart(p);
+      ctxMenu.replaceChildren(
+        h("button", { type: "button", role: "menuitem", className: "danger-item", textContent: `Delete part ${p + 1}…`, onclick: () => (hideMenu(), void askDeletePart(p)) }),
+      );
+      ctxMenu.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+      ctxMenu.hidden = false;
+      (ctxMenu.firstElementChild as HTMLElement).focus();
+      return;
+    }
     const refs = selection.has(vkey(v)) && selection.size > 1 ? [...selection.values()] : [v];
     ctxMenu.replaceChildren(
       h("button", { type: "button", role: "menuitem", textContent: refs.length > 1 ? `Delete ${refs.length} vertices` : "Delete", onclick: () => (hideMenu(), deleteRefs(refs)) }),
@@ -1694,6 +1745,10 @@ export function openEditor(o: EditorOptions): void {
     if ((e.key === "Delete" || e.key === "Backspace") && tool === "select" && selection.size) {
       e.preventDefault();
       return deleteRefs([...selection.values()]);
+    }
+    if ((e.key === "Delete" || e.key === "Backspace") && tool === "select" && selPart >= 0 && !drawing) {
+      e.preventDefault();
+      return void askDeletePart(selPart);
     }
     if (e.key.startsWith("Arrow") && tool === "select" && !mod) {
       e.preventDefault();

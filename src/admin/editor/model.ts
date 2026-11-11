@@ -155,6 +155,16 @@ export function insertVertex(parts: Parts, p: number, r: number, i: number, pos:
 }
 
 /**
+ * Deletes whole parts (outer ring and holes) by index. `kept[i]` is the old index of new part i, so
+ * colours, labels and contested zones can follow (see remapContested).
+ */
+export function deleteParts(parts: Parts, ps: readonly number[]): { parts: Parts; kept: number[] } {
+  const drop = new Set(ps);
+  const kept = parts.map((_, p) => p).filter((p) => !drop.has(p));
+  return { parts: kept.map((p) => parts[p].map((ring) => ring.map(([x, y]) => [x, y] as Position))), kept };
+}
+
+/**
  * Deletes vertices. A ring may not drop below 3 vertices: a hole that would is removed, and an outer
  * ring that would takes its whole part with it.
  */
