@@ -39,9 +39,10 @@ import {
   WebGLRenderer,
 } from "three";
 import { BASE_DISTANCE, FOV_DEG, MAX_DISTANCE, MIN_DISTANCE, clamp, clampPadding, distanceForZoom, parseHex } from "../shared/params.ts";
-import { imageToGlobe, type Position } from "../shared/geo.ts";
-import { regionFit, regionLabelPoints, regionLayers, type RegionData } from "../shared/region.ts";
-import { paintLayers } from "../shared/raster.ts";
+import { imageToGlobe, polygonsOf, type Position } from "../shared/geo.ts";
+import { regionFit, regionLabelPoints, type RegionData } from "../shared/region.ts";
+import { paintSpec, type PaintSpec } from "../shared/raster.ts";
+import { hasContestedMarks, regionPaintSpec } from "../shared/region-paint.ts";
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
 import { createGlobeTiles } from "./globe-tiles.ts";
 import type { PreviewMessage, StartContext } from "./contract.ts";
@@ -301,10 +302,15 @@ export async function start(ctx: StartContext): Promise<void> {
     const H = o.canvas.height;
     const g = o.canvas.getContext("2d")!;
     g.clearRect(0, 0, W, H);
+    // Clashes are worked out once per region (or live update), not per redraw.
+    if (specFor !== reg) {
+      spec = regionPaintSpec(reg, R?.clash ?? true);
+      specFor = reg;
+    }
     // Map-image frame → texture pixels, exactly like the map texture's own UVs.
-    paintLayers(
+    paintSpec(
       g,
-      regionLayers(reg),
+      spec!,
       (lon) => ((lon + 180) / 360) * W,
       (lat) => ((90 - lat) / 180) * H,
       [-360, 0, 360],
@@ -315,8 +321,10 @@ export async function start(ctx: StartContext): Promise<void> {
     const pts = (R?.label ?? reg.label) ? regionLabelPoints(reg) : [];
     labelAt = pts.map((p) => p.at);
     labels?.set(pts.map((p) => p.text));
-    regionKey?.set(R?.key ? reg.legend : [], reg.legendTitle);
+    regionKey?.set(R?.key ? reg.legend : [], reg.legendTitle, !!R?.key && hasContestedMarks(spec!));
   }
+  let spec: PaintSpec | null = null;
+  let specFor: RegionData | null = null;
   const labels = R ? makeLabels(stage) : null;
   const regionKey = R ? makeLegend(stage) : null;
   const tmpV = new Vector3();
@@ -581,9 +589,10 @@ export async function start(ctx: StartContext): Promise<void> {
       goHome(true);
     });
     if (lock.locked) spinning = false;
-    const fit = () => {
+    const fit = (focus = -1) => {
       if (!reg) return;
-      const f = regionFit(reg.geometry, { north: pad.north, south: pad.south, shift });
+      const part = focus >= 0 ? polygonsOf(reg.geometry)[focus] : undefined;
+      const f = regionFit(part ? { type: "Polygon", coordinates: part } : reg.geometry, { north: pad.north, south: pad.south, shift });
       if (!R.explicit.lon) cfg.lon = f.lon;
       if (!R.explicit.lat) cfg.lat = f.lat;
       if (!R.explicit.zoom) cfg.zoom = f.zoom;
@@ -603,11 +612,11 @@ export async function start(ctx: StartContext): Promise<void> {
       }
       invalidate();
     });
-    R.subscribe?.((r, centre) => {
+    R.subscribe?.((r, centre, focus) => {
       reg = r;
       drawRegion();
       if (centre) {
-        fit();
+        fit(focus);
         goHome(true);
         onZoom();
       }

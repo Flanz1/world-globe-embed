@@ -626,8 +626,8 @@ await step(A, "editor: colours and legend", async () => {
       const d = document.querySelector("dialog.editor");
       return {
         keys: [...d.querySelectorAll(".ed-key .ed-key-row")].map((r) => [r.querySelector("input[type=color]").value, r.querySelector("input[type=text]").value]),
-        parts: [...d.querySelectorAll(".ed-part-row select")].map((s) => s.value),
-        options: [...(d.querySelector(".ed-part-row select")?.options ?? [])].map((o) => o.textContent),
+        parts: [...d.querySelectorAll(".ed-part-row select[data-part]")].map((s) => s.value),
+        options: [...(d.querySelector(".ed-part-row select[data-part]")?.options ?? [])].map((o) => o.textContent),
         title: d.querySelector('input[name="legend-title"]').value,
       };
     });

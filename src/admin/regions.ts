@@ -3,8 +3,9 @@
  * duplicate, delete, preview, copy embed code). Each action that writes is one commit.
  */
 import { checkGeometry, geometryBounds, polygonsOf, vertexCount } from "../shared/geo.ts";
-import { paintLayers } from "../shared/raster.ts";
-import { REGION_COLOR, copyId, flatFit, normalizePartLegend, regionData, regionLayers, type RegionFeature } from "../shared/region.ts";
+import { paintSpec } from "../shared/raster.ts";
+import { REGION_COLOR, copyId, flatFit, normalizePartContested, normalizePartLegend, regionData, type RegionFeature } from "../shared/region.ts";
+import { paintSpecOf, regionClashes } from "../shared/region-paint.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
 import { $, h } from "./dom.ts";
 import { openEditor } from "./editor/editor.ts";
@@ -98,6 +99,7 @@ function thumbnail(f: RegionFeature, map: MapMeta | undefined): HTMLCanvasElemen
   const H = 96;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const c = h("canvas", { className: "rthumb", width: W * dpr, height: H * dpr, ariaHidden: "true" });
+  let spec: ReturnType<typeof paintSpecOf> | undefined;
   const draw = (img: HTMLImageElement | null) => {
     const g = c.getContext("2d")!;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -112,8 +114,17 @@ function thumbnail(f: RegionFeature, map: MapMeta | undefined): HTMLCanvasElemen
     const p = f.properties;
     const legend = Array.isArray(p.legend) ? p.legend.map((e) => ({ label: "", color: safeColor(e?.color) })) : [];
     const n = polygonsOf(f.geometry).length;
-    const layers = regionLayers({ color: safeColor(p.color), legend, parts: normalizePartLegend(Array.isArray(p.partLegend) ? p.partLegend : undefined, n, legend.length), geometry: f.geometry });
-    paintLayers(g, layers, x, y, offs, { fillOpacity: 0.3, lineWidth: 1.5 }, { w: W, h: H });
+    spec ??= paintSpecOf(
+      {
+        color: safeColor(p.color),
+        legend,
+        parts: normalizePartLegend(Array.isArray(p.partLegend) ? p.partLegend : undefined, n, legend.length),
+        contested: normalizePartContested(Array.isArray(p.partContested) ? p.partContested : undefined, n),
+        geometry: f.geometry,
+      },
+      regionClashes(polygonsOf(f.geometry)),
+    );
+    paintSpec(g, spec, x, y, offs, { fillOpacity: 0.3, lineWidth: 1.5 }, { w: W, h: H });
   };
   draw(null);
   if (map) void loadMapImage(map, 1024).then(draw, () => {});

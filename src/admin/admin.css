@@ -140,7 +140,16 @@ dialog.editor[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr
 .ed-key-default { grid-template-columns: auto 1fr; }
 .ed-fill { display: flex; align-items: center; gap: 8px; }
 .ed-key-row button { padding: 2px 7px; }
-.ed-part-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 45%); gap: 8px; align-items: center; padding: 2px 4px; border-radius: 6px; }
+.ed-part-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 45%); gap: 4px 8px; align-items: center; padding: 2px 4px; border-radius: 6px; }
+.ed-part-row .ed-of { grid-column: 2 / 4; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; align-items: center; margin: 0; }
+.ed-part-row .ed-part-acts { grid-column: 2 / 4; display: flex; gap: 4px; }
+.ed-part-row.zone { margin-left: 18px; border-left: 2px dashed rgba(255, 255, 255, .25); }
+.ed-part-row.sel { background: rgba(255, 212, 0, .12); box-shadow: inset 0 0 0 1px rgba(255, 212, 0, .55); }
+.ed-badge.zone { border-style: dashed; }
+button.tiny { padding: 1px 7px; font-size: 12px; }
+.ed-clashes { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 2px; }
+.ed-clashes .muted { list-style: none; margin-left: -18px; }
+.zone-pick-list { display: grid; gap: 6px; }
 .ed-part-row input[type=text] { min-width: 0; }
 .ed-part-row:hover, .ed-part-row.hot { background: rgba(255, 255, 255, .08); }
 .ed-part-row.hot .ed-badge { outline: 2px solid var(--accent); outline-offset: 1px; }

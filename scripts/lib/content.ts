@@ -5,7 +5,7 @@ import path from "node:path";
 import { Ajv2020, type ErrorObject } from "ajv/dist/2020.js";
 import type { MapMeta, SlotsFile } from "../../src/shared/types.ts";
 import { checkGeometry } from "../../src/shared/geo.ts";
-import { checkLegend, type RegionFeature } from "../../src/shared/region.ts";
+import { checkLegend, checkParts, type RegionFeature } from "../../src/shared/region.ts";
 import { ROOT, contentPaths, type ContentPaths } from "./paths.ts";
 
 const readJson = (file: string): unknown => JSON.parse(readFileSync(file, "utf8"));
@@ -150,7 +150,7 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
       errors.push(...geo);
       ok = false;
     }
-    const lg = checkLegend(region.properties, region.geometry, rel);
+    const lg = [...checkLegend(region.properties, region.geometry, rel), ...checkParts(region.properties, region.geometry, rel)];
     if (lg.length) {
       errors.push(...lg);
       ok = false;

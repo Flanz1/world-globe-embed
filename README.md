@@ -55,14 +55,16 @@ A region is an outline (a kingdom, a province, a battlefield) drawn on a slot's 
 | `V` / `P` / `F` | Select, polygon and freehand tools |
 | Click (polygon) | Add a point; double-click, `Enter` or click the first point to close |
 | `Backspace` while drawing | Remove the last point |
-| `Esc` | Cancel the outline being drawn, or clear the selection |
+| `Esc` | Cancel the outline being drawn, or clear the selection (vertices first, then the selected part) |
 | Drag a vertex | Move it; hold `Shift` to snap to a neighbouring region's vertex |
 | Drag a midpoint | Insert a vertex there |
 | `Alt`+click, right-click | Delete a vertex |
 | `Shift`+click, box drag | Select several vertices |
 | `Delete` / `Backspace` | Delete the selected vertices |
-| Drag inside the fill | Move the whole shape; `Ctrl`+drag moves one part |
-| Arrow keys | Nudge the selection (or the shape) 1 px; `Shift` for 10 px |
+| Click inside a part, its badge or **Select** in its row | Select that part (yellow outline, filled badge) |
+| `Alt`+click inside | Where parts overlap: select the next part under the pointer (the status line says "Part 3 (1 of 2 here…)") |
+| Drag inside a part | Move that part (with its holes); `Ctrl`+drag (`Cmd` on macOS) moves the whole region |
+| Arrow keys | Nudge the selected vertices, else the selected part, else the whole region, 1 px; `Shift` for 10 px |
 | `Ctrl+Z`, `Ctrl+Shift+Z` / `Ctrl+Y` | Undo and redo (at least 100 steps; a whole drag is one step) |
 | Wheel / pinch | Zoom around the cursor |
 | `Space`+drag, middle drag | Pan |
@@ -72,6 +74,10 @@ A region is an outline (a kingdom, a province, a battlefield) drawn on a slot's 
 **Add part** draws another separate piece (islands), **Cut hole** draws a hole inside a part (a lake). **Simplify…** removes vertices with a live preview and before/after counts, **Smooth** rounds the corners (one pass per click). An edit that would make an outline cross itself is refused and the vertex snaps back. The limit is 5,000 vertices per region.
 
 **Colours and legend.** A region can use several colours, for example one per province or per faction. In the editor's side panel, under **Colours and legend**, press **Add colour** and give each colour a label; then pick a colour for each part in the **Parts** list. Each part has a numbered badge on the map that matches its row; pointing at either one highlights the other. Parts left on "Default colour" use the colour set at the top of that section. The embed shows the labelled colours as a small legend in the top-left corner, under the legend title you set (default "Legend"); readers can fold it away by clicking its header. Up to 16 colours per region. Removing a colour sends its parts back to the default colour; undo brings it back.
+
+**Contested zones.** A contested zone is land a part claims but doesn't firmly hold. The embed draws it with a dashed border and a lighter, hatched fill, in the colour of the part it extends (or in its own legend colour, if you pick one for it, to show who else claims it). To add one, select a part and press **Add contested zone**, then draw it with the polygon or freehand tool; with no part selected, the editor asks which part it extends. To turn an existing part into a zone, or back into a normal part, use the **Contested of** dropdown in its row of the **Parts** list; zones are listed, indented, under their part, and their badges on the map have a dashed ring. A part that has zones of its own can't become one. Moving a part leaves its zones where they are, unless you tick **Move contested zones with their part**. Deleting a part turns its zones into normal parts (the editor says so).
+
+**Overlaps are dashed automatically.** Wherever two parts overlap, or one lies inside another, the stretch of each border that lies inside the other part is drawn dashed and the overlap is hatched, so the overlap reads as contested with no extra work. Parts that only touch along a shared edge or at a vertex (snapped with `Shift`) stay solid, and so does a part sitting in another's hole. The same goes for overlaps with other regions on the same slot: the editor shows them live and lists every overlap under **Overlaps** in the side panel (for example "Part 2 overlaps *Kingdom of Vael*"); the build adds the other regions' overlapping outlines to the embed's data, so a region embed marks those overlaps too, without drawing the other region. When a region has a contested zone or an overlap, its legend gets a **Contested** row with a dashed swatch.
 
 Regions are identified by their id; there is no separate name. Regions saved before part labels existed show their old name once, in the middle of the region, until you open and save them: the editor then moves that name into part 1's label. **Duplicate** opens an unsaved copy with a new id. **Delete** asks you to type the region's id; embeds of a deleted region fall back to the plain globe with a small "Region not found" note.
 
@@ -84,6 +90,8 @@ Each region is a GeoJSON Feature in `content/regions/<id>.json`, checked against
 - Outer rings run counter-clockwise and holes clockwise, every ring is closed, nothing crosses itself, and coordinates have at most 4 decimals.
 - `properties.legend` is an optional list of `{ "label", "color" }` entries (at most 16), and `properties.partLegend` gives one number per part (per polygon, in order): the index of the legend entry that part is drawn in, or `-1` for the region's own `color`. Leave both out for a single-colour region. `properties.legendTitle` is the legend's heading.
 - `properties.partLabels` is an optional list with one text per part (`""` for none), shown on each part in the embed. `properties.name` is optional and only used by older regions without part labels.
+- `properties.partContested` is an optional list with one number per part: `-1` for a normal part, or `k` (counted from 0) for a contested zone extending part `k`, which must itself be a normal part. Leave it out when there are no zones.
+- The overlaps with other regions aren't stored in the region file: the build works them out per slot and adds a compact `clash` field (just the other regions' overlapping outlines, at most 2,000 vertices, simplified if bigger) to `regions/<id>.json`.
 - `properties.slot` must name an existing slot. `properties.map` records which map it was drawn on; if the slot now shows a different map, validation warns (it doesn't fail) and the admin card says "drawn on a different map".
 
 ### Embedding a region
@@ -105,7 +113,8 @@ Region embeds take these parameters on top of the ones above:
 | `label` | `0` / `1` | Part labels (default: the region's own "Show part labels in embed" setting) |
 | `dim` | `0` / `1` | Dim everything outside the region |
 | `lock` | `0` / `1` | `1` (default) starts locked on the region; `0` starts unlocked |
-| `key` | `0` / `1` | `0` hides the region's colour legend (shown by default when the region has one). Not the same as `legend`, which is the grid legend |
+| `key` | `0` / `1` | `0` hides the region's colour legend (shown by default when the region has one), including its "Contested" row. Not the same as `legend`, which is the grid legend |
+| `clash` | `0` / `1` | `0` stops marking overlaps with other regions on the slot (dashes and hatching from the build-time data); overlaps between the region's own parts and its contested zones are always shown. The embed-code popover's "Mark overlaps with other regions" box sets it |
 | `lat`, `lon`, `zoom` | as above | Override the automatic framing (in the flat view: centre in map degrees and a zoom multiplier) |
 
 `rotate` defaults to off for region embeds.
@@ -253,6 +262,7 @@ env SLUG=aerthos QUERY='region=old-kingdom&view=flat' npm run measure
 # and the admin editor in headless Chromium against a fake GitHub API (nothing is pushed).
 # Screenshots and report.json go to .e2e/regions/
 npm run e2e:regions
+npm run e2e:contested # contested zones, dashed overlaps (embeds and editor), moving parts; .e2e/contested/
 npm run e2e:tiers     # which texture sizes load, and in what order (1024 → 4096 → 8192 when zoomed in)
 npm run e2e:tiles     # close-up tiles at max zoom (synthetic 32768 map; env TILES_MAP=your.jpg for your own)
 npm run e2e:upload    # a big admin upload in 8 MB parts, with the progress bar (env UPLOAD_FILE=your.jpg for your own)

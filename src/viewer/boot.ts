@@ -68,7 +68,7 @@ if (regionId !== null) {
     let regionData: Promise<RegionData | null>;
     if (preview) {
       // The admin page sends the region it's editing; only same-origin messages from the parent count.
-      const subs: ((r: RegionData, centre: boolean) => void)[] = [];
+      const subs: ((r: RegionData, centre: boolean, focus: number) => void)[] = [];
       let first: (r: RegionData) => void = () => {};
       regionData = new Promise((res) => (first = res));
       window.addEventListener("message", (e: MessageEvent) => {
@@ -76,7 +76,9 @@ if (regionId !== null) {
         const r = parseRegionData(e.data.region);
         if (!r) return;
         first(r);
-        for (const cb of subs) cb(r, e.data.centre === true);
+        const f = e.data.focus;
+        const focus = typeof f === "number" && Number.isInteger(f) && f >= 0 && f < 1000 ? f : -1;
+        for (const cb of subs) cb(r, e.data.centre === true, focus);
       });
       subscribe = (cb) => void subs.push(cb);
     } else {
@@ -95,6 +97,7 @@ if (regionId !== null) {
       subscribe,
       label: label === "1" ? true : label === "0" ? false : null,
       key: q.get("key") !== "0",
+      clash: q.get("clash") !== "0",
       dim: q.get("dim") === "1",
       lock: q.get("lock") !== "0",
       explicit,

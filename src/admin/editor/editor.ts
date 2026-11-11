@@ -21,8 +21,11 @@ import {
   simplifyRing,
   type Position,
   type RegionGeometry,
+  type Ring,
 } from "../../shared/geo.ts";
-import { paintLayers, traceGeometry, traceRing } from "../../shared/raster.ts";
+import { findClashes, findClashesBetween, prepare, type Prepared } from "../../shared/clash.ts";
+import { paintSpec, traceGeometry, traceRing } from "../../shared/raster.ts";
+import { capClash, clashPolygon, paintSpecOf, partColours, type Clashes } from "../../shared/region-paint.ts";
 import {
   DEFAULT_FILL_OPACITY,
   LEGEND_LABEL_MAX,
@@ -33,10 +36,11 @@ import {
   REGION_ID,
   flatFit,
   flatMinK,
+  checkParts,
+  normalizePartContested,
   normalizePartLabels,
   normalizePartLegend,
   PART_LABEL_MAX,
-  regionLayers,
   slugify,
   uniqueId,
   type RegionData,
@@ -61,8 +65,12 @@ import {
   partAnchor,
   nextLegendColour,
   partAt,
+  partsAt,
   partsFromGeometry,
+  remapContested,
   removeLegendEntry,
+  setContested,
+  zonesOf,
   ringProblem,
   simplifyParts,
   smoothParts,
@@ -127,6 +135,7 @@ function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"): Edit
     parts,
     styles: normalizePartLegend(fp?.partLegend, parts.length, legend.length),
     labels: normalizePartLabels(fp?.partLabels ?? legacy, parts.length),
+    contested: normalizePartContested(fp?.partContested, parts.length),
     props: {
       color: fp && REGION_COLOR.test(fp.color) ? expandHex(fp.color) : fallbackColour,
       fillOpacity: fp?.fillOpacity ?? DEFAULT_FILL_OPACITY,
@@ -148,8 +157,10 @@ export const SHORTCUTS: [string, string][] = [
   ["Alt+click / right-click", "Delete a vertex"],
   ["Shift+click, box drag", "Select several vertices"],
   ["Delete / Backspace", "Delete the selected vertices"],
-  ["Drag inside the fill", "Move the whole shape; Ctrl+drag moves one part"],
-  ["Arrow keys", "Nudge the selection (or the shape) 1 px; Shift for 10 px"],
+  ["Click inside a part", "Select that part (or click its badge or its row in the Parts list)"],
+  ["Alt+click inside", "Select the next part under the pointer, where parts overlap"],
+  ["Drag inside a part", "Move that part; Ctrl+drag (Cmd on macOS) moves the whole region"],
+  ["Arrow keys", "Nudge the selected vertices, else the selected part, else the whole region, 1 px; Shift for 10 px"],
   ["Ctrl+Z", "Undo"],
   ["Ctrl+Shift+Z / Ctrl+Y", "Redo"],
   ["Wheel / pinch", "Zoom around the cursor"],
@@ -187,8 +198,8 @@ export function openEditor(o: EditorOptions): void {
   const ctxMenu = h("div", { className: "ed-menu", hidden: true, role: "menu" });
   const tip = h("div", { className: "ed-tip", hidden: true });
 
-  const toolBtn = (t: Tool, text: string, key: string) =>
-    h("button", { type: "button", className: "ghost tool", textContent: text, title: `${text} (${key})`, dataset: { tool: t }, onclick: () => setTool(t) });
+  const toolBtn = (t: Tool, text: string, key: string, more = "") =>
+    h("button", { type: "button", className: "ghost tool", textContent: text, title: `${text} (${key})${more}`, dataset: { tool: t }, onclick: () => setTool(t) });
   const btn = (text: string, title: string, onclick: () => void, data = "") =>
     h("button", { type: "button", className: "ghost", textContent: text, title, onclick, dataset: data ? { act: data } : {} });
   const undoBtn = btn("Undo", "Undo (Ctrl+Z)", () => undo(), "undo");
@@ -208,6 +219,8 @@ export function openEditor(o: EditorOptions): void {
   const keyRows = h("div", { className: "ed-key" });
   const addKeyBtn = btn("Add colour", "Add a colour with a label to the legend", () => addLegendEntry(), "key-add");
   const partRows = h("div", { className: "ed-parts" });
+  const zonesFollowIn = h("input", { type: "checkbox", checked: false, name: "zones-follow" });
+  const clashList = h("ul", { className: "ed-clashes small", ariaLive: "polite" });
   const saveBtn = h("button", { type: "button", textContent: "Save", className: "ed-save" });
   const closeBtn = h("button", { type: "button", className: "ghost", textContent: "Close" });
 
@@ -229,12 +242,13 @@ export function openEditor(o: EditorOptions): void {
     h(
       "div",
       { className: "ed-toolbar", role: "toolbar" },
-      toolBtn("select", "Select", "V"),
+      toolBtn("select", "Select", "V", ": click a part to select it, drag inside it to move it, Ctrl+drag to move the whole region, Alt+click for the next part where parts overlap"),
       toolBtn("polygon", "Polygon", "P"),
       toolBtn("freehand", "Freehand", "F"),
       h("span", { className: "sep" }),
       btn("Add part", "Draw another polygon (an island or exclave)", () => startDraw("part"), "add-part"),
       btn("Cut hole", "Draw a hole inside a part", () => startDraw("hole"), "cut-hole"),
+      btn("Add contested zone", "Draw land a part claims but doesn't firmly hold (dashed in the embed)", () => addContested(), "add-contested"),
       h("span", { className: "sep" }),
       undoBtn,
       redoBtn,
@@ -276,6 +290,14 @@ export function openEditor(o: EditorOptions): void {
           addKeyBtn,
           h("p", { className: "muted small", textContent: "Parts: a label (shown on that part in the embed) and a colour for each. The numbers match the badges on the map." }),
           partRows,
+          h("label", { className: "check", title: "Off: moving a part leaves its contested zones where they are" }, zonesFollowIn, "Move contested zones with their part"),
+        ),
+        h(
+          "fieldset",
+          { className: "ed-overlaps" },
+          h("legend", { textContent: "Overlaps" }),
+          h("p", { className: "muted small", textContent: "Where parts overlap each other or another region on this slot, the embed draws the border dashed." }),
+          clashList,
         ),
         stats,
       ),
@@ -346,7 +368,14 @@ export function openEditor(o: EditorOptions): void {
 
   /* ── State ── */
   let tool: Tool = "select";
-  let target: "part" | "hole" = "part";
+  let target: "part" | "hole" | "contested" = "part";
+  /** The part a contested zone being drawn will extend. */
+  let zoneParent = -1;
+  /** The selected part (-1 for none): click inside it, its badge or its row. Separate from the vertex selection. */
+  let selPart = -1;
+  /** Alt+click cycling through the parts under one spot. */
+  let cycle: { x: number; y: number; list: number[]; i: number } | null = null;
+  let pickHint = "";
   let drawing: Position[] | null = null;
   let cursor: Position | null = null;
   let selection = new Map<string, VRef>();
@@ -356,7 +385,7 @@ export function openEditor(o: EditorOptions): void {
   let spaceHeld = false;
   type Drag =
     | { kind: "vertex"; base: Parts; refs: VRef[]; grab: VRef; x0: number; y0: number; w0: Position; moved: boolean; label: string; toggle: boolean }
-    | { kind: "shape"; base: Parts; part: number | null; w0: Position; moved: boolean }
+    | { kind: "shape"; base: Parts; part: number[] | null; w0: Position; moved: boolean }
     | { kind: "pan"; x0: number; y0: number; v0: typeof view }
     | { kind: "box"; x0: number; y0: number; x1: number; y1: number; add: boolean }
     | { kind: "free"; pts: Position[] }
@@ -366,11 +395,17 @@ export function openEditor(o: EditorOptions): void {
   let pinch: { d: number; mx: number; my: number } | null = null;
 
   const parts = () => hist.state.parts;
-  /** Geometry edits. `styles` must be given whenever parts are added or removed. */
-  const setParts = (label: string, next: Parts, merge?: string, styles = hist.state.styles, labels = hist.state.labels) =>
+  /** Geometry edits. `styles`, `labels` and `contested` must be given whenever parts are added or removed. */
+  const setParts = (label: string, next: Parts, merge?: string, styles = hist.state.styles, labels = hist.state.labels, contested = hist.state.contested) =>
     hist.apply(
       label,
-      { ...hist.state, parts: next, styles: normalizePartLegend(styles, next.length, hist.state.props.legend.length), labels: normalizePartLabels(labels, next.length) },
+      {
+        ...hist.state,
+        parts: next,
+        styles: normalizePartLegend(styles, next.length, hist.state.props.legend.length),
+        labels: normalizePartLabels(labels, next.length),
+        contested: normalizePartContested(contested, next.length),
+      },
       merge,
     );
   /** Part under the pointer, on the map or in the side panel's Parts list, or -1. */
@@ -378,9 +413,21 @@ export function openEditor(o: EditorOptions): void {
   function setHoverPart(p: number): void {
     if (p === hoverPart) return;
     hoverPart = p;
-    partRows.querySelectorAll<HTMLElement>(".ed-part-row").forEach((row, i) => row.classList.toggle("hot", i === p));
+    partRows.querySelectorAll<HTMLElement>(".ed-part-row").forEach((row) => row.classList.toggle("hot", Number(row.dataset.row) === p));
     draw();
   }
+  function selectPart(p: number, hint = ""): void {
+    selPart = p >= 0 && p < parts().length ? p : -1;
+    pickHint = selPart >= 0 ? hint : "";
+    partRows.querySelectorAll<HTMLElement>(".ed-part-row").forEach((row) => {
+      const on = Number(row.dataset.row) === selPart;
+      row.classList.toggle("sel", on);
+      row.querySelector<HTMLButtonElement>("button[data-act=part-select]")?.setAttribute("aria-pressed", String(on));
+    });
+    draw();
+  }
+  /** The parts a move of part p takes along: p, plus its contested zones when that's switched on. */
+  const moveSet = (p: number): number[] => (zonesFollowIn.checked ? [p, ...zonesOf(hist.state.contested, p)] : [p]);
 
   function setMsg(text: string, kind: "muted" | "error" | "ok" = "muted"): void {
     msg.textContent = text;
@@ -402,6 +449,74 @@ export function openEditor(o: EditorOptions): void {
     return out;
   }
   const asGeometry = (p: Parts): RegionGeometry => ({ type: "MultiPolygon", coordinates: p.map((rings) => rings.map(closeRing)) });
+
+  /* ── Overlaps (clashes), with each other and with the neighbours ── */
+  const nbPolys: Ring[][] = [];
+  const nbOwner: { f: RegionFeature; p: number }[] = [];
+  for (const n of neighbours) polygonsOf(n.geometry).forEach((poly, p) => (nbPolys.push(poly), nbOwner.push({ f: n, p })));
+  let nbPreps: Prepared[] | null = null;
+  const nbPrepared = () => (nbPreps ??= nbPolys.map((poly) => prepare(poly)));
+  type ClashState = { version: number; preps: Prepared[]; clashes: Clashes; spec: ReturnType<typeof paintSpecOf> };
+  let clashCache: ClashState | null = null;
+  /** During a drag: the clashes where it began, and which parts the drag moves. */
+  let dragBase: { cs: ClashState; moving: Set<number> } | null = null;
+  /**
+   * Clashes and the paint spec for the current parts, recomputed only when they change (not on pan or
+   * zoom). While a drag moves some parts, only the pairs involving those parts are tested again.
+   */
+  function clashState(): ClashState {
+    if (clashCache && clashCache.version === hist.version) return clashCache;
+    const ps = parts();
+    let preps: Prepared[];
+    let clashes: Clashes;
+    const base = dragBase && hist.dragging && dragBase.cs.preps.length === ps.length ? dragBase : null;
+    if (base && base.moving.size < ps.length) {
+      const mv = base.moving;
+      preps = ps.map((r, i) => (mv.has(i) ? prepare(r) : base.cs.preps[i]));
+      clashes = {
+        internal: [...base.cs.clashes.internal.filter(([i, j]) => !mv.has(i) && !mv.has(j)), ...findClashes(preps, mv)],
+        external: [...base.cs.clashes.external.filter(([i]) => !mv.has(i)), ...findClashesBetween(preps, nbPrepared(), mv)],
+      };
+    } else {
+      preps = ps.map((r) => prepare(r));
+      clashes = { internal: findClashes(preps), external: findClashesBetween(preps, nbPrepared()) };
+    }
+    const st = hist.state;
+    const spec = paintSpecOf({ color: st.props.color, legend: st.props.legend, parts: st.styles, contested: st.contested, geometry: asGeometry(ps) }, clashes, nbPolys);
+    clashCache = { version: hist.version, preps, clashes, spec };
+    return clashCache;
+  }
+  /** Call when a drag starts: later clashState() calls only re-test the moving parts. */
+  function beginClashDrag(moving: Iterable<number>): void {
+    dragBase = { cs: clashState(), moving: new Set(moving) };
+  }
+  const neighbourName = (e: number): string => {
+    const o = nbOwner[e];
+    if (!o) return "another region";
+    const pl = o.f.properties.partLabels?.[o.p];
+    return (typeof pl === "string" && pl.trim()) || o.f.properties.name?.trim() || o.f.id;
+  };
+  const partName = (p: number): string => {
+    const t = hist.state.labels[p]?.trim();
+    return t ? `part ${p + 1} (${t})` : `part ${p + 1}`;
+  };
+  let clashListVersion = -1;
+  /** The side panel's list of overlaps (plain text only: labels and names are untrusted). */
+  function syncClashList(cs: ClashState): void {
+    if (clashListVersion === cs.version) return;
+    clashListVersion = cs.version;
+    const c = hist.state.contested;
+    const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+    const rows: HTMLElement[] = [];
+    for (const [i, j] of cs.clashes.internal) {
+      // A zone overlapping the part it extends is what zones are for; not worth listing.
+      if (c[i] === j || c[j] === i) continue;
+      rows.push(h("li", { dataset: { clash: `${i}:${j}` } }, `${cap(partName(i))} overlaps ${partName(j)}`));
+    }
+    for (const [i, e] of cs.clashes.external) rows.push(h("li", { dataset: { clash: `${i}:n${e}` } }, `${cap(partName(i))} overlaps `, h("em", { textContent: neighbourName(e) })));
+    if (!rows.length) rows.push(h("li", { className: "muted", textContent: "No overlaps." }));
+    clashList.replaceChildren(...rows);
+  }
 
   function render(): void {
     raf = 0;
@@ -433,9 +548,21 @@ export function openEditor(o: EditorOptions): void {
     }
     const p = simplifyPreview ?? parts();
     const s = hist.state.props;
+    const cs = clashState();
+    syncClashList(cs);
     if (p.length) {
-      const layers = regionLayers({ color: s.color, legend: s.legend, parts: hist.state.styles, geometry: asGeometry(parts()) });
-      paintLayers(g, layers, sx, sy, offs, { fillOpacity: simplifyPreview ? s.fillOpacity * 0.4 : s.fillOpacity, lineWidth: 2 }, { w, h: hh });
+      paintSpec(g, cs.spec, sx, sy, offs, { fillOpacity: simplifyPreview ? s.fillOpacity * 0.4 : s.fillOpacity, lineWidth: 2 }, { w, h: hh });
+      const sp = parts()[selPart];
+      if (sp) {
+        g.save();
+        g.lineWidth = 3;
+        g.lineJoin = "round";
+        g.strokeStyle = "#ffd400";
+        g.beginPath();
+        for (const ring of sp) traceRing(g, ring, sx, sy, offs);
+        g.stroke();
+        g.restore();
+      }
       const hp = parts()[hoverPart];
       if (hp) {
         g.save();
@@ -480,6 +607,7 @@ export function openEditor(o: EditorOptions): void {
     }
     if (tool === "select" && !simplifyPreview) drawHandles(offs);
     if (parts().length > 1 && !simplifyPreview) drawBadges(offs);
+    else badgeAt = [];
     if (drawing || drag?.kind === "free") {
       const pts = drawing ?? (drag as { pts: Position[] }).pts;
       g.save();
@@ -507,25 +635,38 @@ export function openEditor(o: EditorOptions): void {
     updateStatus();
   }
 
-  /** The colour part p is drawn in. */
+  /** The colour part p is drawn in (a contested zone takes its parent's unless it has its own). */
   const partColour = (p: number): string => {
-    const k = hist.state.styles[p] ?? OWN_COLOUR;
-    return k === OWN_COLOUR ? hist.state.props.color : (hist.state.props.legend[k]?.color ?? hist.state.props.color);
+    const st = hist.state;
+    return partColours({ color: st.props.color, legend: st.props.legend, parts: st.styles, contested: st.contested }, st.parts.length)[p] ?? st.props.color;
   };
   // Badge positions, recomputed only when the parts change (not on every pan or hover).
   let anchors: { version: number; at: (Position | null)[] } = { version: -1, at: [] };
+  /** Badge positions as last drawn (none when badges aren't shown), for clicking them. */
+  let badgeAt: (Position | null)[] = [];
+  function hitBadge(x: number, y: number): number {
+    if (parts().length < 2 || simplifyPreview) return -1;
+    const cl = wx(x);
+    for (let p = badgeAt.length - 1; p >= 0; p--) {
+      const a = badgeAt[p];
+      if (a && Math.hypot(sx(nearest(a[0], cl)) - x, sy(a[1]) - y) <= 12) return p;
+    }
+    return -1;
+  }
   /** Numbered badges ("1", "2", …) on each part, matching the Parts list in the side panel. */
   function drawBadges(offs: number[]): void {
     if (anchors.version !== hist.version) anchors = { version: hist.version, at: parts().map((rings) => partAnchor(rings)) };
+    badgeAt = anchors.at;
     const { w, h: hh } = size();
     g.save();
     g.textAlign = "center";
     g.textBaseline = "middle";
     anchors.at.forEach((a, p) => {
       if (!a) return;
-      const hot = p === hoverPart;
+      const hot = p === hoverPart || p === selPart;
       const r = hot ? 14 : 11;
       const fill = partColour(p);
+      const zone = (hist.state.contested[p] ?? -1) >= 0;
       g.font = `600 ${hot ? 13 : 11}px system-ui, sans-serif`;
       for (const off of offs) {
         const x = sx(a[0] + off);
@@ -534,12 +675,21 @@ export function openEditor(o: EditorOptions): void {
         // A dark chip with a ring in the part's colour reads on any fill and any map.
         g.beginPath();
         g.arc(x, y, r, 0, Math.PI * 2);
-        g.fillStyle = "rgba(20,18,14,.85)";
+        // The selected part's badge is filled with its colour.
+        g.fillStyle = p === selPart ? fill : "rgba(20,18,14,.85)";
         g.fill();
         g.lineWidth = hot ? 3.5 : 2.5;
         g.strokeStyle = hot ? "#fff" : fill;
+        // Contested zones: a dashed ring.
+        g.setLineDash(zone ? [3, 2.5] : []);
         g.stroke();
+        g.setLineDash([]);
         g.fillStyle = "#fff";
+        if (p === selPart) {
+          g.lineWidth = 3;
+          g.strokeStyle = "rgba(0,0,0,.7)";
+          g.strokeText(String(p + 1), x, y + 0.5);
+        }
         g.fillText(String(p + 1), x, y + 0.5);
       }
     });
@@ -619,7 +769,9 @@ export function openEditor(o: EditorOptions): void {
   function updateStatus(): void {
     const n = countVertices(parts());
     const parts_ = parts().length;
-    let line = `${tool === "select" ? "Select" : tool === "polygon" ? (target === "hole" ? "Cut hole" : "Polygon") : "Freehand"} · ${n} vertices`;
+    const what = target === "hole" ? "Cut hole" : target === "contested" ? `Contested zone of part ${zoneParent + 1}` : "";
+    let line = `${tool === "select" ? "Select" : `${tool === "polygon" ? "Polygon" : "Freehand"}${what ? ` (${what})` : ""}`} · ${n} vertices`;
+    if (tool === "select" && selPart >= 0) line += ` · ${pickHint || `Part ${selPart + 1} selected`}`;
     if (cursor) {
       const lon = ((((cursor[0] + 180) % 360) + 360) % 360) - 180;
       const gl = imageToGlobe([lon, cursor[1]], frame);
@@ -649,14 +801,16 @@ export function openEditor(o: EditorOptions): void {
     label: hist.state.props.label,
     legendTitle: hist.state.props.legendTitle.slice(0, LEGEND_TITLE_MAX),
     legend: hist.state.props.legend.map((e) => ({ label: e.label.slice(0, LEGEND_LABEL_MAX), color: e.color })),
-    ...(({ geometry, partLegend, partLabels }) => ({ geometry, parts: partLegend, labels: partLabels.map((t) => t.slice(0, PART_LABEL_MAX)) }))(
-      toStyledGeometry(parts(), hist.state.styles, hist.state.labels),
+    ...(({ geometry, partLegend, partLabels, partContested }) => ({ geometry, parts: partLegend, labels: partLabels.map((t) => t.slice(0, PART_LABEL_MAX)), contested: partContested }))(
+      toStyledGeometry(parts(), hist.state.styles, hist.state.labels, hist.state.contested),
     ),
+    // What the build will add: the neighbours' polygons this region overlaps.
+    clash: capClash([...new Set(clashState().clashes.external.map(([, e]) => e))].sort((a, b) => a - b).map((e) => clashPolygon(nbPolys[e]))),
   });
   let previewRaf = 0;
   let lastSent = -1;
-  function sendPreview(centre = false): void {
-    if (centre) return sendRegion(frameEl, regionNow(), true);
+  function sendPreview(centre = false, focus?: number): void {
+    if (centre) return sendRegion(frameEl, regionNow(), true, focus);
     // At most one update per animation frame, even while dragging.
     if (previewRaf || lastSent === hist.version) return;
     previewRaf = requestAnimationFrame(() => {
@@ -719,11 +873,36 @@ export function openEditor(o: EditorOptions): void {
     hist.apply("Part colour", { ...hist.state, styles });
     changed();
   }
+  function setPartContested(p: number, k: number): void {
+    const next = setContested(hist.state, p, k);
+    if (typeof next === "string") {
+      setMsg(next, "error");
+      colourSig = "";
+      return changed();
+    }
+    hist.apply(k < 0 ? "Make normal part" : "Make contested zone", next);
+    setMsg(k < 0 ? `Part ${p + 1} is a normal part again.` : `Part ${p + 1} is now a contested zone of part ${k + 1}.`, "ok");
+    changed();
+  }
+  /** Pans the flat map to part p and turns the globe preview to it. */
+  function centrePart(p: number): void {
+    const rings = parts()[p];
+    if (!rings) return;
+    const { w, h: hh } = size();
+    const v = flatFit(geometryBounds(toGeometry([rings])), aspect, w, hh);
+    view = { cx: v.cx, cy: v.cy, k: v.k };
+    touched = true;
+    setTool("select");
+    selectPart(p);
+    // The preview's part indices are after storing, which drops degenerate parts; they match here.
+    sendPreview(true, p);
+    draw();
+  }
   /** Rebuilds the legend and part rows only when their structure changes, so typing keeps focus. */
   let colourSig = "";
   function syncColours(): void {
     const s = hist.state;
-    const sig = JSON.stringify([s.props.legend.length, s.parts.length, s.parts.map((r) => [r[0]?.length ?? 0, r.length])]);
+    const sig = JSON.stringify([s.props.legend.length, s.parts.length, s.parts.map((r) => [r[0]?.length ?? 0, r.length]), s.contested]);
     if (sig !== colourSig) {
       colourSig = sig;
       keyRows.replaceChildren(
@@ -753,12 +932,36 @@ export function openEditor(o: EditorOptions): void {
           );
         }),
       );
+      // Normal parts in order, each followed by its contested zones (indented).
+      const order: number[] = [];
+      s.parts.forEach((_, p) => {
+        if ((s.contested[p] ?? -1) >= 0 && s.contested[s.contested[p]] === -1) return;
+        order.push(p, ...zonesOf(s.contested, p));
+      });
       partRows.replaceChildren(
-        ...s.parts.map((rings, p) => {
+        ...order.map((p) => {
+          const rings = s.parts[p];
+          const zone = (s.contested[p] ?? -1) >= 0;
           const sel = h("select", { ariaLabel: `Colour of part ${p + 1}`, dataset: { part: String(p) } });
           for (const k of [OWN_COLOUR, ...s.props.legend.map((_, i) => i)]) sel.append(h("option", { value: String(k), textContent: entryName(k) }));
           sel.addEventListener("change", () => setPartStyle(p, Number(sel.value)));
-          const sw = h("i", { className: "ed-swatch ed-badge", textContent: String(p + 1), ariaHidden: "true" });
+          const of = h("select", { ariaLabel: `Part ${p + 1}: contested zone of`, title: "Contested of: make this part a contested zone of another part (dashed in the embed)", dataset: { contestedOf: String(p) } });
+          of.append(h("option", { value: "-1", textContent: "— (normal part)" }));
+          const hasZones = zonesOf(s.contested, p).length > 0;
+          s.parts.forEach((_, k) => {
+            if (k === p || (s.contested[k] ?? -1) >= 0) return;
+            of.append(
+              h("option", {
+                value: String(k),
+                textContent: `Part ${k + 1}${s.labels[k]?.trim() ? ` (${s.labels[k].trim()})` : ""}`,
+                disabled: hasZones,
+                title: hasZones ? `Part ${p + 1} has contested zones of its own, so it can't become one` : "",
+              }),
+            );
+          });
+          if (hasZones) of.title = `Part ${p + 1} has contested zones of its own, so it can't become one`;
+          of.addEventListener("change", () => setPartContested(p, Number(of.value)));
+          const sw = h("i", { className: `ed-swatch ed-badge${zone ? " zone" : ""}`, textContent: String(p + 1), ariaHidden: "true" });
           const lbl = h("input", {
             type: "text",
             maxLength: PART_LABEL_MAX,
@@ -774,7 +977,17 @@ export function openEditor(o: EditorOptions): void {
             hist.apply("Part label", { ...hist.state, labels }, `part-label:${p}`);
             changed();
           });
-          const row = h("div", { className: "ed-part-row", dataset: { row: String(p) } }, sw, lbl, sel);
+          const pick = h("button", { type: "button", className: "ghost tiny", textContent: "Select", title: `Select part ${p + 1}`, dataset: { act: "part-select" }, onclick: () => (setTool("select"), selectPart(p)) });
+          const centre = h("button", { type: "button", className: "ghost tiny", textContent: "Centre", title: `Show part ${p + 1} on the map and the globe`, dataset: { act: "part-centre" }, onclick: () => centrePart(p) });
+          const row = h(
+            "div",
+            { className: `ed-part-row${zone ? " zone" : ""}`, dataset: { row: String(p) } },
+            sw,
+            lbl,
+            sel,
+            h("label", { className: "ed-of" }, h("span", { className: "muted small", textContent: "Contested of" }), of),
+            h("span", { className: "ed-part-acts" }, pick, centre),
+          );
           row.addEventListener("pointerenter", () => setHoverPart(p));
           row.addEventListener("pointerleave", () => setHoverPart(-1));
           return row;
@@ -789,9 +1002,18 @@ export function openEditor(o: EditorOptions): void {
       if (el.type === "color") el.value = e.color;
       else el.value = e.label;
     });
-    partRows.querySelectorAll<HTMLDivElement>(".ed-part-row").forEach((row, p) => {
+    partRows.querySelectorAll<HTMLDivElement>(".ed-part-row").forEach((row) => {
+      const p = Number(row.dataset.row);
       const k = s.styles[p] ?? OWN_COLOUR;
-      const sel = row.querySelector("select")!;
+      const sel = row.querySelector<HTMLSelectElement>("select[data-part]")!;
+      const of = row.querySelector<HTMLSelectElement>("select[data-contested-of]")!;
+      if (document.activeElement !== of) of.value = String(s.contested[p] ?? -1);
+      for (const opt of of.options) {
+        const n = Number(opt.value);
+        if (n < 0) continue;
+        const t = `Part ${n + 1}${s.labels[n]?.trim() ? ` (${s.labels[n].trim()})` : ""}`;
+        if (opt.textContent !== t) opt.textContent = t;
+      }
       const lbl = row.querySelector<HTMLInputElement>("input[type=text]")!;
       if (document.activeElement !== lbl) lbl.value = s.labels[p] ?? "";
       // Option texts follow the legend labels as they're typed (rebuilding the rows would lose focus).
@@ -803,6 +1025,8 @@ export function openEditor(o: EditorOptions): void {
       const badge = row.querySelector(".ed-swatch") as HTMLElement;
       badge.style.borderColor = partColour(p);
       row.classList.toggle("hot", p === hoverPart);
+      row.classList.toggle("sel", p === selPart);
+      row.querySelector("button[data-act=part-select]")?.setAttribute("aria-pressed", String(p === selPart));
     });
     keyRows.querySelectorAll<HTMLSpanElement>(".ed-key-row > span").forEach((el, k) => {
       const used = s.styles.filter((v) => v === k).length;
@@ -815,6 +1039,7 @@ export function openEditor(o: EditorOptions): void {
   function changed(): void {
     // Drop selections that no longer exist.
     for (const [k, v] of selection) if (!parts()[v.p]?.[v.r]?.[v.i]) selection.delete(k);
+    if (selPart >= parts().length) selPart = -1;
     syncPanel();
     undoBtn.disabled = !hist.canUndo;
     redoBtn.disabled = !hist.canRedo;
@@ -834,12 +1059,13 @@ export function openEditor(o: EditorOptions): void {
     toggleSimplify(false);
     changed();
   }
-  function drawHint(t: "part" | "hole"): string {
+  function drawHint(t: "part" | "hole" | "contested"): string {
+    const zone = t === "contested" ? `Contested zone of part ${zoneParent + 1}: ` : "";
     if (drawTool === "freehand")
-      return t === "hole" ? "Drag inside a part to draw the hole; let go to close it." : "Drag on the map to draw the outline; let go to close it. Press P for the polygon tool.";
-    return t === "hole" ? "Click inside a part to start the hole." : "Click to add points. Double-click, Enter or click the first point to close.";
+      return t === "hole" ? "Drag inside a part to draw the hole; let go to close it." : `${zone}Drag on the map to draw the outline; let go to close it. Press P for the polygon tool.`;
+    return t === "hole" ? "Click inside a part to start the hole." : `${zone}Click to add points. Double-click, Enter or click the first point to close.`;
   }
-  function startDraw(t: "part" | "hole"): void {
+  function startDraw(t: "part" | "hole" | "contested"): void {
     if (t === "hole" && !parts().length) return setMsg("Draw a part first, then cut a hole inside it.", "error");
     target = t;
     drawing = null;
@@ -847,6 +1073,41 @@ export function openEditor(o: EditorOptions): void {
     canvas.style.cursor = "crosshair";
     setMsg(drawHint(t));
     changed();
+  }
+
+  /**
+   * "Add contested zone": extends the selected part (or the part a selected zone extends); with nothing
+   * selected, asks which part, unless there's only one normal part.
+   */
+  function addContested(): void {
+    const st = hist.state;
+    if (!st.parts.length) return setMsg("Draw a part first; a contested zone extends one of its parts.", "error");
+    const normal = st.parts.flatMap((_, p) => ((st.contested[p] ?? -1) < 0 ? [p] : []));
+    const fromSel = selPart >= 0 ? ((st.contested[selPart] ?? -1) >= 0 ? st.contested[selPart] : selPart) : -1;
+    const go = (k: number) => {
+      zoneParent = k;
+      selectPart(k);
+      startDraw("contested");
+    };
+    if (fromSel >= 0) return go(fromSel);
+    if (normal.length === 1) return go(normal[0]);
+    const m = modal("Extends which part?", "zone-pick");
+    m.body.append(
+      h("p", { className: "muted small", textContent: "The new contested zone extends one part: it's drawn in that part's colour, dashed." }),
+      h(
+        "div",
+        { className: "zone-pick-list" },
+        ...normal.map((k) =>
+          h("button", {
+            type: "button",
+            className: "ghost",
+            dataset: { pickPart: String(k) },
+            textContent: `Part ${k + 1}${st.labels[k]?.trim() ? ` (${st.labels[k].trim()})` : ""}`,
+            onclick: () => (m.close(), go(k)),
+          }),
+        ),
+      ),
+    );
   }
 
   /** Validates and adds a closed outline from the polygon or freehand tool. */
@@ -871,9 +1132,16 @@ export function openEditor(o: EditorOptions): void {
         return false;
       }
       setParts("Cut hole", addHole(parts(), ring)!);
-    } else setParts(parts().length ? "Add part" : "Draw outline", addPart(parts(), ring), undefined, [...hist.state.styles, OWN_COLOUR], [...hist.state.labels, ""]);
-    setMsg(`${target === "hole" ? "Hole" : "Outline"} added. Drag vertices to refine it.`, "ok");
+    } else if (target === "contested" && zoneParent >= 0 && zoneParent < parts().length) {
+      setParts("Add contested zone", addPart(parts(), ring), undefined, [...hist.state.styles, OWN_COLOUR], [...hist.state.labels, ""], [...hist.state.contested, zoneParent]);
+    } else setParts(parts().length ? "Add part" : "Draw outline", addPart(parts(), ring), undefined, [...hist.state.styles, OWN_COLOUR], [...hist.state.labels, ""], [...hist.state.contested, -1]);
+    setMsg(
+      target === "hole" ? "Hole added. Drag vertices to refine it." : target === "contested" ? `Contested zone of part ${zoneParent + 1} added (part ${parts().length}).` : "Outline added. Drag vertices to refine it.",
+      "ok",
+    );
+    if (target !== "hole") selPart = parts().length - 1;
     target = "part";
+    zoneParent = -1;
     drawing = null;
     tool = "select";
     canvas.style.cursor = "default";
@@ -941,17 +1209,21 @@ export function openEditor(o: EditorOptions): void {
     const res = deleteVertices(parts(), refs);
     const prob = ringProblem(res.parts);
     if (prob) return setMsg(`Can't delete that: ${prob.message.toLowerCase()}`, "error");
+    const zones = remapContested(hist.state.contested, res.kept);
     setParts(
       label,
       res.parts,
       undefined,
       res.kept.map((p) => hist.state.styles[p] ?? OWN_COLOUR),
       res.kept.map((p) => hist.state.labels[p] ?? ""),
+      zones.contested,
     );
     selection.clear();
+    if (res.removedParts) selPart = selPart >= 0 ? res.kept.indexOf(selPart) : -1;
+    const orphans = zones.orphaned ? ` ${zones.orphaned === 1 ? "Its contested zone is" : `Its ${zones.orphaned} contested zones are`} now normal part${zones.orphaned === 1 ? "" : "s"}.` : "";
     setMsg(
       res.removedParts
-        ? "A ring needs at least 3 vertices, so the whole part was deleted (undo brings it back)."
+        ? `A ring needs at least 3 vertices, so the whole part was deleted (undo brings it back).${orphans}`
         : res.removedHoles
           ? "A hole needs at least 3 vertices, so the hole was deleted."
           : "",
@@ -968,7 +1240,8 @@ export function openEditor(o: EditorOptions): void {
       const prob = ringProblem(next, refs);
       if (prob) return setMsg(prob.message, "error");
       setParts("Nudge", next, "nudge");
-    } else if (parts().length) setParts("Nudge shape", translate(parts(), null, dLon, dLat), "nudge");
+    } else if (selPart >= 0 && parts()[selPart]) setParts("Nudge part", translate(parts(), moveSet(selPart), dLon, dLat), "nudge-part");
+    else if (parts().length) setParts("Nudge shape", translate(parts(), null, dLon, dLat), "nudge");
     changed();
   }
   function undo(): void {
@@ -1085,12 +1358,14 @@ export function openEditor(o: EditorOptions): void {
       }
       const refs = [...selection.values()];
       const vp = parts()[v.p][v.r][v.i];
+      beginClashDrag(refs.map((r) => r.p));
       hist.begin();
       drag = { kind: "vertex", base: parts(), refs, grab: v, x0: x, y0: y, w0: [nearest(vp[0], w0[0]), vp[1]], moved: false, label: refs.length > 1 ? `Move ${refs.length} vertices` : "Move vertex", toggle: was && e.shiftKey };
       return draw();
     }
     const m = hitMidpoint(x, y);
     if (m) {
+      beginClashDrag([m.p]);
       hist.begin();
       const ins = insertVertex(parts(), m.p, m.r, m.i, m.pos);
       hist.preview({ ...hist.state, parts: ins.parts });
@@ -1099,10 +1374,27 @@ export function openEditor(o: EditorOptions): void {
       changed();
       return;
     }
-    const p = partAt(parts(), w0);
+    const here = partsAt(parts(), w0, hist.state.contested);
+    const badge = hitBadge(x, y);
+    if (e.altKey && here.length) {
+      // Alt+click: the next part under the pointer (topmost first, wrapping round).
+      const same = cycle && Math.hypot(cycle.x - x, cycle.y - y) < 4 && cycle.list.join() === here.join();
+      const i = same ? (cycle!.i + 1) % here.length : (here.indexOf(selPart) + 1) % here.length;
+      cycle = { x, y, list: here, i };
+      selectPart(here[i], `Part ${here[i] + 1} (${i + 1} of ${here.length} here, Alt+click for the next)`);
+      return;
+    }
+    // A click keeps the selected part when it's under the pointer (picked with Alt+click), else takes the topmost.
+    const p = badge >= 0 ? badge : here.includes(selPart) ? selPart : (here[0] ?? -1);
     if (p >= 0) {
+      cycle = null;
+      const i = here.indexOf(p);
+      selectPart(p, here.length > 1 && i >= 0 ? `Part ${p + 1} (${i + 1} of ${here.length} here, Alt+click for the next)` : "");
+      const whole = e.ctrlKey || e.metaKey;
+      const moving = whole ? null : moveSet(p);
+      beginClashDrag(moving ?? parts().map((_, k) => k));
       hist.begin();
-      drag = { kind: "shape", base: parts(), part: e.ctrlKey || e.metaKey ? p : null, w0, moved: false };
+      drag = { kind: "shape", base: parts(), part: moving, w0, moved: false };
       canvas.style.cursor = "move";
       return;
     }
@@ -1131,7 +1423,7 @@ export function openEditor(o: EditorOptions): void {
     if (!drag) {
       if (tool === "select") {
         const over = hitVertex(x, y) || hitMidpoint(x, y);
-        const under = cursor ? partAt(parts(), cursor) : -1;
+        const under = cursor ? partAt(parts(), cursor, hist.state.contested) : -1;
         canvas.style.cursor = spaceHeld ? "grab" : over ? "pointer" : under >= 0 ? "move" : "default";
         setHoverPart(under);
       }
@@ -1197,6 +1489,8 @@ export function openEditor(o: EditorOptions): void {
       const [x0, x1] = [Math.min(d.x0, d.x1), Math.max(d.x0, d.x1)];
       const [y0, y1] = [Math.min(d.y0, d.y1), Math.max(d.y0, d.y1)];
       if (!d.add) selection.clear();
+      // A plain click on empty map clears the selected part too.
+      if (x1 - x0 <= 2 && y1 - y0 <= 2 && !d.add) selectPart(-1);
       if (x1 - x0 > 2 || y1 - y0 > 2) {
         const cl = wx((x0 + x1) / 2);
         parts().forEach((rings, p) =>
@@ -1221,8 +1515,9 @@ export function openEditor(o: EditorOptions): void {
     }
     if (d.kind === "shape") {
       canvas.style.cursor = "default";
-      if (d.moved) hist.commit(d.part === null ? "Move shape" : "Move part");
+      if (d.moved) hist.commit(d.part === null ? "Move region" : d.part.length > 1 ? "Move part and its zones" : "Move part");
       else hist.cancel();
+      dragBase = null;
       return changed();
     }
     if (d.kind === "vertex") {
@@ -1238,6 +1533,7 @@ export function openEditor(o: EditorOptions): void {
         hist.cancel();
         if (d.toggle) selection.delete(vkey(d.grab));
       }
+      dragBase = null;
       changed();
     }
   };
@@ -1353,6 +1649,13 @@ export function openEditor(o: EditorOptions): void {
       selection.clear();
       return draw();
     }
+    if (selPart >= 0) return selectPart(-1);
+    if (target === "contested" && (tool === "polygon" || tool === "freehand")) {
+      target = "part";
+      zoneParent = -1;
+      setMsg("Contested zone cancelled.");
+      return setTool("select");
+    }
     void tryClose();
   });
 
@@ -1376,8 +1679,9 @@ export function openEditor(o: EditorOptions): void {
       if (o.takenIds.has(id)) return setMsg(`The id "${id}" is taken. Choose another one.`, "error"), idIn.focus();
     }
     if (!s.parts.length) return setMsg("Draw the region first.", "error");
-    const { geometry, partLegend, partLabels } = toStyledGeometry(s.parts, s.styles, s.labels);
-    const errs = checkGeometry(geometry);
+    const { geometry, partLegend, partLabels, partContested } = toStyledGeometry(s.parts, s.styles, s.labels, s.contested);
+    const hasZones = partContested.some((k) => k !== -1);
+    const errs = [...checkGeometry(geometry), ...checkParts({ slot: slotName, map: slot.map, color: s.props.color, ...(hasZones ? { partContested } : {}) }, geometry, "Contested zones")];
     if (errs.length) return setMsg(errs[0], "error");
     const props = s.props;
     const feature: RegionFeature = {
@@ -1396,6 +1700,7 @@ export function openEditor(o: EditorOptions): void {
           ? { legend: props.legend.map((e) => ({ label: e.label.trim().slice(0, LEGEND_LABEL_MAX), color: e.color })), partLegend }
           : {}),
         ...(partLabels.some((t) => t.trim()) ? { partLabels: partLabels.map((t) => t.trim().slice(0, PART_LABEL_MAX)) } : {}),
+        ...(hasZones ? { partContested } : {}),
         updated: stamp(),
       },
       geometry,
@@ -1499,5 +1804,7 @@ export function openEditor(o: EditorOptions): void {
     },
     toScreen: (lon: number, lat: number) => [sx(lon), sy(lat)],
     id: () => id,
+    selectedPart: () => selPart,
+    clashes: () => clashState().clashes,
   };
 }

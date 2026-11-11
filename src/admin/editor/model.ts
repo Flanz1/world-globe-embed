@@ -42,6 +42,8 @@ export interface EditorState {
   styles: number[];
   /** Per part: the label the embed shows on it ("" for none). */
   labels: string[];
+  /** Per part: -1 for a normal part, or the (normal) part this contested zone extends. */
+  contested: number[];
   props: RegionProps;
 }
 
@@ -59,6 +61,7 @@ export const cloneState = (s: EditorState): EditorState => ({
   parts: cloneParts(s.parts),
   styles: [...s.styles],
   labels: [...s.labels],
+  contested: [...(s.contested ?? [])],
   props: { ...s.props, legend: s.props.legend.map((e) => ({ ...e })) },
 });
 
@@ -184,12 +187,17 @@ export function deleteVertices(parts: Parts, refs: VRef[]): { parts: Parts; remo
   return { parts: out, removedParts, removedHoles, kept: keptParts };
 }
 
-/** Moves the whole shape, or one part (with its holes). Latitude is limited so nothing leaves ±90. */
-export function translate(parts: Parts, part: number | null, dLon: number, dLat: number): Parts {
+/**
+ * Moves the whole shape (null), one part, or several parts (with their holes). Latitude is limited so
+ * nothing that moves leaves ±90.
+ */
+export function translate(parts: Parts, part: number | readonly number[] | null, dLon: number, dLat: number): Parts {
+  const moves = part === null ? null : new Set(typeof part === "number" ? [part] : part);
+  const skip = (p: number) => moves !== null && !moves.has(p);
   let lo = Infinity;
   let hi = -Infinity;
   parts.forEach((rings, p) => {
-    if (part !== null && p !== part) return;
+    if (skip(p)) return;
     for (const r of rings)
       for (const [, y] of r) {
         lo = Math.min(lo, y);
@@ -197,7 +205,8 @@ export function translate(parts: Parts, part: number | null, dLon: number, dLat:
       }
   });
   const dy = Math.max(-90 - lo, Math.min(90 - hi, dLat));
-  return parts.map((rings, p) => (part !== null && p !== part ? rings.map((r) => r.map(([x, y]) => [x, y] as Position)) : rings.map((r) => r.map(([x, y]) => [x + dLon, y + dy] as Position))));
+  if (!Number.isFinite(lo)) return cloneParts(parts);
+  return parts.map((rings, p) => (skip(p) ? rings.map((r) => r.map(([x, y]) => [x, y] as Position)) : rings.map((r) => r.map(([x, y]) => [x + dLon, y + dy] as Position))));
 }
 
 export function addPart(parts: Parts, ring: Ring): Parts {
@@ -214,16 +223,70 @@ export function addHole(parts: Parts, ring: Ring): Parts | null {
   return out;
 }
 
-/** Index of the part under a point (inside its outer ring and not in a hole), or -1. */
-export function partAt(parts: Parts, pos: Position): number {
+/** Index of the part under a point (inside its outer ring and not in a hole), or -1. The topmost wins (see partsAt). */
+export function partAt(parts: Parts, pos: Position, contested: readonly number[] = []): number {
+  return partsAt(parts, pos, contested)[0] ?? -1;
+}
+
+/**
+ * Every part under a point, topmost first: the order they're drawn in reversed, so contested zones
+ * (drawn on top) come before normal parts, and later parts before earlier ones.
+ */
+export function partsAt(parts: Parts, pos: Position, contested: readonly number[] = []): number[] {
+  const out: number[] = [];
   for (let p = parts.length - 1; p >= 0; p--) {
     const rings = parts[p];
     if (!rings[0] || !pointInRing(pos, rings[0])) continue;
     if (rings.slice(1).some((h) => pointInRing(pos, h))) continue;
-    return p;
+    out.push(p);
   }
-  return -1;
+  const zone = (p: number) => ((contested[p] ?? -1) >= 0 ? 0 : 1);
+  return out.sort((a, b) => zone(a) - zone(b) || b - a);
 }
+
+/* ── Contested zones ── */
+
+/**
+ * partContested after parts were removed or kept (`kept[i]` = old index of new part i). A zone whose
+ * parent went keeps its shape and becomes a normal part; `orphaned` counts them.
+ */
+export function remapContested(contested: readonly number[], kept: readonly number[]): { contested: number[]; orphaned: number } {
+  const at = new Map(kept.map((old, i) => [old, i]));
+  let orphaned = 0;
+  const out = kept.map((old) => {
+    const k = contested[old] ?? -1;
+    if (k < 0) return -1;
+    const n = at.get(k);
+    if (n === undefined) {
+      orphaned++;
+      return -1;
+    }
+    return n;
+  });
+  return { contested: out, orphaned };
+}
+
+/** Why part p can't become a zone of part k (or back to normal with k = -1), or null if it can. */
+export function contestedProblem(contested: readonly number[], p: number, k: number): string | null {
+  if (k === -1) return null;
+  if (k === p) return "A part can't be a contested zone of itself.";
+  if (k < 0 || k >= contested.length) return "That part doesn't exist.";
+  if ((contested[k] ?? -1) !== -1) return `Part ${k + 1} is itself a contested zone; a zone has to extend a normal part.`;
+  if (contested.some((v) => v === p)) return `Part ${p + 1} has contested zones of its own, so it can't become one. Change those zones first.`;
+  return null;
+}
+
+/** Sets part p's parent (-1 for normal). Returns the new state, or the reason it can't. */
+export function setContested(s: EditorState, p: number, k: number): EditorState | string {
+  const why = contestedProblem(s.contested, p, k);
+  if (why) return why;
+  const next = cloneState(s);
+  next.contested[p] = k;
+  return next;
+}
+
+/** The zones of part p (parts whose parent is p). */
+export const zonesOf = (contested: readonly number[], p: number): number[] => contested.flatMap((k, i) => (k === p ? [i] : []));
 
 /**
  * Douglas–Peucker with `tol` in degrees of longitude, measured in the map image's proportions
@@ -254,19 +317,29 @@ export function smoothParts(parts: Parts): Parts | null {
 /* ── Part colours and the legend ── */
 
 
-/** Stored geometry plus the matching partLegend, dropping any part that doesn't survive storing (too few vertices). */
-export function toStyledGeometry(parts: Parts, styles: number[], labels: string[] = []): { geometry: RegionGeometry; partLegend: number[]; partLabels: string[] } {
+/**
+ * Stored geometry plus the matching partLegend, partLabels and partContested, dropping any part that
+ * doesn't survive storing (too few vertices). Zones of a dropped part become normal parts.
+ */
+export function toStyledGeometry(
+  parts: Parts,
+  styles: number[],
+  labels: string[] = [],
+  contested: number[] = [],
+): { geometry: RegionGeometry; partLegend: number[]; partLabels: string[]; partContested: number[] } {
   const keep: Parts = [];
+  const kept: number[] = [];
   const partLegend: number[] = [];
   const partLabels: string[] = [];
   parts.forEach((rings, p) => {
     if (polygonsOf(toStoredGeometry([rings])).length) {
       keep.push(rings);
+      kept.push(p);
       partLegend.push(styles[p] ?? OWN_COLOUR);
       partLabels.push(labels[p] ?? "");
     }
   });
-  return { geometry: toStoredGeometry(keep), partLegend, partLabels };
+  return { geometry: toStoredGeometry(keep), partLegend, partLabels, partContested: remapContested(contested, kept).contested };
 }
 
 /** Removes legend entry `k`: its parts go back to the region's colour, later indices shift down. */
