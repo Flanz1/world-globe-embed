@@ -14,6 +14,7 @@
     "preview": "vite preview --port 4173",
     "validate": "tsx scripts/validate-content.ts",
     "process-maps": "tsx scripts/process-maps.ts",
+    "import-map": "tsx scripts/import-map.ts",
     "sample": "tsx scripts/make-sample.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -22,6 +23,7 @@
     "check": "npm run typecheck && npm run lint && npm test",
     "e2e:regions": "tsx scripts/e2e/regions.mjs",
     "e2e:tiers": "node scripts/e2e/tiers.mjs",
+    "e2e:tiles": "node scripts/e2e/tiles.mjs",
     "e2e:view": "tsx scripts/e2e/view.mjs"
   },
   "dependencies": {

@@ -43,6 +43,7 @@ import { imageToGlobe, sphericalCentroid, type Position } from "../shared/geo.ts
 import { regionFit, regionLayers, type RegionData } from "../shared/region.ts";
 import { paintLayers } from "../shared/raster.ts";
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
+import { createGlobeTiles } from "./globe-tiles.ts";
 import type { PreviewMessage, StartContext } from "./contract.ts";
 import { RELOCK_MS, makeLabel, makeLegend, regionNote, setupLock, type Lock } from "./region-ui.ts";
 
@@ -188,6 +189,7 @@ export async function start(ctx: StartContext): Promise<void> {
     band = { t0, t1 };
     const next = new SphereGeometry(1, wSegs, rows((t1 - t0) / Math.PI), 0, Math.PI * 2, t0, t1 - t0);
     for (const m of [globe, fade?.mesh]) if (m) m.geometry = next;
+    tiles?.relayout();
     geo.dispose();
     geo = next;
     for (const c of [...caps.children] as Mesh[]) {
@@ -200,6 +202,8 @@ export async function start(ctx: StartContext): Promise<void> {
   }
 
   let shift = clamp(cfg.shift, -180, 180);
+  /** Tile levels above 8192, once the 8192 is on screen (created below). */
+  let tiles: ReturnType<typeof createGlobeTiles> | null = null;
   const makeTexture = (d: { src: ImageBitmap | HTMLImageElement; preFlipped: boolean }) => {
     const t = new Texture(d.src);
     t.colorSpace = SRGBColorSpace;
@@ -264,7 +268,7 @@ export async function start(ctx: StartContext): Promise<void> {
   function textureWant(): number {
     const f = (stage.clientHeight * dpr()) / 2 / Math.tan((camera.fov * DEG) / 2);
     const want = (2 * Math.PI * f) / Math.max(0.05, view.distance - 1);
-    if (want >= 6000 && !device.mobile) return 8192;
+    if (want >= 6000 && !device.mobile) return Math.round(want); // 8192, or a tile level (see globe-tiles.ts)
     return want >= 3000 && (!device.mobile || want >= 4500) ? 4096 : 2048;
   }
   let onZoom = (): void => {};
@@ -432,6 +436,8 @@ export async function start(ctx: StartContext): Promise<void> {
       renderer.render(scene, camera);
       placeLabel();
       dirty = false;
+      // The view moved: once it settles, see whether it needs a sharper texture or other tiles.
+      if (!spinning && !fade) onZoom();
     }
     if (spinning || fade || ease) schedule();
     else lastT = 0;
@@ -542,6 +548,7 @@ export async function start(ctx: StartContext): Promise<void> {
     if (typeof d.shift === "number" && Number.isFinite(d.shift)) {
       shift = clamp(d.shift, -180, 180);
       for (const t of [globeMat.map, fade?.mat.map, overlay?.tex]) if (t) t.offset.x = -shift / 360;
+      tiles?.relayout();
     }
     const pole = parseHex(d.pole);
     if (pole) poleMat.color.set(pole);
@@ -630,6 +637,23 @@ export async function start(ctx: StartContext): Promise<void> {
     const pick = nextTier(cfg.textures, texW, textureWant(), texLimit);
     if (!pick) {
       root.dataset.state = "hires";
+      // Past 8192: the tiles under the view (16384, then 32768), desktop only like the 8192.
+      if (texW >= 8192 && cfg.tiles?.length && texLimit >= 8192) {
+        tiles ??= createGlobeTiles({
+          levels: cfg.tiles,
+          world,
+          camera,
+          renderer,
+          gl,
+          band: () => band,
+          shift: () => shift,
+          anisotropy: Math.min(8, maxAniso),
+          load: async (url) => decode(await fetchBlob(url)),
+          invalidate,
+          onShown: (w) => (root.dataset.tiles = String(w)),
+        });
+        void tiles.update(textureWant());
+      }
       return;
     }
     upgrading = true;

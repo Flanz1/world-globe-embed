@@ -10,6 +10,7 @@ import { GitHub, GitHubError, type FileChange, type WorkflowRun } from "./github
 import { openPreview } from "./preview.ts";
 import { $, SITE, h } from "./dom.ts";
 import { initRegions, loadRegions, renderRegions } from "./regions.ts";
+import { prepareImage } from "./upload-image.ts";
 
 declare const __REPO__: string;
 /** Branch the admin page reads from and commits to; empty = the repository's default branch. Set with VITE_CONTENT_BRANCH at build time. */
@@ -287,45 +288,6 @@ const blobToBase64 = (blob: Blob): Promise<string> =>
     r.onerror = () => reject(r.error);
     r.readAsDataURL(blob);
   });
-
-/** Widest upload kept as is; process-maps makes an 8192 texture from sources at least this wide. */
-const UPLOAD_MAX = 8192;
-
-/** Downscales to ≤8192 px wide and re-encodes (which also drops EXIF). Falls back to 4096 where the
- * browser can't make a canvas that big (iOS Safari caps canvases at about 16.7 million pixels). */
-async function prepareImage(file: File): Promise<{ blob: Blob; ext: string; w: number; h: number; note: string }> {
-  const bmp = await createImageBitmap(file);
-  const aspect = bmp.width / bmp.height;
-  if (aspect < 1 || aspect > 4)
-    throw new Error(`This image is ${bmp.width}×${bmp.height}. Globe maps need to be at least as wide as they are tall, and at most 4× as wide.`);
-  if (bmp.width < 1024) throw new Error(`This image is only ${bmp.width}px wide; maps need at least 1024px.`);
-  try {
-    for (const max of [UPLOAD_MAX, 4096]) {
-      const scale = Math.min(1, max / bmp.width);
-      const w = Math.round(bmp.width * scale);
-      const hgt = Math.round(bmp.height * scale);
-      const canvas = h("canvas", { width: w, height: hgt });
-      const g = canvas.getContext("2d");
-      if (!g) continue;
-      g.drawImage(bmp, 0, 0, w, hgt);
-      const encode = (type: string, q?: number) => new Promise<Blob | null>((res) => canvas.toBlob(res, type, q));
-      let blob = await encode("image/webp", 0.92);
-      if (!blob || blob.type !== "image/webp") blob = await encode("image/png");
-      canvas.width = canvas.height = 0; // free the canvas memory now, not at GC
-      if (blob) {
-        // Say so when the 8192 attempt failed, so a smaller upload than expected isn't a mystery.
-        const note =
-          max < UPLOAD_MAX && bmp.width > max
-            ? ` Your browser couldn't make an image ${Math.min(bmp.width, UPLOAD_MAX)} px wide, so it was shrunk to ${w} px and this map won't get the 8192 version. Try Chrome or Edge on a desktop.`
-            : "";
-        return { blob, ext: blob.type === "image/webp" ? "webp" : "png", w, h: hgt, note };
-      }
-    }
-  } finally {
-    bmp.close();
-  }
-  throw new Error("Your browser couldn't encode the image.");
-}
 
 function wireUpload(): void {
   const form = $<HTMLFormElement>("#upload");

@@ -7,6 +7,7 @@ import type { MapMeta, PreviewMap, Slot, ViewerConfig } from "./types.ts";
 import type { RegionIndexEntry } from "./region.ts";
 import { REGION_ID } from "./region.ts";
 import { DEFAULT_VIEW, TEXTURE_WIDTHS } from "./types.ts";
+import { TILE_LEVELS } from "./tiles.ts";
 
 export const escapeHtml = (s: string): string =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -26,7 +27,11 @@ export function buildViewerConfig(slug: string, slot: Slot, map: MapMeta, toRoot
   }));
   const { map: _map, title, ...overrides } = slot;
   void _map;
-  return { ...DEFAULT_VIEW, ...overrides, slug, title: title ?? map.name, textures, aspect: map.aspect };
+  const tiles = TILE_LEVELS.flatMap((w) => {
+    const l = map.tiles?.[`${w}`];
+    return l ? [{ ...l, url: toRoot + l.url }] : [];
+  });
+  return { ...DEFAULT_VIEW, ...overrides, slug, title: title ?? map.name, textures, ...(tiles.length ? { tiles } : {}), aspect: map.aspect };
 }
 
 export const CRITICAL_CSS = `
