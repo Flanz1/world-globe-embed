@@ -52,6 +52,8 @@ import { deviceLimit, nextTier } from "../../shared/tiers.ts";
 import { h } from "../dom.ts";
 import type { GitHub } from "../github.ts";
 import { loadMapImage } from "../images.ts";
+import { SITE } from "../dom.ts";
+import { TILE_BUDGET, TILE_LEVELS, TileCache, levelFor, tileRect, tilesAt, tileUrl, type TileLevel } from "../../shared/tiles.ts";
 import { alertBox, confirmBox, modal, openEmbedDialog, previewUrl, sendRegion } from "../region-dialogs.ts";
 import { regionPath, serialize, stamp } from "../regions.ts";
 import {
@@ -366,6 +368,79 @@ export function openEditor(o: EditorOptions): void {
     );
   }
 
+  /* ── Close-up tiles past 8192 (16384, then 32768), only those under the view, as in the flat embed ── */
+  const tileLevels: TileLevel[] = map
+    ? TILE_LEVELS.flatMap((w) => {
+        const l = map.tiles?.[`${w}`];
+        return l ? [{ ...l, url: new URL(l.url, SITE).href }] : [];
+      })
+    : [];
+  type EdTile = { img: HTMLImageElement; level: number; c: number; r: number };
+  const tileCache = new TileCache<EdTile>(TILE_BUDGET, () => {});
+  const tileKey = (l: number, c: number, r: number) => `${l}:${c}:${r}`;
+  let tileBusy = false;
+  let tilesOff = false;
+  let tileTop = -1;
+  function drawTiles(offs: number[]): void {
+    if (tileTop < 0) return;
+    const { w, h: hh } = size();
+    const span = 360 * view.k;
+    const height = 180 * view.k * ky;
+    const top = sy(90);
+    const shown = [...tileCache.entries()].map(([, t]) => t).filter((t) => t.level <= tileTop).sort((a, b) => a.level - b.level);
+    for (const t of shown) {
+      const [u0, v0, u1, v1] = tileRect(tileLevels[t.level], t.c, t.r);
+      const y = top + v0 * height;
+      const th = (v1 - v0) * height;
+      if (y > hh || y + th < 0) continue;
+      for (const off of offs) {
+        const x = sx(-180 + off) + u0 * span;
+        const tw = (u1 - u0) * span;
+        if (x > w || x + tw < 0) continue;
+        g.drawImage(t.img, x, y, tw, th);
+      }
+    }
+  }
+  function maybeTiles(): void {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const top = tileLevels.length && imgW >= 8192 ? levelFor(tileLevels, 360 * view.k * dpr) : undefined;
+    tileTop = top ? tileLevels.indexOf(top) : -1;
+    if (!top || tileBusy || tilesOff) return;
+    const { w, h: hh } = size();
+    const steps = [0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6, 1];
+    const pts: [number, number][] = [];
+    for (const [fx, fy] of [[0.5, 0.5], ...steps.flatMap((a) => steps.map((b) => [a, b]))]) {
+      const lat = wy(fy * hh);
+      if (lat > 90 || lat < -90) continue;
+      pts.push([(wx(fx * w) + 180) / 360, (90 - lat) / 180]);
+    }
+    // Lower levels first: the 16384 tiles show while the 32768 ones load.
+    const need: [number, number, number][] = [];
+    for (let li = 0; li <= tileTop; li++) for (const [c, r] of tilesAt(tileLevels[li], pts)) need.push([li, c, r]);
+    const next = need.find(([l, c, r]) => !tileCache.has(tileKey(l, c, r)));
+    if (!next) {
+      dlg.dataset.tiles = String(top.w);
+      return;
+    }
+    const keep = new Set(need.map(([l, c, r]) => tileKey(l, c, r)));
+    const [l, c, r] = next;
+    tileBusy = true;
+    // Not through images.ts's cache, which keeps everything: only TILE_BUDGET tiles stay in memory.
+    const im = new Image();
+    im.src = tileUrl(tileLevels[l], c, r);
+    void im.decode().then(
+      () => {
+        tileCache.set(tileKey(l, c, r), { img: im, level: l, c, r }, keep);
+        tileBusy = false;
+        draw(); // the render calls maybeTiles again for the next one
+      },
+      () => {
+        tileBusy = false;
+        tilesOff = true; // a broken tile: keep what's there, load no more
+      },
+    );
+  }
+
   /* ── State ── */
   let tool: Tool = "select";
   let target: "part" | "hole" | "contested" = "part";
@@ -533,6 +608,8 @@ export function openEditor(o: EditorOptions): void {
     if (img) {
       g.imageSmoothingQuality = "high";
       for (const off of offs) g.drawImage(img, sx(-180 + off), sy(90), 360 * view.k, 180 * view.k * ky);
+      maybeTiles();
+      drawTiles(offs);
     }
     if (gridOn) drawGrid(offs);
     // Neighbours on the same slot: thin grey outlines to trace against.
