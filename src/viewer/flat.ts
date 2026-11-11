@@ -11,7 +11,7 @@ import { geometryBounds, globeToImage, sphericalCentroid, type Position } from "
 import { FLAT_K_MAX, flatFit, flatMinK, regionLayers, type FlatView, type RegionData } from "../shared/region.ts";
 import { paintLayers } from "../shared/raster.ts";
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
-import type { FlatStartContext } from "./contract.ts";
+import type { FlatStartContext, PreviewMessage } from "./contract.ts";
 import { RELOCK_MS, makeLabel, makeLegend, regionNote, setupLock, type Lock } from "./region-ui.ts";
 
 type Img = ImageBitmap | HTMLImageElement;
@@ -360,6 +360,21 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     gridOn = cfg.grid;
     applyGrid();
     goHome(false);
+  });
+
+  // Admin preview: padding and prime meridian move the grid live (the flat map itself is never padded or shifted).
+  window.addEventListener("message", (e: MessageEvent<PreviewMessage>) => {
+    if (e.origin !== location.origin || e.source !== window.parent || e.data?.type !== "wge-preview") return;
+    const d = e.data;
+    const num = (v: unknown, lo: number, hi: number, cur: number) => (typeof v === "number" && Number.isFinite(v) ? clamp(v, lo, hi) : cur);
+    cfg.north = num(d.north, 0, 49, cfg.north);
+    cfg.south = num(d.south, 0, 49, cfg.south);
+    cfg.shift = num(d.shift, -180, 180, cfg.shift);
+    if (typeof d.grid === "boolean") {
+      gridOn = d.grid;
+      applyGrid();
+    }
+    schedule();
   });
 
   img = await decode(await ctx.firstTexture);

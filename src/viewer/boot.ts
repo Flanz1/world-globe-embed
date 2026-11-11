@@ -18,7 +18,8 @@ const cfg: ViewerConfig = applyParams(data.cfg, location.search);
 const q = new URLSearchParams(location.search);
 const root = document.documentElement;
 const $ = (id: string) => document.getElementById(id)!;
-const view: ViewMode = q.get("view") === "flat" && data.flat ? "flat" : "globe";
+// The slot's default view (cfg.view), or ?view= when given. Pages built without the flat viewer always show the globe.
+const view: ViewMode = cfg.view === "flat" && data.flat ? "flat" : "globe";
 
 /** A small, unobtrusive note in the corner (never a broken page). */
 function note(text: string): void {
@@ -138,8 +139,9 @@ if (view === "flat") {
 /* ── Controls: the lock button shows on every region embed, even with controls=0 ── */
 $("ui").hidden = !cfg.controls && !region;
 for (const id of ["btn-grid", "btn-fs"]) $(id).hidden = !cfg.controls;
-if (region) {
-  $("btn-lock").hidden = false;
+if (region) $("btn-lock").hidden = false;
+// Globe/flat switch: on every embed that has both viewers. The admin preview has its own switch beside the iframe.
+if (data.flat && (region || !data.maps)) {
   const vb = $("btn-view") as HTMLButtonElement;
   vb.hidden = !cfg.controls;
   vb.dataset.view = view;

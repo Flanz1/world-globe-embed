@@ -114,6 +114,17 @@ describe("prime meridian shift", () => {
   });
 });
 
+describe("default view", () => {
+  it("is globe unless the slot says flat, and ?view= overrides it", () => {
+    expect(DEFAULT_VIEW.view).toBe("globe");
+    const flat = generateSlotPages({ ...content, slots: { slots: { a: { map: "terra", view: "flat" } } } }, "", "g.js")[0].html;
+    expect(dataOf(flat).cfg.view).toBe("flat");
+    expect(applyParams({ ...DEFAULT_VIEW, view: "flat" }, "?view=globe").view).toBe("globe");
+    expect(applyParams(DEFAULT_VIEW, "?view=flat").view).toBe("flat");
+    expect(applyParams({ ...DEFAULT_VIEW, view: "flat" }, "?view=<b>").view).toBe("flat");
+  });
+});
+
 describe("query params", () => {
   it("override slot defaults and ignore junk", () => {
     const out = applyParams(DEFAULT_VIEW, "?grid=1&rotate=0&bg=%23112233&lat=120&lon=-30&zoom=abc&controls=0&north=12.5&south=80&pole=transparent");

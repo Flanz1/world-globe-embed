@@ -51,6 +51,7 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .55); }
 .pv-controls .range { display: flex; gap: 8px; align-items: center; }
 .pv-controls .range input { flex: 1; min-width: 0; }
 .pv-controls output { width: 3.2em; text-align: right; color: var(--fg); font-variant-numeric: tabular-nums; }
+.pv-view { display: grid; gap: 6px; justify-items: start; }
 .pv-controls label.inline { display: flex; align-items: center; gap: 8px; }
 .small { font-size: 12px; margin: 0; }
 @media (max-width: 720px) { .pv-body { grid-template-columns: 1fr; } #pv-frame { height: 50vh; } }

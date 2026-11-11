@@ -40,13 +40,19 @@ function num(v: string | null, lo: number, hi: number): number | undefined {
   return Number.isFinite(n) ? clamp(n, lo, hi) : undefined;
 }
 
-/** Applies query-string overrides (grid, rotate, bg, lat, lon, zoom, controls, legend, north, south, pole). */
+/** "globe" or "flat", or undefined for anything else. */
+export function parseView(v: string | null | undefined): ViewDefaults["view"] | undefined {
+  return v === "globe" || v === "flat" ? v : undefined;
+}
+
+/** Applies query-string overrides (view, grid, rotate, bg, lat, lon, zoom, controls, legend, north, south, pole). */
 export function applyParams<T extends ViewDefaults>(base: T, search: string): T {
   const q = new URLSearchParams(search);
   const out = { ...base };
   const set = <K extends keyof ViewDefaults>(k: K, v: ViewDefaults[K] | undefined) => {
     if (v !== undefined) out[k] = v as T[K];
   };
+  set("view", parseView(q.get("view")));
   set("grid", bool(q.get("grid")));
   set("rotate", bool(q.get("rotate")));
   set("controls", bool(q.get("controls")));

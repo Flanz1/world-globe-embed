@@ -39,6 +39,13 @@
           "type": "string",
           "maxLength": 120
         },
+        "view": {
+          "enum": [
+            "globe",
+            "flat"
+          ],
+          "description": "Which view the embed opens in (default globe). ?view= overrides it."
+        },
         "grid": {
           "type": "boolean"
         },

@@ -66,6 +66,13 @@ describe("content validation", () => {
     expect(text).toMatch(/slots\.ok\.lat must be <= 90/);
   });
 
+  it("accepts a flat default view and rejects anything but globe or flat", () => {
+    expect(loadContent(project({ slots: { a: { map: "terra", view: "flat" } } }, [{ id: "terra" }])).errors).toEqual([]);
+    const r = loadContent(project({ slots: { a: { map: "terra", view: "3d" } } }, [{ id: "terra" }]));
+    expect(r.content).toBeNull();
+    expect(r.errors.join("\n")).toMatch(/slots\.a\.view/);
+  });
+
   it("reports broken JSON", () => {
     const r = loadContent(project('{ "slots": { "a": { "map": "terra" } ', [{ id: "terra" }]));
     expect(r.errors[0]).toMatch(/content\/slots\.json: is not valid JSON/);

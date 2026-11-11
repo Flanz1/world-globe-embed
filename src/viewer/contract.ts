@@ -38,7 +38,7 @@ export interface RegionMessage {
   centre?: boolean;
 }
 
-export type ViewMode = "globe" | "flat";
+export type { ViewMode } from "../shared/types.ts";
 
 /** Everything about ?region=… that the viewer modules need. */
 export interface RegionContext {
