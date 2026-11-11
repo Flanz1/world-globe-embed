@@ -64,7 +64,7 @@ function detectDevice() {
   const mobileUA = /Android|iPhone|iPad|iPod|webOS/i.test(ua);
   const touchOnly = matchMedia("(pointer: coarse)").matches && !matchMedia("(any-pointer: fine)").matches;
   const mem = deviceMemory();
-  const lowMem = mem !== undefined && mem <= 4;
+  const lowMem = mem !== undefined && mem < 4; // see deviceLimit: many 8 GB laptops report 4
   return { mobile: mobileUA || touchOnly || lowMem };
 }
 

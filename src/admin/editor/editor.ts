@@ -343,13 +343,13 @@ export function openEditor(o: EditorOptions): void {
     draw();
   }
 
-  /* ── Map image: 2048, then 4096 when zoomed far in on a large screen, then 8192 when zoomed in further ── */
+  /* ── Map image: 2048, then 4096 when zoomed far in, then 8192 when zoomed in further (then tiles) ── */
   let img: HTMLImageElement | null = null;
   let imgW = 0;
   let upgrading = false;
   if (map) void loadMapImage(map, 2048).then((i) => ((img = i), (imgW = 2048), draw()), () => setMsg("The map image isn't deployed yet; you can still draw.", "error"));
   function maybeUpgrade(): void {
-    if (!map || upgrading || innerWidth < 1100) return;
+    if (!map || upgrading) return;
     const need = 360 * view.k * (window.devicePixelRatio || 1);
     const want = need >= 6000 ? 8192 : need >= 3000 ? 4096 : 2048;
     const pick = nextTier(TEXTURE_WIDTHS.filter((w) => map.sizes[`${w}`]).map((w) => ({ w, url: "" })), imgW, want, deviceLimit(false));
