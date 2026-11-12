@@ -200,4 +200,23 @@ describe("province borders follow their part", () => {
     const moved: Parts = [[square(172, 0)]];
     expect(carryLines(line, carry, west, moved, [0])[0][0][0]).toBeCloseTo(-183);
   });
+  it("a free-floating line (touching no vertex or outline) is kept as drawn and moves with its part, whatever the vertices do", () => {
+    const floating: Position[][] = [[[2, 3], [4, 6], [3, 8]]];
+    const carry = lineCarry(parts, floating);
+    expect(carry.pins).toEqual([]);
+    expect(carry.owners).toEqual([0]);
+    // A vertex drag leaves it exactly where it was.
+    const dragged: Parts = [[[[0, 0], [10, -4], [10, 10], [0, 10]]], [B]];
+    expect(carryLines(floating, carry, parts, dragged, [])).toEqual(floating);
+    // Moving the part carries it.
+    const moved: Parts = [[A.map(([x, y]) => [x - 2, y + 1] as Position)], [B]];
+    expect(carryLines(floating, carry, parts, moved, [0])[0]).toEqual([[0, 4], [2, 7], [1, 9]]);
+    // Moving the whole region carries it too.
+    const all: Parts = [[A.map(([x, y]) => [x + 1, y] as Position)], [B.map(([x, y]) => [x + 1, y] as Position)]];
+    expect(carryLines(floating, carry, parts, all, null)[0]).toEqual([[3, 3], [5, 6], [4, 8]]);
+  });
+  it("only points on an outline are pinned; the rest of the same line stays free", () => {
+    const mixed: Position[][] = [[[5, 0], [5, 5], [7, 4]]];
+    expect(lineCarry(parts, mixed).pins.map((q) => q.k)).toEqual([0]);
+  });
 });
