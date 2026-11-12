@@ -57,6 +57,7 @@ import { SITE } from "../dom.ts";
 import { TILE_BUDGET, TILE_LEVELS, TileCache, levelFor, tileRect, tilesAt, tileUrl, type TileLevel } from "../../shared/tiles.ts";
 import { alertBox, confirmBox, modal, openEmbedDialog, previewUrl, sendRegion } from "../region-dialogs.ts";
 import { regionPath, serialize, stamp } from "../regions.ts";
+import { combineKind, combineParts, extendPart, type MergeResult } from "./merge.ts";
 import {
   History,
   addPart,
@@ -113,13 +114,15 @@ export interface EditorOptions {
 }
 
 type Tool = "select" | "polygon" | "freehand";
-/** What the polygon and freehand tools draw: a part, a shape to cut away, a split line or a contested zone. */
-type DrawTarget = "part" | "cut" | "split" | "contested";
+/** What the polygon and freehand tools draw: a part, a shape to cut away, a split line, a contested zone or land to add to a part. */
+type DrawTarget = "part" | "cut" | "split" | "contested" | "extend";
 
 const HANDLE = 5;
 const HIT = 8;
 const EDGE_HIT = 6;
 const SNAP_PX = 8;
+/** Gaps up to this many screen pixels between an Extend shape and its part are filled. */
+const EXTEND_GAP_PX = 12;
 
 /** Git's blob SHA-1 of a text file, to know the file's SHA after our own commit without asking GitHub. */
 async function gitBlobSha(text: string): Promise<string> {
@@ -177,6 +180,8 @@ export const SHORTCUTS: [string, string][] = [
   ["Click inside a part", "Select that part (or click its badge or its row in the Parts list)"],
   ["Alt+click inside", "Select the next part under the pointer, where parts overlap"],
   ["Drag inside a part", "Move that part; Ctrl+drag (Cmd on macOS) moves the whole region"],
+  ["C", "Combine the selected part with the parts touching it (click parts to add or remove them, Enter to apply)"],
+  ["E", "Extend the selected part: draw a shape that touches it and it's added to the part"],
   ["L", "Lock or unlock the selected part (a locked part can't be moved; its vertices and midpoints still edit)"],
   ["Arrow keys", "Nudge the selected vertices, else the selected part, else the whole region, 1 px; Shift for 10 px"],
   ["Ctrl+Z", "Undo"],
@@ -252,6 +257,20 @@ export function openEditor(o: EditorOptions): void {
     h("div", { className: "row" }, btn("Apply", "Apply the simplification (one undo step)", () => applySimplify(), "simplify-apply"), btn("Cancel", "", () => toggleSimplify(false))),
   );
 
+  const combRange = h("input", { type: "range", min: "0", max: "40", value: "10", ariaLabel: "Fill gaps up to (pixels)", name: "combine-gap" });
+  const combGapOut = h("output", {});
+  const combInfo = h("p", { className: "small ed-comb-info", ariaLive: "polite" });
+  const combApply = btn("Combine", "Combine the picked parts into one (one undo step; Enter)", () => applyCombine(), "combine-apply");
+  const combPanel = h(
+    "div",
+    { className: "ed-simplify ed-combine", hidden: true },
+    h("strong", { textContent: "Combine parts" }),
+    h("p", { className: "muted small", textContent: "Click parts on the map to add or remove them. Small gaps between them are filled." }),
+    h("label", {}, "Fill gaps up to", combRange, combGapOut),
+    combInfo,
+    h("div", { className: "row" }, combApply, btn("Cancel", "", () => closeCombine())),
+  );
+
   const title = h("h2", {});
   const dlg = h(
     "dialog",
@@ -267,6 +286,8 @@ export function openEditor(o: EditorOptions): void {
       btn("Add part", "Draw another polygon (an island or exclave)", () => startDraw("part"), "add-part"),
       btn("Cut", "Draw a shape to cut away: inside a part it makes a hole, across a part's edge it bites it, right across it splits it into separate parts", () => startDraw("cut"), "cut-hole"),
       btn("Split", "Draw a line right across a part to split it into separate parts", () => startDraw("split"), "split"),
+      btn("Combine…", "Combine the selected part with parts that touch or nearly touch it into one part, filling small gaps (C)", () => openCombine(), "combine"),
+      btn("Extend", "Draw a shape that touches the selected part to add it to that part (E)", () => startExtend(), "extend"),
       btn("Add contested zone", "Draw land a part claims but doesn't firmly hold (dashed in the embed)", () => addContested(), "add-contested"),
       h("span", { className: "sep" }),
       undoBtn,
@@ -281,7 +302,7 @@ export function openEditor(o: EditorOptions): void {
     h(
       "div",
       { className: "ed-body" },
-      h("div", { className: "ed-canvas-wrap" }, canvas, ctxMenu, tip, simpPanel, status),
+      h("div", { className: "ed-canvas-wrap" }, canvas, ctxMenu, tip, simpPanel, combPanel, status),
       h(
         "div",
         { className: "ed-side" },
@@ -476,6 +497,10 @@ export function openEditor(o: EditorOptions): void {
   let problem: RingProblem | null = null;
   let gridOn = false;
   let simplifyPreview: Parts | null = null;
+  /** The Combine panel: the parts picked (the first keeps its place) and the result or why not. */
+  let combine: { set: number[]; res: MergeResult | string; version: number } | null = null;
+  /** The part an Extend shape is added to (-1: the part the shape starts in). */
+  let extendTarget = -1;
   let spaceHeld = false;
   type Drag =
     | { kind: "vertex"; base: Parts; refs: VRef[]; grab: VRef; x0: number; y0: number; w0: Position; moved: boolean; label: string; toggle: boolean }
@@ -718,7 +743,8 @@ export function openEditor(o: EditorOptions): void {
         g.restore();
       }
     }
-    if (tool === "select" && !simplifyPreview) drawHandles(offs);
+    if (combine) drawCombine(offs);
+    if (tool === "select" && !simplifyPreview && !combine) drawHandles(offs);
     if ((parts().length > 1 || hist.state.locked.some(Boolean)) && !simplifyPreview) drawBadges(offs);
     else badgeAt = [];
     if (drawing || drag?.kind === "free") {
@@ -901,7 +927,7 @@ export function openEditor(o: EditorOptions): void {
   function updateStatus(): void {
     const n = countVertices(parts());
     const parts_ = parts().length;
-    const what = target === "cut" ? "Cut" : target === "split" ? "Split" : target === "contested" ? `Contested zone of part ${zoneParent + 1}` : "";
+    const what = target === "cut" ? "Cut" : target === "split" ? "Split" : target === "contested" ? `Contested zone of part ${zoneParent + 1}` : target === "extend" ? (extendTarget >= 0 ? `Extend part ${extendTarget + 1}` : "Extend") : "";
     let line = `${tool === "select" ? "Select" : `${tool === "polygon" ? "Polygon" : "Freehand"}${what ? ` (${what})` : ""}`} · ${n} vertices`;
     if (tool === "select" && selPart >= 0) line += ` · ${pickHint || `Part ${selPart + 1} selected`}`;
     if (cursor) {
@@ -1189,6 +1215,8 @@ export function openEditor(o: EditorOptions): void {
     // Drop selections that no longer exist.
     for (const [k, v] of selection) if (!parts()[v.p]?.[v.r]?.[v.i]) selection.delete(k);
     if (selPart >= parts().length) selPart = -1;
+    // Any other edit while combining (undo, a delete in the Parts list…) makes the picked parts stale.
+    if (combine && combine.version !== hist.version) closeCombine(true);
     syncPanel();
     undoBtn.disabled = !hist.canUndo;
     redoBtn.disabled = !hist.canRedo;
@@ -1206,6 +1234,7 @@ export function openEditor(o: EditorOptions): void {
     if (t !== "polygon" && t !== "freehand") target = "part";
     canvas.style.cursor = t === "select" ? "default" : "crosshair";
     toggleSimplify(false);
+    closeCombine(true);
     changed();
   }
   function drawHint(t: DrawTarget): string {
@@ -1214,6 +1243,12 @@ export function openEditor(o: EditorOptions): void {
       return drawTool === "freehand"
         ? "Drag a line right across a part, from outside it to outside it; let go to split it. Press P for the polygon tool."
         : "Click points along a line right across a part, starting and ending outside it. Double-click or Enter to split.";
+    if (t === "extend") {
+      const which = extendTarget >= 0 ? `part ${extendTarget + 1}` : "the part you start in";
+      return drawTool === "freehand"
+        ? `Drag a shape that starts inside or touches ${which}; let go to add it. Press P for the polygon tool.`
+        : `Click points around the land to add to ${which}, touching it. Double-click, Enter or click the first point to add it.`;
+    }
     if (t === "cut")
       return drawTool === "freehand"
         ? "Drag around the area to cut away; let go to cut. Inside a part it makes a hole, right across a part it splits it."
@@ -1222,6 +1257,7 @@ export function openEditor(o: EditorOptions): void {
     return `${zone}Click to add points. Double-click, Enter or click the first point to close.`;
   }
   function startDraw(t: DrawTarget): void {
+    closeCombine(true);
     if ((t === "cut" || t === "split") && !parts().length) return setMsg(`Draw a part first, then ${t} it.`, "error");
     target = t;
     drawing = null;
@@ -1282,6 +1318,7 @@ export function openEditor(o: EditorOptions): void {
       return false;
     }
     if (target === "cut") return applyCut(cutParts(hist.state, [ring]), "Cut");
+    if (target === "extend") return finishExtend(ring);
     if (target === "contested" && zoneParent >= 0 && zoneParent < parts().length) {
       setParts("Add contested zone", addPart(parts(), ring), undefined, [...hist.state.styles, OWN_COLOUR], [...hist.state.labels, ""], [...hist.state.contested, zoneParent]);
     } else setParts(parts().length ? "Add part" : "Draw outline", addPart(parts(), ring), undefined, [...hist.state.styles, OWN_COLOUR], [...hist.state.labels, ""], [...hist.state.contested, -1]);
@@ -1296,6 +1333,7 @@ export function openEditor(o: EditorOptions): void {
   function endDraw(): void {
     target = "part";
     zoneParent = -1;
+    extendTarget = -1;
     drawing = null;
     tool = "select";
     canvas.style.cursor = "default";
@@ -1341,6 +1379,182 @@ export function openEditor(o: EditorOptions): void {
       return false;
     }
     return applyCut(splitParts(hist.state, line, undefined, ky), "Split");
+  }
+
+  /* ── Combine and extend ── */
+  const partLabel = (p: number) => `part ${p + 1}${hist.state.labels[p]?.trim() ? ` (${hist.state.labels[p].trim()})` : ""}`;
+  /** The Combine gap in map units (degrees of longitude, latitude scaled by ky), from screen pixels at this zoom. */
+  const combineGap = () => Number(combRange.value) / view.k;
+  /** combineParts, but a geometry-library failure becomes a message instead of an exception. */
+  function tryMerge(f: () => MergeResult | string): MergeResult | string {
+    try {
+      return f();
+    } catch (err) {
+      console.warn("merge failed", err);
+      return "The shapes are too tangled to merge here. Try a smaller gap, or simplify the parts first.";
+    }
+  }
+  /** Bounding boxes of part outer rings, in unwrapped longitudes. */
+  const partBox = (p: number) => {
+    const r = parts()[p]?.[0] ?? [];
+    let x0 = Infinity,
+      y0 = Infinity,
+      x1 = -Infinity,
+      y1 = -Infinity;
+    for (const [x, y] of r) {
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x);
+      y0 = Math.min(y0, y);
+      y1 = Math.max(y1, y);
+    }
+    return { x0, y0, x1, y1 };
+  };
+  /** Parts whose boxes come within the gap of part p's (any copy of the map), and that can be combined with it. */
+  function combineNeighbours(p: number): number[] {
+    const a = partBox(p);
+    const gx = combineGap();
+    const gy = gx / ky;
+    const out: number[] = [];
+    parts().forEach((_, q) => {
+      if (q === p || typeof combineKind(hist.state.contested, [p, q]) === "string") return;
+      const b = partBox(q);
+      const k = Math.round(((a.x0 + a.x1) / 2 - (b.x0 + b.x1) / 2) / 360) * 360;
+      if (b.x0 + k > a.x1 + gx || b.x1 + k < a.x0 - gx || b.y0 > a.y1 + gy || b.y1 < a.y0 - gy) return;
+      const res = tryMerge(() => combineParts(hist.state, [p, q], combineGap(), ky));
+      if (typeof res !== "string") out.push(q);
+    });
+    return out;
+  }
+  /** "Combine…": opens the panel with the selected part and the parts touching it picked. */
+  function openCombine(): void {
+    if (parts().length < 2) return setMsg("Combine needs at least two parts.", "error");
+    if (drawing) return;
+    let p = selPart;
+    if (p < 0 && parts().length === 2) p = 0;
+    if (p < 0) return setMsg("Select a part first (click inside it), then Combine. You can then click more parts to add them.", "error");
+    if (tool !== "select") setTool("select");
+    toggleSimplify(false);
+    combine = { set: [p, ...combineNeighbours(p)], res: "", version: hist.version };
+    combPanel.hidden = false;
+    updateCombine();
+    combRange.focus();
+  }
+  function closeCombine(quiet = false): void {
+    if (!combine) return;
+    combine = null;
+    // Hiding the panel would drop the focus out of the dialog (and its shortcuts) if the slider had it.
+    if (combPanel.contains(document.activeElement)) canvas.focus();
+    combPanel.hidden = true;
+    if (!quiet) setMsg("Combine cancelled.");
+    draw();
+  }
+  function updateCombine(): void {
+    if (!combine) return;
+    combGapOut.textContent = ` ${combRange.value} px`;
+    const set = combine.set;
+    combine.res = set.length < 2 ? "Click another part on the map to combine it with " + partLabel(set[0]) + "." : tryMerge(() => combineParts(hist.state, set, combineGap(), ky));
+    const res = combine.res;
+    const names = set.map((q) => q + 1).join(", ");
+    if (typeof res === "string") {
+      combInfo.textContent = set.length < 2 ? res : `Parts ${names}: ${res}`;
+      combInfo.className = `small ed-comb-info ${set.length < 2 ? "muted" : "error"}`;
+    } else {
+      combInfo.textContent = `Parts ${names} → one part (${partLabel(set[0])} keeps its place, colour and label)${res.filled ? ", gaps filled" : ""}.`;
+      combInfo.className = "small ed-comb-info ok";
+    }
+    combApply.disabled = typeof res === "string";
+    draw();
+  }
+  combRange.addEventListener("input", updateCombine);
+  /** A click on the map while combining: adds or removes the part under the pointer. */
+  function toggleCombinePart(here: number[], badge: number): void {
+    if (!combine) return;
+    const set = combine.set;
+    const p = badge >= 0 ? badge : (here.find((q) => !set.includes(q)) ?? here.find((q) => set.includes(q) && q !== set[0]) ?? -1);
+    if (p < 0) return;
+    if (set.includes(p)) {
+      if (p === set[0]) return setMsg(`${partLabel(p)} is the part the others combine into. Cancel to start from another part.`);
+      combine.set = set.filter((q) => q !== p);
+    } else {
+      const why = combineKind(hist.state.contested, [...set, p]);
+      if (typeof why === "string") return setMsg(why, "error");
+      combine.set = [...set, p];
+    }
+    updateCombine();
+  }
+  function applyCombine(): void {
+    if (!combine) return;
+    const res = typeof combine.res === "string" ? combine.res : tryMerge(() => combineParts(hist.state, combine!.set, combineGap(), ky));
+    if (typeof res === "string") return setMsg(res, "error");
+    if (countVertices(res.state.parts) > MAX_VERTICES) return setMsg(`That would go over the ${MAX_VERTICES}-vertex limit. Simplify first.`, "error");
+    const prob = res.problem ?? ringProblem([res.state.parts[res.into]])?.message.toLowerCase();
+    if (prob) return setMsg(`Can't combine: ${prob}`, "error");
+    const n = combine.set.length;
+    hist.apply(`Combine ${n} parts`, res.state);
+    selection.clear();
+    closeCombine(true);
+    selPart = res.into;
+    setMsg(`Combined ${n} parts into ${partLabel(res.into)}${res.filled ? ", filling the gaps between them" : ""}. Ctrl+Z undoes it.`, "ok");
+    changed();
+    selectPart(res.into);
+  }
+  /** The Combine preview: picked parts outlined, the result drawn dashed over them. */
+  function drawCombine(offs: number[]): void {
+    if (!combine) return;
+    g.save();
+    g.lineWidth = 3;
+    g.lineJoin = "round";
+    g.strokeStyle = "#ffd400";
+    g.beginPath();
+    for (const p of combine.set) for (const ring of parts()[p] ?? []) traceRing(g, ring, sx, sy, offs);
+    g.stroke();
+    if (typeof combine.res !== "string") {
+      const rings = combine.res.state.parts[combine.res.into];
+      g.beginPath();
+      for (const ring of rings) traceRing(g, ring, sx, sy, offs);
+      g.fillStyle = "rgba(255,255,255,.18)";
+      g.fill("evenodd");
+      g.setLineDash([6, 4]);
+      g.lineWidth = 2;
+      g.strokeStyle = "#ffffff";
+      g.stroke();
+    }
+    g.restore();
+  }
+
+  /** "Extend": draw land onto the selected part (or, with none selected, the part the shape starts in). */
+  function startExtend(): void {
+    if (!parts().length) return setMsg("Draw a part first, then extend it.", "error");
+    extendTarget = selPart >= 0 ? selPart : parts().length === 1 ? 0 : -1;
+    startDraw("extend");
+  }
+  function finishExtend(ring: Position[]): boolean {
+    let p = extendTarget;
+    if (p < 0) p = partAt(parts(), ring[0], hist.state.contested);
+    if (p < 0) {
+      setMsg("Start the shape inside the part you want to extend, or select the part first.", "error");
+      return false;
+    }
+    const res = tryMerge(() => extendPart(hist.state, p, ring, EXTEND_GAP_PX / view.k, ky));
+    if (typeof res === "string") {
+      setMsg(res, "error");
+      return false;
+    }
+    if (countVertices(res.state.parts) > MAX_VERTICES) {
+      setMsg(`That would go over the ${MAX_VERTICES}-vertex limit.`, "error");
+      return false;
+    }
+    const prob = res.problem ?? ringProblem([res.state.parts[res.into]])?.message.toLowerCase();
+    if (prob) {
+      setMsg(`Can't extend there: ${prob}`, "error");
+      return false;
+    }
+    hist.apply(`Extend part ${p + 1}`, res.state);
+    selection.clear();
+    setMsg(`Extended ${partLabel(p)}. Drag vertices to refine it; Ctrl+Z undoes it.`, "ok");
+    endDraw();
+    selectPart(res.into);
+    return true;
   }
 
   /* ── Hit testing (screen pixels, nearest copy of each point) ── */
@@ -1588,6 +1802,7 @@ export function openEditor(o: EditorOptions): void {
     }
     const w0: Position = [wx(x), wy(y)];
     if (simplifyPreview) return;
+    if (combine) return void toggleCombinePart(partsAt(parts(), w0, hist.state.contested), hitBadge(x, y));
     if (tool === "polygon") {
       if (!drawing) drawing = [w0];
       else {
@@ -1901,6 +2116,10 @@ export function openEditor(o: EditorOptions): void {
       canvas.style.cursor = "grab";
       return;
     }
+    if (e.key === "Enter" && combine && !drawing) {
+      e.preventDefault();
+      return applyCombine();
+    }
     if (e.key === "Enter" && drawing) {
       e.preventDefault();
       return void (target === "split" ? finishLine(drawing) : finishRing(drawing));
@@ -1935,6 +2154,8 @@ export function openEditor(o: EditorOptions): void {
     else if (k === "f") setTool("freehand");
     else if (k === "g") toggleGrid();
     else if (k === "l" && selPart >= 0) togglePartLock(selPart);
+    else if (k === "c" && !drawing) openCombine();
+    else if (k === "e" && !drawing) startExtend();
     else if (e.key === "?") showHelp();
   });
   dlg.addEventListener("keyup", (e) => {
@@ -1947,11 +2168,16 @@ export function openEditor(o: EditorOptions): void {
   dlg.addEventListener("cancel", (e) => {
     e.preventDefault();
     if (!ctxMenu.hidden) return hideMenu();
+    if (combine) return closeCombine();
     if (drawing || drag?.kind === "free") {
       drawing = null;
       drag = null;
       setMsg("Outline cancelled.");
       return draw();
+    }
+    if (target === "extend" && (tool === "polygon" || tool === "freehand")) {
+      setMsg("Extend cancelled.");
+      return endDraw();
     }
     if (selection.size) {
       selection.clear();
@@ -1964,6 +2190,7 @@ export function openEditor(o: EditorOptions): void {
       setMsg("Contested zone cancelled.");
       return setTool("select");
     }
+
     void tryClose();
   });
 
