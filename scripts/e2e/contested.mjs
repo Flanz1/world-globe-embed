@@ -17,7 +17,7 @@
  */
 import { createServer } from "node:http";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
-import { existsSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -101,6 +101,12 @@ if (want("identity")) {
     rmSync(wt, { recursive: true, force: true });
     execFileSync("git", ["worktree", "add", "--detach", wt, "origin/main"], { stdio: "pipe" });
     symlinkSync(path.resolve("node_modules"), path.join(wt, "node_modules"), "dir");
+    // The embeds' line width was made thinner on purpose: give the main build the same widths so only the zone work is compared
+    // (a no-op once main has them).
+    for (const [file, from, to] of [["src/viewer/flat.ts", "lineWidth: 2,", "lineWidth: 1.2,"], ["src/viewer/globe.ts", "lineWidth: (W / 2048) * 2.5,", "lineWidth: (W / 2048) * 1.5,"]]) {
+      const f = path.join(wt, file);
+      writeFileSync(f, readFileSync(f, "utf8").replace(from, to));
+    }
     mainDir = await build(path.join(wt, "scripts/e2e/fixture.mjs"), [], BRANCH);
     execFileSync("git", ["worktree", "remove", "--force", wt], { stdio: "pipe" });
     console.log(`origin/main fixture: ${mainDir}`);

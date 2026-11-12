@@ -387,7 +387,7 @@ for (const view of ["flat", "globe"]) {
       const outer = inkProfile(img, at(11, -10), at(19, -10));
       check(G, "national border (different colours) is a solid dark line", nat.on > 0.9 && nat.flips <= 2, fmt(nat));
       check(G, "no line where two same-colour parts meet", none.on < 0.1, fmt(none));
-      check(G, "province border is dotted dark ink", prov.on > 0.15 && prov.on < 0.8 && prov.flips >= 6, fmt(prov));
+      check(G, "province border is dotted dark ink", prov.on > 0.03 && prov.on < 0.8 && prov.flips >= 6, fmt(prov));
       check(G, "outer borders stay in the part's colour", outer.on < 0.1, fmt(outer));
     }
     await c.close();
