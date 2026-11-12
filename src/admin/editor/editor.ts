@@ -8,6 +8,7 @@
  */
 import {
   MAX_VERTICES,
+  WARN_VERTICES,
   areaPercent,
   checkGeometry,
   closeRing,
@@ -712,7 +713,11 @@ export function openEditor(o: EditorOptions): void {
     let preps: Prepared[];
     let clashes: Clashes;
     const base = dragBase && hist.dragging && dragBase.cs.preps.length === ps.length ? dragBase : null;
-    if (base && base.moving.size < ps.length) {
+    if (ps.length < 2) {
+      // One part can't overlap anything: nothing to prepare (a big ring would cost milliseconds per drag move).
+      preps = [];
+      clashes = { internal: [] };
+    } else if (base && base.moving.size < ps.length) {
       const mv = base.moving;
       preps = ps.map((r, i) => (mv.has(i) ? prepare(r) : base.cs.preps[i]));
       clashes = {
@@ -1045,6 +1050,10 @@ export function openEditor(o: EditorOptions): void {
     });
     g.restore();
   }
+  /** Rings with more vertices than this get thinned handles (see drawHandles). */
+  const DENSE_RING = 1500;
+  const MIN_HANDLE_GAP = 5;
+  const MIN_MIDPOINT_EDGE = 14;
   function drawHandles(offs: number[]): void {
     const { w, h: hh } = size();
     const glued = glue().glued;
@@ -1057,9 +1066,13 @@ export function openEditor(o: EditorOptions): void {
         g.fillStyle = "rgba(255,255,255,.55)";
         g.strokeStyle = "rgba(0,0,0,.6)";
         g.lineWidth = 1;
+        // A big ring (a combined map's coastline) has more handles than pixels when zoomed out: draw
+        // one every few pixels, and no midpoints on edges too short to grab. Every vertex is still hit-testable.
+        const dense = n > DENSE_RING;
         for (let i = 0; i < n; i++) {
           const a = ring[i];
           const b = ring[(i + 1) % n];
+          if (dense && Math.hypot(sx(b[0]) - sx(a[0]), sy(b[1]) - sy(a[1])) < MIN_MIDPOINT_EDGE) continue;
           const mx = (a[0] + b[0]) / 2;
           const my = (a[1] + b[1]) / 2;
           for (const off of offs) {
@@ -1072,9 +1085,18 @@ export function openEditor(o: EditorOptions): void {
             g.stroke();
           }
         }
+        let lastX = -Infinity;
+        let lastY = -Infinity;
         for (let i = 0; i < n; i++) {
           const key = selection.size > 0 || glued.size > 0 ? vkey({ p, r, i }) : "";
           const sel = selection.size > 0 && selection.has(key);
+          if (dense && !sel && !(glued.size > 0 && glued.has(key))) {
+            const x0 = sx(ring[i][0]);
+            const y0 = sy(ring[i][1]);
+            if (Math.abs(x0 - lastX) < MIN_HANDLE_GAP && Math.abs(y0 - lastY) < MIN_HANDLE_GAP) continue;
+            lastX = x0;
+            lastY = y0;
+          }
           g.fillStyle = sel ? "#ffd400" : "#ffffff";
           g.strokeStyle = "#000";
           const stuck = glued.size > 0 && glued.has(key);
@@ -1158,8 +1180,8 @@ export function openEditor(o: EditorOptions): void {
     if (!hist.dragging || lastArea < 0) lastArea = parts_ ? areaPercent(mapGeometry(toGeometry(parts()), (p) => imageToGlobe(p, frame))) : 0;
     const area = lastArea;
     stats.textContent = `${n.toLocaleString()} vertices in ${parts_} part${parts_ === 1 ? "" : "s"} · about ${area < 0.01 ? area.toFixed(4) : area.toFixed(2)}% of the globe's surface`;
-    stats.classList.toggle("error", n >= 4000);
-    if (n >= 4000) stats.textContent += ` · close to the ${MAX_VERTICES.toLocaleString()}-vertex limit`;
+    stats.classList.toggle("error", n >= WARN_VERTICES);
+    if (n >= WARN_VERTICES) stats.textContent += ` · close to the ${MAX_VERTICES.toLocaleString()}-vertex limit`;
   }
 
   /* ── Live globe preview ── */
@@ -1541,7 +1563,7 @@ export function openEditor(o: EditorOptions): void {
       return false;
     }
     if (countVertices(parts()) + ring.length > MAX_VERTICES) {
-      setMsg(`That would go over the ${MAX_VERTICES}-vertex limit.`, "error");
+      setMsg(`That would go over the ${MAX_VERTICES.toLocaleString()}-vertex limit.`, "error");
       return false;
     }
     if (target === "cut") return applyCut(cutParts(hist.state, [ring]), "Cut");
@@ -1577,7 +1599,7 @@ export function openEditor(o: EditorOptions): void {
       return false;
     }
     if (countVertices(res.state.parts) > MAX_VERTICES) {
-      setMsg(`That would go over the ${MAX_VERTICES}-vertex limit.`, "error");
+      setMsg(`That would go over the ${MAX_VERTICES.toLocaleString()}-vertex limit.`, "error");
       return false;
     }
     const prob = res.problem ?? ringProblem(res.state.parts)?.message.toLowerCase();
@@ -1805,7 +1827,7 @@ export function openEditor(o: EditorOptions): void {
     if (!combine) return;
     const res = typeof combine.res === "string" ? combine.res : tryMerge(() => combineParts(hist.state, combine!.set, combineGap(), ky));
     if (typeof res === "string") return setMsg(res, "error");
-    if (countVertices(res.state.parts) > MAX_VERTICES) return setMsg(`That would go over the ${MAX_VERTICES}-vertex limit. Simplify first.`, "error");
+    if (countVertices(res.state.parts) > MAX_VERTICES) return setMsg(`That would go over the ${MAX_VERTICES.toLocaleString()}-vertex limit.`, "error");
     const prob = res.problem ?? ringProblem([res.state.parts[res.into]])?.message.toLowerCase();
     if (prob) return setMsg(`Can't combine: ${prob}`, "error");
     const n = combine.set.length;
@@ -1860,7 +1882,7 @@ export function openEditor(o: EditorOptions): void {
       return false;
     }
     if (countVertices(res.state.parts) > MAX_VERTICES) {
-      setMsg(`That would go over the ${MAX_VERTICES}-vertex limit.`, "error");
+      setMsg(`That would go over the ${MAX_VERTICES.toLocaleString()}-vertex limit.`, "error");
       return false;
     }
     const prob = res.problem ?? ringProblem([res.state.parts[res.into]])?.message.toLowerCase();
@@ -2230,12 +2252,12 @@ export function openEditor(o: EditorOptions): void {
   function smooth(): void {
     if (!parts().length) return;
     const next = smoothParts(parts());
-    if (!next) return setMsg(`Smoothing would go over the ${MAX_VERTICES.toLocaleString()}-vertex limit. Simplify first.`, "error");
+    if (!next) return setMsg(`Smoothing would go over the ${MAX_VERTICES.toLocaleString()}-vertex limit.`, "error");
     const prob = ringProblem(next);
     if (prob) return setMsg(`Can't smooth: ${prob.message.toLowerCase()}`, "error");
     setParts("Smooth", next);
     const n = countVertices(next);
-    setMsg(`Smoothed: ${n.toLocaleString()} vertices.${n >= 4000 ? ` Close to the ${MAX_VERTICES.toLocaleString()} limit.` : ""}`, n >= 4000 ? "error" : "ok");
+    setMsg(`Smoothed: ${n.toLocaleString()} vertices.${n >= WARN_VERTICES ? ` Close to the ${MAX_VERTICES.toLocaleString()} limit.` : ""}`, n >= WARN_VERTICES ? "error" : "ok");
     changed();
   }
 
@@ -2533,9 +2555,17 @@ export function openEditor(o: EditorOptions): void {
       }
     }
     const refs = drag.refs;
-    const keys = new Set(refs.map(vkey));
+    // Only the rings holding a dragged vertex are rebuilt (indices per ring, no string keys: a 70,000-vertex ring would allocate 70,000 of them per move).
+    const moved = new Map<string, Set<number>>();
+    for (const v of refs) {
+      const k = `${v.p}:${v.r}`;
+      (moved.get(k) ?? moved.set(k, new Set()).get(k)!).add(v.i);
+    }
     const next = drag.base.map((rings, p) =>
-      rings.map((ring, r) => ring.map((q, i) => (keys.has(vkey({ p, r, i })) ? ([q[0] + dLon, Math.max(-90, Math.min(90, q[1] + dLat))] as Position) : q))),
+      rings.map((ring, r) => {
+        const at = moved.get(`${p}:${r}`);
+        return at ? ring.map((q, i) => (at.has(i) ? ([q[0] + dLon, Math.max(-90, Math.min(90, q[1] + dLat))] as Position) : q)) : ring;
+      }),
     );
     problem = ringProblem(next, refs);
     hist.preview({ ...hist.state, parts: next, lines: carryLines(drag.baseLines, drag.carry, drag.base, next, []) });

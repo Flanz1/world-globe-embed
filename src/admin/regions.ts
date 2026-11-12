@@ -3,6 +3,7 @@
  * duplicate, delete, preview, copy embed code), and combining several regions into a new one. Each
  * action that writes is one commit.
  */
+import { stringifyCompact } from "../shared/json.ts";
 import { baseKey, combineRegions, combinedId, regionBases, type RegionBase } from "../shared/combine.ts";
 import { checkGeometry, geometryBounds, polygonsOf, vertexCount } from "../shared/geo.ts";
 import { paintSpec } from "../shared/raster.ts";
@@ -40,7 +41,7 @@ export interface RegionsDeps {
 
 export const regionPath = (id: string) => `content/regions/${id}.json`;
 export const stamp = () => new Date().toISOString().replace(/\.\d+Z$/, "Z");
-export const serialize = (f: RegionFeature) => JSON.stringify(f, null, 2) + "\n";
+export const serialize = (f: RegionFeature) => stringifyCompact(f) + "\n";
 
 let deps: RegionsDeps;
 let entries: RegionEntry[] = [];

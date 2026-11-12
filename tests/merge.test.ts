@@ -168,3 +168,23 @@ describe("province borders survive combining and extending", () => {
     expect((r as MergeResult).state.lines).toEqual(lines);
   });
 });
+
+describe("combine big parts", () => {
+  // Two coastlines of 20,000 vertices each, a hair apart: filling the gap used to compare every
+  // segment with every other (many seconds), now only neighbours.
+  const coast = (n: number, cx: number): Position[] =>
+    Array.from({ length: n }, (_, i) => {
+      const t = (i / n) * 2 * Math.PI;
+      const r = 20 * (1 + 0.1 * Math.sin(5 * t) + 0.004 * Math.sin(97 * t));
+      return [Math.round((cx + Math.cos(t) * r) * 1e4) / 1e4, Math.round(Math.sin(t) * r * 0.8 * 1e4) / 1e4] as Position;
+    });
+
+  it("fills a gap between two 20,000-vertex parts in a couple of seconds", () => {
+    const t0 = performance.now();
+    const r = ok(combineParts(st([[coast(20000, 0)], [coast(20000, 40.3)]]), [0, 1], 0.5, 1));
+    expect(performance.now() - t0).toBeLessThan(5000);
+    expect(r.state.parts).toHaveLength(1);
+    expect(r.filled).toBe(1);
+    expect(r.state.parts[0][0].length).toBeGreaterThan(30000);
+  });
+});

@@ -492,6 +492,8 @@ async function proxy(req: Request, env: Env, up: Upstream, path: string, url: UR
     }
     if ((m = /^\/contents\/([A-Za-z0-9._/-]{1,300})$/.exec(rest)) && !m[1].includes("..")) return pass(await gh(env, up, `${base}/contents/${m[1]}${q(["ref"])}`));
     if (/^\/git\/ref\/heads\/[A-Za-z0-9._/-]{1,200}$/.test(rest) && !rest.includes("..")) return pass(await gh(env, up, `${base}${rest}`));
+    // A file over 1 MB (a region with tens of thousands of vertices) comes back from /contents without its content: the admin page reads its blob instead.
+    if (/^\/git\/blobs\/[0-9a-f]{40}$/.test(rest)) return pass(await gh(env, up, `${base}${rest}`));
     if (/^\/git\/commits\/[0-9a-f]{40}$/.test(rest)) return pass(await gh(env, up, `${base}${rest}`));
     if (rest === "/commits") return pass(await gh(env, up, `${base}/commits${q(["path", "sha", "per_page"])}`));
     if (rest === "/actions/runs") return pass(await gh(env, up, `${base}/actions/runs${q(["per_page", "branch"])}`));

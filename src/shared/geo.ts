@@ -22,8 +22,13 @@ export interface MultiPolygonGeometry {
 }
 export type RegionGeometry = PolygonGeometry | MultiPolygonGeometry;
 
-/** Most vertices a region may have, over all its rings (closing positions not counted). */
-export const MAX_VERTICES = 5000;
+/**
+ * Most vertices a region may have, over all its rings (closing positions not counted). A safety rail,
+ * not a performance limit: a region this size is about 4 MB on disk and still edits and draws smoothly.
+ */
+export const MAX_VERTICES = 70000;
+/** Where the editor starts warning that a region is getting close to MAX_VERTICES. */
+export const WARN_VERTICES = Math.round(MAX_VERTICES * 0.8);
 /** Coordinates are stored with this many decimals (about 1 m on an Earth-sized globe at 1e-5; 4 is ~10 m). */
 export const DECIMALS = 4;
 
@@ -538,7 +543,7 @@ export function checkGeometry(g: RegionGeometry, where = "geometry"): string[] {
       if (ri > 0 && poly[0].length >= 4 && !pointInRing(ring[0], poly[0])) errs.push(`${at} lies outside its outer ring`);
     });
   });
-  if (total > MAX_VERTICES) errs.push(`${where} has ${total} vertices; the limit is ${MAX_VERTICES}. Simplify it in the admin page`);
+  if (total > MAX_VERTICES) errs.push(`${where} has ${total} vertices; the limit is ${MAX_VERTICES.toLocaleString("en")}. Simplify it in the admin page`);
   return errs;
 }
 
