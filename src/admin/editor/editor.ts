@@ -16,9 +16,11 @@ import {
   globeToImage,
   imageToGlobe,
   mapGeometry,
+  openRing,
   polygonsOf,
   round,
   simplifyRing,
+  unwrapRing,
   type Position,
   type RegionGeometry,
 } from "../../shared/geo.ts";
@@ -94,6 +96,7 @@ import {
   type RingProblem,
   type VRef,
 } from "./model.ts";
+import { findSnap, followBorders, insertOnEdges, partRings, sharedEdges, snapRing, traceBetween, vertexIndex, withGlued, type Snap, type SnapRing } from "./snap.ts";
 
 export interface EditorOptions {
   gh: GitHub;
@@ -119,7 +122,9 @@ type DrawTarget = "part" | "cut" | "split" | "contested" | "extend";
 const HANDLE = 5;
 const HIT = 8;
 const EDGE_HIT = 6;
-const SNAP_PX = 8;
+const SNAP_PX = 10;
+const SNAP_COLOUR = "#4dd0e1";
+const SNAP_PREF = "wge.editor.snap";
 /** Gaps up to this many screen pixels between an Extend shape and its part are filled. */
 const EXTEND_GAP_PX = 12;
 
@@ -169,8 +174,12 @@ export const SHORTCUTS: [string, string][] = [
   ["Click (polygon)", "Add a point; double-click, Enter or click the first point to close (a split line: double-click or Enter)"],
   ["Backspace (drawing)", "Remove the last point"],
   ["Esc", "Cancel the outline being drawn, or clear the selection"],
-  ["Drag a vertex", "Move it; hold Shift to snap to a neighbouring region's vertex"],
-  ["Drag a midpoint", "Insert a vertex there"],
+  ["Drag a vertex", "Move it, with any vertices attached to it (other parts' vertices on the same spot); it snaps to vertices and lines of other parts and regions"],
+  ["Ctrl+drag a vertex", "Move just that vertex, without snapping (pulls it off a shared border)"],
+  ["Drag a midpoint", "Insert a vertex there (on a shared border, on both sides)"],
+  ["S", "Snapping on or off; hold Ctrl to place one point freely"],
+  ["Click two points on one border (polygon)", "Fills in that border's vertices in between; Tab takes the other way round. Clicking the first point to close follows the border too"],
+  ["Freehand along a border", "The stroke follows that border's vertices exactly"],
   ["Click a line", "Select every vertex of that outline or hole (Shift adds); Delete then removes it"],
   ["Alt+click / right-click", "Delete a vertex"],
   ["Shift+click, box drag", "Select several vertices"],
@@ -201,8 +210,6 @@ export function openEditor(o: EditorOptions): void {
   const pad = clampPadding(slot.north ?? 0, slot.south ?? 0);
   const frame = { north: pad.north, south: pad.south, shift: slot.shift ?? 0 };
   const neighbours = o.neighbours.filter((n) => n.properties.slot === slotName);
-  const snapPts: Position[] = [];
-  for (const n of neighbours) for (const poly of polygonsOf(n.geometry)) for (const r of poly) for (const p of r) snapPts.push(p);
 
   const hist = new History(stateOf(o.feature));
   let id = o.feature?.id ?? uniqueId("region", o.takenIds);
@@ -227,6 +234,12 @@ export function openEditor(o: EditorOptions): void {
   const undoBtn = btn("Undo", "Undo (Ctrl+Z)", () => undo(), "undo");
   const redoBtn = btn("Redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)", () => redo(), "redo");
   const gridBtn = btn("Grid", "Show the globe's 15° grid (G)", () => toggleGrid(), "grid");
+  const snapBtn = btn(
+    "Snap",
+    "Snap to the vertices and lines of other parts and regions while drawing and dragging, so borders are shared exactly (S). Hold Ctrl to place a point freely.",
+    () => toggleSnap(),
+    "snap",
+  );
   const simplifyBtn = btn("Simplify…", "Fewer vertices, same shape", () => toggleSimplify(), "simplify");
   const smoothBtn = btn("Smooth", "Round the corners (one Chaikin pass; doubles the vertices)", () => smooth(), "smooth");
 
@@ -295,6 +308,7 @@ export function openEditor(o: EditorOptions): void {
       simplifyBtn,
       smoothBtn,
       h("span", { className: "sep" }),
+      snapBtn,
       gridBtn,
       btn("?", "Keyboard shortcuts", () => showHelp(), "help"),
     ),
@@ -501,8 +515,35 @@ export function openEditor(o: EditorOptions): void {
   /** The part an Extend shape is added to (-1: the part the shape starts in). */
   let extendTarget = -1;
   let spaceHeld = false;
+  /** Snapping to other parts' and regions' vertices and lines (S, or the Snap button); remembered per browser. */
+  let snapOn = true;
+  try {
+    snapOn = localStorage.getItem(SNAP_PREF) !== "off";
+  } catch {
+    /* storage blocked: default on */
+  }
+  /** Where the pointer would snap right now (drawn as a ring), with the rings it refers to. */
+  let snapHint: { snap: Snap; rings: readonly SnapRing[] } | null = null;
+  /** Per point of `drawing`: where it snapped (null for a free point), for tracing along a border. */
+  let drawSnaps: (Snap | null)[] = [];
+  /** Tab while drawing: trace the other way round the border. */
+  let traceFlip = false;
   type Drag =
-    | { kind: "vertex"; base: Parts; refs: VRef[]; grab: VRef; x0: number; y0: number; w0: Position; moved: boolean; label: string; toggle: boolean }
+    | {
+        kind: "vertex";
+        base: Parts;
+        refs: VRef[];
+        grab: VRef;
+        x0: number;
+        y0: number;
+        w0: Position;
+        moved: boolean;
+        label: string;
+        toggle: boolean;
+        /** Snap targets for this drag, leaving out the rings being reshaped. */
+        rings: SnapRing[];
+        skip: (ring: number) => boolean;
+      }
     | { kind: "shape"; base: Parts; part: number[] | null; w0: Position; moved: boolean }
     | { kind: "pan"; x0: number; y0: number; v0: typeof view }
     | { kind: "box"; x0: number; y0: number; x1: number; y1: number; add: boolean; refused?: string }
@@ -744,13 +785,53 @@ export function openEditor(o: EditorOptions): void {
       g.lineWidth = 2;
       g.beginPath();
       pts.forEach((pt, i) => (i ? g.lineTo(sx(pt[0]), sy(pt[1])) : g.moveTo(sx(pt[0]), sy(pt[1]))));
-      if (drawing && cursor) g.lineTo(sx(cursor[0]), sy(cursor[1]));
       g.stroke();
+      // From the last point to the pointer, along a border where the next click would trace one.
+      const tail = drawing ? pendingTail() : null;
+      if (tail && drawing) {
+        const last = drawing[drawing.length - 1];
+        g.beginPath();
+        g.moveTo(sx(last[0]), sy(last[1]));
+        for (const q of tail.pts) g.lineTo(sx(q[0]), sy(q[1]));
+        if (tail.traced) {
+          g.strokeStyle = SNAP_COLOUR;
+          g.lineWidth = 3;
+        }
+        g.stroke();
+        g.fillStyle = SNAP_COLOUR;
+        for (const q of tail.pts.slice(0, -1)) {
+          g.beginPath();
+          g.arc(sx(q[0]), sy(q[1]), 2.5, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
       g.fillStyle = "#fff";
       for (const [i, pt] of pts.entries()) {
         g.beginPath();
         g.arc(sx(pt[0]), sy(pt[1]), i === 0 ? 6 : 3.5, 0, Math.PI * 2);
         g.fill();
+      }
+      g.restore();
+    }
+    if (snapHint && snapOn && !simplifyPreview) {
+      const q = snapHint.snap.pos;
+      g.save();
+      g.strokeStyle = SNAP_COLOUR;
+      g.lineWidth = 2;
+      for (const off of offs) {
+        const x = sx(q[0] + off);
+        const y = sy(q[1]);
+        if (x < -20 || x > w + 20) continue;
+        g.beginPath();
+        if (snapHint.snap.kind === "vertex") g.arc(x, y, 7, 0, Math.PI * 2);
+        else {
+          g.moveTo(x - 6, y);
+          g.lineTo(x, y - 6);
+          g.lineTo(x + 6, y);
+          g.lineTo(x, y + 6);
+          g.closePath();
+        }
+        g.stroke();
       }
       g.restore();
     }
@@ -846,6 +927,7 @@ export function openEditor(o: EditorOptions): void {
 
   function drawHandles(offs: number[]): void {
     const { w, h: hh } = size();
+    const glued = glue().glued;
     const vis = (x: number, y: number) => x > -10 && x < w + 10 && y > -10 && y < hh + 10;
     g.save();
     parts().forEach((rings, p) =>
@@ -871,13 +953,31 @@ export function openEditor(o: EditorOptions): void {
           }
         }
         for (let i = 0; i < n; i++) {
-          const sel = selection.has(vkey({ p, r, i }));
+          const key = vkey({ p, r, i });
+          const sel = selection.has(key);
           g.fillStyle = sel ? "#ffd400" : "#ffffff";
           g.strokeStyle = "#000";
+          const stuck = glued.has(key);
           for (const off of offs) {
             const x = sx(ring[i][0] + off);
             const y = sy(ring[i][1]);
             if (!vis(x, y)) continue;
+            if (stuck) {
+              // Attached to another part's vertex: a diamond in the snap colour (moves with it).
+              const d = HANDLE / 2 + 1.5 + (sel ? 1 : 0);
+              g.save();
+              g.fillStyle = sel ? "#ffd400" : SNAP_COLOUR;
+              g.beginPath();
+              g.moveTo(x, y - d);
+              g.lineTo(x + d, y);
+              g.lineTo(x, y + d);
+              g.lineTo(x - d, y);
+              g.closePath();
+              g.fill();
+              g.stroke();
+              g.restore();
+              continue;
+            }
             g.fillRect(x - HANDLE / 2 - (sel ? 1 : 0), y - HANDLE / 2 - (sel ? 1 : 0), HANDLE + (sel ? 2 : 0), HANDLE + (sel ? 2 : 0));
             g.strokeRect(x - HANDLE / 2 - (sel ? 1 : 0), y - HANDLE / 2 - (sel ? 1 : 0), HANDLE + (sel ? 2 : 0), HANDLE + (sel ? 2 : 0));
           }
@@ -920,6 +1020,8 @@ export function openEditor(o: EditorOptions): void {
     const what = target === "cut" ? "Cut" : target === "split" ? "Split" : target === "contested" ? `Contested zone of part ${zoneParent + 1}` : target === "extend" ? (extendTarget >= 0 ? `Extend part ${extendTarget + 1}` : "Extend") : "";
     let line = `${tool === "select" ? "Select" : `${tool === "polygon" ? "Polygon" : "Freehand"}${what ? ` (${what})` : ""}`} · ${n} vertices`;
     if (tool === "select" && selPart >= 0) line += ` · ${pickHint || `Part ${selPart + 1} selected`}`;
+    if (snapHint && snapOn) line += ` · snaps to ${snapName(snapHint.snap, snapHint.rings)}`;
+    if (tool === "polygon" && drawing && pendingTail()?.traced) line += ` · follows the border${traceFlip ? " the other way" : ""} (Tab: ${traceFlip ? "back" : "other way"})`;
     if (cursor) {
       const lon = ((((cursor[0] + 180) % 360) + 360) % 360) - 180;
       const gl = imageToGlobe([lon, cursor[1]], frame);
@@ -930,6 +1032,7 @@ export function openEditor(o: EditorOptions): void {
     redoBtn.disabled = !hist.canRedo;
     for (const b of dlg.querySelectorAll<HTMLButtonElement>("button.tool")) b.setAttribute("aria-pressed", String(b.dataset.tool === tool));
     gridBtn.setAttribute("aria-pressed", String(gridOn));
+    snapBtn.setAttribute("aria-pressed", String(snapOn));
     // The spherical area is skipped mid-drag (it costs a few ms at 2,000 vertices) and refreshed on release.
     if (!hist.dragging || lastArea < 0) lastArea = parts_ ? areaPercent(mapGeometry(toGeometry(parts()), (p) => imageToGlobe(p, frame))) : 0;
     const area = lastArea;
@@ -1241,8 +1344,8 @@ export function openEditor(o: EditorOptions): void {
       return drawTool === "freehand"
         ? "Drag around the area to cut away; let go to cut. Inside a part it makes a hole, right across a part it splits it."
         : "Click points around the area to cut away. Double-click, Enter or click the first point to cut.";
-    if (drawTool === "freehand") return `${zone}Drag on the map to draw the outline; let go to close it. Press P for the polygon tool.`;
-    return `${zone}Click to add points. Double-click, Enter or click the first point to close.`;
+    if (drawTool === "freehand") return `${zone}Drag on the map to draw the outline; let go to close it. Along a border, the stroke follows it. Press P for the polygon tool.`;
+    return `${zone}Click to add points. Double-click, Enter or click the first point to close. Click two points on one border to follow it (Tab: the other way round).`;
   }
   function startDraw(t: DrawTarget): void {
     closeCombine(true);
@@ -1611,24 +1714,76 @@ export function openEditor(o: EditorOptions): void {
     for (const v of ringRefs(parts(), ring.p, ring.r)) selection.set(vkey(v), v);
     setMsg(ring.r === 0 ? `Outline of part ${ring.p + 1} selected: Delete removes the whole part (asks first).` : `Hole in part ${ring.p + 1} selected: Delete removes it.`);
   }
-  /** Nearest neighbour-region vertex within SNAP_PX of a position (in the same copy), or null. */
-  function snapTarget(pos: Position): Position | null {
-    let best: Position | null = null;
-    let bestD = SNAP_PX;
-    for (const p of snapPts) {
-      const lon = nearest(p[0], pos[0]);
-      const d = Math.hypot((lon - pos[0]) * view.k, (p[1] - pos[1]) * view.k * ky);
-      if (d <= bestD) {
-        bestD = d;
-        best = [lon, p[1]];
-      }
+  /* ── Snapping, tracing along borders, attached vertices (see snap.ts) ── */
+  /** The neighbours' rings, as snap targets (they never change while the editor is open). */
+  const nbSnapRings: SnapRing[] = nbPolys.flatMap((poly, n) => poly.map((r, ri) => snapRing(openRing(unwrapRing(r)), { kind: "neighbour", n, r: ri })));
+  let ringCache: { version: number; rings: SnapRing[] } = { version: -1, rings: [] };
+  /** Every snap target for the current parts: the region's own rings, then the neighbours'. */
+  function snapRings(): SnapRing[] {
+    if (ringCache.version !== hist.version) ringCache = { version: hist.version, rings: [...partRings(parts()), ...nbSnapRings] };
+    return ringCache.rings;
+  }
+  const scale = () => ({ k: view.k, ky });
+  /** Where a point would snap (null when snapping is off or nothing is near). */
+  const snapAt = (pos: Position, rings: readonly SnapRing[] = snapRings(), skip?: (ring: number) => boolean): Snap | null =>
+    snapOn ? findSnap(rings, pos, scale(), SNAP_PX, skip) : null;
+  function snapName(sn: Snap, rings: readonly SnapRing[]): string {
+    const src = rings[sn.ring]?.src;
+    if (!src) return "";
+    const what = sn.kind === "vertex" ? "vertex" : "line";
+    if (src.kind === "part") return `${what} of ${src.r ? `a hole in ${partName(src.p)}` : partName(src.p)}`;
+    return `${what} of ${neighbourName(src.n)}`;
+  }
+  function toggleSnap(): void {
+    snapOn = !snapOn;
+    if (!snapOn) snapHint = null;
+    try {
+      localStorage.setItem(SNAP_PREF, snapOn ? "on" : "off");
+    } catch {
+      /* not remembered: fine */
     }
-    return best;
+    setMsg(snapOn ? "Snapping on: points snap to other parts' and regions' vertices and lines. Hold Ctrl to place one freely." : "Snapping off.");
+    draw();
+  }
+  /** Vertices of the region's own rings that sit on the same spot as another (attached), per state. */
+  let glueCache: { version: number; index: ReturnType<typeof vertexIndex>; glued: Set<string> } = { version: -1, index: new Map(), glued: new Set() };
+  function glue(): typeof glueCache {
+    if (glueCache.version === hist.version) return glueCache;
+    const index = vertexIndex(parts());
+    const glued = new Set<string>();
+    for (const list of index.values()) if (list.length > 1) for (const v of list) glued.add(vkey(v));
+    glueCache = { version: hist.version, index, glued };
+    return glueCache;
+  }
+  /** `refs` with the vertices attached to them. */
+  const glued = (refs: VRef[]): VRef[] => withGlued(parts(), refs, glue().index);
+  /** The border vertices to add between the last drawn point and `next`, when both snapped to the same ring. */
+  function traceTo(next: Snap | null, from = drawSnaps[drawSnaps.length - 1]): Snap[] {
+    if (!next || !from || from.ring !== next.ring || target === "split") return [];
+    const rings = snapRings();
+    const ring = rings[next.ring];
+    if (!ring) return [];
+    return traceBetween(ring.pts, from, next, ky, traceFlip).map((t) => ({ pos: t.pos, ring: next.ring, at: t.at, kind: "vertex" as const }));
+  }
+  /** Whether a click at screen (x, y) would close the outline on its first point. */
+  const closesAt = (x: number, y: number) => !!drawing && target !== "split" && drawing.length >= 3 && Math.hypot(sx(drawing[0][0]) - x, sy(drawing[0][1]) - y) <= HIT;
+  /** What the polygon tool would add on the next click (for the preview), and whether it follows a border. */
+  function pendingTail(): { pts: Position[]; traced: boolean } | null {
+    if (!drawing || !cursor || tool !== "polygon") return null;
+    if (closesAt(sx(cursor[0]), sy(cursor[1]))) {
+      const tr = traceTo(drawSnaps[0]);
+      return { pts: [...tr.map((t) => t.pos), drawing[0]], traced: tr.length > 0 };
+    }
+    const sn = snapHint?.snap ?? null;
+    const tr = traceTo(sn);
+    return { pts: [...tr.map((t) => t.pos), sn ? sn.pos : cursor], traced: tr.length > 0 };
   }
 
   /* ── Edits ── */
   function deleteRefs(refs: VRef[], label = refs.length > 1 ? `Delete ${refs.length} vertices` : "Delete vertex"): void {
     if (!refs.length) return;
+    // A vertex attached to other parts' vertices goes with them, so the shared border stays shared.
+    refs = glued(refs);
     const res = deleteVertices(parts(), refs);
     const prob = ringProblem(res.parts);
     if (prob) return setMsg(`Can't delete that: ${prob.message.toLowerCase()}`, "error");
@@ -1694,8 +1849,9 @@ export function openEditor(o: EditorOptions): void {
     const dLon = dxPx / view.k;
     const dLat = -dyPx / (view.k * ky);
     if (selection.size) {
-      const refs = [...selection.values()];
-      const next = parts().map((rings, p) => rings.map((ring, r) => ring.map((pt, i) => (selection.has(vkey({ p, r, i })) ? ([pt[0] + dLon, Math.max(-90, Math.min(90, pt[1] + dLat))] as Position) : pt))));
+      const refs = glued([...selection.values()]);
+      const keys = new Set(refs.map(vkey));
+      const next = parts().map((rings, p) => rings.map((ring, r) => ring.map((pt, i) => (keys.has(vkey({ p, r, i })) ? ([pt[0] + dLon, Math.max(-90, Math.min(90, pt[1] + dLat))] as Position) : pt))));
       const prob = ringProblem(next, refs);
       if (prob) return setMsg(prob.message, "error");
       setParts("Nudge", next, "nudge");
@@ -1762,6 +1918,19 @@ export function openEditor(o: EditorOptions): void {
     changed();
   }
 
+  /** Snap targets for dragging `refs`: everything but the rings they belong to (so nothing snaps to itself). */
+  function dragSnap(base: Parts, refs: VRef[]): { rings: SnapRing[]; skip: (ring: number) => boolean } {
+    const rings = [...partRings(base), ...nbSnapRings];
+    const moving = new Set(refs.map((q) => `${q.p}:${q.r}`));
+    return {
+      rings,
+      skip: (i) => {
+        const src = rings[i].src;
+        return src.kind === "part" && moving.has(`${src.p}:${src.r}`);
+      },
+    };
+  }
+
   /* ── Pointer input ── */
   const local = (e: { clientX: number; clientY: number }) => {
     const r = canvas.getBoundingClientRect();
@@ -1791,14 +1960,30 @@ export function openEditor(o: EditorOptions): void {
     const w0: Position = [wx(x), wy(y)];
     if (simplifyPreview) return;
     if (combine) return void toggleCombinePart(partsAt(parts(), w0, hist.state.contested), hitBadge(x, y));
+    const free = e.ctrlKey || e.metaKey;
     if (tool === "polygon") {
-      if (!drawing) drawing = [w0];
-      else {
-        const f = drawing[0];
-        if (target !== "split" && drawing.length >= 3 && Math.hypot(sx(f[0]) - x, sy(f[1]) - y) <= HIT) return void finishRing(drawing);
+      const sn = free ? null : snapAt(w0);
+      const at = sn ? sn.pos : w0;
+      if (!drawing) {
+        drawing = [at];
+        drawSnaps = [sn];
+      } else if (closesAt(x, y)) {
+        // Closing on the first point: follow the border back to it when both ends are on one.
+        const tr = free ? [] : traceTo(drawSnaps[0]);
+        traceFlip = false;
+        return void finishRing([...drawing, ...tr.map((t) => t.pos)]);
+      } else {
         const last = drawing[drawing.length - 1];
-        if (Math.hypot(sx(last[0]) - x, sy(last[1]) - y) > 2) drawing.push(w0);
+        if (Math.hypot(sx(last[0]) - sx(at[0]), sy(last[1]) - sy(at[1])) > 2) {
+          for (const t of traceTo(sn)) {
+            drawing.push(t.pos);
+            drawSnaps.push(t);
+          }
+          drawing.push(at);
+          drawSnaps.push(sn);
+        }
       }
+      traceFlip = false;
       return draw();
     }
     if (tool === "freehand") {
@@ -1816,21 +2001,50 @@ export function openEditor(o: EditorOptions): void {
         if (!e.shiftKey) selection.clear();
         selection.set(k, v);
       }
-      const refs = [...selection.values()];
+      const chosen = [...selection.values()];
+      // Attached vertices (other parts' vertices on the same spot) come along, unless Ctrl pulls this one free.
+      const refs = free ? chosen : glued(chosen);
       const vp = parts()[v.p][v.r][v.i];
       beginClashDrag(refs.map((r) => r.p));
       hist.begin();
-      drag = { kind: "vertex", base: parts(), refs, grab: v, x0: x, y0: y, w0: [nearest(vp[0], w0[0]), vp[1]], moved: false, label: refs.length > 1 ? `Move ${refs.length} vertices` : "Move vertex", toggle: was && e.shiftKey };
+      drag = {
+        kind: "vertex",
+        base: parts(),
+        refs,
+        grab: v,
+        x0: x,
+        y0: y,
+        w0: [nearest(vp[0], w0[0]), vp[1]],
+        moved: false,
+        label: chosen.length > 1 ? `Move ${chosen.length} vertices` : "Move vertex",
+        toggle: was && e.shiftKey,
+        ...dragSnap(parts(), refs),
+      };
       return draw();
     }
     const m = hitMidpoint(x, y);
     if (m) {
-      beginClashDrag([m.p]);
+      // On a shared border the vertex goes into both sides, attached.
+      const edges = [{ p: m.p, r: m.r, i: m.i }, ...(free ? [] : sharedEdges(parts(), m.p, m.r, m.i, glue().index))];
+      beginClashDrag(edges.map((q) => q.p));
       hist.begin();
-      const ins = insertVertex(parts(), m.p, m.r, m.i, m.pos);
+      const ins = edges.length > 1 ? insertOnEdges(parts(), edges, m.pos) : (({ parts: ps, v: nv }) => ({ parts: ps, refs: [nv] }))(insertVertex(parts(), m.p, m.r, m.i, m.pos));
+      const grab = ins.refs.find((q) => q.p === m.p && q.r === m.r) ?? ins.refs[0];
       hist.preview({ ...hist.state, parts: ins.parts });
-      selection = new Map([[vkey(ins.v), ins.v]]);
-      drag = { kind: "vertex", base: ins.parts, refs: [ins.v], grab: ins.v, x0: x, y0: y, w0: [nearest(m.pos[0], w0[0]), m.pos[1]], moved: true, label: "Insert vertex", toggle: false };
+      selection = new Map([[vkey(grab), grab]]);
+      drag = {
+        kind: "vertex",
+        base: ins.parts,
+        refs: ins.refs,
+        grab,
+        x0: x,
+        y0: y,
+        w0: [nearest(m.pos[0], w0[0]), m.pos[1]],
+        moved: true,
+        label: "Insert vertex",
+        toggle: false,
+        ...dragSnap(ins.parts, ins.refs),
+      };
       changed();
       return;
     }
@@ -1888,6 +2102,11 @@ export function openEditor(o: EditorOptions): void {
       pinch = { d, mx, my };
       return draw();
     }
+    const free = e.ctrlKey || e.metaKey;
+    if (tool === "polygon" || tool === "freehand") {
+      const sn = free || simplifyPreview ? null : snapAt(cursor);
+      snapHint = sn ? { snap: sn, rings: snapRings() } : null;
+    }
     if (!drag) {
       if (tool === "select") {
         const over = hitVertex(x, y) || hitMidpoint(x, y) || hitEdge(x, y);
@@ -1928,13 +2147,15 @@ export function openEditor(o: EditorOptions): void {
     drag.moved = true;
     let dLon = cursor[0] - drag.w0[0];
     let dLat = cursor[1] - drag.w0[1];
-    if (e.shiftKey) {
+    snapHint = null;
+    if (snapOn && !free) {
       const g0 = drag.base[drag.grab.p][drag.grab.r][drag.grab.i];
       const want: Position = [g0[0] + dLon, g0[1] + dLat];
-      const t = snapTarget(want);
+      const t = findSnap(drag.rings, want, scale(), SNAP_PX, drag.skip);
       if (t) {
-        dLon = t[0] - g0[0];
-        dLat = t[1] - g0[1];
+        dLon = t.pos[0] - g0[0];
+        dLat = t.pos[1] - g0[1];
+        snapHint = { snap: t, rings: drag.rings };
       }
     }
     const refs = drag.refs;
@@ -1955,6 +2176,7 @@ export function openEditor(o: EditorOptions): void {
     }
     const d = drag;
     drag = null;
+    if (d?.kind === "vertex") snapHint = null;
     if (!d) return;
     if (d.kind === "pan") canvas.style.cursor = spaceHeld ? "grab" : "default";
     if (d.kind === "box") {
@@ -1985,14 +2207,18 @@ export function openEditor(o: EditorOptions): void {
       // Simplify the sketch: Douglas–Peucker at about 2 screen pixels.
       const tol = 2 / view.k;
       const simple = (pts: Position[]) => simplifyRing(pts.map(([px, py]) => [px, py * ky]), tol).map(([px, py]) => [px, py / ky] as Position);
+      // Stretches drawn along a border follow that border's own vertices (unless snapping is off or Ctrl is held).
+      const follow = snapOn && !(e.ctrlKey || e.metaKey);
+      const rings = snapRings();
+      const traced = (closedRing: boolean) => followBorders(d.pts, (q) => findSnap(rings, q, scale(), SNAP_PX), rings, ky, tol, closedRing).pts;
       if (target === "split") {
         if (d.pts.length < 2) return draw();
-        const line = douglasPeucker(d.pts.map(([px, py]) => [px, py * ky]), tol).map(([px, py]) => [px, py / ky] as Position);
+        const line = follow ? traced(false) : douglasPeucker(d.pts.map(([px, py]) => [px, py * ky]), tol).map(([px, py]) => [px, py / ky] as Position);
         if (!finishLine(line)) draw();
         return;
       }
       if (d.pts.length < 3) return draw();
-      if (!finishRing(simple(d.pts))) draw();
+      if (!finishRing(follow ? traced(true) : simple(d.pts))) draw();
       return;
     }
     if (d.kind === "shape") {
@@ -2027,6 +2253,7 @@ export function openEditor(o: EditorOptions): void {
   canvas.addEventListener("pointercancel", endPointer);
   canvas.addEventListener("pointerleave", () => {
     cursor = null;
+    if (!drag) snapHint = null;
     setHoverPart(-1);
     draw();
   });
@@ -2115,7 +2342,14 @@ export function openEditor(o: EditorOptions): void {
     if (e.key === "Backspace" && drawing) {
       e.preventDefault();
       drawing.pop();
+      drawSnaps.length = drawing.length;
       if (!drawing.length) drawing = null;
+      return draw();
+    }
+    if (e.key === "Tab" && drawing && tool === "polygon" && !mod) {
+      // Trace the other way round the border the next click follows.
+      e.preventDefault();
+      traceFlip = !traceFlip;
       return draw();
     }
     if ((e.key === "Delete" || e.key === "Backspace") && tool === "select" && selection.size) {
@@ -2141,6 +2375,7 @@ export function openEditor(o: EditorOptions): void {
     else if (k === "p") setTool("polygon");
     else if (k === "f") setTool("freehand");
     else if (k === "g") toggleGrid();
+    else if (k === "s") toggleSnap();
     else if (k === "l" && selPart >= 0) togglePartLock(selPart);
     else if (k === "c" && !drawing) openCombine();
     else if (k === "e" && !drawing) startExtend();
@@ -2331,5 +2566,7 @@ export function openEditor(o: EditorOptions): void {
     selectedPart: () => selPart,
     selectedVertices: () => [...selection.values()],
     clashes: () => clashState().clashes,
+    snapOn: () => snapOn,
+    drawing: () => (drawing ? drawing.map((q) => [...q]) : null),
   };
 }
