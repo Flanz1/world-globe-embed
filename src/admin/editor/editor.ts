@@ -1834,8 +1834,13 @@ export function openEditor(o: EditorOptions): void {
   const lineRings = (): SnapRing[] => (hist.state.lines ?? []).map((l, i) => snapRing(l, { kind: "line", l: i }));
   const scale = () => ({ k: view.k, ky });
   /** Where a point would snap (null when snapping is off or nothing is near). */
-  const snapAt = (pos: Position, rings: readonly SnapRing[] = snapRings(), skip?: (ring: number) => boolean): Snap | null =>
+  const snapAt = (pos: Position, rings: readonly SnapRing[] = snapRings(), skip: (ring: number) => boolean = extendSkip): Snap | null =>
     snapOn ? findSnap(rings, pos, scale(), SNAP_PX, skip) : null;
+  /** Extending a part: its own outline isn't a snap target (the tool already joins a shape that touches or nearly touches it). */
+  const extendSkip = (ri: number): boolean => {
+    const src = snapRings()[ri]?.src;
+    return target === "extend" && extendTarget >= 0 && src?.kind === "part" && src.p === extendTarget;
+  };
   function snapName(sn: Snap, rings: readonly SnapRing[]): string {
     const src = rings[sn.ring]?.src;
     if (!src) return "";
@@ -2331,7 +2336,7 @@ export function openEditor(o: EditorOptions): void {
       // Stretches drawn along a border follow that border's own vertices (unless snapping is off or Ctrl is held).
       const follow = snapOn && !(e.ctrlKey || e.metaKey);
       const rings = snapRings();
-      const traced = (closedRing: boolean) => followBorders(d.pts, (q) => findSnap(rings, q, scale(), SNAP_PX), rings, ky, tol, closedRing).pts;
+      const traced = (closedRing: boolean) => followBorders(d.pts, (q) => findSnap(rings, q, scale(), SNAP_PX, extendSkip), rings, ky, tol, closedRing).pts;
       if (lineTarget()) {
         if (d.pts.length < 2) return draw();
         const line = follow ? traced(false) : douglasPeucker(d.pts.map(([px, py]) => [px, py * ky]), tol).map(([px, py]) => [px, py / ky] as Position);
