@@ -3,13 +3,19 @@
 name = "world-globe-admin"
 main = "src/index.ts"
 compatibility_date = "2026-11-01"
-workers_dev = true
+# The API lives on its own address on Marko's domain. Cloudflare creates the DNS record and the
+# certificate on the first deploy; the deploy token needs Zone → Workers Routes → Edit for garmeley.com.
+workers_dev = false
+
+[[routes]]
+pattern = "admin-api.garmeley.com"
+custom_domain = true
 
 [vars]
 REPO = "Flanz1/world-globe-embed"
 BRANCH = "main"
 OWNER_ID = "45669787"
-ADMIN_URLS = "https://flanz1.github.io/world-globe-embed/admin/"
+ADMIN_URLS = "https://editor.garmeley.com/admin/,https://flanz1.github.io/world-globe-embed/admin/"
 # APP_ID and APP_CLIENT_ID come from the workflow (repository variables), so they aren't hard-coded here.
 
 # People who signed in but aren't on the admin list yet (the Users tab's "Asked for access").
