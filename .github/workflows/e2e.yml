@@ -41,6 +41,12 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      # select.mjs imports esbuild, so dependencies must be installed before it runs.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - name: Pick suites
         id: pick
         env:
@@ -59,13 +65,7 @@ jobs:
           echo "suites=$SUITES" >> "$GITHUB_OUTPUT"
           echo "Suites: ${SUITES:-all}"
       - if: steps.pick.outputs.run == 'yes'
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - if: steps.pick.outputs.run == 'yes'
         run: |
-          npm ci
           npm install --no-save playwright@1.63.0
           npx playwright install --with-deps chromium
       - if: steps.pick.outputs.run == 'yes'
