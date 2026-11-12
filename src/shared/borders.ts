@@ -63,7 +63,7 @@ export interface Borders {
 
 /**
  * Lines a region's polygons share exactly with each other. `group(p)` is polygon p's group (its legend
- * colour), or null to leave it out (contested zones keep their own dashed border). A line between
+ * colour), or null to leave it out (contested zones are left to their own hatching). A line between
  * different groups is national; within one group it's only hidden.
  */
 export function regionBorders(polys: readonly Ring[][], group: (p: number) => number | null): Borders {

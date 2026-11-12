@@ -111,7 +111,7 @@ export interface PaintSpec {
   plain: boolean;
   layers: { color: string; geometry: RegionGeometry }[];
   parts: PaintPart[];
-  /** Per part: the polygons it overlaps. Its border is dashed inside them and solid elsewhere. */
+  /** Per part: the polygons it overlaps. Their overlaps are hatched. */
   partners: Position[][][][];
   /** Overlap areas (inside both a and b) to hatch, in `color`. */
   hatches: { a: Position[][]; b: Position[][]; color: string }[];
@@ -127,8 +127,6 @@ export const CASING_W = 1.8;
 export const PROVINCIAL_W = 1.2;
 export const PROVINCIAL_GAP = 2.5;
 
-/** Dash and gap, in multiples of the line width (round caps add half a width to each end of a dash). */
-export const DASH = [2, 3] as const;
 /** The hatch's opacity on top of the fill. */
 const HATCH_ALPHA = 0.55;
 
@@ -245,7 +243,7 @@ function paintBorders(ctx: Ctx, spec: PaintSpec, x: (lon: number) => number, y: 
 /**
  * Draws a region from a PaintSpec. Plain regions go through paintLayers unchanged. Otherwise: fills
  * (normal parts, then contested zones at half opacity with a hatch), hatches over the overlaps, then
- * borders: contested zones dashed all round, normal parts solid outside their partners and dashed inside.
+ * solid outlines in each part's colour.
  */
 export function paintSpec(
   ctx: Ctx,
@@ -305,53 +303,16 @@ export function paintSpec(
   }
   ctx.globalAlpha = 1;
   // Borders.
-  const dashed = () => {
-    ctx.setLineDash([DASH[0] * lw, DASH[1] * lw]);
-    ctx.lineCap = "round";
-  };
   for (const i of order) {
     const p = spec.parts[i];
-    const partners = spec.partners[i] ?? [];
     ctx.strokeStyle = p.color;
     const trace = () => {
       ctx.beginPath();
       tracePoly(ctx, p.rings, x, y, offsets, p.hide);
     };
-    if (p.contested) {
-      ctx.save();
-      dashed();
-      trace();
-      ctx.stroke();
-      ctx.restore();
-      continue;
-    }
-    if (!partners.length) {
-      trace();
-      ctx.stroke();
-      continue;
-    }
-    // Solid outside every partner: clip to "not inside" each one in turn (big box plus its rings, evenodd).
-    ctx.save();
-    for (const q of partners) {
-      ctx.beginPath();
-      ctx.rect(-area.w, -area.h, area.w * 3, area.h * 3);
-      tracePoly(ctx, q, x, y, offsets);
-      ctx.clip("evenodd");
-    }
+    // Every border is a thin solid line (contested zones and overlaps are told apart by their fill and hatch).
     trace();
     ctx.stroke();
-    ctx.restore();
-    // Dashed inside each partner.
-    for (const q of partners) {
-      ctx.save();
-      ctx.beginPath();
-      tracePoly(ctx, q, x, y, offsets);
-      ctx.clip("evenodd");
-      dashed();
-      trace();
-      ctx.stroke();
-      ctx.restore();
-    }
   }
   if (spec.borders) paintBorders(ctx, spec, x, y, offsets, lw);
   ctx.restore();

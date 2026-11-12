@@ -58,7 +58,7 @@ export interface RegionProperties {
   partLabels?: string[];
   /**
    * One entry per part, in order: -1 for a normal part, or k for a contested zone extending part k (a
-   * normal part). The embed draws contested zones dashed and hatched. Missing means all -1.
+   * normal part). The embed draws contested zones hatched. Missing means all -1.
    */
   partContested?: number[];
   /**

@@ -121,7 +121,7 @@
         "partContested": {
           "type": "array",
           "maxItems": 1000,
-          "description": "One entry per polygon of the geometry, in order: -1 for a normal part, or k (counted from 0) to make that part a contested zone extending part k: land part k claims but doesn't firmly hold. The embed draws a contested zone with a dashed border and a hatched, lighter fill, in its parent's colour (or its own partLegend colour when that isn't -1). k must be another part that is itself normal (no zones of zones). Leave it out when there are no contested zones. Separately, wherever two parts (or this region and another region on the same slot) overlap, the border inside the overlap is drawn dashed automatically.",
+          "description": "One entry per polygon of the geometry, in order: -1 for a normal part, or k (counted from 0) to make that part a contested zone extending part k: land part k claims but doesn't firmly hold. The embed draws a contested zone with a thin solid border and a hatched, lighter fill, in its parent's colour (or its own partLegend colour when that isn't -1). k must be another part that is itself normal (no zones of zones). Leave it out when there are no contested zones. Separately, wherever two parts (or this region and another region on the same slot) overlap, the overlap is hatched automatically.",
           "items": {
             "type": "integer",
             "minimum": -1,

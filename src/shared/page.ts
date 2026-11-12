@@ -67,7 +67,7 @@ background-image:var(--lqip);background-size:var(--fw) var(--fh);background-posi
 .rkey li{display:flex;align-items:center;gap:6px;min-width:0}
 .rkey li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rkey i{flex:none;width:12px;height:12px;border-radius:3px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
-.rkey i.dash{box-shadow:none;border:2px dashed #f3ead8;box-sizing:border-box;background:repeating-linear-gradient(135deg,rgba(243,234,216,.35) 0 1px,transparent 1px 4px)}
+.rkey i.dash{box-shadow:none;border:1px solid #f3ead8;box-sizing:border-box;background:repeating-linear-gradient(135deg,rgba(243,234,216,.35) 0 1px,transparent 1px 4px)}
 .rkey[hidden],.rkey ul[hidden]{display:none}
 .rnote{position:fixed;left:8px;top:8px;margin:0;padding:3px 8px;border-radius:6px;background:rgba(20,18,14,.6);color:#e8dcc8;font-size:11px;pointer-events:none}
 @media (prefers-reduced-motion:reduce){#poster,#globe{transition:none}}

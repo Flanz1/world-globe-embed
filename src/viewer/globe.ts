@@ -314,7 +314,7 @@ export async function start(ctx: StartContext): Promise<void> {
       (lon) => ((lon + 180) / 360) * W,
       (lat) => ((90 - lat) / 180) * H,
       [-360, 0, 360],
-      { fillOpacity: reg.fillOpacity, lineWidth: (W / 2048) * 2.5, dim: dimOn() },
+      { fillOpacity: reg.fillOpacity, lineWidth: (W / 2048) * 1.5, dim: dimOn() },
       { w: W, h: H },
     );
     o.tex.needsUpdate = true;

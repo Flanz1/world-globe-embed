@@ -144,7 +144,7 @@ export function makeLegend(stage: HTMLElement): { set(entries: readonly LegendEn
         return li;
       });
       if (contested) {
-        // Dashed borders and hatching: contested zones and overlaps.
+        // Hatching: contested zones and overlaps.
         const li = document.createElement("li");
         li.className = "rkey-contested";
         const sw = document.createElement("i");
