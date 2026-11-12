@@ -8,7 +8,7 @@ const deepEqual = (a, b) => {
   return ka.length === Object.keys(b).length && ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && deepEqual(a[k], b[k]));
 };
 export const validateRegion = validate20;
-const schema31 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/region.schema.json","title":"Region","description":"One region (a country, province, kingdom…) drawn on a map: a GeoJSON Feature (RFC 7946) stored as content/regions/<id>.json. COORDINATES ARE [lon, lat] IN THE MAP IMAGE'S OWN FRAME: lon = x / width * 360 - 180 and lat = 90 - y / height * 180, where x/y are pixels in the image as uploaded. They are NOT adjusted for the slot's prime meridian shift or pole padding; the globe applies the same padding and shift to the region as to the texture, so the region stays on the land when those settings change. That's why the numbers can differ from the globe's grid labels on a padded or shifted globe. Longitudes are within [-180, 180] and every edge takes the shorter way round (so [179, 0] → [-179, 0] crosses the antimeridian and is 2° long). A ring may span at most 180° of longitude and may not contain a pole. Rings are closed, have at least 4 positions, outer rings are counter-clockwise and holes clockwise, and they don't cross themselves. At most 70000 vertices in total. The id is permanent (embeds point at it): each part's label is in properties.partLabels.","type":"object","required":["type","id","properties","geometry"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"type":{"const":"Feature"},"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Permanent id; must match the file name. Embeds use it: v/<slot>/?region=<id>."},"properties":{"type":"object","required":["slot","map","color"],"additionalProperties":false,"properties":{"name":{"type":"string","minLength":1,"maxLength":80,"description":"Optional legacy display name (plain text). The admin editor no longer sets it; part labels (partLabels) replace it."},"slot":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Slot (in content/slots.json) whose globe shows this region."},"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id the region was drawn on."},"color":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$","description":"Fill and border colour, #rgb or #rrggbb."},"fillOpacity":{"type":"number","minimum":0,"maximum":1,"default":0.35},"label":{"type":"boolean","default":true,"description":"Show the part labels (or, for a region without partLabels, its name) in the embed."},"description":{"type":"string","maxLength":500,"description":"Optional short plain-text description."},"legendTitle":{"type":"string","maxLength":40,"description":"Heading of the embed's legend (plain text). Defaults to \"Legend\"."},"legend":{"type":"array","maxItems":16,"description":"Extra colours for the region's parts, each with a plain-text label. The embed shows them as a legend (key=0 hides it).","items":{"type":"object","required":["label","color"],"additionalProperties":false,"properties":{"label":{"type":"string","maxLength":60,"description":"Legend text (plain text)."},"color":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$","description":"#rgb or #rrggbb."}}}},"partLegend":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry (a Polygon is one part), in order: the index of the legend entry whose colour that part is drawn in, or -1 for the region's own colour. Leave it out to draw every part in the region's colour.","items":{"type":"integer","minimum":-1,"maximum":15}},"partLabels":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry, in order: the label the embed shows on that part (plain text), or \"\" for none. Must have one entry per part when present.","items":{"type":"string","maxLength":80}},"partContested":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry, in order: -1 for a normal part, or k (counted from 0) to make that part a contested zone extending part k: land part k claims but doesn't firmly hold. The embed draws a contested zone with a dashed border and a hatched, lighter fill, in its parent's colour (or its own partLegend colour when that isn't -1). k must be another part that is itself normal (no zones of zones). Leave it out when there are no contested zones. Separately, wherever two parts (or this region and another region on the same slot) overlap, the border inside the overlap is drawn dashed automatically.","items":{"type":"integer","minimum":-1,"maximum":999}},"partLocked":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry, in order: true for a part locked in the admin editor, so it can't be dragged or nudged as a whole (its vertices and midpoints still edit). Editor-only; the embed ignores it. Leave it out when no part is locked.","items":{"type":"boolean"}},"provinceBorders":{"type":"array","maxItems":500,"description":"Province borders drawn inside the region with the editor's Province border tool: open lines of [lon, lat] positions (at least 2 each, in the map image's frame like the geometry; each step takes the shorter way round). The embed draws them as fine dotted dark lines, only where they lie inside the region's (non-contested) parts. They don't change the parts. At most 5000 positions in all. Leave it out when there are none.","items":{"type":"array","minItems":2,"maxItems":5000,"items":{"type":"array","minItems":2,"maxItems":2,"prefixItems":[{"type":"number","minimum":-180,"maximum":180},{"type":"number","minimum":-90,"maximum":90}]}}},"updated":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},"created":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$","description":"When the region was first saved."},"createdBy":{"$ref":"#/$defs/account","description":"Who created the region: they (and anyone allowed to edit others' regions) can change it. Set by the admin page and checked by the admin API. Missing on regions from before owners existed, which belong to the repository owner."},"updatedBy":{"$ref":"#/$defs/account","description":"Who saved this version."}}},"geometry":{"type":"object","required":["type","coordinates"],"additionalProperties":false,"properties":{"type":{"enum":["Polygon","MultiPolygon"]},"coordinates":{"type":"array"}},"if":{"properties":{"type":{"const":"Polygon"}}},"then":{"properties":{"coordinates":{"$ref":"#/$defs/polygon"}}},"else":{"properties":{"coordinates":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/polygon"}}}}}},"$defs":{"polygon":{"type":"array","minItems":1,"description":"Outer ring first, then holes.","items":{"$ref":"#/$defs/ring"}},"ring":{"type":"array","minItems":4,"items":{"$ref":"#/$defs/position"}},"position":{"type":"array","minItems":2,"maxItems":2,"prefixItems":[{"type":"number","minimum":-180,"maximum":180},{"type":"number","minimum":-90,"maximum":90}],"items":false},"account":{"type":"object","required":["id","login"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1,"description":"GitHub account id (permanent, survives a rename)."},"login":{"type":"string","pattern":"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$","description":"GitHub username when saved."}}}}};
+const schema31 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/region.schema.json","title":"Region","description":"One region (a country, province, kingdom…) drawn on a map: a GeoJSON Feature (RFC 7946) stored as content/regions/<id>.json. COORDINATES ARE [lon, lat] IN THE MAP IMAGE'S OWN FRAME: lon = x / width * 360 - 180 and lat = 90 - y / height * 180, where x/y are pixels in the image as uploaded. They are NOT adjusted for the slot's prime meridian shift or pole padding; the globe applies the same padding and shift to the region as to the texture, so the region stays on the land when those settings change. That's why the numbers can differ from the globe's grid labels on a padded or shifted globe. Longitudes are within [-180, 180] and every edge takes the shorter way round (so [179, 0] → [-179, 0] crosses the antimeridian and is 2° long). A ring may span at most 180° of longitude and may not contain a pole. Rings are closed, have at least 4 positions, outer rings are counter-clockwise and holes clockwise, and they don't cross themselves. At most 70000 vertices in total. The id is permanent (embeds point at it): each part's label is in properties.partLabels.","type":"object","required":["type","id","properties","geometry"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"type":{"const":"Feature"},"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Permanent id; must match the file name. Embeds use it: v/<slot>/?region=<id>."},"properties":{"type":"object","required":["slot","map","color"],"additionalProperties":false,"properties":{"name":{"type":"string","minLength":1,"maxLength":80,"description":"Optional legacy display name (plain text). The admin editor no longer sets it; part labels (partLabels) replace it."},"slot":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Slot (in content/slots.json) whose globe shows this region."},"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id the region was drawn on."},"color":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$","description":"Fill and border colour, #rgb or #rrggbb."},"fillOpacity":{"type":"number","minimum":0,"maximum":1,"default":0.35},"label":{"type":"boolean","default":true,"description":"Show the part labels (or, for a region without partLabels, its name) in the embed."},"description":{"type":"string","maxLength":500,"description":"Optional short plain-text description."},"legendTitle":{"type":"string","maxLength":40,"description":"Heading of the embed's legend (plain text). Defaults to \"Legend\"."},"legend":{"type":"array","maxItems":16,"description":"Extra colours for the region's parts, each with a plain-text label. The embed shows them as a legend (key=0 hides it).","items":{"type":"object","required":["label","color"],"additionalProperties":false,"properties":{"label":{"type":"string","maxLength":60,"description":"Legend text (plain text)."},"color":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$","description":"#rgb or #rrggbb."}}}},"partLegend":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry (a Polygon is one part), in order: the index of the legend entry whose colour that part is drawn in, or -1 for the region's own colour. Leave it out to draw every part in the region's colour.","items":{"type":"integer","minimum":-1,"maximum":15}},"partLabels":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry, in order: the label the embed shows on that part (plain text), or \"\" for none. Must have one entry per part when present.","items":{"type":"string","maxLength":80}},"partContested":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry, in order: -1 for a normal part, or k (counted from 0) to make that part a contested zone extending part k: land part k claims but doesn't firmly hold. The embed draws a contested zone with a dashed border and a hatched, lighter fill, in its parent's colour (or its own partLegend colour when that isn't -1). k must be another part that is itself normal (no zones of zones). Leave it out when there are no contested zones. Separately, wherever two parts (or this region and another region on the same slot) overlap, the border inside the overlap is drawn dashed automatically.","items":{"type":"integer","minimum":-1,"maximum":999}},"partLocked":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry, in order: true for a part locked in the admin editor, so it can't be dragged or nudged as a whole (its vertices and midpoints still edit). Editor-only; the embed ignores it. Leave it out when no part is locked.","items":{"type":"boolean"}},"nationalBorders":{"type":"boolean","description":"Draw national borders: where two parts of the region share a line exactly (drawn with snapping or tracing), the embed draws a thick dark line on a light casing between parts of different legend colours, and leaves the line off between parts of the same colour. Off unless true: parts that touch just touch. Leave it out for off."},"provinceBorders":{"type":"array","maxItems":500,"description":"Province borders drawn inside the region with the editor's Province border tool: open lines of [lon, lat] positions (at least 2 each, in the map image's frame like the geometry; each step takes the shorter way round). The embed draws them as fine dotted dark lines, only where they lie inside the region's (non-contested) parts. They don't change the parts. At most 5000 positions in all. Leave it out when there are none.","items":{"type":"array","minItems":2,"maxItems":5000,"items":{"type":"array","minItems":2,"maxItems":2,"prefixItems":[{"type":"number","minimum":-180,"maximum":180},{"type":"number","minimum":-90,"maximum":90}]}}},"updated":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},"created":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$","description":"When the region was first saved."},"createdBy":{"$ref":"#/$defs/account","description":"Who created the region: they (and anyone allowed to edit others' regions) can change it. Set by the admin page and checked by the admin API. Missing on regions from before owners existed, which belong to the repository owner."},"updatedBy":{"$ref":"#/$defs/account","description":"Who saved this version."}}},"geometry":{"type":"object","required":["type","coordinates"],"additionalProperties":false,"properties":{"type":{"enum":["Polygon","MultiPolygon"]},"coordinates":{"type":"array"}},"if":{"properties":{"type":{"const":"Polygon"}}},"then":{"properties":{"coordinates":{"$ref":"#/$defs/polygon"}}},"else":{"properties":{"coordinates":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/polygon"}}}}}},"$defs":{"polygon":{"type":"array","minItems":1,"description":"Outer ring first, then holes.","items":{"$ref":"#/$defs/ring"}},"ring":{"type":"array","minItems":4,"items":{"$ref":"#/$defs/position"}},"position":{"type":"array","minItems":2,"maxItems":2,"prefixItems":[{"type":"number","minimum":-180,"maximum":180},{"type":"number","minimum":-90,"maximum":90}],"items":false},"account":{"type":"object","required":["id","login"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1,"description":"GitHub account id (permanent, survives a rename)."},"login":{"type":"string","pattern":"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$","description":"GitHub username when saved."}}}}};
 const schema32 = {"type":"object","required":["id","login"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1,"description":"GitHub account id (permanent, survives a rename)."},"login":{"type":"string","pattern":"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$","description":"GitHub username when saved."}}};
 const pattern4 = new RegExp("^[a-z0-9][a-z0-9-]{0,63}$", "u");
 const pattern7 = new RegExp("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", "u");
@@ -727,62 +727,74 @@ else {
 var valid1 = true;
 }
 if(valid1){
-if(data3.provinceBorders !== undefined){
-let data24 = data3.provinceBorders;
+if(data3.nationalBorders !== undefined){
 const _errs51 = errors;
-if(errors === _errs51){
-if(Array.isArray(data24)){
-if(data24.length > 500){
+if(typeof data3.nationalBorders !== "boolean"){
+validate20.errors = [{instancePath:instancePath+"/properties/nationalBorders",schemaPath:"#/properties/properties/properties/nationalBorders/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
+return false;
+}
+var valid1 = _errs51 === errors;
+}
+else {
+var valid1 = true;
+}
+if(valid1){
+if(data3.provinceBorders !== undefined){
+let data25 = data3.provinceBorders;
+const _errs53 = errors;
+if(errors === _errs53){
+if(Array.isArray(data25)){
+if(data25.length > 500){
 validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders",schemaPath:"#/properties/properties/properties/provinceBorders/maxItems",keyword:"maxItems",params:{limit: 500},message:"must NOT have more than 500 items"}];
 return false;
 }
 else {
 var valid8 = true;
-const len5 = data24.length;
+const len5 = data25.length;
 for(let i5=0; i5<len5; i5++){
-let data25 = data24[i5];
-const _errs53 = errors;
-if(errors === _errs53){
-if(Array.isArray(data25)){
-if(data25.length > 5000){
+let data26 = data25[i5];
+const _errs55 = errors;
+if(errors === _errs55){
+if(Array.isArray(data26)){
+if(data26.length > 5000){
 validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i5,schemaPath:"#/properties/properties/properties/provinceBorders/items/maxItems",keyword:"maxItems",params:{limit: 5000},message:"must NOT have more than 5000 items"}];
 return false;
 }
 else {
-if(data25.length < 2){
+if(data26.length < 2){
 validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i5,schemaPath:"#/properties/properties/properties/provinceBorders/items/minItems",keyword:"minItems",params:{limit: 2},message:"must NOT have fewer than 2 items"}];
 return false;
 }
 else {
 var valid9 = true;
-const len6 = data25.length;
+const len6 = data26.length;
 for(let i6=0; i6<len6; i6++){
-let data26 = data25[i6];
-const _errs55 = errors;
-if(errors === _errs55){
-if(Array.isArray(data26)){
-if(data26.length > 2){
+let data27 = data26[i6];
+const _errs57 = errors;
+if(errors === _errs57){
+if(Array.isArray(data27)){
+if(data27.length > 2){
 validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i5+"/" + i6,schemaPath:"#/properties/properties/properties/provinceBorders/items/items/maxItems",keyword:"maxItems",params:{limit: 2},message:"must NOT have more than 2 items"}];
 return false;
 }
 else {
-if(data26.length < 2){
+if(data27.length < 2){
 validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i5+"/" + i6,schemaPath:"#/properties/properties/properties/provinceBorders/items/items/minItems",keyword:"minItems",params:{limit: 2},message:"must NOT have fewer than 2 items"}];
 return false;
 }
 else {
-const len7 = data26.length;
+const len7 = data27.length;
 if(len7 > 0){
-let data27 = data26[0];
-const _errs57 = errors;
-if(errors === _errs57){
-if((typeof data27 == "number") && (isFinite(data27))){
-if(data27 > 180 || isNaN(data27)){
+let data28 = data27[0];
+const _errs59 = errors;
+if(errors === _errs59){
+if((typeof data28 == "number") && (isFinite(data28))){
+if(data28 > 180 || isNaN(data28)){
 validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i5+"/" + i6+"/0",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/0/maximum",keyword:"maximum",params:{comparison: "<=", limit: 180},message:"must be <= 180"}];
 return false;
 }
 else {
-if(data27 < -180 || isNaN(data27)){
+if(data28 < -180 || isNaN(data28)){
 validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i5+"/" + i6+"/0",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/0/minimum",keyword:"minimum",params:{comparison: ">=", limit: -180},message:"must be >= -180"}];
 return false;
 }
@@ -793,20 +805,20 @@ validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" +
 return false;
 }
 }
-var valid10 = _errs57 === errors;
+var valid10 = _errs59 === errors;
 }
 if(valid10){
 if(len7 > 1){
-let data28 = data26[1];
-const _errs59 = errors;
-if(errors === _errs59){
-if((typeof data28 == "number") && (isFinite(data28))){
-if(data28 > 90 || isNaN(data28)){
+let data29 = data27[1];
+const _errs61 = errors;
+if(errors === _errs61){
+if((typeof data29 == "number") && (isFinite(data29))){
+if(data29 > 90 || isNaN(data29)){
 validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i5+"/" + i6+"/1",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/1/maximum",keyword:"maximum",params:{comparison: "<=", limit: 90},message:"must be <= 90"}];
 return false;
 }
 else {
-if(data28 < -90 || isNaN(data28)){
+if(data29 < -90 || isNaN(data29)){
 validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i5+"/" + i6+"/1",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/1/minimum",keyword:"minimum",params:{comparison: ">=", limit: -90},message:"must be >= -90"}];
 return false;
 }
@@ -817,7 +829,7 @@ validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" +
 return false;
 }
 }
-var valid10 = _errs59 === errors;
+var valid10 = _errs61 === errors;
 }
 }
 }
@@ -828,7 +840,7 @@ validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" +
 return false;
 }
 }
-var valid9 = _errs55 === errors;
+var valid9 = _errs57 === errors;
 if(!valid9){
 break;
 }
@@ -841,7 +853,7 @@ validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" +
 return false;
 }
 }
-var valid8 = _errs53 === errors;
+var valid8 = _errs55 === errors;
 if(!valid8){
 break;
 }
@@ -853,23 +865,23 @@ validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders",sc
 return false;
 }
 }
-var valid1 = _errs51 === errors;
+var valid1 = _errs53 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.updated !== undefined){
-let data29 = data3.updated;
-const _errs61 = errors;
-if(errors === _errs61){
-if(typeof data29 === "string"){
-if(func2(data29) > 40){
+let data30 = data3.updated;
+const _errs63 = errors;
+if(errors === _errs63){
+if(typeof data30 === "string"){
+if(func2(data30) > 40){
 validate20.errors = [{instancePath:instancePath+"/properties/updated",schemaPath:"#/properties/properties/properties/updated/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
 return false;
 }
 else {
-if(!pattern9.test(data29)){
+if(!pattern9.test(data30)){
 validate20.errors = [{instancePath:instancePath+"/properties/updated",schemaPath:"#/properties/properties/properties/updated/pattern",keyword:"pattern",params:{pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},message:"must match pattern \""+"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"+"\""}];
 return false;
 }
@@ -880,23 +892,23 @@ validate20.errors = [{instancePath:instancePath+"/properties/updated",schemaPath
 return false;
 }
 }
-var valid1 = _errs61 === errors;
+var valid1 = _errs63 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.created !== undefined){
-let data30 = data3.created;
-const _errs63 = errors;
-if(errors === _errs63){
-if(typeof data30 === "string"){
-if(func2(data30) > 40){
+let data31 = data3.created;
+const _errs65 = errors;
+if(errors === _errs65){
+if(typeof data31 === "string"){
+if(func2(data31) > 40){
 validate20.errors = [{instancePath:instancePath+"/properties/created",schemaPath:"#/properties/properties/properties/created/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
 return false;
 }
 else {
-if(!pattern9.test(data30)){
+if(!pattern9.test(data31)){
 validate20.errors = [{instancePath:instancePath+"/properties/created",schemaPath:"#/properties/properties/properties/created/pattern",keyword:"pattern",params:{pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},message:"must match pattern \""+"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"+"\""}];
 return false;
 }
@@ -907,60 +919,60 @@ validate20.errors = [{instancePath:instancePath+"/properties/created",schemaPath
 return false;
 }
 }
-var valid1 = _errs63 === errors;
+var valid1 = _errs65 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.createdBy !== undefined){
-let data31 = data3.createdBy;
-const _errs65 = errors;
-const _errs66 = errors;
-if(errors === _errs66){
-if(data31 && typeof data31 == "object" && !Array.isArray(data31)){
+let data32 = data3.createdBy;
+const _errs67 = errors;
+const _errs68 = errors;
+if(errors === _errs68){
+if(data32 && typeof data32 == "object" && !Array.isArray(data32)){
 let missing3;
-if(((data31.id === undefined) && (missing3 = "id")) || ((data31.login === undefined) && (missing3 = "login"))){
+if(((data32.id === undefined) && (missing3 = "id")) || ((data32.login === undefined) && (missing3 = "login"))){
 validate20.errors = [{instancePath:instancePath+"/properties/createdBy",schemaPath:"#/$defs/account/required",keyword:"required",params:{missingProperty: missing3},message:"must have required property '"+missing3+"'"}];
 return false;
 }
 else {
-const _errs68 = errors;
-for(const key3 in data31){
+const _errs70 = errors;
+for(const key3 in data32){
 if(!((key3 === "id") || (key3 === "login"))){
 validate20.errors = [{instancePath:instancePath+"/properties/createdBy",schemaPath:"#/$defs/account/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key3},message:"must NOT have additional properties"}];
 return false;
 break;
 }
 }
-if(_errs68 === errors){
-if(data31.id !== undefined){
-let data32 = data31.id;
-const _errs69 = errors;
-if(!(((typeof data32 == "number") && (!(data32 % 1) && !isNaN(data32))) && (isFinite(data32)))){
+if(_errs70 === errors){
+if(data32.id !== undefined){
+let data33 = data32.id;
+const _errs71 = errors;
+if(!(((typeof data33 == "number") && (!(data33 % 1) && !isNaN(data33))) && (isFinite(data33)))){
 validate20.errors = [{instancePath:instancePath+"/properties/createdBy/id",schemaPath:"#/$defs/account/properties/id/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
 return false;
 }
-if(errors === _errs69){
-if((typeof data32 == "number") && (isFinite(data32))){
-if(data32 < 1 || isNaN(data32)){
+if(errors === _errs71){
+if((typeof data33 == "number") && (isFinite(data33))){
+if(data33 < 1 || isNaN(data33)){
 validate20.errors = [{instancePath:instancePath+"/properties/createdBy/id",schemaPath:"#/$defs/account/properties/id/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
 return false;
 }
 }
 }
-var valid12 = _errs69 === errors;
+var valid12 = _errs71 === errors;
 }
 else {
 var valid12 = true;
 }
 if(valid12){
-if(data31.login !== undefined){
-let data33 = data31.login;
-const _errs71 = errors;
-if(errors === _errs71){
-if(typeof data33 === "string"){
-if(!pattern11.test(data33)){
+if(data32.login !== undefined){
+let data34 = data32.login;
+const _errs73 = errors;
+if(errors === _errs73){
+if(typeof data34 === "string"){
+if(!pattern11.test(data34)){
 validate20.errors = [{instancePath:instancePath+"/properties/createdBy/login",schemaPath:"#/$defs/account/properties/login/pattern",keyword:"pattern",params:{pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"},message:"must match pattern \""+"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"+"\""}];
 return false;
 }
@@ -970,7 +982,7 @@ validate20.errors = [{instancePath:instancePath+"/properties/createdBy/login",sc
 return false;
 }
 }
-var valid12 = _errs71 === errors;
+var valid12 = _errs73 === errors;
 }
 else {
 var valid12 = true;
@@ -984,60 +996,60 @@ validate20.errors = [{instancePath:instancePath+"/properties/createdBy",schemaPa
 return false;
 }
 }
-var valid1 = _errs65 === errors;
+var valid1 = _errs67 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.updatedBy !== undefined){
-let data34 = data3.updatedBy;
-const _errs73 = errors;
-const _errs74 = errors;
-if(errors === _errs74){
-if(data34 && typeof data34 == "object" && !Array.isArray(data34)){
+let data35 = data3.updatedBy;
+const _errs75 = errors;
+const _errs76 = errors;
+if(errors === _errs76){
+if(data35 && typeof data35 == "object" && !Array.isArray(data35)){
 let missing4;
-if(((data34.id === undefined) && (missing4 = "id")) || ((data34.login === undefined) && (missing4 = "login"))){
+if(((data35.id === undefined) && (missing4 = "id")) || ((data35.login === undefined) && (missing4 = "login"))){
 validate20.errors = [{instancePath:instancePath+"/properties/updatedBy",schemaPath:"#/$defs/account/required",keyword:"required",params:{missingProperty: missing4},message:"must have required property '"+missing4+"'"}];
 return false;
 }
 else {
-const _errs76 = errors;
-for(const key4 in data34){
+const _errs78 = errors;
+for(const key4 in data35){
 if(!((key4 === "id") || (key4 === "login"))){
 validate20.errors = [{instancePath:instancePath+"/properties/updatedBy",schemaPath:"#/$defs/account/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key4},message:"must NOT have additional properties"}];
 return false;
 break;
 }
 }
-if(_errs76 === errors){
-if(data34.id !== undefined){
-let data35 = data34.id;
-const _errs77 = errors;
-if(!(((typeof data35 == "number") && (!(data35 % 1) && !isNaN(data35))) && (isFinite(data35)))){
+if(_errs78 === errors){
+if(data35.id !== undefined){
+let data36 = data35.id;
+const _errs79 = errors;
+if(!(((typeof data36 == "number") && (!(data36 % 1) && !isNaN(data36))) && (isFinite(data36)))){
 validate20.errors = [{instancePath:instancePath+"/properties/updatedBy/id",schemaPath:"#/$defs/account/properties/id/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
 return false;
 }
-if(errors === _errs77){
-if((typeof data35 == "number") && (isFinite(data35))){
-if(data35 < 1 || isNaN(data35)){
+if(errors === _errs79){
+if((typeof data36 == "number") && (isFinite(data36))){
+if(data36 < 1 || isNaN(data36)){
 validate20.errors = [{instancePath:instancePath+"/properties/updatedBy/id",schemaPath:"#/$defs/account/properties/id/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
 return false;
 }
 }
 }
-var valid14 = _errs77 === errors;
+var valid14 = _errs79 === errors;
 }
 else {
 var valid14 = true;
 }
 if(valid14){
-if(data34.login !== undefined){
-let data36 = data34.login;
-const _errs79 = errors;
-if(errors === _errs79){
-if(typeof data36 === "string"){
-if(!pattern11.test(data36)){
+if(data35.login !== undefined){
+let data37 = data35.login;
+const _errs81 = errors;
+if(errors === _errs81){
+if(typeof data37 === "string"){
+if(!pattern11.test(data37)){
 validate20.errors = [{instancePath:instancePath+"/properties/updatedBy/login",schemaPath:"#/$defs/account/properties/login/pattern",keyword:"pattern",params:{pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"},message:"must match pattern \""+"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"+"\""}];
 return false;
 }
@@ -1047,7 +1059,7 @@ validate20.errors = [{instancePath:instancePath+"/properties/updatedBy/login",sc
 return false;
 }
 }
-var valid14 = _errs79 === errors;
+var valid14 = _errs81 === errors;
 }
 else {
 var valid14 = true;
@@ -1061,10 +1073,11 @@ validate20.errors = [{instancePath:instancePath+"/properties/updatedBy",schemaPa
 return false;
 }
 }
-var valid1 = _errs73 === errors;
+var valid1 = _errs75 === errors;
 }
 else {
 var valid1 = true;
+}
 }
 }
 }
@@ -1098,14 +1111,14 @@ var valid0 = true;
 }
 if(valid0){
 if(data.geometry !== undefined){
-let data37 = data.geometry;
-const _errs81 = errors;
+let data38 = data.geometry;
 const _errs83 = errors;
+const _errs85 = errors;
 let valid15 = true;
-const _errs84 = errors;
-if(data37 && typeof data37 == "object" && !Array.isArray(data37)){
-if(data37.type !== undefined){
-if("Polygon" !== data37.type){
+const _errs86 = errors;
+if(data38 && typeof data38 == "object" && !Array.isArray(data38)){
+if(data38.type !== undefined){
+if("Polygon" !== data38.type){
 const err0 = {};
 if(vErrors === null){
 vErrors = [err0];
@@ -1117,11 +1130,11 @@ errors++;
 }
 }
 }
-var _valid0 = _errs84 === errors;
-errors = _errs83;
+var _valid0 = _errs86 === errors;
+errors = _errs85;
 if(vErrors !== null){
-if(_errs83){
-vErrors.length = _errs83;
+if(_errs85){
+vErrors.length = _errs85;
 }
 else {
 vErrors = null;
@@ -1129,16 +1142,16 @@ vErrors = null;
 }
 let ifClause0;
 if(_valid0){
-const _errs86 = errors;
-if(data37 && typeof data37 == "object" && !Array.isArray(data37)){
-if(data37.coordinates !== undefined){
-if(!(validate21(data37.coordinates, {instancePath:instancePath+"/geometry/coordinates",parentData:data37,parentDataProperty:"coordinates",rootData,dynamicAnchors}))){
+const _errs88 = errors;
+if(data38 && typeof data38 == "object" && !Array.isArray(data38)){
+if(data38.coordinates !== undefined){
+if(!(validate21(data38.coordinates, {instancePath:instancePath+"/geometry/coordinates",parentData:data38,parentDataProperty:"coordinates",rootData,dynamicAnchors}))){
 vErrors = vErrors === null ? validate21.errors : vErrors.concat(validate21.errors);
 errors = vErrors.length;
 }
 }
 }
-var _valid0 = _errs86 === errors;
+var _valid0 = _errs88 === errors;
 valid15 = _valid0;
 if(valid15){
 var props0 = {};
@@ -1148,27 +1161,27 @@ props0.type = true;
 ifClause0 = "then";
 }
 else {
-const _errs88 = errors;
-if(data37 && typeof data37 == "object" && !Array.isArray(data37)){
-if(data37.coordinates !== undefined){
-let data40 = data37.coordinates;
-const _errs89 = errors;
-if(errors === _errs89){
-if(Array.isArray(data40)){
-if(data40.length < 1){
+const _errs90 = errors;
+if(data38 && typeof data38 == "object" && !Array.isArray(data38)){
+if(data38.coordinates !== undefined){
+let data41 = data38.coordinates;
+const _errs91 = errors;
+if(errors === _errs91){
+if(Array.isArray(data41)){
+if(data41.length < 1){
 validate20.errors = [{instancePath:instancePath+"/geometry/coordinates",schemaPath:"#/properties/geometry/else/properties/coordinates/minItems",keyword:"minItems",params:{limit: 1},message:"must NOT have fewer than 1 items"}];
 return false;
 }
 else {
 var valid19 = true;
-const len8 = data40.length;
+const len8 = data41.length;
 for(let i7=0; i7<len8; i7++){
-const _errs91 = errors;
-if(!(validate21(data40[i7], {instancePath:instancePath+"/geometry/coordinates/" + i7,parentData:data40,parentDataProperty:i7,rootData,dynamicAnchors}))){
+const _errs93 = errors;
+if(!(validate21(data41[i7], {instancePath:instancePath+"/geometry/coordinates/" + i7,parentData:data41,parentDataProperty:i7,rootData,dynamicAnchors}))){
 vErrors = vErrors === null ? validate21.errors : vErrors.concat(validate21.errors);
 errors = vErrors.length;
 }
-var valid19 = _errs91 === errors;
+var valid19 = _errs93 === errors;
 if(!valid19){
 break;
 }
@@ -1182,7 +1195,7 @@ return false;
 }
 }
 }
-var _valid0 = _errs88 === errors;
+var _valid0 = _errs90 === errors;
 valid15 = _valid0;
 if(valid15){
 if(props0 !== true){
@@ -1204,43 +1217,43 @@ errors++;
 validate20.errors = vErrors;
 return false;
 }
-if(errors === _errs81){
-if(data37 && typeof data37 == "object" && !Array.isArray(data37)){
+if(errors === _errs83){
+if(data38 && typeof data38 == "object" && !Array.isArray(data38)){
 let missing5;
-if(((data37.type === undefined) && (missing5 = "type")) || ((data37.coordinates === undefined) && (missing5 = "coordinates"))){
+if(((data38.type === undefined) && (missing5 = "type")) || ((data38.coordinates === undefined) && (missing5 = "coordinates"))){
 validate20.errors = [{instancePath:instancePath+"/geometry",schemaPath:"#/properties/geometry/required",keyword:"required",params:{missingProperty: missing5},message:"must have required property '"+missing5+"'"}];
 return false;
 }
 else {
-const _errs92 = errors;
-for(const key5 in data37){
+const _errs94 = errors;
+for(const key5 in data38){
 if(!((key5 === "type") || (key5 === "coordinates"))){
 validate20.errors = [{instancePath:instancePath+"/geometry",schemaPath:"#/properties/geometry/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key5},message:"must NOT have additional properties"}];
 return false;
 break;
 }
 }
-if(_errs92 === errors){
-if(data37.type !== undefined){
-let data42 = data37.type;
-const _errs93 = errors;
-if(!((data42 === "Polygon") || (data42 === "MultiPolygon"))){
+if(_errs94 === errors){
+if(data38.type !== undefined){
+let data43 = data38.type;
+const _errs95 = errors;
+if(!((data43 === "Polygon") || (data43 === "MultiPolygon"))){
 validate20.errors = [{instancePath:instancePath+"/geometry/type",schemaPath:"#/properties/geometry/properties/type/enum",keyword:"enum",params:{allowedValues: schema31.properties.geometry.properties.type.enum},message:"must be equal to one of the allowed values"}];
 return false;
 }
-var valid20 = _errs93 === errors;
+var valid20 = _errs95 === errors;
 }
 else {
 var valid20 = true;
 }
 if(valid20){
-if(data37.coordinates !== undefined){
-const _errs94 = errors;
-if(!(Array.isArray(data37.coordinates))){
+if(data38.coordinates !== undefined){
+const _errs96 = errors;
+if(!(Array.isArray(data38.coordinates))){
 validate20.errors = [{instancePath:instancePath+"/geometry/coordinates",schemaPath:"#/properties/geometry/properties/coordinates/type",keyword:"type",params:{type: "array"},message:"must be array"}];
 return false;
 }
-var valid20 = _errs94 === errors;
+var valid20 = _errs96 === errors;
 }
 else {
 var valid20 = true;
@@ -1254,7 +1267,7 @@ validate20.errors = [{instancePath:instancePath+"/geometry",schemaPath:"#/proper
 return false;
 }
 }
-var valid0 = _errs81 === errors;
+var valid0 = _errs83 === errors;
 }
 else {
 var valid0 = true;

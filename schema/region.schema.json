@@ -136,6 +136,10 @@
             "type": "boolean"
           }
         },
+        "nationalBorders": {
+          "type": "boolean",
+          "description": "Draw national borders: where two parts of the region share a line exactly (drawn with snapping or tracing), the embed draws a thick dark line on a light casing between parts of different legend colours, and leaves the line off between parts of the same colour. Off unless true: parts that touch just touch. Leave it out for off."
+        },
         "provinceBorders": {
           "type": "array",
           "maxItems": 500,
