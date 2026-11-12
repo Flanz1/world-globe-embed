@@ -95,15 +95,7 @@ export interface RegionData {
   /** Per polygon: -1, or the normal part this contested zone extends. */
   contested: number[];
   geometry: RegionGeometry;
-  /**
-   * Polygons (outer ring then holes, open rings) of other regions on the same slot that overlap this
-   * one, added by the build. The embed dashes this region's border inside them; it never draws them.
-   */
-  clash?: Ring[][];
 }
-
-/** Most vertices in a region's `clash` data. */
-export const CLASH_MAX_VERTICES = 2000;
 
 /** Inlined per region into its slot page so the poster can face it before anything loads. */
 export interface RegionIndexEntry {
@@ -280,29 +272,13 @@ export function parseGeometry(v: unknown): RegionGeometry | null {
 }
 
 /**
- * A region's `clash` data from outside the page: polygons of at least 3-position rings, finite numbers in
- * range, at most CLASH_MAX_VERTICES positions in all. Anything else gives [] (the region still loads).
- */
-export function parseClash(v: unknown): Ring[][] {
-  if (!Array.isArray(v) || v.length > 1000) return [];
-  const budget = { n: CLASH_MAX_VERTICES };
-  const out: Ring[][] = [];
-  for (const p of v) {
-    const poly = parsePolygon(p, budget);
-    if (!poly || poly.some((r) => r.length < 3)) return [];
-    out.push(poly);
-  }
-  return out;
-}
-
-/**
  * Validates region data from outside the page (a fetched regions/<id>.json, or a postMessage from the
  * admin page). Everything is checked and copied; anything unexpected gives null. Strings are only ever
  * used as text.
  */
 export function parseRegionData(v: unknown): RegionData | null {
   if (!isObj(v)) return null;
-  const { id, slot, name, color, fillOpacity, label, geometry, legend, legendTitle, parts, labels, contested, clash } = v;
+  const { id, slot, name, color, fillOpacity, label, geometry, legend, legendTitle, parts, labels, contested } = v;
   if (typeof id !== "string" || !REGION_ID.test(id)) return null;
   if (typeof slot !== "string" || !REGION_ID.test(slot)) return null;
   if (typeof name !== "string" || name.length > NAME_MAX) return null;
@@ -341,10 +317,10 @@ export function parseRegionData(v: unknown): RegionData | null {
     legend: lg,
     parts: parts ? [...(parts as number[])] : new Array<number>(n).fill(OWN_COLOUR),
     labels: labels ? [...(labels as string[])] : new Array<string>(n).fill(""),
-    // Older data has neither; malformed entries become normal parts, malformed clash data is dropped.
+    // Older data has none; malformed entries become normal parts. A `clash` field from older builds
+    // (overlaps with other regions) is ignored: regions are separate maps and never mark each other.
     contested: normalizePartContested(Array.isArray(contested) && contested.length === n ? contested : undefined, n),
     geometry: g,
-    ...(clash !== undefined ? { clash: parseClash(clash) } : {}),
   };
 }
 
