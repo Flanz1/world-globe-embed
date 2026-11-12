@@ -21,6 +21,7 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { SLOT, MAP, makeFixture } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
+import { useAdminApi } from "./admin-api.mjs";
 import { geometryBounds } from "../../src/shared/geo.ts";
 import { flatFit } from "../../src/shared/region.ts";
 
@@ -91,6 +92,7 @@ const A = "editor";
 const mock = new MockGitHub({ root: dir, branches: ["main", BRANCH] });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
 await ctx.route("https://api.github.com/**", (r) => mock.handle(r));
+await useAdminApi(ctx, mock, { branch: BRANCH });
 const page = await ctx.newPage();
 const errors = [];
 const dialogs = [];
@@ -141,8 +143,6 @@ const undo = async () => (await page.keyboard.press("Control+z"), await page.wai
 
 await step(A, "open the editor", async () => {
   await page.goto(`${SITE}/admin/#regions`);
-  await page.fill("#token", "ghp_e2etoken");
-  await page.click('#signin-form button[type="submit"]');
   await page.waitForSelector('#regions .rcard[data-region="snap-test"]', { timeout: 15000 });
   await page.locator('[data-region="snap-test"] [data-action="edit"]').click();
   await page.waitForSelector("dialog.editor[open]");

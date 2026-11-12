@@ -1,8 +1,10 @@
 /**
- * Minimal GitHub REST client for the admin page.
- * The token is only ever placed in the Authorization header of requests to api.github.com.
+ * Minimal GitHub REST client for the admin page. It talks to the admin API (worker/), which signs people
+ * in with GitHub, checks their permissions and makes the commits as the site's GitHub App: /gh/... there
+ * is an allow-listed copy of the GitHub REST endpoints this file uses. The session token is only ever
+ * placed in the Authorization header of requests to the admin API.
  */
-const API = "https://api.github.com";
+import type { Permission } from "../shared/access.ts";
 
 export class GitHubError extends Error {
   constructor(
@@ -43,19 +45,20 @@ export interface WorkflowRun {
   head_commit?: { message: string } | null;
 }
 
-/**
- * Classic-token scopes the admin page accepts. Anything broader (repo, workflow, delete_repo, admin:*, …)
- * would turn a stolen admin token into much more than "can edit public repos", so sign-in is refused.
- */
-const ALLOWED_CLASSIC_SCOPES = new Set(["public_repo", "read:user", "user:email", "read:org"]);
+/** Who is signed in, from the admin API. */
+export interface Me {
+  id: number;
+  login: string;
+  /** The repository owner: every permission, always. */
+  owner: boolean;
+  permissions: Permission[];
+}
 
-/** Scopes in an X-OAuth-Scopes header that the admin page doesn't need. Fine-grained tokens send none. */
-export function excessScopes(header: string | null): string[] {
-  if (!header) return [];
-  return header
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s && !ALLOWED_CLASSIC_SCOPES.has(s));
+/** People who signed in but aren't on the list yet. */
+export interface Waiting {
+  id: number;
+  login: string;
+  at: string;
 }
 
 const utf8ToBase64 = (s: string): string => {
@@ -67,22 +70,34 @@ const utf8ToBase64 = (s: string): string => {
 const base64ToUtf8 = (b64: string): string =>
   new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, "")), (c) => c.charCodeAt(0)));
 
+/** The admin API refused a request because the person isn't on the admin list (yet). */
+export class NotListed extends GitHubError {
+  constructor(
+    message: string,
+    public login: string,
+  ) {
+    super(403, message);
+  }
+}
+
 export class GitHub {
-  /** The branch every read and commit goes to. */
+  /** The branch every read and commit goes to (the admin API decides which). */
   branch = "main";
   /** The repository's default branch (what GitHub Pages deploys). */
   defaultBranch = "main";
+  private readonly API: string;
+  private readonly root: string;
 
   /**
-   * @param targetBranch branch to read from and commit to; empty means the repository's default branch.
-   *   Set at build time with VITE_CONTENT_BRANCH so a test build never writes to main.
+   * @param api the admin API's address (VITE_ADMIN_API at build time).
    */
   constructor(
     private token: string,
     public repo: string,
-    private targetBranch = "",
+    api: string,
   ) {
-    if (targetBranch && !BRANCH.test(targetBranch)) throw new Error(`"${targetBranch}" isn't a valid branch name.`);
+    this.API = `${api.replace(/\/+$/, "")}/gh`;
+    this.root = api.replace(/\/+$/, "");
   }
 
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -96,7 +111,7 @@ export class GitHub {
   createBlob(base64: string, onProgress?: (loaded: number, total: number) => void): Promise<string> {
     return new Promise((resolve, reject) => {
       const x = new XMLHttpRequest();
-      x.open("POST", `${API}/repos/${this.repo}/git/blobs`);
+      x.open("POST", `${this.API}/repos/${this.repo}/git/blobs`);
       x.setRequestHeader("Accept", "application/vnd.github+json");
       x.setRequestHeader("X-GitHub-Api-Version", "2022-11-28");
       x.setRequestHeader("Authorization", `Bearer ${this.token}`);
@@ -112,15 +127,15 @@ export class GitHub {
         }
         if (x.status >= 200 && x.status < 300 && body.sha) return resolve(body.sha);
         let msg = body.message ?? x.statusText;
-        if (x.status === 401) msg = "The token was rejected (expired or mistyped?).";
+        if (x.status === 401) msg = "You're signed out (the session expired). Sign in again.";
         reject(new GitHubError(x.status, msg));
       };
       x.send(JSON.stringify({ content: base64, encoding: "base64" }));
     });
   }
 
-  private async send<T>(path: string, init: RequestInit = {}): Promise<{ data: T; headers: Headers }> {
-    const r = await fetch(`${API}${path}`, {
+  private async send<T>(path: string, init: RequestInit = {}, base = this.API): Promise<{ data: T; headers: Headers }> {
+    const r = await fetch(`${base}${path}`, {
       ...init,
       cache: "no-store",
       headers: {
@@ -132,42 +147,43 @@ export class GitHub {
       },
     });
     if (!r.ok) {
-      let msg = r.statusText;
+      let body: { message?: string; notListed?: boolean; login?: string } = {};
       try {
-        msg = ((await r.json()) as { message?: string }).message ?? msg;
+        body = (await r.json()) as typeof body;
       } catch {
         /* no JSON body */
       }
-      if (r.status === 401) msg = "The token was rejected (expired or mistyped?).";
-      if (r.status === 403 || r.status === 404)
-        msg = `${msg}. Check that the token has access to ${this.repo} with Contents: Read and write.`;
+      const msg = r.status === 401 ? "You're signed out (the session expired). Sign in again." : (body.message ?? r.statusText);
+      if (r.status === 403 && body.notListed) throw new NotListed(msg, body.login ?? "");
       throw new GitHubError(r.status, msg);
     }
     return { data: (r.status === 204 ? undefined : await r.json()) as T, headers: r.headers };
   }
 
-  /** Confirms the token works and can push, and lists any scopes it has beyond what the page needs. */
-  async whoAmI(): Promise<{ login: string; canPush: boolean; excessScopes: string[] }> {
-    const [user, repo] = await Promise.all([
-      this.send<{ login: string }>("/user").catch(() => null),
-      this.send<{ default_branch: string; permissions?: { push?: boolean } }>(`/repos/${this.repo}`),
+  /** Who is signed in and what they may do; also learns the branch to work on. Throws NotListed for someone not on the list. */
+  async whoAmI(): Promise<Me> {
+    const [me, repo] = await Promise.all([
+      this.send<Me & { branch: string }>("/session", {}, this.root),
+      this.send<{ default_branch: string }>(`/repos/${this.repo}`),
     ]);
     this.defaultBranch = repo.data.default_branch;
-    this.branch = this.targetBranch || this.defaultBranch;
-    if (this.branch !== this.defaultBranch) {
-      try {
-        await this.request(`/repos/${this.repo}/git/ref/heads/${this.branch}`);
-      } catch (e) {
-        if (e instanceof GitHubError && e.status === 404)
-          throw new GitHubError(404, `This admin page is set to write to the branch "${this.branch}", which doesn't exist in ${this.repo}. Create it, or rebuild without VITE_CONTENT_BRANCH.`);
-        throw e;
-      }
-    }
-    return {
-      login: user?.data.login ?? "token",
-      canPush: !!repo.data.permissions?.push,
-      excessScopes: excessScopes(repo.headers.get("X-OAuth-Scopes")),
-    };
+    if (!BRANCH.test(me.data.branch)) throw new Error("The admin API named an odd branch.");
+    this.branch = me.data.branch;
+    const { id, login, owner, permissions } = me.data;
+    return { id, login, owner, permissions };
+  }
+
+  /** A GitHub account by username (Users tab). */
+  async lookupUser(login: string): Promise<{ id: number; login: string }> {
+    return (await this.send<{ id: number; login: string }>(`/users/${encodeURIComponent(login)}`, {}, this.root)).data;
+  }
+
+  async waiting(): Promise<Waiting[]> {
+    return (await this.send<Waiting[]>("/waiting", {}, this.root)).data;
+  }
+
+  async dismissWaiting(id: number): Promise<void> {
+    await this.send(`/waiting/${id}`, { method: "DELETE" }, this.root);
   }
 
   async readText(path: string): Promise<string> {

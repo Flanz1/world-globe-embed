@@ -13,26 +13,22 @@
   <h1>Globe maps</h1>
   <span id="who" class="muted"></span>
   <span id="branch" class="branch" role="note" hidden></span>
-  <button id="forget" type="button" class="ghost" hidden>Forget token</button>
+  <button id="forget" type="button" class="ghost" hidden>Sign out</button>
 </header>
 <main id="app">
   <section id="signin" class="card" hidden>
     <h2>Sign in</h2>
-    <p>Paste your own GitHub token. It's sent only to api.github.com and, unless you tick <em>Remember</em>, forgotten when you close this tab.</p>
-    <ul class="muted">
-      <li><strong>Repository owner:</strong> a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">fine-grained token</a>
-        limited to this one repository, with <em>Contents: Read and write</em> (and optionally <em>Actions: Read-only</em>).</li>
-      <li><strong>Collaborators:</strong> GitHub doesn't let fine-grained tokens write to a personal account's repository you're only a collaborator on,
-        so create a <a href="https://github.com/settings/tokens/new?scopes=public_repo&amp;description=Globe%20maps%20admin" target="_blank" rel="noopener">classic token</a>
-        with only the <code>public_repo</code> scope and a short expiry.</li>
-    </ul>
-    <form id="signin-form">
-      <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…" required>
-      <button type="submit">Sign in</button>
-      <label class="check"><input id="remember" type="checkbox"> Remember on this device</label>
-    </form>
-    <p class="muted">Only tick <em>Remember</em> on your own computer: a remembered token stays in this browser until you press <em>Forget token</em>.</p>
+    <p>Sign in with your GitHub account. You'll only see the parts of the admin page you've been given access to.</p>
+    <p><button id="signin-github" type="button">Sign in with GitHub</button></p>
+    <p class="muted small">GitHub asks once whether to let this site know your username. The page never sees your GitHub password or a token that can change your repositories, and the sign-in lasts at most 12 hours in this tab.</p>
+    <p id="signin-setup" class="warn small" hidden>Sign-in isn't set up for this copy of the site yet (it was built without VITE_ADMIN_API).</p>
     <p id="signin-error" class="error" role="alert"></p>
+  </section>
+
+  <section id="waiting" class="card" hidden>
+    <h2>Waiting for access</h2>
+    <p>You're signed in as <strong id="waiting-who"></strong>, but you aren't on the admin list yet. Your name now shows up for the site's owner in the Users tab: once they add you, reload this page.</p>
+    <button id="waiting-out" type="button" class="ghost">Sign out</button>
   </section>
 
   <div id="main" hidden>
@@ -45,6 +41,7 @@
     <div class="tabs" role="tablist" aria-label="Admin sections">
       <button type="button" role="tab" id="tab-btn-maps" aria-controls="tab-maps" aria-selected="true">Maps &amp; slots</button>
       <button type="button" role="tab" id="tab-btn-regions" aria-controls="tab-regions" aria-selected="false">Regions</button>
+      <button type="button" role="tab" id="tab-btn-users" aria-controls="tab-users" aria-selected="false" hidden>Users</button>
     </div>
 
     <div id="tab-maps" role="tabpanel" aria-labelledby="tab-btn-maps" class="tabpanel">
@@ -90,9 +87,10 @@
           <button type="button" class="r-new">New region</button>
         </div>
         <div id="regions-tools" class="row r-tools" hidden>
-          <label class="grow">Search <input id="r-search" type="search" placeholder="Name or id" autocomplete="off"></label>
+          <label class="grow">Search <input id="r-search" type="search" placeholder="Name, id or creator" autocomplete="off"></label>
           <label>Slot <select id="r-slot"><option value="">All slots</option></select></label>
-          <label>Sort <select id="r-sort"><option value="name">Id</option><option value="updated">Last updated</option></select></label>
+          <label>Created by <select id="r-creator"><option value="">Anyone</option></select></label>
+          <label>Sort <select id="r-sort"><option value="name">Id</option><option value="updated">Last updated</option><option value="created">Newest first</option><option value="creator">Creator</option></select></label>
           <button type="button" id="r-combine" class="ghost" title="Copy several regions into one new region">Combine regions…</button>
         </div>
         <div id="regions-empty" class="empty" hidden>
@@ -100,6 +98,29 @@
           <button type="button" class="r-new">New region</button>
         </div>
         <div id="regions" class="regions"></div>
+      </section>
+    </div>
+
+    <div id="tab-users" role="tabpanel" aria-labelledby="tab-btn-users" class="tabpanel" hidden>
+      <section class="card">
+        <h2>People</h2>
+        <p class="muted">Everyone who may use this admin page, and what they may do. The repository owner can always do everything. Changes are saved as one commit when you press <em>Save changes</em>.</p>
+        <div id="users" class="users"></div>
+        <form id="user-add" class="row">
+          <label>GitHub username <input id="user-login" required autocomplete="off" spellcheck="false" maxlength="39" placeholder="e.g. octocat"></label>
+          <label>Access <select id="user-preset"></select></label>
+          <button type="submit" class="ghost">Add person</button>
+        </form>
+        <div class="row">
+          <button id="users-save" type="button" disabled>Save changes</button>
+          <button id="users-reset" type="button" class="ghost" disabled>Undo changes</button>
+          <span id="users-note" class="muted small" aria-live="polite"></span>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Asked for access</h2>
+        <p class="muted">People who signed in but aren't on the list yet (kept for 30 days).</p>
+        <div id="waiting-list" class="users"></div>
       </section>
     </div>
   </div>

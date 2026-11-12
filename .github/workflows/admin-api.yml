@@ -1,0 +1,70 @@
+name: Admin API
+
+# Deploys the admin API (worker/) to Cloudflare Workers whenever it, or the rules it shares with the
+# admin page, change on main. Does nothing until the Cloudflare and GitHub App secrets are set
+# (see docs/admin-access.md).
+on:
+  push:
+    branches: [main]
+    paths: ["worker/**", "src/shared/access.ts", "schema/region.schema.json", "schema/access.schema.json", ".github/workflows/admin-api.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that the secrets are set
+        id: ready
+        env:
+          CF: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          APP_ID: ${{ vars.APP_ID }}
+        run: |
+          if [ -z "$CF" ] || [ -z "$KEY" ] || [ -z "$APP_ID" ]; then
+            echo "::notice title=Admin API not deployed::Set the CLOUDFLARE_API_TOKEN, APP_PRIVATE_KEY, APP_CLIENT_SECRET and SESSION_KEY secrets and the CLOUDFLARE_ACCOUNT_ID, APP_ID and APP_CLIENT_ID variables (docs/admin-access.md)."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.ready.outputs.ready == 'true'
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        if: steps.ready.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - if: steps.ready.outputs.ready == 'true'
+        run: npm ci
+
+      - name: Permission tests
+        if: steps.ready.outputs.ready == 'true'
+        run: npx vitest run tests/admin-api.test.ts
+
+      - name: Deploy
+        if: steps.ready.outputs.ready == 'true'
+        uses: cloudflare/wrangler-action@v3
+        env:
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          APP_CLIENT_SECRET: ${{ secrets.APP_CLIENT_SECRET }}
+          SESSION_KEY: ${{ secrets.SESSION_KEY }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy --var APP_ID:${{ vars.APP_ID }} --var APP_CLIENT_ID:${{ vars.APP_CLIENT_ID }}
+          secrets: |
+            APP_PRIVATE_KEY
+            APP_CLIENT_SECRET
+            SESSION_KEY

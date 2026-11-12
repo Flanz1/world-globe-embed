@@ -21,6 +21,7 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { makeFixture, PROVINCES, SLOT } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
+import { ADMIN_API, useAdminApi } from "./admin-api.mjs";
 import { checkGeometry } from "../../src/shared/geo.ts";
 
 import { port } from "./ports.mjs";
@@ -355,15 +356,16 @@ await ctx.addInitScript(() => {
 const leaks = [];
 ctx.on("request", (r) => {
   const auth = r.headers()["authorization"];
-  if (auth && !r.url().startsWith("https://api.github.com/")) leaks.push(r.url());
+  if (auth && !r.url().startsWith(`${ADMIN_API}/`)) leaks.push(r.url());
 });
 await ctx.route("https://api.github.com/**", (r) => mock.handle(r));
+await useAdminApi(ctx, mock, { branch: BRANCH });
 const page = await ctx.newPage();
 const errors = [];
 const dialogs = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => m.type() === "error" && !/^Failed to load resource/.test(m.text()) && errors.push(m.text()));
-page.on("response", (r) => r.status() >= 400 && !r.url().startsWith("https://api.github.com/") && errors.push(`${r.status()} ${r.url()}`));
+page.on("response", (r) => r.status() >= 400 && !r.url().startsWith(`${ADMIN_API}/`) && errors.push(`${r.status()} ${r.url()}`));
 page.on("dialog", (d) => (dialogs.push(d.message()), d.dismiss()));
 
 const commitsSince = (n) => mock.log.slice(n);
@@ -398,8 +400,6 @@ async function mdrag(x, y, dx, dy, mods = []) {
 
 await step(A, "sign in and Regions tab", async () => {
   await page.goto(`${SITE}/admin/#regions`);
-  await page.fill("#token", "ghp_e2etoken");
-  await page.click('#signin-form button[type="submit"]');
   await page.waitForSelector("#regions .rcard", { timeout: 15000 });
   await page.waitForTimeout(800);
   check(A, "shows the target branch", (await page.textContent("#branch")) === `Writing to branch ${BRANCH} (not main)` && (await page.isVisible("#branch")), await page.textContent("#branch"));
@@ -818,7 +818,7 @@ await step(A, "preview and embed code", async () => {
 await step(A, "security and branch", async () => {
   const csp = await page.evaluate(() => window.__csp);
   check(A, "admin CSP: no violations while using the editor", csp.length === 0 && !errors.some((e) => /Content Security Policy/i.test(e)), csp.join(" | ") || "none");
-  check(A, "token only sent to api.github.com", leaks.length === 0, leaks.join(", ") || "ok");
+  check(A, "session only sent to the admin API", leaks.length === 0, leaks.join(", ") || "ok");
   check(A, "no page errors in the admin page", errors.length === 0, errors.join(" | ") || "none");
   check(A, "no alert() from region data", dialogs.length === 0, dialogs.join(" | ") || "none");
   check(A, "nothing written to main", mock.refs.get("main") === mainAtStart && mock.log.every((c) => c.branch === BRANCH), `${mock.log.length} commits, all on ${BRANCH}`);

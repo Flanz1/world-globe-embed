@@ -1,0 +1,15 @@
+{
+  "$schema": "../schema/access.schema.json",
+  "users": [
+    {
+      "id": 45669787,
+      "login": "Flanz1",
+      "permissions": ["maps", "regions", "editOthers", "deleteOthers", "users"]
+    },
+    {
+      "id": 138310181,
+      "login": "LoopSimon",
+      "permissions": ["maps", "regions"]
+    }
+  ]
+}

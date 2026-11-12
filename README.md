@@ -166,7 +166,7 @@ You don't need to wait for step 1 to finish before doing step 2. If the map isn'
 
 ### Option B: admin page
 
-Open `/admin/` on the site and sign in with a token (see [Tokens for the admin page](#tokens-for-the-admin-page)). From there you can:
+Open `/admin/` on the site and **Sign in with GitHub** (see [Admin access](#admin-access)). Depending on what you've been allowed to do, you can:
 
 - see every map (with thumbnails) and every slot;
 - **switch a slot's map** with a preview;
@@ -219,14 +219,11 @@ On GitHub, open `content/` (or `content/slots.json`) and click **History**.
 4. **Add collaborators:** go to **Settings → Collaborators → Add people**. On a personal account, collaborators get write access to the whole repo, which is why the embed lives in its own repo and not in the app's.
 5. **Custom domain (optional):** go to **Settings → Pages → Custom domain**. The build only uses relative URLs, so nothing in the code needs to change.
 
-### Tokens for the admin page
+### Admin access
 
-The admin page works in your browser only. It sends your token only to `api.github.com` and never logs it. By default the token is kept in `sessionStorage`, so it's gone when you close the tab; tick **Remember on this device** to keep it in `localStorage` until you press **Forget token** (only do that on your own computer). The page refuses tokens with more than the `public_repo` scope, refuses to run inside a frame, and ships a strict Content-Security-Policy. It has `noindex` and is harmless without a token.
+People sign in with their GitHub account; there are no tokens to create. Each person gets permissions in the admin page's **Users** tab: **Maps & slots** (only for people you tick it for), **Create regions** (and change their own), **Edit others' regions**, **Delete others' regions** and **Manage users**. Every region records who created it, and the Regions tab can filter and sort by creator.
 
-Keep in mind that every GitHub Pages site under `flanz1.github.io` shares one browser origin, so script on any of those sites could read a remembered token. Serving this repo from its own custom domain removes that.
-
-- **Repository owner:** create a [fine-grained token](https://github.com/settings/personal-access-tokens/new). Pick **Only select repositories → world-globe-embed**, then under **Repository permissions** set **Contents: Read and write**. Optionally add **Actions: Read-only** for the run status, which works without it on a public repo. Give it an expiry.
-- **Collaborators:** GitHub [doesn't allow fine-grained tokens](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) to write to a personal account's repo where you're only a collaborator. Collaborators should create a [classic token](https://github.com/settings/tokens/new?scopes=public_repo&description=Globe%20maps%20admin) with **only** the `public_repo` scope and a short expiry. Alternatively, move this repo into a (free) GitHub organization: then everyone can use fine-grained tokens limited to this one repo.
+The rules are enforced by the admin API (`worker/`, a Cloudflare Worker), which is the only thing that writes to the repository, as the site's GitHub App. The page keeps only the API's 12-hour session, in `sessionStorage`, refuses to run inside a frame, and ships a strict Content-Security-Policy. Setup, the permission rules and how to add people: [docs/admin-access.md](docs/admin-access.md).
 
 ## Local development
 
@@ -261,10 +258,9 @@ set -x GITHUB_REPOSITORY Flanz1/world-globe-embed
 npm run build
 set -e GITHUB_REPOSITORY
 
-# Point the admin page at another branch, e.g. to try region editing without touching main.
-# The page then says "Writing to branch … (not main)" at the top.
-env VITE_CONTENT_BRANCH=test/region-overlays npm run build
-env VITE_CONTENT_BRANCH=test/region-overlays npm run dev
+# Point the admin page at an admin API (worker/). The branch it writes to is the API's BRANCH setting;
+# the page says "Writing to branch … (not main)" at the top when that isn't the default branch.
+env VITE_ADMIN_API=https://world-globe-admin.example.workers.dev npm run build
 
 # Timings for a region embed (globe, then flat)
 env SLUG=inara QUERY='region=old-kingdom' npm run measure

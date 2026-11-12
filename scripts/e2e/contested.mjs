@@ -25,6 +25,7 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { SLOT, MAP } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
+import { useAdminApi } from "./admin-api.mjs";
 import { geometryBounds } from "../../src/shared/geo.ts";
 import { flatFit } from "../../src/shared/region.ts";
 
@@ -359,6 +360,7 @@ const moved = (a, b) => a.map((v, i) => +(b[i] - v).toFixed(4));
 if (want("editor")) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
   await ctx.route("https://api.github.com/**", (r) => mock.handle(r));
+  await useAdminApi(ctx, mock, { branch: BRANCH });
   page = await ctx.newPage();
   page.on("pageerror", (e) => editorErrors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && !/^Failed to load resource/.test(m.text()) && editorErrors.push(m.text()));
@@ -368,8 +370,6 @@ if (want("editor")) {
 
   await step(A, "open the editor", async () => {
     await page.goto(`${SITE}/admin/#regions`);
-    await page.fill("#token", "ghp_e2etoken");
-    await page.click('#signin-form button[type="submit"]');
     await page.waitForSelector('#regions .rcard[data-region="editor-test"]', { timeout: 15000 });
     await page.locator('[data-region="editor-test"] [data-action="edit"]').click();
     await page.waitForSelector("dialog.editor[open]");

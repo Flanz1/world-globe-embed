@@ -19,6 +19,7 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { makeFixture } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
+import { useAdminApi } from "./admin-api.mjs";
 
 import { port } from "./ports.mjs";
 const require = createRequire(import.meta.url);
@@ -115,6 +116,7 @@ const A = "editor";
 const mock = new MockGitHub({ root: dir, branches: ["main", BRANCH] });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
 await ctx.route("https://api.github.com/**", (r) => mock.handle(r));
+await useAdminApi(ctx, mock, { branch: BRANCH });
 const page = await ctx.newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
@@ -156,8 +158,6 @@ const onShore = (t, d = 0) => [(shore(t) + d) * Math.cos(t), (shore(t) + d) * Ma
 
 await step(A, "open the editor", async () => {
   await page.goto(`${SITE}/admin/#regions`);
-  await page.fill("#token", "ghp_e2etoken");
-  await page.click('#signin-form button[type="submit"]');
   await page.waitForSelector('#regions .rcard[data-region="coast-test"]', { timeout: 15000 });
   await page.locator('[data-region="coast-test"] [data-action="edit"]').click();
   await page.waitForSelector("dialog.editor[open]");

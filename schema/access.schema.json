@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flanz1.github.io/world-globe-embed/schema/access.schema.json",
+  "title": "Admin access",
+  "description": "Who can sign in to the admin page and what each person may do. Edited from the admin page's Users tab; the admin API checks every change against it. The repository owner always has every permission, whether or not they are listed. Each person is identified by their GitHub account id, which survives a username change.",
+  "type": "object",
+  "required": ["users"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "users": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "required": ["id", "login", "permissions"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "integer", "minimum": 1, "description": "GitHub account id." },
+          "login": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$",
+            "description": "GitHub username when added (informational; the id is what counts)."
+          },
+          "permissions": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "enum": ["maps", "regions", "editOthers", "deleteOthers", "users"] },
+            "description": "maps: the Maps & slots tab. regions: create regions and change your own. editOthers / deleteOthers: change / delete other people's regions. users: the Users tab."
+          },
+          "added": { "type": "string", "maxLength": 40, "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$" },
+          "addedBy": { "type": "string", "maxLength": 39 }
+        }
+      }
+    }
+  }
+}

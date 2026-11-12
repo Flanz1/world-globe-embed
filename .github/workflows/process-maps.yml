@@ -22,12 +22,24 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       committed: ${{ steps.commit.outputs.committed }}
+      # When the site's GitHub App is set up, the commit is pushed as the App (the one actor allowed
+      # to push to main); its pushes start the Deploy workflow by themselves.
+      app: ${{ steps.app.outputs.token != '' }}
     steps:
+      - name: Token for the GitHub App
+        id: app
+        if: vars.APP_ID != ''
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v4
         with:
           ref: main
           # Enough history for "git log" to find who uploaded each file.
           fetch-depth: 50
+          token: ${{ steps.app.outputs.token || github.token }}
 
       - uses: actions/setup-node@v4
         with:
@@ -64,9 +76,10 @@ jobs:
           exit 1
 
   # Pushes made with the workflow token don't trigger other workflows, so deploy from here.
+  # (The App's pushes do, so there's nothing to do here then.)
   deploy:
     needs: process
-    if: needs.process.outputs.committed == 'true'
+    if: needs.process.outputs.committed == 'true' && needs.process.outputs.app != 'true'
     uses: ./.github/workflows/deploy.yml
     with:
       ref: main

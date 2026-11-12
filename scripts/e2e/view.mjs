@@ -19,6 +19,7 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { makeFixture, SLOT } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
+import { useAdminApi } from "./admin-api.mjs";
 
 import { port } from "./ports.mjs";
 const require = createRequire(import.meta.url);
@@ -107,6 +108,7 @@ const A = "admin";
 const mock = new MockGitHub({ root: dir });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
 await ctx.route("https://api.github.com/**", (r) => mock.handle(r));
+await useAdminApi(ctx, mock, { branch: BRANCH });
 const page = await ctx.newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
@@ -126,8 +128,6 @@ const openSlotPreview = async (slug) => {
 
 await step(A, "default view in the preview", async () => {
   await page.goto(`${SITE}/admin/`);
-  await page.fill("#token", "ghp_e2etoken");
-  await page.click('#signin-form button[type="submit"]');
   await page.waitForSelector("#slots .slot", { timeout: 15000 });
 
   await openSlotPreview(SLOT.slug);

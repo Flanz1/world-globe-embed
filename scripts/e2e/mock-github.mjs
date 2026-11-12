@@ -10,8 +10,24 @@ import path from "node:path";
 
 export const blobSha = (buf) => createHash("sha1").update(Buffer.concat([Buffer.from(`blob ${buf.length}\0`), buf])).digest("hex");
 
+/** GitHub accounts the mock knows (for sign-in and the Users tab's lookup). */
+export const ACCOUNTS = [
+  { id: 45669787, login: "Flanz1", type: "User" },
+  { id: 138310181, login: "LoopSimon", type: "User" },
+  { id: 5001, login: "e2e-user", type: "User" },
+  { id: 5002, login: "carto-ann", type: "User" },
+  { id: 5003, login: "drafter-bo", type: "User" },
+  { id: 5004, login: "new-face", type: "User" },
+  { id: 9001, login: "some-org", type: "Organization" },
+];
+
 export class MockGitHub {
   constructor({ repo = "Flanz1/world-globe-embed", root, branches = ["main", "test/region-overlays"], defaultBranch = "main", maxBlobRequest = 40 * 1024 * 1024 }) {
+    /** OAuth: code → account, and user token → account (the admin API's sign-in). */
+    this.oauthCodes = new Map();
+    this.userTokens = new Map();
+    /** Content-addressed subtrees served by GET git/trees/<sha>: sha → { flat tree sha, folder prefix }. */
+    this.subtrees = new Map();
     /** Like GitHub, refuse blob uploads whose request body is bigger than this ("input too large"). */
     this.maxBlobRequest = maxBlobRequest;
     this.repo = repo;
@@ -53,9 +69,40 @@ export class MockGitHub {
     this.commits.set(sha, c);
     return sha;
   }
-  filesAt(branch) {
-    const c = this.commits.get(this.refs.get(branch));
-    return this.trees.get(c.tree);
+  /** Files at a branch, or at a commit SHA (like GitHub's ?ref=). */
+  filesAt(ref) {
+    const c = this.commits.get(this.refs.get(ref) ?? ref);
+    return c ? this.trees.get(c.tree) : undefined;
+  }
+  /** A one-time OAuth code that signs in as `login` (what github.com/login/oauth/authorize would hand back). */
+  oauthCode(login) {
+    const acct = ACCOUNTS.find((a) => a.login === login);
+    if (!acct) throw new Error(`mock: unknown account ${login}`);
+    const code = `code-${login}-${this.oauthCodes.size}`;
+    this.oauthCodes.set(code, acct);
+    return code;
+  }
+  /** One folder level of a flat tree, git-style: files are blobs, folders are content-addressed subtrees. */
+  treeListing(flatSha, prefix) {
+    const files = this.trees.get(flatSha);
+    if (!files) return null;
+    const entries = new Map();
+    for (const [p, sha] of files) {
+      if (!p.startsWith(prefix)) continue;
+      const rest = p.slice(prefix.length);
+      const name = rest.split("/")[0];
+      if (rest.includes("/")) {
+        if (!entries.has(name)) entries.set(name, { path: name, mode: "040000", type: "tree", sha: null });
+      } else entries.set(name, { path: name, mode: "100644", type: "blob", sha });
+    }
+    for (const e of entries.values()) {
+      if (e.type !== "tree") continue;
+      const sub = `${prefix}${e.path}/`;
+      const sig = [...files].filter(([p]) => p.startsWith(sub)).map(([p, b]) => `${p.slice(sub.length)} ${b}`).sort().join("\n");
+      e.sha = createHash("sha1").update(`tree ${sig}`).digest("hex");
+      this.subtrees.set(e.sha, { flat: flatSha, prefix: sub });
+    }
+    return [...entries.values()].sort((a, b) => a.path.localeCompare(b.path));
   }
   /** Text of a file on a branch, or null. */
   read(branch, p) {
@@ -79,12 +126,31 @@ export class MockGitHub {
     this.requests.push({ method, path: url.pathname, auth: auth ? auth.slice(0, 7) + "…" : "" });
     const json = (status, body, headers = {}) =>
       route.fulfill({ status, contentType: "application/json", headers: { "access-control-allow-origin": "*", ...headers }, body: JSON.stringify(body) });
+    const p = url.pathname;
+    if (url.hostname === "github.com" && method === "POST" && p === "/login/oauth/access_token") {
+      const b = JSON.parse(req.postData() ?? "{}");
+      const acct = this.oauthCodes.get(b.code);
+      if (!acct || !b.client_id || !b.client_secret) return json(200, { error: "bad_verification_code" });
+      this.oauthCodes.delete(b.code);
+      const token = `ghu_${acct.login}_${this.userTokens.size}`;
+      this.userTokens.set(token, acct);
+      return json(200, { access_token: token, token_type: "bearer" });
+    }
     if (!/^Bearer \S+$/.test(auth)) return json(401, { message: "Bad credentials" });
     const base = `/repos/${this.repo}`;
-    const p = url.pathname;
     const body = req.postData() ? JSON.parse(req.postData()) : null;
 
-    if (p === "/user") return json(200, { login: "e2e-user" });
+    if (p === "/user") {
+      const acct = this.userTokens.get(auth.slice(7));
+      return json(200, acct ? { id: acct.id, login: acct.login } : { id: 5001, login: "e2e-user" });
+    }
+    let um;
+    if (method === "GET" && (um = /^\/users\/([^/]+)$/.exec(p))) {
+      const acct = ACCOUNTS.find((a) => a.login.toLowerCase() === decodeURIComponent(um[1]).toLowerCase());
+      return acct ? json(200, acct) : json(404, { message: "Not Found" });
+    }
+    if (method === "GET" && p === `${base}/installation`) return json(200, { id: 77 });
+    if (method === "POST" && p === "/app/installations/77/access_tokens") return json(201, { token: "ghs_mockinstalltoken", expires_at: new Date(Date.now() + 3600_000).toISOString() });
     if (p === base) return json(200, { default_branch: this.defaultBranch, permissions: { push: true } }, { "x-oauth-scopes": "public_repo" });
     if (p === `${base}/actions/runs`) return json(200, { workflow_runs: [] });
 
@@ -95,7 +161,16 @@ export class MockGitHub {
     }
     if (method === "GET" && (m = /^\/git\/commits\/([0-9a-f]+)$/.exec(p.slice(base.length)))) {
       const c = this.commits.get(m[1]);
-      return c ? json(200, { sha: m[1], tree: { sha: c.tree } }) : json(404, { message: "Not Found" });
+      return c ? json(200, { sha: m[1], tree: { sha: c.tree }, parents: c.parent ? [{ sha: c.parent }] : [], author: { name: c.author } }) : json(404, { message: "Not Found" });
+    }
+    if (method === "GET" && (m = /^\/git\/trees\/([0-9a-z]+)$/.exec(p.slice(base.length)))) {
+      const sub = this.subtrees.get(m[1]);
+      const tree = sub ? this.treeListing(sub.flat, sub.prefix) : this.treeListing(m[1], "");
+      return tree ? json(200, { sha: m[1], tree, truncated: false }) : json(404, { message: "Not Found" });
+    }
+    if (method === "GET" && (m = /^\/git\/blobs\/([0-9a-f]{40})$/.exec(p.slice(base.length)))) {
+      const b = this.blobs.get(m[1]);
+      return b ? json(200, { sha: m[1], encoding: "base64", content: b.toString("base64"), size: b.length }) : json(404, { message: "Not Found" });
     }
     if (method === "POST" && p === `${base}/git/blobs`) {
       if ((req.postData()?.length ?? 0) > this.maxBlobRequest) return json(422, { message: "Sorry, your input was too large to process. Consider creating the blob in a local clone of the repository and then pushing it to GitHub." });
@@ -116,7 +191,7 @@ export class MockGitHub {
         message: body.message,
         tree: body.tree,
         parent: body.parents[0],
-        author: "e2e-user",
+        author: body.author?.name ?? "e2e-user",
         date: new Date().toISOString(),
         changed: (this.trees.get(body.tree).changes ?? []).map((c) => c.path),
         changes: this.trees.get(body.tree).changes ?? [],
@@ -162,4 +237,23 @@ export class MockGitHub {
     }
     return json(404, { message: `mock: no route for ${method} ${p}` });
   }
+}
+
+/**
+ * The mock as a fetch() function (for the admin API running in Node): requests to api.github.com and
+ * github.com/login/oauth go to `mock`, through the same handler Playwright's page.route() uses.
+ */
+export function mockFetch(mock) {
+  return async (url, init = {}) => {
+    let result = null;
+    const headers = Object.fromEntries(new Headers(init.headers).entries());
+    const body = init.body == null ? null : typeof init.body === "string" ? init.body : await new Response(init.body).text();
+    await mock.handle({
+      request: () => ({ url: () => url, method: () => init.method ?? "GET", headers: () => headers, postData: () => body }),
+      fulfill: async ({ status, headers: h = {}, contentType, body: b }) => {
+        result = new Response(b ?? null, { status, headers: { ...(contentType ? { "content-type": contentType } : {}), ...h } });
+      },
+    });
+    return result;
+  };
 }

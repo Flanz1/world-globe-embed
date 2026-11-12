@@ -1,28 +1,30 @@
 /**
- * Admin page: list maps and slots, upload a map, switch a slot's map.
- * Every action is a single commit through the GitHub API, signed in with the
- * collaborator's own token. The token is kept in sessionStorage (this tab only) unless the user
- * ticks "Remember", then in localStorage. It is never logged.
+ * Admin page: list maps and slots, upload a map, switch a slot's map, draw regions, manage users.
+ * People sign in with GitHub through the admin API (worker/), which checks what they may do and makes
+ * every change as one commit with the site's GitHub App. The page keeps only the API's short-lived
+ * session token, in sessionStorage (this tab only). It is never logged.
  */
 import type { MapMeta, Slot, SlotsFile, ViewMode } from "../shared/types.ts";
 import { escapeHtml } from "../shared/page.ts";
-import { GitHub, GitHubError, type FileChange, type WorkflowRun } from "./github.ts";
+import { GitHub, GitHubError, NotListed, type FileChange, type WorkflowRun } from "./github.ts";
 import { openPreview } from "./preview.ts";
 import { $, SITE, h } from "./dom.ts";
 import { initRegions, loadRegions, renderRegions } from "./regions.ts";
 import { PART_BYTES, prepareImage } from "./upload-image.ts";
+import { can, setMe } from "./session.ts";
+import { initUsers, loadUsers } from "./users.ts";
 
 declare const __REPO__: string;
-/** Branch the admin page reads from and commits to; empty = the repository's default branch. Set with VITE_CONTENT_BRANCH at build time. */
-const CONTENT_BRANCH: string = (import.meta.env.VITE_CONTENT_BRANCH ?? "").trim();
+/** The admin API (worker/). Set with VITE_ADMIN_API at build time; empty means it isn't set up yet. */
+const ADMIN_API: string = (import.meta.env.VITE_ADMIN_API ?? "").trim().replace(/\/+$/, "");
 
-const TOKEN_KEY = "wge-admin-token";
+const SESSION_KEY = "wge-admin-session";
 const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 /*
  * Every GitHub Pages project site of an account shares one origin (<user>.github.io), so anything
- * stored here is readable by script on any of the owner's other Pages sites. sessionStorage is the
- * default because it is scoped to this tab and gone when the tab closes; localStorage only on request.
+ * stored here is readable by script on any of the owner's other Pages sites. The session therefore
+ * lives in sessionStorage (this tab only, gone when it closes), and it expires after 12 hours anyway.
  */
 const tryStorage = <T>(fn: () => T, fallback: T): T => {
   try {
@@ -32,18 +34,17 @@ const tryStorage = <T>(fn: () => T, fallback: T): T => {
   }
 };
 const store = {
-  get: () => tryStorage(() => sessionStorage.getItem(TOKEN_KEY) ?? localStorage.getItem(TOKEN_KEY), null),
-  set: (t: string, remember: boolean) => {
-    store.clear();
-    tryStorage(() => (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, t), undefined);
-  },
+  get: () => tryStorage(() => sessionStorage.getItem(SESSION_KEY), null),
+  set: (t: string) => tryStorage(() => sessionStorage.setItem(SESSION_KEY, t), undefined),
   clear: () => {
-    tryStorage(() => localStorage.removeItem(TOKEN_KEY), undefined);
-    tryStorage(() => sessionStorage.removeItem(TOKEN_KEY), undefined);
+    tryStorage(() => sessionStorage.removeItem(SESSION_KEY), undefined);
+    // Tokens from before the admin API (personal access tokens) are dropped too.
+    tryStorage(() => localStorage.removeItem("wge-admin-token"), undefined);
+    tryStorage(() => sessionStorage.removeItem("wge-admin-token"), undefined);
   },
 };
 
-/** The page acts with the user's token, so it must never run inside someone else's frame (clickjacking). */
+/** The page acts for the signed-in person, so it must never run inside someone else's frame (clickjacking). */
 const framed = tryStorage(() => window.top !== window.self, true);
 
 let gh: GitHub | null = null;
@@ -263,6 +264,7 @@ async function afterCommit(sha: string): Promise<void> {
   setStatus(`Committed ${sha.slice(0, 7)} to ${gh!.branch}. Waiting for the workflow to publish it…`, "ok");
   if (gh!.branch !== gh!.defaultBranch) setStatus(`Committed ${sha.slice(0, 7)} to the test branch ${gh!.branch}. GitHub Pages only deploys ${gh!.defaultBranch}, so it won't go live from here.`, "ok");
   pollRuns();
+  if (can("users")) void loadUsers();
   await loadAll().catch((e) => setStatus((e as Error).message, "error"));
 }
 
@@ -397,31 +399,42 @@ function wireNewSlot(): void {
 
 /* ── Tabs (kept in the URL hash so a reload stays on the same tab) ── */
 
-function showTab(name: "maps" | "regions"): void {
-  for (const t of ["maps", "regions"] as const) {
+const TABS = ["maps", "regions", "users"] as const;
+type Tab = (typeof TABS)[number];
+/** The tabs this person may open: Maps & slots and Users need their own permission. */
+const allowedTabs = (): Tab[] => TABS.filter((t) => t === "regions" || (t === "maps" ? can("maps") : can("users")));
+
+function showTab(name: Tab): void {
+  const allowed = allowedTabs();
+  if (!allowed.includes(name)) name = allowed[0];
+  for (const t of TABS) {
     $(`#tab-${t}`).hidden = t !== name;
     const b = $(`#tab-btn-${t}`);
+    b.hidden = !allowed.includes(t);
     b.setAttribute("aria-selected", String(t === name));
     b.tabIndex = t === name ? 0 : -1;
   }
   if (name === "regions") renderRegions();
+  if (name === "users") void loadUsers();
 }
 
+const tabFromHash = (): Tab => (location.hash === "#regions" ? "regions" : location.hash === "#users" ? "users" : "maps");
+
 function wireTabs(): void {
-  const fromHash = () => showTab(location.hash === "#regions" ? "regions" : "maps");
-  for (const t of ["maps", "regions"] as const)
+  for (const t of TABS)
     $(`#tab-btn-${t}`).addEventListener("click", () => {
-      history.replaceState(null, "", t === "regions" ? "#regions" : location.pathname + location.search);
+      history.replaceState(null, "", t === "maps" ? location.pathname + location.search : `#${t}`);
       showTab(t);
     });
   $(".tabs").addEventListener("keydown", (e) => {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-    const next = location.hash === "#regions" ? "maps" : "regions";
+    const allowed = allowedTabs();
+    const i = allowed.indexOf(tabFromHash());
+    const next = allowed[(Math.max(0, i) + (e.key === "ArrowRight" ? 1 : allowed.length - 1)) % allowed.length];
     $(`#tab-btn-${next}`).click();
     $(`#tab-btn-${next}`).focus();
   });
-  window.addEventListener("hashchange", fromHash);
-  fromHash();
+  window.addEventListener("hashchange", () => gh && showTab(tabFromHash()));
 }
 
 /** Shows which branch the page writes to whenever it isn't the default branch. */
@@ -433,41 +446,64 @@ function showBranch(client: GitHub): void {
 
 /* ── Sign in ── */
 
-class TokenRejected extends Error {}
+function signInWithGitHub(): void {
+  // The admin API sends people back here with #session=… (or #signin-error=…). Only this page's address is accepted.
+  const back = location.origin + location.pathname;
+  location.href = `${ADMIN_API}/auth/login?return=${encodeURIComponent(back)}`;
+}
 
-async function signIn(token: string): Promise<boolean> {
-  const client = new GitHub(token, __REPO__, CONTENT_BRANCH);
+/** What the sign-in left in the address: a session, or why it failed. The fragment is removed right away. */
+function takeFragment(): { session?: string; error?: string } {
+  const m = /^#(session|signin-error)=([^&]*)$/.exec(location.hash);
+  if (!m) return {};
+  history.replaceState(null, "", location.pathname + location.search);
+  return m[1] === "session" ? { session: m[2] } : { error: decodeURIComponent(m[2]) };
+}
+
+function showSignIn(error = ""): void {
+  $("#signin").hidden = false;
+  $("#main").hidden = true;
+  $("#signin-error").textContent = error;
+  const ready = !!ADMIN_API;
+  $<HTMLButtonElement>("#signin-github").disabled = !ready;
+  $("#signin-setup").hidden = ready;
+}
+
+async function signIn(token: string): Promise<void> {
+  const client = new GitHub(token, __REPO__, ADMIN_API);
   try {
     const me = await client.whoAmI();
-    if (!me.canPush) throw new TokenRejected(`This token can read ${__REPO__} but can't write to it. Give it Contents: Read and write.`);
-    if (me.excessScopes.length)
-      throw new TokenRejected(
-        `This token has more access than the admin page needs (${me.excessScopes.join(", ")}). ` +
-          "Create a classic token with only the public_repo scope, or a fine-grained token for this repository, and revoke this one if you don't need it.",
-      );
+    setMe(me);
     gh = client;
     $("#who").textContent = `${__REPO__} · signed in as ${me.login}`;
     showBranch(client);
     $("#forget").hidden = false;
     $("#signin").hidden = true;
+    $("#waiting").hidden = true;
     $("#main").hidden = false;
+    showTab(tabFromHash());
     setStatus("Loading…");
     await loadAll();
     setStatus("Ready.");
     void refreshRuns();
-    return true;
   } catch (e) {
-    // A rejected token is dropped rather than retried on every visit; network hiccups keep it.
-    if ((e instanceof GitHubError && e.status === 401) || e instanceof TokenRejected) store.clear();
-    $("#signin").hidden = false;
-    $("#signin-error").textContent = (e as Error).message;
-    return false;
+    if (e instanceof NotListed) {
+      // Signed in, but nobody has added them yet: the owner sees them in the Users tab.
+      $("#forget").hidden = false;
+      $("#signin").hidden = true;
+      $("#waiting").hidden = false;
+      $("#waiting-who").textContent = e.login;
+      return;
+    }
+    if (e instanceof GitHubError && e.status === 401) store.clear();
+    showSignIn((e as Error).message);
   }
 }
 
 function signOut(): void {
   store.clear();
   gh = null;
+  setMe(null);
   clearTimeout(pollTimer);
   location.reload();
 }
@@ -478,21 +514,19 @@ if (framed) {
   );
 } else {
   $("#forget").addEventListener("click", signOut);
-  $<HTMLFormElement>("#signin-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const input = $<HTMLInputElement>("#token");
-    const remember = $<HTMLInputElement>("#remember").checked;
-    const token = input.value.trim();
-    input.value = "";
-    void signIn(token).then((ok) => ok && store.set(token, remember));
-  });
+  $("#waiting-out").addEventListener("click", signOut);
+  $("#signin-github").addEventListener("click", signInWithGitHub);
   wireUpload();
   wireNewSlot();
   initRegions({ gh: () => gh!, maps: () => maps, slots: () => slots, act, afterCommit });
+  initUsers({ gh: () => gh!, act });
   wireTabs();
-
-  const saved = store.get();
-  if (saved) void signIn(saved);
-  else $("#signin").hidden = false;
   $("#who").textContent = __REPO__;
+
+  const back = takeFragment();
+  if (back.session) store.set(back.session);
+  const saved = store.get();
+  if (back.error) showSignIn(back.error);
+  else if (saved) void signIn(saved);
+  else showSignIn();
 }

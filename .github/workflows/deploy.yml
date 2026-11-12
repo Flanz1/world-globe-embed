@@ -64,6 +64,8 @@ jobs:
         env:
           # Relative base: the same build works on <user>.github.io/<repo>/ and on a custom domain.
           BASE_PATH: ./
+          # The admin API (worker/) the admin page signs in and saves through; see docs/admin-access.md.
+          VITE_ADMIN_API: ${{ vars.ADMIN_API_URL }}
         run: npm run build
 
       - uses: actions/upload-pages-artifact@v3

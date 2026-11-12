@@ -159,6 +159,20 @@
           "type": "string",
           "maxLength": 40,
           "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+        },
+        "created": {
+          "type": "string",
+          "maxLength": 40,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+          "description": "When the region was first saved."
+        },
+        "createdBy": {
+          "$ref": "#/$defs/account",
+          "description": "Who created the region: they (and anyone allowed to edit others' regions) can change it. Set by the admin page and checked by the admin API. Missing on regions from before owners existed, which belong to the repository owner."
+        },
+        "updatedBy": {
+          "$ref": "#/$defs/account",
+          "description": "Who saved this version."
         }
       }
     },
@@ -240,6 +254,26 @@
         }
       ],
       "items": false
+    },
+    "account": {
+      "type": "object",
+      "required": [
+        "id",
+        "login"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "GitHub account id (permanent, survives a rename)."
+        },
+        "login": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$",
+          "description": "GitHub username when saved."
+        }
+      }
     }
   }
 }

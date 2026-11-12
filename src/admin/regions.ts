@@ -14,6 +14,7 @@ import { openEditor } from "./editor/editor.ts";
 import type { FileCommit, GitHub } from "./github.ts";
 import { loadMapImage } from "./images.ts";
 import { modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
+import { OWNER_ID, can, canDelete, canEdit, currentUser, ownerOf } from "./session.ts";
 
 export interface RegionEntry {
   id: string;
@@ -88,9 +89,19 @@ export async function loadRegions(): Promise<void> {
 const fmtDate = (s: string | undefined) => (s ? new Date(s).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "");
 
 function metaText(e: RegionEntry): string {
-  const date = e.commit?.date || e.feature?.properties.updated;
-  const by = e.commit?.author;
-  return date ? `Updated ${fmtDate(date)}${by ? ` by ${by}` : ""}` : "";
+  const p = e.feature?.properties;
+  const date = e.commit?.date || p?.updated;
+  const by = p?.updatedBy?.login ?? e.commit?.author;
+  const made = `Created by ${creatorName(e)}${p?.created ? ` on ${fmtDate(p.created)}` : ""}`;
+  return [made, date ? `updated ${fmtDate(date)}${by ? ` by ${by}` : ""}` : ""].filter(Boolean).join(" · ");
+}
+
+/** The creator's login; regions from before owners existed belong to the repository owner. */
+function creatorName(e: RegionEntry): string {
+  const c = e.feature?.properties.createdBy;
+  if (c?.login) return c.login;
+  const me = currentUser();
+  return me?.id === OWNER_ID ? me.login : "the owner";
 }
 
 const safeColor = (c: unknown) => (typeof c === "string" && REGION_COLOR.test(c) ? c : "#888888");
@@ -142,7 +153,7 @@ function card(e: RegionEntry): HTMLElement {
       { className: "rcard broken", dataset: { region: e.id } },
       h("div", {}, h("strong", { textContent: e.id }), " ", h("span", { className: "badge error", textContent: "Can't be read" })),
       h("p", { className: "error small", textContent: e.problem ?? "" }),
-      h("div", { className: "actions" }, h("button", { type: "button", className: "ghost", textContent: "Delete", onclick: () => del(e) })),
+      h("div", { className: "actions" }, h("button", { type: "button", className: "ghost", textContent: "Delete", disabled: !canDelete(null), onclick: () => del(e) })),
     );
   }
   const f = e.feature;
@@ -152,7 +163,12 @@ function card(e: RegionEntry): HTMLElement {
   const differs = !!slot && slot.map !== p.map;
   const swatch = h("span", { className: "swatch", ariaHidden: "true" });
   swatch.style.backgroundColor = safeColor(p.color);
-  const btn = (text: string, onclick: () => void, cls = "ghost") => h("button", { type: "button", className: cls, textContent: text, onclick, dataset: { action: text.toLowerCase().replace(/\W+/g, "-") } });
+  const btn = (text: string, onclick: () => void, cls = "ghost", why = "") =>
+    h("button", { type: "button", className: cls, textContent: text, onclick, disabled: !!why, title: why, dataset: { action: text.toLowerCase().replace(/\W+/g, "-") } });
+  const someoneElse = ownerOf(f) !== currentUser()?.id;
+  const noEdit = canEdit(f) ? "" : someoneElse ? `${creatorName(e)} created this region, and you can't edit other people's regions.` : "You don't have permission to edit regions.";
+  const noDelete = canDelete(f) ? "" : someoneElse ? `${creatorName(e)} created this region, and you can't delete other people's regions.` : "You don't have permission to delete regions.";
+  const noCreate = can("regions") ? "" : "You don't have permission to create regions.";
   return h(
     "div",
     { className: "rcard", dataset: { region: e.id } },
@@ -160,7 +176,7 @@ function card(e: RegionEntry): HTMLElement {
     h(
       "div",
       { className: "rinfo" },
-      h("div", {}, swatch, h("strong", { className: "rname", textContent: e.id })),
+      h("div", {}, swatch, h("strong", { className: "rname", textContent: e.id }), " ", h("span", { className: "badge rcreator", textContent: creatorName(e), title: "Created by" })),
       labelsText(p) ? h("div", { className: "muted small rlabels", textContent: labelsText(p) }) : null,
       h(
         "div",
@@ -174,11 +190,11 @@ function card(e: RegionEntry): HTMLElement {
       h(
         "div",
         { className: "actions" },
-        btn("Edit", () => edit(e), ""),
-        btn("Duplicate", () => duplicate(e)),
+        btn("Edit", () => edit(e), "", noEdit),
+        btn("Duplicate", () => duplicate(e), "ghost", noCreate),
         btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot)),
         btn("Copy embed code", () => openEmbedDialog({ region: { id: e.id, name: e.id, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot })),
-        btn("Delete", () => del(e), "ghost danger"),
+        btn("Delete", () => del(e), "ghost danger", noDelete),
       ),
     ),
   );
@@ -188,7 +204,24 @@ const ui = {
   search: () => $<HTMLInputElement>("#r-search"),
   slot: () => $<HTMLSelectElement>("#r-slot"),
   sort: () => $<HTMLSelectElement>("#r-sort"),
+  creator: () => $<HTMLSelectElement>("#r-creator"),
 };
+
+/** Creator filter: anyone, me, or one person (by account id). */
+function creatorOptions(): void {
+  const sel = ui.creator();
+  const keep = sel.value;
+  const me = currentUser();
+  const people = new Map<number, string>();
+  for (const e of entries) if (e.feature) people.set(ownerOf(e.feature), creatorName(e));
+  const opts = [...people].filter(([id]) => id !== me?.id).sort((a, b) => a[1].localeCompare(b[1]));
+  sel.replaceChildren(
+    h("option", { value: "", textContent: "Anyone" }),
+    h("option", { value: "me", textContent: "Me" }),
+    ...opts.map(([id, name]) => h("option", { value: String(id), textContent: name })),
+  );
+  sel.value = [...sel.options].some((o) => o.value === keep) ? keep : "";
+}
 
 export function renderRegions(): void {
   const slotSel = ui.slot();
@@ -199,18 +232,34 @@ export function renderRegions(): void {
   const keepNew = newSel.value;
   newSel.replaceChildren(...slugs.map((s) => h("option", { value: s, textContent: s, selected: s === keepNew })));
 
+  creatorOptions();
+  for (const b of document.querySelectorAll<HTMLButtonElement>(".r-new")) {
+    b.disabled = !can("regions");
+    b.title = can("regions") ? "" : "You don't have permission to create regions.";
+  }
+  $<HTMLButtonElement>("#r-combine").disabled = !can("regions");
+
   const q = ui.search().value.trim().toLowerCase();
   const slot = slotSel.value;
   const sort = ui.sort().value;
+  const who = ui.creator().value;
+  const whoId = who === "me" ? currentUser()?.id : who ? Number(who) : null;
   const shown = entries
     .filter((e) => !slot || e.feature?.properties.slot === slot)
-    .filter((e) => !q || e.id.includes(q) || labelsText(e.feature?.properties).toLowerCase().includes(q))
+    .filter((e) => whoId == null || (!!e.feature && ownerOf(e.feature) === whoId))
+    .filter((e) => !q || e.id.includes(q) || labelsText(e.feature?.properties).toLowerCase().includes(q) || creatorName(e).toLowerCase().includes(q))
     .sort((a, b) => {
       if (sort === "updated") {
         const da = a.commit?.date || a.feature?.properties.updated || "";
         const db = b.commit?.date || b.feature?.properties.updated || "";
-        return db.localeCompare(da);
+        return db.localeCompare(da) || a.id.localeCompare(b.id);
       }
+      if (sort === "created") {
+        const da = a.feature?.properties.created || "";
+        const db = b.feature?.properties.created || "";
+        return db.localeCompare(da) || a.id.localeCompare(b.id);
+      }
+      if (sort === "creator") return creatorName(a).localeCompare(creatorName(b), undefined, { sensitivity: "base" }) || a.id.localeCompare(b.id);
       return a.id.localeCompare(b.id);
     });
   $("#regions-empty").hidden = entries.length > 0;
@@ -234,17 +283,17 @@ function others(e?: RegionEntry) {
 }
 
 function edit(e: RegionEntry): void {
-  if (!e.feature) return;
+  if (!e.feature || !canEdit(e.feature)) return;
   openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature: e.feature, sha: e.sha, isNew: false, neighbours: others(e), takenIds: new Set(entries.map((x) => x.id)), afterCommit: deps.afterCommit });
 }
 
 export function newRegion(slot: string): void {
-  if (!deps.slots().slots[slot]) return;
+  if (!deps.slots().slots[slot] || !can("regions")) return;
   openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), slot, sha: null, isNew: true, neighbours: others(), takenIds: new Set(entries.map((x) => x.id)), afterCommit: deps.afterCommit });
 }
 
 function duplicate(e: RegionEntry): void {
-  if (!e.feature) return;
+  if (!e.feature || !can("regions")) return;
   const taken = new Set(entries.map((x) => x.id));
   const id = copyId(e.id, taken);
   const feature: RegionFeature = { ...e.feature, id };
@@ -367,6 +416,7 @@ export function initRegions(d: RegionsDeps): void {
   ui.search().addEventListener("input", renderRegions);
   ui.slot().addEventListener("change", renderRegions);
   ui.sort().addEventListener("change", renderRegions);
+  ui.creator().addEventListener("change", renderRegions);
   $("#r-combine").addEventListener("click", openCombine);
   for (const b of document.querySelectorAll<HTMLButtonElement>(".r-new")) b.addEventListener("click", () => newRegion($<HTMLSelectElement>("#r-new-slot").value));
 }

@@ -60,6 +60,7 @@ import { SITE } from "../dom.ts";
 import { TILE_BUDGET, TILE_LEVELS, TileCache, levelFor, tileRect, tilesAt, tileUrl, type TileLevel } from "../../shared/tiles.ts";
 import { alertBox, confirmBox, modal, openEmbedDialog, previewUrl, sendRegion } from "../region-dialogs.ts";
 import { regionPath, serialize, stamp } from "../regions.ts";
+import { account } from "../session.ts";
 import { combineKind, combineParts, extendPart, type MergeResult } from "./merge.ts";
 import {
   History,
@@ -2818,6 +2819,14 @@ export function openEditor(o: EditorOptions): void {
   }
 
   /* ── Save ── */
+  /** Who created the region and when: kept from the saved region; the saver's own for a new one (also a duplicate or a combination). */
+  let creator: Pick<RegionFeature["properties"], "created" | "createdBy"> | null = isNew
+    ? null
+    : { ...(o.feature?.properties.created ? { created: o.feature.properties.created } : {}), ...(o.feature?.properties.createdBy ? { createdBy: o.feature.properties.createdBy } : {}) };
+  function creatorFields(fresh: boolean): Pick<RegionFeature["properties"], "created" | "createdBy"> {
+    if (fresh || !creator) creator = { created: stamp(), createdBy: account() };
+    return creator;
+  }
   let saving = false;
   async function save(): Promise<void> {
     if (saving) return;
@@ -2856,6 +2865,8 @@ export function openEditor(o: EditorOptions): void {
         ...(partLocked.some((l) => !l) ? { partLocked } : {}),
         ...(provinceLines.length ? { provinceBorders: provinceLines } : {}),
         updated: stamp(),
+        ...creatorFields(isNew),
+        updatedBy: account(),
       },
       geometry,
     };
@@ -2905,6 +2916,7 @@ export function openEditor(o: EditorOptions): void {
       const f = await o.gh.readFile(regionPath(id));
       const fresh = JSON.parse(f.text) as RegionFeature;
       sha = f.sha;
+      creator = { ...(fresh.properties.created ? { created: fresh.properties.created } : {}), ...(fresh.properties.createdBy ? { createdBy: fresh.properties.createdBy } : {}) };
       hist.apply("Reload from GitHub", stateOf(fresh, hist.state.props.color));
       saved = JSON.stringify(hist.state);
       setMsg("Reloaded the latest version from GitHub.", "ok");

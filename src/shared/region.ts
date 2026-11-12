@@ -14,6 +14,7 @@ import {
   type RegionGeometry,
   type Ring,
 } from "./geo.ts";
+import type { Account } from "./access.ts";
 
 export const REGION_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 /** #rgb or #rrggbb, nothing else (so it can never break out of a CSS or style context). */
@@ -69,6 +70,12 @@ export interface RegionProperties {
   /** Province borders: open lines drawn inside the region (dotted in the embed). They don't change the parts. */
   provinceBorders?: Position[][];
   updated?: string;
+  /** When the region was first saved. */
+  created?: string;
+  /** Who created it (missing on regions from before owners existed: those belong to the repository owner). */
+  createdBy?: Account;
+  /** Who saved this version. */
+  updatedBy?: Account;
 }
 
 /** content/regions/<id>.json */
