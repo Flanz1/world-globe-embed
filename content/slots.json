@@ -1,9 +1,9 @@
 {
   "$schema": "../schema/slots.schema.json",
   "slots": {
-    "aerthos": {
+    "inara": {
       "map": "globe-map",
-      "title": "Aerthos",
+      "title": "Inara",
       "grid": false,
       "rotate": true,
       "lat": 20,

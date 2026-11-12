@@ -3,7 +3,7 @@
   "type": "Feature",
   "id": "twintailborder",
   "properties": {
-    "slot": "aerthos",
+    "slot": "inara",
     "map": "globe-map",
     "color": "#c01630",
     "fillOpacity": 0.35,

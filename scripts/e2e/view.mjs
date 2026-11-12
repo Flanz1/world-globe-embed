@@ -91,7 +91,7 @@ await step(E, "slot defaults", async () => {
   await ready(page.mainFrame());
   check(E, "?view=globe overrides the slot's default", !(await isFlat(page.mainFrame())));
 
-  await page.goto(`${SITE}/v/aerthos/`);
+  await page.goto(`${SITE}/v/inara/`);
   await ready(page.mainFrame());
   check(E, "slot without view still opens on the globe", !(await isFlat(page.mainFrame())));
   await page.goto(`${SITE}/v/${SLOT.slug}/?controls=0`);
@@ -156,7 +156,7 @@ await step(A, "default view in the preview", async () => {
 
   await page.waitForSelector("#slots .slot", { timeout: 15000 });
   await page.waitForTimeout(500);
-  await openSlotPreview("aerthos");
+  await openSlotPreview("inara");
   check(A, "slot without view opens as Globe", (await page.getAttribute("#pv-view-globe", "aria-pressed")) === "true");
   await page.click("#pv-view-flat");
   await page.waitForTimeout(300);
@@ -165,7 +165,7 @@ await step(A, "default view in the preview", async () => {
   n = mock.log.length;
   await page.click("#pv-save");
   await waitCommit(n);
-  s = slotsOnBranch().aerthos;
+  s = slotsOnBranch().inara;
   check(A, "saving Flat map writes view: flat", s.view === "flat", JSON.stringify(s));
   check(A, "nothing written to main", mock.log.every((c) => c.branch === BRANCH));
   check(A, "no page errors", errors.length === 0, errors.join(" | "));

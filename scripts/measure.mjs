@@ -18,7 +18,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
 const DIST = path.resolve(process.env.DIST || "dist");
-const SLUG = process.env.SLUG || "aerthos";
+const SLUG = process.env.SLUG || "inara";
 // Extra query string for the embed, e.g. region=<id>&view=flat.
 const QUERY = process.env.QUERY || "";
 const RUNS = Number(process.env.RUNS || 3);

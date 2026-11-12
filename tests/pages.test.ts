@@ -25,7 +25,7 @@ const map: MapMeta = {
 };
 const content: Content = {
   maps: new Map([["terra", map]]),
-  slots: { slots: { aerthos: { map: "terra", title: "Aerthos </script><b>", grid: true, lon: 90 }, plain: { map: "terra" }, padded: { map: "terra", north: 10, south: 30, pole: "#abcdef" } } },
+  slots: { slots: { inara: { map: "terra", title: "Inara </script><b>", grid: true, lon: 90 }, plain: { map: "terra" }, padded: { map: "terra", north: 10, south: 30, pole: "#abcdef" } } },
 };
 
 function dataOf(html: string) {
@@ -37,7 +37,7 @@ describe("slot page generator", () => {
   const pages = generateSlotPages(content, "/*boot*/", "assets/globe-abc.js", ["assets/chunk-1.js"]);
 
   it("writes one page per slot", () => {
-    expect(pages.map((p) => p.path)).toEqual(["v/aerthos/index.html", "v/plain/index.html", "v/padded/index.html"]);
+    expect(pages.map((p) => p.path)).toEqual(["v/inara/index.html", "v/plain/index.html", "v/padded/index.html"]);
   });
 
   it("inlines config, LQIP, boot script and a preload for the 1024 texture, with relative URLs only", () => {
@@ -51,7 +51,7 @@ describe("slot page generator", () => {
     const data = dataOf(html);
     expect(data.globe).toBe("../../assets/globe-abc.js");
     expect(data.preload.globe).toEqual(["../../assets/chunk-1.js"]);
-    expect(data.cfg).toMatchObject({ slug: "aerthos", grid: true, lon: 90, rotate: true, zoom: 1 });
+    expect(data.cfg).toMatchObject({ slug: "inara", grid: true, lon: 90, rotate: true, zoom: 1 });
     expect(data.cfg.textures).toEqual([
       { w: 1024, url: "../../maps/terra/abcdef012345-1024.webp" },
       { w: 2048, url: "../../maps/terra/abcdef012345-2048.webp" },
@@ -67,9 +67,9 @@ describe("slot page generator", () => {
 
   it("escapes the title in HTML and in the inline JSON", () => {
     const html = pages[0].html;
-    expect(html).toContain("<title>Aerthos &lt;/script&gt;&lt;b&gt;</title>");
+    expect(html).toContain("<title>Inara &lt;/script&gt;&lt;b&gt;</title>");
     expect(html.match(/<\/script>/g)!.length).toBe(2); // only the two real closing tags
-    expect(dataOf(html).cfg.title).toBe("Aerthos </script><b>");
+    expect(dataOf(html).cfg.title).toBe("Inara </script><b>");
   });
 
   it("falls back to the map name and default view", () => {
@@ -144,7 +144,7 @@ describe("regions in the build", () => {
     $schema: "../../schema/region.schema.json",
     type: "Feature" as const,
     id: "evil",
-    properties: { name: evil, slot: "aerthos", map: "terra", color: "#c33", description: "</script><img src=x onerror=alert(2)>", label: true },
+    properties: { name: evil, slot: "inara", map: "terra", color: "#c33", description: "</script><img src=x onerror=alert(2)>", label: true },
     geometry: { type: "Polygon" as const, coordinates: [[[170, 0], [-170, 0], [-170, 10], [170, 10], [170, 0]]] as [number, number][][] },
   };
   const withRegion: Content = { ...content, regions: new Map([["evil", region]]) };
@@ -163,7 +163,7 @@ describe("regions in the build", () => {
     const [file] = generateRegionFiles(withRegion);
     expect(file.path).toBe("regions/evil.json");
     const data = JSON.parse(file.json);
-    expect(data).toEqual({ id: "evil", slot: "aerthos", name: evil, color: "#c33", fillOpacity: 0.35, label: true, geometry: region.geometry });
+    expect(data).toEqual({ id: "evil", slot: "inara", name: evil, color: "#c33", fillOpacity: 0.35, label: true, geometry: region.geometry });
     expect(file.json).not.toContain("description");
     expect(file.json).not.toMatch(/\n/);
   });
@@ -171,9 +171,9 @@ describe("regions in the build", () => {
   it("never adds other regions' overlaps (each region is its own map), and keeps contested zones", () => {
     const sq = (x: number, y: number, s = 10): [number, number][] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s], [x, y]];
     const base = { $schema: "../../schema/region.schema.json", type: "Feature" as const };
-    const a = { ...base, id: "a", properties: { slot: "aerthos", map: "terra", color: "#c33", partContested: [-1, 0] }, geometry: { type: "MultiPolygon" as const, coordinates: [[sq(0, 0)], [sq(8, 0, 4)]] } };
+    const a = { ...base, id: "a", properties: { slot: "inara", map: "terra", color: "#c33", partContested: [-1, 0] }, geometry: { type: "MultiPolygon" as const, coordinates: [[sq(0, 0)], [sq(8, 0, 4)]] } };
     // b overlaps a on the same slot: a different map, so neither gets anything from the other.
-    const b = { ...base, id: "b", properties: { slot: "aerthos", map: "terra", color: "#33c" }, geometry: { type: "MultiPolygon" as const, coordinates: [[sq(5, 5)], [sq(60, 0)]] } };
+    const b = { ...base, id: "b", properties: { slot: "inara", map: "terra", color: "#33c" }, geometry: { type: "MultiPolygon" as const, coordinates: [[sq(5, 5)], [sq(60, 0)]] } };
     const files = generateRegionFiles({ ...content, regions: new Map([["a", a], ["b", b]] as [string, RegionFeature][]) });
     const get = (id: string) => JSON.parse(files.find((f) => f.path === `regions/${id}.json`)!.json);
     expect(get("a").clash).toBeUndefined();
@@ -191,18 +191,18 @@ describe("regions in the build", () => {
   });
 
   it("the copied embed snippet escapes the name", () => {
-    const code = regionEmbedCode("https://flanz1.github.io/world-globe-embed/", "aerthos", "Aerthos", { id: "evil", name: evil, label: true }, defaultEmbedOptions({ label: true }));
+    const code = regionEmbedCode("https://flanz1.github.io/world-globe-embed/", "inara", "Inara", { id: "evil", name: evil, label: true }, defaultEmbedOptions({ label: true }));
     expect(code).toBe(
-      '<iframe src="https://flanz1.github.io/world-globe-embed/v/aerthos/?region=evil&amp;view=globe"\n' +
+      '<iframe src="https://flanz1.github.io/world-globe-embed/v/inara/?region=evil&amp;view=globe"\n' +
         '        width="100%" height="480" style="border:0;border-radius:8px;background:transparent"\n' +
-        '        loading="lazy" allow="fullscreen" title="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt; (Aerthos)"></iframe>',
+        '        loading="lazy" allow="fullscreen" title="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt; (Inara)"></iframe>',
     );
     expect(code).not.toMatch(/<script/);
   });
 
   it("embed URL options: flat, label off, dim, start unlocked, custom domain", () => {
-    const code = regionEmbedCode("https://maps.example.org/", "aerthos", "Aerthos", { id: "vael", name: "Vael", label: true }, { view: "flat", height: 600, label: false, dim: true, lock: false, key: false });
-    expect(code).toContain('src="https://maps.example.org/v/aerthos/?region=vael&amp;view=flat&amp;label=0&amp;dim=1&amp;lock=0&amp;key=0"');
+    const code = regionEmbedCode("https://maps.example.org/", "inara", "Inara", { id: "vael", name: "Vael", label: true }, { view: "flat", height: 600, label: false, dim: true, lock: false, key: false });
+    expect(code).toContain('src="https://maps.example.org/v/inara/?region=vael&amp;view=flat&amp;label=0&amp;dim=1&amp;lock=0&amp;key=0"');
     expect(code).toContain('height="600"');
   });
 });

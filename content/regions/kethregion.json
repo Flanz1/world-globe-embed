@@ -3,7 +3,7 @@
   "type": "Feature",
   "id": "kethregion",
   "properties": {
-    "slot": "aerthos",
+    "slot": "inara",
     "map": "globe-map",
     "color": "#5881ad",
     "fillOpacity": 0.35,

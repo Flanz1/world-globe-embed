@@ -24,12 +24,12 @@ function region(id: string, props: Partial<RegionFeature["properties"]>, polys: 
     $schema: "../../schema/region.schema.json",
     type: "Feature",
     id,
-    properties: { slot: "aerthos", map: "terra", color: "#c0392b", ...props },
+    properties: { slot: "inara", map: "terra", color: "#c0392b", ...props },
     geometry: polys.length === 1 ? { type: "Polygon", coordinates: polys[0] } : { type: "MultiPolygon", coordinates: polys },
   };
 }
 
-const base = { slot: "aerthos", map: "terra" };
+const base = { slot: "inara", map: "terra" };
 
 function expectValid(f: RegionFeature) {
   expect(validate(f), JSON.stringify(validate.errors)).toBe(true);
@@ -66,7 +66,7 @@ describe("combineRegions", () => {
     const f = r.feature!;
     expect(JSON.stringify([vael, keth])).toBe(before);
     expect(f.id).toBe("vael-keth");
-    expect(f.properties.slot).toBe("aerthos");
+    expect(f.properties.slot).toBe("inara");
     expect(f.properties.map).toBe("terra");
     expect(polygonsOf(f.geometry)).toHaveLength(5);
     expect(polygonsOf(f.geometry)[3]).toEqual(square(20, 20));
@@ -142,14 +142,14 @@ describe("combineRegions", () => {
     const other = region("other", { map: "luna" }, [square(30, 0)]);
     const moved = region("moved", { slot: "second" }, [square(40, 0)]);
     expect(regionBases([vael, other, moved]).map((b) => [b.slot, b.map, b.ids])).toEqual([
-      ["aerthos", "terra", ["vael"]],
-      ["aerthos", "luna", ["other"]],
+      ["inara", "terra", ["vael"]],
+      ["inara", "luna", ["other"]],
       ["second", "terra", ["moved"]],
     ]);
     const r = combineRegions([vael, other, moved], { id: "x", base: { slot: "second", map: "terra" } });
     expect(r.feature!.properties.slot).toBe("second");
     expect(r.notes.some((n) => n.includes('other was drawn on the map "luna"'))).toBe(true);
-    expect(r.notes.some((n) => n.includes('vael moves from slot "aerthos"'))).toBe(true);
+    expect(r.notes.some((n) => n.includes('vael moves from slot "inara"'))).toBe(true);
   });
 });
 
