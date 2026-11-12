@@ -59,12 +59,12 @@ const WEST = [[100, -56], [110, -56], [110, -46], [100, -46], [100, -49], [100, 
 // Three provinces in a row for the embed: A and B one colour (provincial border at lon 20), C another (national at 30).
 const BORDERS = [box(10, -20, 20, -10), box(20, -20, 30, -10), box(30, -20, 40, -10)];
 const regions = [
-  feature("snap-test", { type: "Polygon", coordinates: [WEST] }, {}),
-  feature("snap-neighbour", { type: "Polygon", coordinates: [box(111, -56, 121, -46)] }, { color: "#ffffff", name: "Neighbour" }),
+  feature("snap-test", { type: "Polygon", coordinates: [WEST] }, { partLocked: [false] }),
+  feature("snap-neighbour", { type: "Polygon", coordinates: [box(111, -56, 121, -46)] }, { color: "#ffffff", name: "Neighbour", partLocked: [false] }),
   feature(
     "borders-test",
     { type: "MultiPolygon", coordinates: BORDERS.map((r) => [r]) },
-    { color: "#c0392b", fillOpacity: 0.35, legend: [{ label: "Breza", color: "#c0392b" }, { label: "Selbia", color: "#2e86c1" }], partLegend: [0, 0, 1], provinceBorders: [[[15, -20], [15, -10]]] },
+    { color: "#c0392b", fillOpacity: 0.35, legend: [{ label: "Breza", color: "#c0392b" }, { label: "Selbia", color: "#2e86c1" }], partLegend: [0, 0, 1], partLocked: [false, false, false], provinceBorders: [[[15, -20], [15, -10]]] },
   ),
 ];
 
