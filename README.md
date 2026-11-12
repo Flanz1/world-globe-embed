@@ -1,10 +1,12 @@
 # World globe embed
 
-A lightweight 3D globe for embedding in an Obsidian Publish site (or any page) with an `<iframe>`. It's a stripped-down web port of the globe viewer from [Fantasy-World-Visualizer](https://github.com/Flanz1/Fantasy-World-Visualizer). It's fully static and hosted on GitHub Pages.
+A lightweight 3D globe for embedding in an Obsidian Publish site (or any page) with an `<iframe>`. It's a stripped-down web port of the globe viewer from [Fantasy-World-Visualizer](https://github.com/Flanz1/Fantasy-World-Visualizer). It's fully static and hosted on GitHub Pages at `editor.garmeley.com`.
 
-- **Viewer:** `https://flanz1.github.io/world-globe-embed/v/<slot>/`
-- **Admin page:** `https://flanz1.github.io/world-globe-embed/admin/`
-- **Slot list with embed codes:** `https://flanz1.github.io/world-globe-embed/`
+- **Viewer:** `https://editor.garmeley.com/v/<slot>/`
+- **Admin page:** `https://editor.garmeley.com/admin/`
+- **Slot list with embed codes:** `https://editor.garmeley.com/`
+
+Old `https://flanz1.github.io/world-globe-embed/...` links still work: GitHub Pages redirects them to the same path on `editor.garmeley.com`.
 
 Maps and settings live in this repo. Anyone with write access can change which map an embed shows, without writing code and without a local setup.
 
@@ -13,7 +15,7 @@ Maps and settings live in this repo. Anyone with write access can change which m
 Paste this into a note:
 
 ```html
-<iframe src="https://flanz1.github.io/world-globe-embed/v/inara/?grid=1&rotate=1"
+<iframe src="https://editor.garmeley.com/v/inara/?grid=1&rotate=1"
         width="100%" height="480" style="border:0;border-radius:8px;background:transparent"
         loading="lazy" allow="fullscreen" title="Inara globe"></iframe>
 ```
@@ -112,7 +114,7 @@ Each region is a GeoJSON Feature in `content/regions/<id>.json`, checked against
 Press **Copy embed code** on a region's card (or **Embed code…** in the editor) and paste the snippet into a note:
 
 ```html
-<iframe src="https://flanz1.github.io/world-globe-embed/v/inara/?region=old-kingdom"
+<iframe src="https://editor.garmeley.com/v/inara/?region=old-kingdom"
         width="100%" height="480" style="border:0;border-radius:8px;background:transparent"
         loading="lazy" allow="fullscreen" title="Old Kingdom (Inara)"></iframe>
 ```

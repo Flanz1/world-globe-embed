@@ -48,7 +48,7 @@ The admin API lives at `https://admin-api.garmeley.com` (set under `[[routes]]` 
 **GitHub → Settings → Developer settings → GitHub Apps → New GitHub App:**
 
 - **Name:** for example `World Globe Admin` (people see it on the sign-in screen).
-- **Homepage URL:** `https://flanz1.github.io/world-globe-embed/admin/`
+- **Homepage URL:** `https://editor.garmeley.com/admin/`
 - **Callback URL:** `https://admin-api.garmeley.com/auth/callback`
 - Leave **Expire user authorization tokens** on. Leave **Request user authorization (OAuth) during installation** off.
 - **Webhook:** untick **Active**.
@@ -84,11 +84,21 @@ Variables:
 | `APP_CLIENT_ID` | the Client ID |
 | `ADMIN_API_URL` | `https://admin-api.garmeley.com` |
 
-### 4. Deploy
+### 4. Site address (editor.garmeley.com)
+
+The whole site (viewer, embeds and admin page) is served at `editor.garmeley.com`. The build uses relative paths, so nothing in the code changes.
+
+1. **Cloudflare → garmeley.com → DNS → Add record:** type `CNAME`, name `editor`, target `flanz1.github.io`, proxy status **DNS only** (grey cloud), so GitHub can issue the certificate.
+2. **GitHub → your profile Settings → Pages → Add a domain:** `editor.garmeley.com`. Add the TXT record GitHub shows in Cloudflare DNS, then **Verify**. This stops anyone else's Pages site from claiming the name.
+3. **world-globe-embed → Settings → Pages → Custom domain:** `editor.garmeley.com` → **Save**. Once the certificate is ready (a few minutes up to an hour), tick **Enforce HTTPS**.
+
+Old `https://flanz1.github.io/world-globe-embed/...` links, including iframes already pasted into notes, are redirected by GitHub to the same path on `editor.garmeley.com`, so they keep working. Embed codes copied from the admin page from now on use the new address.
+
+### 5. Deploy
 
 **Actions → Admin API → Run workflow**, then **Actions → Deploy → Run workflow** (so the admin page is rebuilt with `ADMIN_API_URL`). Open the admin page and sign in.
 
-### 5. Lock it down
+### 6. Lock it down
 
 Once you've signed in through the new page:
 
