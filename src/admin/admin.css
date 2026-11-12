@@ -80,6 +80,17 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .55); }
 .rname { overflow-wrap: anywhere; }
 .rcard .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .rcard .actions button { padding: 3px 10px; font-size: 13px; }
+.rfolder { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px 10px; }
+.rfolder-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; }
+.rfolder-toggle { display: inline-flex; align-items: center; gap: 6px; border: 0; padding: 4px 6px; font-size: 15px; text-align: left; }
+.rfolder-arrow { display: inline-block; transition: transform .12s; }
+.rfolder.closed .rfolder-arrow { transform: rotate(-90deg); }
+.rfolder-head .actions { display: flex; gap: 6px; }
+.rfolder-head .actions button { padding: 3px 10px; font-size: 13px; }
+.rfolder-body { display: grid; gap: 10px; margin-top: 8px; }
+.rfolder-body[hidden] { display: none; }
+.rcat { display: flex; align-items: center; gap: 6px; }
+.rcat select { width: auto; flex: 0 1 260px; }
 .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; border: 1px solid rgba(0, 0, 0, .3); }
 .badge { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 9px; font-size: 11px; border: 1px solid currentColor; }
 .badge.warn { color: #b9770e; }

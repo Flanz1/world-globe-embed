@@ -7,6 +7,7 @@ import type { MapMeta, SlotsFile } from "../../src/shared/types.ts";
 import { checkGeometry } from "../../src/shared/geo.ts";
 import { checkLegend, checkParts, type RegionFeature } from "../../src/shared/region.ts";
 import { checkAccess } from "../../src/shared/access.ts";
+import { checkCategories, type CategoriesFile } from "../../src/shared/categories.ts";
 import { ROOT, contentPaths, type ContentPaths } from "./paths.ts";
 
 const readJson = (file: string): unknown => JSON.parse(readFileSync(file, "utf8"));
@@ -19,6 +20,7 @@ const validateSlots = compile("slots.schema.json");
 const validateMap = compile("map.schema.json");
 const validateRegion = compile("region.schema.json");
 const validateAccess = compile("access.schema.json");
+const validateCategories = compile("categories.schema.json");
 
 function describe(file: string, errors: ErrorObject[] | null | undefined): string[] {
   // if/then/else failures are always accompanied by the specific error inside the branch.
@@ -183,6 +185,23 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
       else errors.push(...checkAccess(data).map((e) => `content/access.json: ${e}`));
     } catch (e) {
       errors.push(`content/access.json: is not valid JSON (${(e as Error).message})`);
+    }
+  }
+
+  // Region categories (optional). A region id that no longer exists is only a warning: deleting a region leaves its id behind until the next category change tidies it up.
+  const categoriesFile = path.join(paths.content, "categories.json");
+  if (existsSync(categoriesFile)) {
+    try {
+      const data = readJson(categoriesFile);
+      if (!validateCategories(data)) errors.push(...describe("content/categories.json", validateCategories.errors));
+      else {
+        errors.push(...checkCategories(data).map((e) => `content/categories.json: ${e}`));
+        for (const k of (data as CategoriesFile).categories)
+          for (const r of k.regions)
+            if (!regionFiles.includes(`${r}.json`)) warnings.push(`content/categories.json: category "${k.name}" lists the region "${r}", which doesn't exist (it was probably deleted).`);
+      }
+    } catch (e) {
+      errors.push(`content/categories.json: is not valid JSON (${(e as Error).message})`);
     }
   }
 

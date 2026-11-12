@@ -11,8 +11,8 @@ are enforced in the API (`src/shared/access.ts`, tested in `tests/admin-api.test
 | Permission | Lets someone |
 |---|---|
 | **Maps & slots** | open the Maps & slots tab: upload or replace map images, add slots, change slot settings |
-| **Create regions** | draw new regions, and edit or delete the regions they created |
-| **Edit others' regions** | change regions other people created |
+| **Create regions** | draw new regions, and edit or delete the regions they created; also add region categories and rename, reorder or delete their own (see below) |
+| **Edit others' regions** | change regions other people created, and rename or delete other people's categories |
 | **Delete others' regions** | delete regions other people created |
 | **Manage users** | open the Users tab and add or change people, but only with permissions they hold themselves, and never their own entry or the owner's |
 
@@ -22,6 +22,23 @@ Every region records who created it (`createdBy`), when (`created`) and who save
 The API fills nothing in by itself. It checks those fields instead: a new region must name the person
 saving it as its creator, and only the owner can change a region's creator. Regions from before this
 change belong to the owner until `npm run region-owners` gives them the account that first committed them.
+
+## Region categories
+
+The Regions tab can group regions into collapsible folders (**New category…**). Folders are saved in
+`content/categories.json` (checked against `schema/categories.schema.json`): an ordered list of
+`{ id, name, regions: [region ids], createdBy, created }`. A region is in at most one category; regions in none
+show under **Uncategorized**, and with no categories at all the list is flat as before. Categories are for the
+admin page only: the public embed doesn't read them.
+
+They follow the region rules, with no extra permission:
+
+- **Create regions** adds categories (saved with the creator, like regions) and renames or deletes your own. Anyone with it can reorder folders (the order is cosmetic).
+- **Edit others' regions** also renames and deletes other people's categories. Categories with no creator recorded belong to the owner.
+- Moving a region into or out of a category (its **Category** menu) needs the right to edit that region: your own, or anyone's with Edit others' regions. Deleting a category doesn't delete its regions; they become uncategorized.
+- Deleting a region leaves its id in `categories.json` until the next category change tidies it up (the build only warns about it).
+
+The API checks all of this on save, like the other rules.
 
 ## Adding someone
 
