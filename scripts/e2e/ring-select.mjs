@@ -176,7 +176,8 @@ await step(A, "delete", async () => {
   await page.keyboard.press("Delete");
   await page.waitForSelector("dialog.small-dlg.danger[open]");
   await page.click('dialog.small-dlg.danger[open] button:has-text("Delete part")');
-  await page.waitForTimeout(150);
+  // The confirm resolves asynchronously: wait for the part to go rather than a fixed 150 ms, which flaked on a busy machine.
+  await page.waitForFunction(() => document.querySelector("dialog.editor").wgeEditor.state().parts.length === 0, null, { timeout: 5000 }).catch(() => {});
   s = await ed.state();
   check(A, "confirming deletes the whole part", s.parts.length === 0, String(s.parts.length));
 });
