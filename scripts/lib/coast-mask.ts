@@ -13,6 +13,7 @@
  *  - Sea names painted in white over the water are not islands: white blobs surrounded by sea
  *    are checked for lettering (crisp edges, pure white, even stroke width) and the lettering goes.
  *    Ice and snow (soft edges, textured, uneven) stay land.
+ *  - Name boxes standing in the sea go back to sea, and so does the water they cut off from it.
  *  - Pictures drawn in the sea (ships, mermaids, sea monsters, a whirlpool's black eye and its
  *    swirls) are not islands either: they're inked, so a blob of up to island size whose edge is
  *    mostly near-black line work around a brighter inside goes, and so does a blob that is
@@ -392,7 +393,7 @@ const isCream = (r: number, g: number, b: number) => r >= 225 && g >= 200 && g <
  * square islands or bumps on the coast: they go back to sea. Boxes mostly on land stay land.
  * Returns how many were removed.
  */
-function removeLabelBoxes(rgb: Uint8Array, ch: number, w: number, h: number, st: Uint8Array, s: number, stack: Stack): number {
+function removeLabelBoxes(rgb: Uint8Array, ch: number, w: number, h: number, st: Uint8Array, s: number, stack: Stack): number[][] {
   const n = w * h;
   const cream = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
@@ -407,7 +408,7 @@ function removeLabelBoxes(rgb: Uint8Array, ch: number, w: number, h: number, st:
   for (let i = 0; i < n; i++) if (grown[i] <= r * r && shrunk[i] > r * r) box[i] = 1;
   const minArea = 300 * s * s;
   const maxArea = 60000 * s * s;
-  let removed = 0;
+  const removed: number[][] = [];
   let buf = new Int32Array(1 << 14);
   const BOXSEEN = 2;
   for (let i0 = 0; i0 < n; i0++) {
@@ -462,9 +463,55 @@ function removeLabelBoxes(rgb: Uint8Array, ch: number, w: number, h: number, st:
       if (y < 0 || y >= h) continue;
       for (let x = x0 - m0; x <= x1 + m0; x++) st[y * w + ((x + w) % w)] |= SEA;
     }
-    removed++;
+    removed.push([x0 - m0, y0 - m0, x1 + m0, y1 + m0]);
   }
   return removed;
+}
+
+/**
+ * Water a removed name box was standing in front of (between the box and the shore) was cut off
+ * from the sea by the box: it is opened again around each box, the same way as the whole map
+ * (water at least `riverR` deep, connected to the sea, grown back), so rivers behind it stay land.
+ */
+function reopenAroundBoxes(st: Uint8Array, w: number, h: number, rects: number[][], riverR: number, margin: number) {
+  const cap = Math.ceil(riverR) + 2;
+  const r2 = riverR * riverR;
+  const b2 = (riverR + 0.5) ** 2;
+  for (const [rx0, ry0, rx1, ry1] of rects) {
+    // A window around the box, padded with `cap` px of land so its edges add nothing.
+    const X0 = rx0 - margin - cap;
+    const Y0 = Math.max(0, ry0 - margin) - cap;
+    const lw = rx1 + margin + cap - X0 + 1;
+    const lh = Math.min(h - 1, ry1 + margin) + cap - Y0 + 1;
+    const gi = (lx: number, ly: number) => {
+      const y = Y0 + ly;
+      if (lx < cap || lx >= lw - cap || ly < cap || ly >= lh - cap || y < 0 || y >= h) return -1;
+      return y * w + ((((X0 + lx) % w) + w) % w);
+    };
+    const idx = new Int32Array(lw * lh);
+    for (let ly = 0; ly < lh; ly++) for (let lx = 0; lx < lw; lx++) idx[ly * lw + lx] = gi(lx, ly);
+    const water = (li: number) => idx[li] >= 0 && (st[idx[li]] & (SEA_COLOUR | SEA)) !== 0;
+    const d2 = distance2(water, lw, lh, cap);
+    // Deep water connected to the sea that's already there.
+    const open = new Uint8Array(lw * lh);
+    const stack: number[] = [];
+    for (let li = 0; li < lw * lh; li++)
+      if (d2[li] > r2 && st[idx[li]] & SEA) {
+        open[li] = 1;
+        stack.push(li);
+      }
+    while (stack.length) {
+      const li = stack.pop()!;
+      const lx = li % lw;
+      for (const lj of [li - lw, li + lw, lx > 0 ? li - 1 : -1, lx < lw - 1 ? li + 1 : -1])
+        if (lj >= 0 && lj < lw * lh && !open[lj] && d2[lj] > r2) {
+          open[lj] = 1;
+          stack.push(lj);
+        }
+    }
+    const back = distance2((li) => !open[li], lw, lh, cap);
+    for (let li = 0; li < lw * lh; li++) if (idx[li] >= 0 && back[li] <= b2 && st[idx[li]] & SEA_COLOUR) st[idx[li]] |= SEA;
+  }
 }
 
 export interface LandMask {
@@ -578,7 +625,9 @@ export function buildLandMask(rgb: Uint8Array, w: number, h: number, ch: number,
       seaPixels++;
     }
   }
-  const boxesRemoved = removeLabelBoxes(rgb, ch, w, h, st, s, stack);
+  const boxes = removeLabelBoxes(rgb, ch, w, h, st, s, stack);
+  const boxesRemoved = boxes.length;
+  reopenAroundBoxes(st, w, h, boxes, riverR, Math.ceil(40 * s));
   // Land blobs (8-connected): lettering and pictures go back to sea, specks go.
   let labelsRemoved = 0;
   let decorationsRemoved = 0;
