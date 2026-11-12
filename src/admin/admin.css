@@ -125,6 +125,8 @@ dialog.editor[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr
 .ed-menu button:hover, .ed-menu button:focus { background: var(--bg); }
 .ed-menu button.danger-item { color: var(--err); }
 .ed-simplify { position: absolute; left: 8px; top: 8px; display: grid; gap: 6px; max-width: 340px; padding: 10px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
+.ed-combine label { display: flex; align-items: center; gap: 6px; }
+.ed-comb-info { margin: 0; }
 .ed-side { display: grid; gap: 10px; align-content: start; padding: 10px; overflow: auto; border-left: 1px solid var(--line); }
 .ed-globe { width: 100%; aspect-ratio: 4 / 3; max-height: 44vh; border: 0; border-radius: 8px; background: #14120f; display: block; }
 .ed-side label.inline { display: flex; align-items: center; gap: 8px; }
