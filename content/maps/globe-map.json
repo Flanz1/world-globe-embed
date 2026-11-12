@@ -32,5 +32,6 @@
       "url": "maps/globe-map/d34171d98414-32768"
     }
   },
+  "coast": "maps/globe-map/d34171d98414-coast.bin",
   "lqip": "data:image/webp;base64,UklGRqwBAABXRUJQVlA4IKABAADwBwCdASowABwAPtFiqlEoJSOipWgBABoJQBXiNxYz40HUXdvPAKKens87JboLG82wGwzrDqEUXUPYu1nib6n56D3d/1u31AAA/u0Q+029q3/3Nxr6jafNgaM/3fxEvoAltm3j4LLAGm8IZ9TwaNuUOGX0x52/QH9X8UjZgzuCygs9uZiyKrwyBSQwDC2z1tU9brsdh+3niUth1R57MK1kEeENYNniGPZA0S6eAsLud94tbFqguVzE7hYLiFGbW4NJCyHOpMOvbqbcL5AMt41WGVZnw+FnujaMxs92qCyoTUV2ltTk1P8+CgJTert7HmkQ7gbgnCtALY1Xt2E4KOCxBxCDYVWwMpoIjjEZZHaPNDDvgU7Ymzhg0OX8f1uQS7/uHZYctwOmAiUn+KQJzZK1wMuyp8PecaB3jI7QLeR+mGEkYfsviLl35oYFnt5tu9fS8oC/ymxNfsOJpCuNhaV2hra0BWdZRvxfw54sESxpYSs8fjW3El/RajZTrjOsR2tNqVIOM6PhrwriJg2EkMdhLneAAdFaOG07gDKLbAgAAA=="
 }

@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync, w
 import path from "node:path";
 import sharp, { type Sharp } from "sharp";
 import { TEXTURE_WIDTHS, type MapMeta, type TextureWidth } from "../../src/shared/types.ts";
+import { COAST_WIDTH, buildCoast, coastFile, type Raster } from "./coast-build.ts";
 import { TILE_LEVELS, tileGrid, tileRect, tileUrl, type TileLevel } from "../../src/shared/tiles.ts";
 import { contentPaths, type ContentPaths } from "./paths.ts";
 
@@ -103,6 +104,8 @@ export interface ProcessOptions {
   removeSource?: boolean;
   /** Map id to use instead of the one from the file name. */
   id?: string;
+  /** Trace coast lines for the region editor (default true). */
+  coast?: boolean;
 }
 
 export async function processImage(file: string, opts: ProcessOptions): Promise<MapMeta> {
@@ -137,10 +140,12 @@ export async function processImage(file: string, opts: ProcessOptions): Promise<
   // Tile levels (16384, 32768) for sources at least that wide: resized once, then cut into 2048 px tiles.
   const tiles: NonNullable<MapMeta["tiles"]> = {};
   const tileFiles: string[] = [];
+  let coastRaster: Raster | null = null;
   for (const w of TILE_LEVELS.filter((w) => w <= info.width)) {
     const grid = tileGrid(w, aspect);
     const level: TileLevel = { ...grid, url: `maps/${info.id}/${hash}-${w}` };
     const { data, info: raw } = await base.clone().resize(grid.w, grid.h, { fit: "fill", kernel: "lanczos3" }).raw().toBuffer({ resolveWithObject: true });
+    if (w === COAST_WIDTH) coastRaster = { data, width: raw.width, height: raw.height, channels: raw.channels };
     for (let r = 0; r < grid.rows; r++)
       for (let c = 0; c < grid.cols; c++) {
         const [u0, v0, u1, v1] = tileRect(grid, c, r);
@@ -155,8 +160,19 @@ export async function processImage(file: string, opts: ProcessOptions): Promise<
       }
     tiles[`${w}`] = level;
   }
+  // Coast lines for snapping in the region editor, traced at up to 16384 px wide.
+  let coast: string | undefined;
+  if (opts.coast !== false) {
+    if (!coastRaster) {
+      const cw = Math.min(COAST_WIDTH, info.width);
+      const { data, info: raw } = await base.clone().resize(cw, Math.round(cw / aspect), { fit: "fill", kernel: "lanczos3" }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      coastRaster = { data, width: raw.width, height: raw.height, channels: raw.channels };
+    }
+    coast = coastFile(info.id, hash);
+    writeFileSync(path.join(paths.publicDir, coast), buildCoast(coastRaster).bytes);
+  }
   // Remove textures from earlier uploads of the same map id.
-  const keep = new Set([...Object.values(sizes).map((p) => path.basename(p!)), ...tileFiles]);
+  const keep = new Set([...Object.values(sizes).map((p) => path.basename(p!)), ...tileFiles, ...(coast ? [path.basename(coast)] : [])]);
   for (const f of readdirSync(outDir)) if (!keep.has(f)) rmSync(path.join(outDir, f));
 
   const metaFile = path.join(paths.mapsDir, `${info.id}.json`);
@@ -173,6 +189,7 @@ export async function processImage(file: string, opts: ProcessOptions): Promise<
     hash,
     sizes,
     ...(Object.keys(tiles).length ? { tiles } : {}),
+    ...(coast ? { coast } : {}),
     lqip: await makeLqip(base, aspect),
   };
   mkdirSync(paths.mapsDir, { recursive: true });

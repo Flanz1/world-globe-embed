@@ -57,7 +57,8 @@ export const ADMIN_CSP = [
   "script-src 'self'",
   "style-src 'self'",
   "img-src 'self' data:",
-  "connect-src https://api.github.com",
+  // The editor fetches the map's coast file from this site.
+  "connect-src 'self' https://api.github.com",
   // The preview dialog shows this site's own preview/ page.
   "frame-src 'self'",
   "base-uri 'none'",
