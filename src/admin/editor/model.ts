@@ -356,7 +356,7 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
     const pc = pieces[p];
     const style = s.styles[p] ?? OWN_COLOUR;
     const parent = s.contested[p] ?? -1;
-    const lock = s.locked?.[p] === true;
+    const lock = s.locked?.[p] !== false;
     if (pc) cut.push(p);
     if (pc && !pc.length) return void removed++;
     index[p] = parts.length;
@@ -450,10 +450,10 @@ export function partsAt(parts: Parts, pos: Position, contested: readonly number[
 
 /* ── Locked parts ── */
 
-/** Sets part p's lock. */
+/** Sets part p's lock. Parts are locked unless an entry says otherwise. */
 export function setLocked(s: EditorState, p: number, on: boolean): EditorState {
   const next = cloneState(s);
-  while (next.locked.length < next.parts.length) next.locked.push(false);
+  while (next.locked.length < next.parts.length) next.locked.push(true);
   if (p >= 0 && p < next.parts.length) next.locked[p] = on;
   return next;
 }
@@ -474,11 +474,11 @@ export function planMove(
   set: readonly number[] = grabbed === null ? [] : [grabbed],
 ): { parts: number[] | null } | { refused: string } {
   if (grabbed === null) {
-    const first = Array.from({ length: n }, (_, p) => p).find((p) => locked[p]);
+    const first = Array.from({ length: n }, (_, p) => p).find((p) => locked[p] !== false);
     return first === undefined ? { parts: null } : { refused: `${partName(first, labels)} is locked, so the whole region can't move. Unlock it in the Parts list first.` };
   }
-  if (locked[grabbed]) return { refused: `${partName(grabbed, labels)} is locked: drag its vertices or midpoints to reshape it, or unlock it to move it.` };
-  return { parts: set.filter((p) => p === grabbed || !locked[p]) };
+  if (locked[grabbed] !== false) return { refused: `${partName(grabbed, labels)} is locked: drag its vertices or midpoints to reshape it, or unlock it to move it.` };
+  return { parts: set.filter((p) => p === grabbed || locked[p] === false) };
 }
 
 /* ── Contested zones ── */
@@ -576,7 +576,7 @@ export function toStyledGeometry(
       kept.push(p);
       partLegend.push(styles[p] ?? OWN_COLOUR);
       partLabels.push(labels[p] ?? "");
-      partLocked.push(locked[p] === true);
+      partLocked.push(locked[p] !== false);
     }
   });
   return { geometry: toStoredGeometry(keep), partLegend, partLabels, partContested: remapContested(contested, kept).contested, partLocked };

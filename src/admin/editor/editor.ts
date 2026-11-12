@@ -601,7 +601,7 @@ export function openEditor(o: EditorOptions): void {
   let pinch: { d: number; mx: number; my: number } | null = null;
 
   const parts = () => hist.state.parts;
-  /** Geometry edits. `styles`, `labels`, `contested` and `locked` must be given whenever parts are removed (added parts start unlocked). */
+  /** Geometry edits. `styles`, `labels`, `contested` and `locked` must be given whenever parts are removed (added parts start locked). */
   const setParts = (
     label: string,
     next: Parts,
@@ -837,7 +837,7 @@ export function openEditor(o: EditorOptions): void {
       drawHandles(offs);
       drawLineHandles(offs);
     }
-    if ((parts().length > 1 || hist.state.locked.some(Boolean)) && !simplifyPreview) drawBadges(offs);
+    if ((parts().length > 1 || hist.state.locked.some((l) => l !== false)) && !simplifyPreview) drawBadges(offs);
     else badgeAt = [];
     if (drawing || drag?.kind === "free") {
       const pts = drawing ?? (drag as { pts: Position[] }).pts;
@@ -980,7 +980,7 @@ export function openEditor(o: EditorOptions): void {
           g.strokeText(String(p + 1), x, y + 0.5);
         }
         g.fillText(String(p + 1), x, y + 0.5);
-        if (hist.state.locked[p]) drawLock(x + r * 0.8, y - r * 0.8);
+        if (hist.state.locked[p] !== false) drawLock(x + r * 0.8, y - r * 0.8);
       }
     });
     g.restore();
@@ -1230,7 +1230,7 @@ export function openEditor(o: EditorOptions): void {
   }
   function togglePartLock(p: number): void {
     if (p < 0 || p >= parts().length) return;
-    const on = !hist.state.locked[p];
+    const on = hist.state.locked[p] === false;
     hist.apply(on ? "Lock part" : "Unlock part", setLocked(hist.state, p, on));
     setMsg(on ? `Part ${p + 1} is locked: it won't move, but its vertices and midpoints still edit.` : `Part ${p + 1} is unlocked.`, "ok");
     changed();
@@ -1380,7 +1380,7 @@ export function openEditor(o: EditorOptions): void {
       row.classList.toggle("hot", p === hoverPart);
       row.classList.toggle("sel", p === selPart);
       row.querySelector("button[data-act=part-select]")?.setAttribute("aria-pressed", String(p === selPart));
-      const locked = !!s.locked[p];
+      const locked = s.locked[p] !== false;
       row.classList.toggle("locked", locked);
       const lock = row.querySelector<HTMLButtonElement>("button[data-act=part-lock]");
       if (lock) {
@@ -2026,7 +2026,7 @@ export function openEditor(o: EditorOptions): void {
       res.kept.map((p) => hist.state.styles[p] ?? OWN_COLOUR),
       res.kept.map((p) => hist.state.labels[p] ?? ""),
       zones.contested,
-      res.kept.map((p) => hist.state.locked[p] ?? false),
+      res.kept.map((p) => hist.state.locked[p] ?? true),
     );
     selection.clear();
     if (res.removedParts) selPart = selPart >= 0 ? res.kept.indexOf(selPart) : -1;
@@ -2072,7 +2072,7 @@ export function openEditor(o: EditorOptions): void {
       res.kept.map((k) => s.styles[k] ?? OWN_COLOUR),
       res.kept.map((k) => s.labels[k] ?? ""),
       remapped.contested,
-      res.kept.map((k) => s.locked[k] ?? false),
+      res.kept.map((k) => s.locked[k] ?? true),
     );
     if (keptLines.length !== (s.lines ?? []).length) hist.apply(`Delete part ${p + 1}`, { ...hist.state, lines: keptLines }, `del-lines:${p}`);
     selection.clear();
@@ -2427,7 +2427,7 @@ export function openEditor(o: EditorOptions): void {
       if (tool === "select") {
         const over = hitVertex(x, y) || hitMidpoint(x, y) || hitEdge(x, y);
         const under = cursor ? partAt(parts(), cursor, hist.state.contested) : -1;
-        canvas.style.cursor = spaceHeld ? "grab" : over ? "pointer" : under >= 0 && !hist.state.locked[under] ? "move" : "default";
+        canvas.style.cursor = spaceHeld ? "grab" : over ? "pointer" : under >= 0 && hist.state.locked[under] === false ? "move" : "default";
         setHoverPart(under);
       }
       return draw();
@@ -2814,7 +2814,7 @@ export function openEditor(o: EditorOptions): void {
           : {}),
         ...(partLabels.some((t) => t.trim()) ? { partLabels: partLabels.map((t) => t.trim().slice(0, PART_LABEL_MAX)) } : {}),
         ...(hasZones ? { partContested } : {}),
-        ...(partLocked.some(Boolean) ? { partLocked } : {}),
+        ...(partLocked.some((l) => !l) ? { partLocked } : {}),
         ...(provinceLines.length ? { provinceBorders: provinceLines } : {}),
         updated: stamp(),
       },

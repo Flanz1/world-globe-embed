@@ -477,7 +477,12 @@ await step(A, "editor: draw and edit", async () => {
   check(A, "delete a vertex (Alt+click)", verts(s) === 4, `${verts(s)} vertices`);
 
   const before = s.parts[0][0].map((p) => p[0]);
+  // A new drawing starts locked: the drag is refused until the part is unlocked.
   [x, y] = await ed.xy(180, 0);
+  await mdrag(x, y, -44, 0);
+  s = await ed.state();
+  check(A, "a new part starts locked: dragging inside it doesn't move it", s.locked[0] === true && s.parts[0][0].every((p, i) => p[0] === before[i]), JSON.stringify(s.locked));
+  await page.click('dialog.editor [data-act="part-lock"]');
   await mdrag(x, y, -44, 0);
   s = await ed.state();
   const moved = s.parts[0][0].map((p, i) => p[0] - before[i]);

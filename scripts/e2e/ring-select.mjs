@@ -140,6 +140,8 @@ await step(A, "click a line", async () => {
 });
 
 await step(A, "drags still work", async () => {
+  // The part opens locked; unlock it so a drag inside it moves it.
+  await page.click('dialog.editor [data-act="part-lock"]');
   const before = await ed.state();
   let [x, y] = await ed.xy(105.5, -52.15); // 3 px outside the hole, on solid ground, still within reach of its line
   await mdrag(x, y, K, 0);

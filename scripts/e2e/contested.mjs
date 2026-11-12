@@ -334,6 +334,11 @@ async function mdrag(x, y, dx, dy, mods = []) {
   for (const m of mods) await page.keyboard.up(m);
   await page.waitForTimeout(100);
 }
+/** Parts open locked (and new ones start locked): unlock every part that is, through the Parts list. */
+async function unlockAll() {
+  const locked = page.locator('dialog.editor [data-act="part-lock"][aria-pressed="true"]');
+  while (await locked.count()) await locked.first().click();
+}
 const K = 20; // px per degree of longitude in the editor checks
 const KY = K * (2 / (MAP.w / MAP.h)); // px per degree of latitude (the map isn't 2:1)
 const r4 = (v) => Math.round(v * 1e4) / 1e4;
@@ -436,6 +441,12 @@ if (want("editor")) {
   });
 
   await step(A, "moving parts and live dashes", async () => {
+    // Every part starts locked: a drag inside one leaves it where it is, until it's unlocked.
+    const locked0 = await ed.state();
+    const [lx, ly] = await ed.xy(124, -47);
+    await mdrag(lx, ly, -2 * K, 0);
+    check(A, "parts start locked: dragging inside one doesn't move it", locked0.locked.every((l) => l === true) && JSON.stringify((await ed.state()).parts) === JSON.stringify(locked0.parts), JSON.stringify(locked0.locked));
+    await unlockAll();
     const before = await ed.state();
     const frameBefore = await page.locator("dialog.editor iframe.ed-globe").screenshot();
     // Plain drag inside B moves just B (its zone stays: "Move contested zones with their part" is off).
