@@ -17,7 +17,7 @@ const good = (): RegionFeature => ({
   id: "kingdom-of-vael",
   properties: {
     name: "Kingdom of Vael",
-    slot: "aerthos",
+    slot: "inara",
     map: "terra",
     color: "#c0392b",
     fillOpacity: 0.35,
@@ -35,7 +35,7 @@ function project(regions: Record<string, unknown>, { slotMap = "terra" } = {}) {
   const paths = contentPaths(mkdtempSync(path.join(tmpdir(), "wge-r-")));
   mkdirSync(paths.mapsDir, { recursive: true });
   mkdirSync(paths.regionsDir, { recursive: true });
-  writeFileSync(paths.slotsFile, JSON.stringify({ slots: { aerthos: { map: slotMap } } }));
+  writeFileSync(paths.slotsFile, JSON.stringify({ slots: { inara: { map: slotMap } } }));
   for (const id of ["terra", "luna"]) {
     const meta: MapMeta = {
       id,
@@ -76,8 +76,8 @@ describe("region validation", () => {
   });
 
   it("unknown slot", () => {
-    expect(errorsFor((r) => (r.properties.slot = "aerthoss"))).toMatch(
-      /content\/regions\/kingdom-of-vael\.json: slot "aerthoss" doesn't exist in content\/slots\.json\. Did you mean "aerthos"\?/,
+    expect(errorsFor((r) => (r.properties.slot = "inaras"))).toMatch(
+      /content\/regions\/kingdom-of-vael\.json: slot "inaras" doesn't exist in content\/slots\.json\. Did you mean "inara"\?/,
     );
   });
 
@@ -148,7 +148,7 @@ describe("region validation", () => {
     const res = loadContent(project({ "kingdom-of-vael.json": good() }, { slotMap: "luna" }));
     expect(res.errors).toEqual([]);
     expect(res.content).not.toBeNull();
-    expect(res.warnings[0]).toMatch(/was drawn on map "terra", but slot "aerthos" now shows map "luna"/);
+    expect(res.warnings[0]).toMatch(/was drawn on map "terra", but slot "inara" now shows map "luna"/);
   });
 
   it("broken JSON is reported", () => {

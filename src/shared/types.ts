@@ -77,7 +77,7 @@ export interface MapMeta {
   height: number;
   /** Content hash of the source image (first 12 hex chars of sha256). */
   hash: string;
-  /** Width → path relative to the site root, e.g. "maps/aerthos/ab12cd34ef56-1024.webp". */
+  /** Width → path relative to the site root, e.g. "maps/inara/ab12cd34ef56-1024.webp". */
   sizes: Partial<Record<`${TextureWidth}`, string>>;
   /** Tile levels above 8192 (see shared/tiles.ts); `url` is a path prefix relative to the site root. */
   tiles?: Partial<Record<`${TileLevelWidth}`, TileLevel>>;

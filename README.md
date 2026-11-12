@@ -13,9 +13,9 @@ Maps and settings live in this repo. Anyone with write access can change which m
 Paste this into a note:
 
 ```html
-<iframe src="https://flanz1.github.io/world-globe-embed/v/aerthos/?grid=1&rotate=1"
+<iframe src="https://flanz1.github.io/world-globe-embed/v/inara/?grid=1&rotate=1"
         width="100%" height="480" style="border:0;border-radius:8px;background:transparent"
-        loading="lazy" allow="fullscreen" title="Aerthos globe"></iframe>
+        loading="lazy" allow="fullscreen" title="Inara globe"></iframe>
 ```
 
 Query parameters override the slot's defaults:
@@ -112,9 +112,9 @@ Each region is a GeoJSON Feature in `content/regions/<id>.json`, checked against
 Press **Copy embed code** on a region's card (or **Embed code…** in the editor) and paste the snippet into a note:
 
 ```html
-<iframe src="https://flanz1.github.io/world-globe-embed/v/aerthos/?region=old-kingdom"
+<iframe src="https://flanz1.github.io/world-globe-embed/v/inara/?region=old-kingdom"
         width="100%" height="480" style="border:0;border-radius:8px;background:transparent"
-        loading="lazy" allow="fullscreen" title="Old Kingdom (Aerthos)"></iframe>
+        loading="lazy" allow="fullscreen" title="Old Kingdom (Inara)"></iframe>
 ```
 
 Region embeds take these parameters on top of the ones above:
@@ -141,13 +141,13 @@ Region embeds take these parameters on top of the ones above:
 
 1. Open the repo on GitHub and go into the folder **`content/incoming`**.
 2. Click **Add file → Upload files** and drag in your map: an equirectangular PNG, JPEG or WebP. 2:1 (e.g. 4096×2048) looks best, but anything from square up to 4:1 is accepted. The globe stretches it to fit, and pole padding can fill in the rest (see below).
-   - The file name becomes the map's id: `Aerthos v2.png` becomes `aerthos-v2`.
+   - The file name becomes the map's id: `Inara v2.png` becomes `inara-v2`.
    - Images 8192 px wide or more also get an extra-sharp 8192 px version, which zoomed-in embeds (especially region embeds) load after the 4096.
    - Images 16384 or 32768 px wide or more also get **close-up tiles** at that size: the map cut into 2048 px squares, of which an embed at (or near) its closest zoom loads only the few under the view. Anything wider than 32768 is used for the 32768 tiles, so there's no point going bigger.
    - GitHub refuses files over 100 MB, and the web upload stops at 25 MB, so for a big map use the admin page (below) or `npm run import-map` (see "Very large maps").
    - Big images make the repo bigger. If you don't need the close-ups, downscale to 4096 or 8192 px first.
 3. Leave **Commit directly to the `main` branch** selected and click **Commit changes**.
-4. Open the **Actions** tab. A run called **Process maps** converts the image (usually 1 to 2 minutes). Once it's green, there's a new file `content/maps/aerthos-v2.json`.
+4. Open the **Actions** tab. A run called **Process maps** converts the image (usually 1 to 2 minutes). Once it's green, there's a new file `content/maps/inara-v2.json`.
    - If it's red, open the run to see why (for example a portrait image, or one wider than 4:1). Delete your file from `content/incoming`, fix the image and try again. **The site won't redeploy while a rejected image is still sitting in `content/incoming`.**
 
 **2. Point the embed at it**
@@ -155,12 +155,12 @@ Region embeds take these parameters on top of the ones above:
 1. Open **`content/slots.json`** and click the pencil icon (**Edit this file**).
 2. Find your slot and change its `"map"` value to the new id:
    ```json
-   "aerthos": { "map": "aerthos-v2", "title": "Aerthos", ... }
+   "inara": { "map": "inara-v2", "title": "Inara", ... }
    ```
 3. Click **Commit changes…** and then **Commit changes**.
 4. The **Deploy** run in the Actions tab publishes it. Allow up to about 10 minutes for GitHub Pages caching.
 
-You don't need to wait for step 1 to finish before doing step 2. If the map isn't processed yet, the deploy waits for it. If you mistype a map id, the deploy fails with a message like `slot "aerthos" points at map "aerthos-v3", which doesn't exist. Did you mean "aerthos-v2"?` and the live site stays as it was. Fix the typo the same way.
+You don't need to wait for step 1 to finish before doing step 2. If the map isn't processed yet, the deploy waits for it. If you mistype a map id, the deploy fails with a message like `slot "inara" points at map "inara-v3", which doesn't exist. Did you mean "inara-v2"?` and the live site stays as it was. Fix the typo the same way.
 
 **To add a new embed (slot)**, add another entry to `content/slots.json`. Slot names use lowercase letters, digits and dashes. Its address is `/v/<slot name>/`.
 
@@ -237,11 +237,11 @@ git clone https://github.com/Flanz1/world-globe-embed.git
 cd world-globe-embed
 npm ci
 
-npm run dev                  # http://localhost:5173/v/aerthos/ and /admin/
+npm run dev                  # http://localhost:5173/v/inara/ and /admin/
 npm run check                # typecheck + lint + tests
 npm run validate             # check content/slots.json and content/maps
 npm run build                # production build into dist/
-npm run preview              # serve dist/ at http://localhost:4173/v/aerthos/
+npm run preview              # serve dist/ at http://localhost:4173/v/inara/
 
 # Process images sitting in content/incoming/ locally (CI normally does this)
 npm run process-maps
@@ -267,8 +267,8 @@ env VITE_CONTENT_BRANCH=test/region-overlays npm run build
 env VITE_CONTENT_BRANCH=test/region-overlays npm run dev
 
 # Timings for a region embed (globe, then flat)
-env SLUG=aerthos QUERY='region=old-kingdom' npm run measure
-env SLUG=aerthos QUERY='region=old-kingdom&view=flat' npm run measure
+env SLUG=inara QUERY='region=old-kingdom' npm run measure
+env SLUG=inara QUERY='region=old-kingdom&view=flat' npm run measure
 
 # Browser checks for regions: builds a throwaway copy with test content and drives the embeds
 # and the admin editor in headless Chromium against a fake GitHub API (nothing is pushed).
@@ -323,9 +323,9 @@ Originals over 100 MB (for example a 49152 px PNG) are too big for the admin pag
 ```fish
 cd world-globe-embed
 npm ci
-npm run import-map -- ~/Maps/world_map.png world-map   # path, then the map id (optional)
-git add content/maps/world-map.json public/maps/world-map
-git commit -m "Add map world-map"
+npm run import-map -- ~/Maps/world_map.png my-map   # path, then the map id (optional)
+git add content/maps/my-map.json public/maps/my-map
+git commit -m "Add map my-map"
 git push
 ```
 

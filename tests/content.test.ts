@@ -37,24 +37,24 @@ function project(slots: unknown, maps: Partial<MapMeta>[] = [], { writeTextures 
 
 describe("content validation", () => {
   it("accepts valid content", () => {
-    const r = loadContent(project({ slots: { aerthos: { map: "terra", grid: true, lat: 10 } } }, [{ id: "terra" }]));
+    const r = loadContent(project({ slots: { inara: { map: "terra", grid: true, lat: 10 } } }, [{ id: "terra" }]));
     expect(r.errors).toEqual([]);
     expect(r.content?.maps.get("terra")?.id).toBe("terra");
   });
 
   it("rejects an LQIP with anything after the base64 data", () => {
     const r = loadContent(
-      project({ slots: { aerthos: { map: "terra" } } }, [{ id: "terra", lqip: `${LQIP}")'><script>alert(1)</script>` }]),
+      project({ slots: { inara: { map: "terra" } } }, [{ id: "terra", lqip: `${LQIP}")'><script>alert(1)</script>` }]),
     );
     expect(r.content).toBeNull();
     expect(r.errors.join("\n")).toMatch(/content\/maps\/terra\.json: lqip/);
   });
 
   it("catches a slot that points at a missing map, with a hint", () => {
-    const r = loadContent(project({ slots: { aerthos: { map: "tera" } } }, [{ id: "terra" }, { id: "luna" }]));
+    const r = loadContent(project({ slots: { inara: { map: "tera" } } }, [{ id: "terra" }, { id: "luna" }]));
     expect(r.content).toBeNull();
     expect(r.errors).toEqual([
-      'content/slots.json: slot "aerthos" points at map "tera", which doesn\'t exist. Did you mean "terra"? Known maps: luna, terra.',
+      'content/slots.json: slot "inara" points at map "tera", which doesn\'t exist. Did you mean "terra"? Known maps: luna, terra.',
     ]);
   });
 
