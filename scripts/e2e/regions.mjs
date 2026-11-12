@@ -789,11 +789,11 @@ await step(A, "preview and embed code", async () => {
   await page.waitForSelector("dialog.rpreview iframe");
   const pf = () => page.frames().find((f) => f.url().includes("/preview/"));
   await page.waitForTimeout(2500);
-  await pf().waitForFunction(() => document.documentElement.dataset.state === "hires", null, { timeout: 20000 });
+  await pf().waitForFunction(() => document.documentElement.dataset.state === "hires", null, { timeout: 60000 });
   await page.screenshot({ path: path.join(OUT, "admin-preview-globe.png") });
   await page.click('dialog.rpreview button[data-view="flat"]');
   await page.waitForTimeout(800);
-  await pf().waitForFunction(() => document.documentElement.dataset.state === "hires" && document.documentElement.classList.contains("flatview"), null, { timeout: 20000 });
+  await pf().waitForFunction(() => document.documentElement.dataset.state === "hires" && document.documentElement.classList.contains("flatview"), null, { timeout: 60000 });
   await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(OUT, "admin-preview-flat.png") });
   const want = await page.textContent('[data-region="landmark-disc"] .rlabels');

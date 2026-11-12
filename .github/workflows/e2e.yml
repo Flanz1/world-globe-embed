@@ -1,0 +1,78 @@
+name: E2E
+
+# Browser checks for the editor, admin and embed (scripts/e2e). Not a required check.
+#  - Pull requests: only when code that can affect them changes (content/ and docs PRs skip it),
+#    and only the suites scripts/e2e/select.mjs picks for the changed files.
+#  - Nightly: the full suite on main.  By hand: all suites, or the ones you name.
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "admin/**"
+      - "scripts/**"
+      - "schema/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.ts"
+      - ".github/workflows/e2e.yml"
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      suites:
+        description: "Suites to run, space separated (empty = all)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Pick suites
+        id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT: ${{ github.event.inputs.suites }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          git fetch -q origin main
+          if [ "$EVENT" = pull_request ]; then
+            git fetch -q origin "$BASE"
+            SUITES=$(node scripts/e2e/select.mjs "origin/$BASE")
+          else
+            SUITES="$INPUT"
+          fi
+          echo "run=$([ "$EVENT" = pull_request ] && [ -z "$SUITES" ] && echo no || echo yes)" >> "$GITHUB_OUTPUT"
+          echo "suites=$SUITES" >> "$GITHUB_OUTPUT"
+          echo "Suites: ${SUITES:-all}"
+      - if: steps.pick.outputs.run == 'yes'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.pick.outputs.run == 'yes'
+        run: |
+          npm ci
+          npm install --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - if: steps.pick.outputs.run == 'yes'
+        env:
+          SUITES: ${{ steps.pick.outputs.suites }}
+        run: npm run e2e -- --jobs 2 $SUITES
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.pick.outputs.run == 'yes'
+        with:
+          name: e2e-logs
+          path: .e2e/
