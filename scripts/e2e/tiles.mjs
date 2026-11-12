@@ -22,6 +22,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { MockGitHub } from "./mock-github.mjs";
+import { useAdminApi } from "./admin-api.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const require = createRequire(path.join(ROOT, "package.json"));
@@ -213,6 +214,7 @@ for (const view of ["globe", "flat"]) {
   const ctx = await browser.newContext({ viewport: { width: 1024, height: 700 }, deviceScaleFactor: 1 });
   await ctx.addInitScript(() => Object.defineProperty(Navigator.prototype, "deviceMemory", { get: () => 4 }));
   await ctx.route("https://api.github.com/**", (r) => mock.handle(r));
+  await useAdminApi(ctx, mock);
   const page = await ctx.newPage();
   const errors = [];
   const requested = [];
@@ -222,8 +224,6 @@ for (const view of ["globe", "flat"]) {
     if (l) requested.push(l);
   });
   await page.goto(`${SITE}/admin/#regions`);
-  await page.fill("#token", "ghp_e2etoken");
-  await page.click('#signin-form button[type="submit"]');
   await page.waitForSelector("#regions .rcard", { timeout: 15000 });
   await page.selectOption("#r-new-slot", "tiles");
   await page.locator(".r-new-row .r-new").click();

@@ -31,11 +31,12 @@
     "e2e:ring-select": "tsx scripts/e2e/ring-select.mjs",
     "e2e:snap": "tsx scripts/e2e/snap.mjs",
     "e2e:tiers": "node scripts/e2e/tiers.mjs",
-    "e2e:tiles": "node scripts/e2e/tiles.mjs",
+    "e2e:tiles": "tsx scripts/e2e/tiles.mjs",
     "e2e:upload": "tsx scripts/e2e/upload.mjs",
     "e2e:view": "tsx scripts/e2e/view.mjs",
     "region-owners": "tsx scripts/region-owners.ts",
-    "worker:validators": "tsx scripts/build-worker-validators.ts"
+    "worker:validators": "tsx scripts/build-worker-validators.ts",
+    "e2e:roles": "tsx scripts/e2e/roles.mjs"
   },
   "dependencies": {
     "polygon-clipping": "^0.15.7",

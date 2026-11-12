@@ -17,6 +17,7 @@ export const ACCOUNTS = [
   { id: 5001, login: "e2e-user", type: "User" },
   { id: 5002, login: "carto-ann", type: "User" },
   { id: 5003, login: "drafter-bo", type: "User" },
+  { id: 5004, login: "new-face", type: "User" },
   { id: 9001, login: "some-org", type: "Organization" },
 ];
 
