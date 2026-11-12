@@ -99,7 +99,7 @@ import {
   type VRef,
 } from "./model.ts";
 import { Coast, loadCoast, thinTrace } from "./coast.ts";
-import { carryLines, findSnap, followBorders, lineCarry, type LineCarry, insertOnEdges, partRings, sharedEdges, snapRing, traceBetween, vertexIndex, withGlued, type Snap, type SnapRing } from "./snap.ts";
+import { carryLines, posKey, findSnap, followBorders, lineCarry, type LineCarry, insertOnEdges, partRings, sharedEdges, snapRing, traceBetween, vertexIndex, withGlued, type Snap, type SnapRing } from "./snap.ts";
 
 export interface EditorOptions {
   gh: GitHub;
@@ -588,6 +588,7 @@ export function openEditor(o: EditorOptions): void {
         baseLines: Position[][];
         carry: LineCarry;
       }
+    | { kind: "lvertex"; l: number; k: number; base: Position[][]; x0: number; y0: number; moved: boolean; rings: SnapRing[]; skip: (ring: number) => boolean }
     | { kind: "shape"; base: Parts; part: number[] | null; w0: Position; moved: boolean; baseLines: Position[][]; carry: LineCarry }
     | { kind: "pan"; x0: number; y0: number; v0: typeof view }
     | { kind: "box"; x0: number; y0: number; x1: number; y1: number; add: boolean; refused?: string }
@@ -991,12 +992,21 @@ export function openEditor(o: EditorOptions): void {
     g.strokeStyle = "#000";
     (hist.state.lines ?? []).forEach((line, l) => {
       if (l !== selLine) return;
-      for (const pt of line)
+      for (let k = 0; k + 1 < line.length; k++) {
+        g.save();
+        g.fillStyle = "rgba(255,255,255,.55)";
         for (const off of offs) {
           g.beginPath();
-          g.arc(sx(pt[0] + off), sy(pt[1]), 3.5, 0, Math.PI * 2);
+          g.arc(sx((line[k][0] + line[k + 1][0]) / 2 + off), sy((line[k][1] + line[k + 1][1]) / 2), 3, 0, Math.PI * 2);
           g.fill();
           g.stroke();
+        }
+        g.restore();
+      }
+      for (const pt of line)
+        for (const off of offs) {
+          g.fillRect(sx(pt[0] + off) - HANDLE / 2, sy(pt[1]) - HANDLE / 2, HANDLE, HANDLE);
+          g.strokeRect(sx(pt[0] + off) - HANDLE / 2, sy(pt[1]) - HANDLE / 2, HANDLE, HANDLE);
         }
     });
     g.restore();
@@ -1572,11 +1582,57 @@ export function openEditor(o: EditorOptions): void {
       setMsg(`Province borders can have at most ${PROVINCE_BORDER_MAX.toLocaleString()} points in all.`, "error");
       return false;
     }
-    hist.apply("Add province border", { ...hist.state, lines: [...lines.map((l) => l.map(([x, y]) => [x, y] as Position)), line.map(([x, y]) => [x, y] as Position)] });
-    selLine = lines.length;
-    setMsg("Province border added. Click it to select it; Delete removes it. Draw another with Province border.", "ok");
+    const copy = lines.map((l) => l.map(([x, y]) => [x, y] as Position));
+    const nl = line.map(([x, y]) => [x, y] as Position);
+    // Starting (or ending) on the end of an existing border continues that border.
+    const same = (a: Position, b: Position) => posKey(a) === posKey(b);
+    const at = copy.findIndex((l) => same(l[l.length - 1], nl[0]) || same(l[0], nl[0]) || same(l[l.length - 1], nl[nl.length - 1]) || same(l[0], nl[nl.length - 1]));
+    let sel = copy.length;
+    if (at >= 0) {
+      let base = copy[at];
+      let add = nl;
+      if (same(base[0], add[0]) || same(base[0], add[add.length - 1])) base = [...base].reverse(); // join at base's start: flip so the join is at its end
+      if (!same(base[base.length - 1], add[0])) add = [...add].reverse();
+      if (same(base[base.length - 1], add[0])) {
+        const unwrapped = unwrapRing([...base, ...add.slice(1)]);
+        copy[at] = unwrapped;
+        sel = at;
+      } else copy.push(nl);
+    } else copy.push(nl);
+    hist.apply(sel < lines.length ? "Extend province border" : "Add province border", { ...hist.state, lines: copy });
+    selLine = sel;
+    setMsg(sel < lines.length ? "Province border extended." : "Province border added. Click it to select it, drag its points, drag a midpoint to add one, Alt+click a point to remove it. Delete removes the border.", "ok");
     endDraw();
     return true;
+  }
+  /** A point or midpoint of the selected province border under the pointer: {k, pos, mid}. Points win over midpoints. */
+  function hitLinePoint(x: number, y: number): { k: number; pos: Position; mid: boolean } | null {
+    const line = (hist.state.lines ?? [])[selLine];
+    if (!line) return null;
+    const cl = wx(x);
+    for (let k = line.length - 1; k >= 0; k--) {
+      if (Math.hypot(sx(nearest(line[k][0], cl)) - x, sy(line[k][1]) - y) <= HIT) return { k, pos: line[k], mid: false };
+    }
+    for (let k = 0; k + 1 < line.length; k++) {
+      const m: Position = [(line[k][0] + line[k + 1][0]) / 2, (line[k][1] + line[k + 1][1]) / 2];
+      if (Math.hypot(sx(nearest(m[0], cl)) - x, sy(m[1]) - y) <= HIT - 1) return { k, pos: m, mid: true };
+    }
+    return null;
+  }
+  /** Snap targets for dragging a point of line l: everything but that line itself. */
+  function lineDragSnap(l: number): { rings: SnapRing[]; skip: (ring: number) => boolean } {
+    const rings = [...partRings(parts()), ...lineRings(), ...nbSnapRings];
+    const mine = parts().reduce((n, rs) => n + rs.length, 0) + l;
+    return { rings, skip: (i) => i === mine };
+  }
+  /** Removes point k of province border l (a border keeps at least 2 points: with 2 it deletes the border). */
+  function deleteLinePoint(l: number, k: number): void {
+    const lines = hist.state.lines ?? [];
+    const line = lines[l];
+    if (!line) return;
+    if (line.length <= 2) return deleteBorder(l);
+    hist.apply("Delete border point", { ...hist.state, lines: lines.map((q, i) => (i === l ? q.filter((_, j) => j !== k) : q.map(([x, y]) => [x, y] as Position))) });
+    changed();
   }
   /** Deletes province border l (one undo step). */
   function deleteBorder(l: number): void {
@@ -2225,6 +2281,25 @@ export function openEditor(o: EditorOptions): void {
     }
     // Select tool.
     edgePick = null;
+    if (selLine >= 0 && !simplifyPreview) {
+      const lh = hitLinePoint(x, y);
+      if (lh) {
+        const lines = hist.state.lines ?? [];
+        if (lh.mid) {
+          // A midpoint of the selected border: insert a point there and drag it.
+          const next = lines.map((l) => l.map(([qx, qy]) => [qx, qy] as Position));
+          next[selLine].splice(lh.k + 1, 0, [lh.pos[0], lh.pos[1]]);
+          hist.begin();
+          hist.preview({ ...hist.state, lines: next });
+          drag = { kind: "lvertex", l: selLine, k: lh.k + 1, base: next, x0: x, y0: y, moved: true, ...lineDragSnap(selLine) };
+          return changed();
+        }
+        if (e.altKey) return deleteLinePoint(selLine, lh.k);
+        hist.begin();
+        drag = { kind: "lvertex", l: selLine, k: lh.k, base: lines, x0: x, y0: y, moved: false, ...lineDragSnap(selLine) };
+        return draw();
+      }
+    }
     const v = hitVertex(x, y);
     if (v) {
       if (e.altKey) return deleteRefs([v]);
@@ -2377,6 +2452,25 @@ export function openEditor(o: EditorOptions): void {
       if (Math.hypot(sx(last[0]) - x, sy(last[1]) - y) >= 2) drag.pts.push([wx(x), wy(y)]);
       return draw();
     }
+    if (drag.kind === "lvertex") {
+      if (!drag.moved && Math.hypot(x - drag.x0, y - drag.y0) < 3) return;
+      drag.moved = true;
+      let at: Position = [cursor[0], cursor[1]];
+      snapHint = null;
+      if (snapOn && !free) {
+        const t = findSnap(drag.rings, at, scale(), SNAP_PX, drag.skip);
+        if (t) {
+          at = t.pos;
+          snapHint = { snap: t, rings: drag.rings };
+        }
+      }
+      const old = drag.base[drag.l][drag.k];
+      at = [nearest(at[0], old[0]), Math.max(-90, Math.min(90, at[1]))];
+      const { l: dl, k: dk, base: dbase } = drag;
+      const moved = at;
+      hist.preview({ ...hist.state, lines: dbase.map((q, i) => (i === dl ? q.map((pt, j) => (j === dk ? moved : pt)) : q)) });
+      return changed();
+    }
     if (drag.kind === "shape") {
       drag.moved = true;
       const next = translate(drag.base, drag.part, cursor[0] - drag.w0[0], cursor[1] - drag.w0[1]);
@@ -2417,7 +2511,7 @@ export function openEditor(o: EditorOptions): void {
     }
     const d = drag;
     drag = null;
-    if (d?.kind === "vertex") snapHint = null;
+    if (d?.kind === "vertex" || d?.kind === "lvertex") snapHint = null;
     if (!d) return;
     if (d.kind === "pan") canvas.style.cursor = spaceHeld ? "grab" : "default";
     if (d.kind === "box") {
@@ -2467,6 +2561,11 @@ export function openEditor(o: EditorOptions): void {
       if (d.pts.length < 3) return draw();
       if (!finishRing(follow ? traced(true) : simple(d.pts))) draw();
       return;
+    }
+    if (d.kind === "lvertex") {
+      if (d.moved) hist.commit("Move border point");
+      else hist.cancel();
+      return changed();
     }
     if (d.kind === "shape") {
       canvas.style.cursor = "default";

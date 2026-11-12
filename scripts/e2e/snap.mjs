@@ -294,6 +294,31 @@ await step(A, "province border tool", async () => {
   check(A, "cutting the part leaves its province border", JSON.stringify(lines) === JSON.stringify([L0]), JSON.stringify(lines));
   await undo();
   await page.keyboard.press("v");
+  // The border's own points edit like an outline's: drag, midpoint insert, Alt+click delete, extend from an end.
+  await click(107.5, -53.5);
+  const pa = await call("lines");
+  await dragPath([[105, -51], [105, -51.5], [105, -52]]);
+  lines = await call("lines");
+  check(A, "dragging a point of the selected border moves just that point", lines[0].length === 3 && Math.abs(lines[0][1][1] + 52) < 0.06 && lines[0][0][0] === pa[0][0][0] && lines[0][2][0] === pa[0][2][0], JSON.stringify(lines));
+  await undo();
+  await dragPath([[107.5, -53.5], [107.7, -53], [108, -52.8]]);
+  lines = await call("lines");
+  check(A, "dragging a midpoint of the border inserts a point", lines[0].length === 4 && Math.abs(lines[0][1][0] - 108) < 0.06, JSON.stringify(lines));
+  await undo();
+  await click(105, -51, ["Alt"]);
+  lines = await call("lines");
+  check(A, "Alt+click removes a border point", lines.length === 1 && lines[0].length === 2, JSON.stringify(lines));
+  await undo();
+  await page.click('dialog.editor button[data-act="province-border"]');
+  await page.keyboard.press("p");
+  await click(110.1, -55.9); // the border's end (also a corner of the part)
+  await click(112, -60);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(100);
+  lines = await call("lines");
+  check(A, "drawing from the end of a border extends it", lines.length === 1 && lines[0].length === 4 && has(lines[0], [112, -60]) && has(lines[0], [100, -46]), JSON.stringify(lines));
+  await undo();
+  await page.keyboard.press("v");
   // Select it by clicking and delete it.
   await click(107.5, -53.5);
   await page.keyboard.press("Delete");
