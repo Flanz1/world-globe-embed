@@ -4,12 +4,24 @@
     {
       "id": 45669787,
       "login": "Flanz1",
-      "permissions": ["maps", "regions", "editOthers", "deleteOthers", "users"]
+      "permissions": [
+        "maps",
+        "regions",
+        "editOthers",
+        "deleteOthers",
+        "users"
+      ]
     },
     {
       "id": 138310181,
       "login": "LoopSimon",
-      "permissions": ["maps", "regions"]
+      "permissions": [
+        "maps",
+        "regions",
+        "editOthers",
+        "deleteOthers",
+        "users"
+      ]
     }
   ]
 }
