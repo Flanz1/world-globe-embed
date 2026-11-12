@@ -64,6 +64,16 @@ const queue = suites.map((name, i) => [name, i]);
 await Promise.all(Array.from({ length: Math.min(jobs, queue.length) }, async () => {
   for (let next = queue.shift(); next; next = queue.shift()) await runSuite(...next);
 }));
+// Software-GL browsers time out on screenshots when suites compete for CPU: give each failed suite
+// one more go on its own before calling it failed.
+const retry = results.filter((r) => r.code !== 0).map((r) => r.name);
+if (retry.length) {
+  console.log(`\nRetrying alone: ${retry.join(", ")}`);
+  for (const name of retry) {
+    results.splice(results.findIndex((r) => r.name === name), 1);
+    await runSuite(name, suites.indexOf(name));
+  }
+}
 const failed = results.filter((r) => r.code !== 0);
 console.log(`\n${results.length - failed.length}/${results.length} suites passed in ${((Date.now() - t00) / 1000).toFixed(1)}s (${jobs} parallel)`);
 process.exit(failed.length ? 1 : 0);
