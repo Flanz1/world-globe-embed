@@ -23,14 +23,15 @@ import { makeFixture, PROVINCES, SLOT } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { checkGeometry } from "../../src/shared/geo.ts";
 
+import { port } from "./ports.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 const sharp = require("sharp");
 
 const OUT = path.resolve(".e2e/regions");
 const BRANCH = "test/region-overlays";
-const SITE = "http://localhost:4173";
-const HOST = "http://127.0.0.1:4180";
+const SITE = `http://localhost:${port(4173)}`;
+const HOST = `http://127.0.0.1:${port(4180)}`;
 await mkdir(OUT, { recursive: true });
 // E2E_ONLY=embed,admin,alignment runs some groups only (for debugging).
 const ONLY = (process.env.E2E_ONLY ?? "").split(",").filter(Boolean);
@@ -67,7 +68,7 @@ const site = createServer(async (req, res) => {
   if (!p.startsWith(DIST) || !existsSync(p)) return res.writeHead(404).end();
   res.writeHead(200, { "Content-Type": TYPES[path.extname(p)] ?? "application/octet-stream", "Cache-Control": "no-store" });
   res.end(await readFile(p));
-}).listen(4173, "localhost");
+}).listen(port(4173), "localhost");
 // Host page on another origin, tall enough to scroll, with the embed in the middle (like an Obsidian note).
 const host = createServer((req, res) => {
   const src = new URL(req.url, "http://x").searchParams.get("src") ?? "";
@@ -76,7 +77,7 @@ const host = createServer((req, res) => {
 <p style="padding:8px;height:300px">Host page on another origin (stand-in for Obsidian Publish)</p>
 <iframe id="embed" src="${SITE}/${src.replace(/"/g, "")}" width="800" height="480" style="border:0;border-radius:8px;background:transparent;display:block;margin-left:40px" allow="fullscreen" title="region"></iframe>
 <div style="height:2400px"></div></body></html>`);
-}).listen(4180, "127.0.0.1");
+}).listen(port(4180), "127.0.0.1");
 
 const browser = await chromium.launch({
   args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--disable-features=IsolateOrigins,site-per-process"],

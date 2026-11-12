@@ -18,12 +18,13 @@ import { createRequire } from "node:module";
 import { SLOT, MAP, makeFixture } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 
+import { port } from "./ports.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
 const OUT = path.resolve(".e2e/ring-select");
 const BRANCH = "test/ring-select";
-const SITE = "http://localhost:4173";
+const SITE = `http://localhost:${port(4173)}`;
 await mkdir(OUT, { recursive: true });
 
 const results = [];
@@ -63,7 +64,7 @@ const server = createServer(async (req, res) => {
   if (!p.startsWith(DIST) || !existsSync(p)) return res.writeHead(404).end();
   res.writeHead(200, { "Content-Type": TYPES[path.extname(p)] ?? "application/octet-stream", "Cache-Control": "no-store" });
   res.end(await readFile(p));
-}).listen(4173, "localhost");
+}).listen(port(4173), "localhost");
 
 const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
 const A = "ring-select";

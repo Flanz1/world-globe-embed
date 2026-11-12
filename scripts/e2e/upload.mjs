@@ -10,7 +10,7 @@
  * parts back together into exactly the bytes that were sent. Nothing touches GitHub.
  */
 import { createServer } from "node:http";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, symlinkSync, writeFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync, readdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -21,10 +21,12 @@ import { joinParts } from "../lib/process.ts";
 import { contentPaths } from "../lib/paths.ts";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+import { port } from "./ports.mjs";
+import { copyRepo } from "./fixture.mjs";
 const require = createRequire(path.join(ROOT, "package.json"));
 const sharp = require("sharp");
 const { chromium } = require("playwright");
-const SITE = "http://localhost:4177";
+const SITE = `http://localhost:${port(4177)}`;
 
 const results = [];
 function check(name, ok, detail = "") {
@@ -33,9 +35,7 @@ function check(name, ok, detail = "") {
 }
 
 const dir = mkdtempSync(path.join(tmpdir(), "wge-upload-"));
-for (const f of ["package.json", "tsconfig.json", "vite.config.ts", "eslint.config.js", "admin", "content", "public", "schema", "scripts", "src"])
-  cpSync(path.join(ROOT, f), path.join(dir, f), { recursive: true });
-symlinkSync(path.join(ROOT, "node_modules"), path.join(dir, "node_modules"), "dir");
+copyRepo(dir);
 execFileSync("npm", ["run", "build"], { cwd: dir, stdio: "pipe" });
 const DIST = path.join(dir, "dist");
 
@@ -60,7 +60,7 @@ const site = createServer(async (req, res) => {
   if (!p.startsWith(DIST) || !existsSync(p)) return res.writeHead(404).end();
   res.writeHead(200, { "Content-Type": TYPES[path.extname(p)] ?? "application/octet-stream", "Cache-Control": "no-store" });
   res.end(await readFile(p));
-}).listen(4177, "localhost");
+}).listen(port(4177), "localhost");
 
 const mock = new MockGitHub({ root: dir });
 const browser = await chromium.launch();

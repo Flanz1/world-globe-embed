@@ -28,15 +28,16 @@ import { MockGitHub } from "./mock-github.mjs";
 import { geometryBounds } from "../../src/shared/geo.ts";
 import { flatFit } from "../../src/shared/region.ts";
 
+import { port } from "./ports.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 const sharp = require("sharp");
 
 const OUT = path.resolve(".e2e/contested");
 const BRANCH = "test/contested";
-const SITE = "http://localhost:4173";
-const MAIN_SITE = "http://localhost:4175";
-const HOST = "http://127.0.0.1:4181";
+const SITE = `http://localhost:${port(4173)}`;
+const MAIN_SITE = `http://localhost:${port(4175)}`;
+const HOST = `http://127.0.0.1:${port(4181)}`;
 await mkdir(OUT, { recursive: true });
 const ONLY = (process.env.E2E_ONLY ?? "").split(",").filter(Boolean);
 const want = (g) => !ONLY.length || ONLY.includes(g);
@@ -117,8 +118,8 @@ const serve = (root, port) =>
     res.writeHead(200, { "Content-Type": TYPES[path.extname(p)] ?? "application/octet-stream", "Cache-Control": "no-store" });
     res.end(await readFile(p));
   }).listen(port, "localhost");
-const servers = [serve(dir, 4173)];
-if (mainDir) servers.push(serve(mainDir, 4175));
+const servers = [serve(dir, port(4173))];
+if (mainDir) servers.push(serve(mainDir, port(4175)));
 // Host page on another origin; src is a full URL on one of the two sites.
 const host = createServer((req, res) => {
   const src = new URL(req.url, "http://x").searchParams.get("src") ?? "";
@@ -126,7 +127,7 @@ const host = createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/html" });
   res.end(`<!doctype html><html><body style="margin:0;background:#202020">
 <iframe id="embed" src="${ok ? src.replace(/"/g, "") : ""}" width="800" height="480" style="border:0;display:block" allow="fullscreen" title="region"></iframe></body></html>`);
-}).listen(4181, "127.0.0.1");
+}).listen(port(4181), "127.0.0.1");
 
 const browser = await chromium.launch({
   args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--disable-features=IsolateOrigins,site-per-process"],

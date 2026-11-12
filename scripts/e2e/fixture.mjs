@@ -5,7 +5,7 @@
  *
  *   node scripts/e2e/fixture.mjs   → prints the temp dir
  */
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -83,11 +83,21 @@ function region(id, name, geometry, extra = {}) {
   };
 }
 
+/** Copies the repo's source and content into dir (public/maps' tiles are linked, not copied) and links node_modules. */
+export function copyRepo(dir) {
+  for (const f of ["package.json", "tsconfig.json", "vite.config.ts", "eslint.config.js", "admin", "content", "schema", "scripts", "src"])
+    cpSync(path.join(ROOT, f), path.join(dir, f), { recursive: true });
+  // public/ holds the real maps' tiles (tens of MB): link each map's folder instead of copying it.
+  // The fixture's own map is written to a real public/maps/<id>/ beside the links.
+  cpSync(path.join(ROOT, "public"), path.join(dir, "public"), { recursive: true, filter: (src) => !src.startsWith(path.join(ROOT, "public/maps/")) });
+  mkdirSync(path.join(dir, "public/maps"), { recursive: true });
+  for (const m of readdirSync(path.join(ROOT, "public/maps"))) symlinkSync(path.join(ROOT, "public/maps", m), path.join(dir, "public/maps", m), "dir");
+  symlinkSync(path.join(ROOT, "node_modules"), path.join(dir, "node_modules"), "dir");
+}
+
 export async function makeFixture({ quiet = false } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "wge-e2e-"));
-  for (const f of ["package.json", "tsconfig.json", "vite.config.ts", "eslint.config.js", "admin", "content", "public", "schema", "scripts", "src"])
-    cpSync(path.join(ROOT, f), path.join(dir, f), { recursive: true });
-  symlinkSync(path.join(ROOT, "node_modules"), path.join(dir, "node_modules"), "dir");
+  copyRepo(dir);
 
   await sharp(Buffer.from(mapSvg())).png().toFile(path.join(dir, "content/incoming", `${MAP.id}.png`));
   const run = (cmd, args, env = {}) =>
