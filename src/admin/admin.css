@@ -88,6 +88,18 @@ button.danger { background: var(--err); border-color: var(--err); color: #fff; }
 button.ghost.danger { background: transparent; color: var(--err); }
 @media (max-width: 560px) { .rcard { grid-template-columns: 1fr; } .rthumb { width: 100%; height: auto; aspect-ratio: 168 / 96; } }
 
+/* ── Users tab ── */
+.users { display: grid; gap: 8px; margin: 8px 0 12px; }
+.urow { display: grid; grid-template-columns: minmax(150px, 190px) 140px 1fr auto; gap: 8px 16px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.urow.new { border-color: #b9770e; }
+.urow[data-waiting] { grid-template-columns: minmax(150px, 1fr) 140px auto auto; }
+.uname { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; overflow-wrap: anywhere; }
+.uperms { display: flex; flex-wrap: wrap; gap: 2px 14px; }
+.uperms .check { display: inline-flex; flex-direction: row; gap: 5px; align-items: center; color: var(--fg); }
+.urow button { padding: 3px 10px; font-size: 13px; }
+.badge.rcreator { font-weight: normal; }
+@media (max-width: 720px) { .urow, .urow[data-waiting] { grid-template-columns: 1fr; } }
+
 /* ── Small dialogs ── */
 dialog.small-dlg { width: min(560px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--fg); }
 dialog.small-dlg::backdrop, dialog.editor::backdrop { background: rgba(0, 0, 0, .55); }
