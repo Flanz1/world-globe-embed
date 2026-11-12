@@ -7,6 +7,7 @@ import { contentPaths } from "../scripts/lib/paths.ts";
 import type { MapMeta } from "../src/shared/types.ts";
 import type { RegionFeature } from "../src/shared/region.ts";
 import { copyId, normalizePartContested, normalizePartLocked, normalizePartLabels, normalizePartLegend, regionLabelPoints, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
+import { MAX_VERTICES } from "../src/shared/geo.ts";
 import { ZOOM_MAX, ZOOM_MIN } from "../src/shared/params.ts";
 
 const LQIP = "data:image/webp;base64,UklGRg==";
@@ -114,12 +115,12 @@ describe("region validation", () => {
   });
 
   it("too many vertices", () => {
-    const n = 5001;
+    const n = MAX_VERTICES + 1;
     const ring = Array.from({ length: n }, (_, i) => {
       const t = (i / n) * 2 * Math.PI;
       return [Math.round(10 * Math.cos(t) * 1e4) / 1e4, Math.round(10 * Math.sin(t) * 1e4) / 1e4] as [number, number];
     });
-    expect(errorsFor((r) => (r.geometry.coordinates = [[...ring, ring[0]]]))).toMatch(/has 5001 vertices; the limit is 5000/);
+    expect(errorsFor((r) => (r.geometry.coordinates = [[...ring, ring[0]]]))).toMatch(/has 70001 vertices; the limit is 70,000/);
   });
 
   it("bad colour", () => {
@@ -166,7 +167,7 @@ describe("region helpers", () => {
     expect(parseRegionData({ ...d, fillOpacity: Number.NaN })).toBeNull();
     expect(parseRegionData({ ...d, geometry: { type: "Polygon", coordinates: [[[0, Infinity]]] } })).toBeNull();
     expect(parseRegionData({ ...d, geometry: { type: "Point", coordinates: [0, 0] } })).toBeNull();
-    const huge = Array.from({ length: 10_001 }, (_, i) => [i % 90, 0]);
+    const huge = Array.from({ length: MAX_VERTICES * 2 + 1 }, (_, i) => [i % 90, 0]);
     expect(parseRegionData({ ...d, geometry: { type: "Polygon", coordinates: [huge] } })).toBeNull();
     expect(parseRegionData({ ...d, name: "x".repeat(81) })).toBeNull();
   });

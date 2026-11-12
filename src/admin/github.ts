@@ -192,9 +192,14 @@ export class GitHub {
 
   /** A file's text and blob SHA (to notice when someone else changed it). */
   async readFile(path: string): Promise<{ text: string; sha: string }> {
-    const f = await this.request<{ content: string; encoding: string; sha: string }>(
+    const f = await this.request<{ content: string; encoding: string; sha: string; size?: number }>(
       `/repos/${this.repo}/contents/${path}?ref=${encodeURIComponent(this.branch)}`,
     );
+    // The contents API leaves the content out of files over 1 MB (a big region is a few MB): read the blob instead.
+    if (f.encoding === "none" || (!f.content && (f.size ?? 0) > 0)) {
+      const b = await this.request<{ content: string; encoding: string }>(`/repos/${this.repo}/git/blobs/${f.sha}`);
+      return { text: b.encoding === "base64" ? base64ToUtf8(b.content) : b.content, sha: f.sha };
+    }
     return { text: base64ToUtf8(f.content), sha: f.sha };
   }
 

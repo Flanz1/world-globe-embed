@@ -323,6 +323,28 @@ describe("admin API user management", () => {
   });
 });
 
+describe("admin API reads", () => {
+  it("reads a file over 1 MB through its blob, because the contents API leaves its content out", async () => {
+    const gh = await client(ANN);
+    const text = await gh.readText("content/regions/ann-land.json");
+    const inner = globalThis.fetch;
+    // What GitHub does for a big file: sha and size, no content.
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const res = await inner(input, init);
+      if (!String(input instanceof Request ? input.url : input).includes("/contents/content/regions/")) return res;
+      const body = (await res.json()) as Record<string, unknown>;
+      return new Response(JSON.stringify({ ...body, content: "", encoding: "none", size: 1_500_000 }), { status: res.status });
+    }) as typeof fetch;
+    try {
+      const f = await gh.readFile("content/regions/ann-land.json");
+      expect(f.text).toBe(text);
+      expect(f.sha).toMatch(/^[0-9a-f]{40}$/);
+    } finally {
+      globalThis.fetch = inner;
+    }
+  });
+});
+
 describe("admin API branch updates", () => {
   const raw = async (who: { id: number; login: string }, method: string, p: string, body?: unknown) => {
     const r = await call(`${API}/gh/repos/${REPO}${p}`, { method, headers: { Authorization: `Bearer ${await session(who)}`, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });

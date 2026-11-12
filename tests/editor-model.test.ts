@@ -32,7 +32,7 @@ import {
   type EditorState,
   type Parts,
 } from "../src/admin/editor/model.ts";
-import { checkGeometry, pointInRing, type Position } from "../src/shared/geo.ts";
+import { MAX_VERTICES, checkGeometry, pointInRing, type Position } from "../src/shared/geo.ts";
 
 const square = (x: number, y: number, s = 10): Position[] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]];
 const props = { color: "#c0392b", fillOpacity: 0.35, label: true, description: "", legendTitle: "", legend: [] };
@@ -91,8 +91,8 @@ describe("editor model", () => {
     const s = simplifyParts([[circle]], 0.3, 1);
     expect(countVertices(s.parts)).toBeLessThan(40);
     expect(countVertices(smoothParts([[square(0, 0)]])!)).toBe(8);
-    const dense: Position[] = Array.from({ length: 2600 }, (_, i) => [10 * Math.cos((i / 2600) * 2 * Math.PI), 10 * Math.sin((i / 2600) * 2 * Math.PI)]);
-    expect(smoothParts([[dense]])).toBeNull(); // 5200 > 5000
+    const dense: Position[] = Array.from({ length: MAX_VERTICES / 2 + 100 }, (_, i) => [10 * Math.cos((i / (MAX_VERTICES / 2 + 100)) * 2 * Math.PI), 10 * Math.sin((i / (MAX_VERTICES / 2 + 100)) * 2 * Math.PI)]);
+    expect(smoothParts([[dense]])).toBeNull(); // just over the cap
   });
 });
 

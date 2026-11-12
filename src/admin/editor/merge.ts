@@ -112,6 +112,42 @@ function nearestOn(p: Position, segs: Seg[]): { d: number; at: Position } {
   return { d, at };
 }
 
+/** Uniform grid over segment boxes: which boxes overlap a query box, without testing them all. */
+function boxIndex(boxes: Box[], cell: number): (q: Box) => number[] {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  for (const b of boxes) {
+    x0 = Math.min(x0, b.x0);
+    y0 = Math.min(y0, b.y0);
+  }
+  const cx = (x: number) => Math.floor((x - x0) / cell);
+  const cy = (y: number) => Math.floor((y - y0) / cell);
+  const key = (i: number, j: number) => i * 1048576 + j;
+  const cells = new Map<number, number[]>();
+  boxes.forEach((b, n) => {
+    for (let i = cx(b.x0); i <= cx(b.x1); i++)
+      for (let j = cy(b.y0); j <= cy(b.y1); j++) {
+        const list = cells.get(key(i, j));
+        if (list) list.push(n);
+        else cells.set(key(i, j), [n]);
+      }
+  });
+  const seen = new Uint32Array(boxes.length);
+  let stamp = 0;
+  return (q) => {
+    stamp++;
+    const out: number[] = [];
+    for (let i = Math.max(0, cx(q.x0)); i <= cx(q.x1); i++)
+      for (let j = Math.max(0, cy(q.y0)); j <= cy(q.y1); j++)
+        for (const n of cells.get(key(i, j)) ?? []) {
+          if (seen[n] === stamp) continue;
+          seen[n] = stamp;
+          if (overlap(q, boxes[n])) out.push(n);
+        }
+    return out;
+  };
+}
+
 /**
  * Bridges across every narrow gap: for each segment of one group that comes within `gap` of another
  * group, the hull of the stretch of it that is that close and the nearest points across the gap.
@@ -119,6 +155,11 @@ function nearestOn(p: Position, segs: Seg[]): { d: number; at: Position } {
  */
 function bridges(groups: Seg[][], gap: number): clip.Polygon[] {
   const boxes = groups.map((g) => g.map((s) => segBox(s)));
+  // Cells a few gaps wide, but not so small that a big map would need millions of them.
+  let extent = 1;
+  for (const g of boxes) for (const b of g) extent = Math.max(extent, b.x1, b.y1, -b.x0, -b.y0);
+  const cell = Math.max(gap * 4, extent / 1000);
+  const indexes = boxes.map((b) => boxIndex(b, cell));
   const out: clip.Polygon[] = [];
   const pt = (s: Seg, u: number): Position => [s[0][0] + (s[1][0] - s[0][0]) * u, s[0][1] + (s[1][1] - s[0][1]) * u];
   for (let i = 0; i < groups.length; i++)
@@ -126,7 +167,7 @@ function bridges(groups: Seg[][], gap: number): clip.Polygon[] {
       if (i === j) continue;
       for (const s of groups[i]) {
         const bs = segBox(s, gap);
-        const near = groups[j].filter((t, ti) => overlap(bs, boxes[j][ti]) && segSeg(s, t) <= gap);
+        const near = indexes[j](bs).map((ti) => groups[j][ti]).filter((t) => segSeg(s, t) <= gap);
         if (!near.length) continue;
         // Sample along s (at least every gap/4) for the stretch within `gap`, then refine its ends.
         const len = Math.hypot(s[1][0] - s[0][0], s[1][1] - s[0][1]);

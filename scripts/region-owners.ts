@@ -11,6 +11,7 @@ import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Account } from "../src/shared/access.ts";
 import type { RegionFeature } from "../src/shared/region.ts";
+import { stringifyCompact } from "../src/shared/json.ts";
 import { ROOT, contentPaths } from "./lib/paths.ts";
 
 const OWNER: Account = { id: 45669787, login: "Flanz1" };
@@ -36,5 +37,5 @@ for (const f of readdirSync(dir).filter((x) => x.endsWith(".json")).sort()) {
   region.properties.createdBy = who;
   if (!region.properties.created && date) region.properties.created = new Date(date).toISOString().replace(/\.\d+Z$/, "Z");
   console.log(`  ${rel}: created by ${who.login}${m ? "" : " (first author unknown, so the owner)"}`);
-  if (!dry) writeFileSync(file, JSON.stringify(region, null, 2) + "\n");
+  if (!dry) writeFileSync(file, stringifyCompact(region) + "\n");
 }
