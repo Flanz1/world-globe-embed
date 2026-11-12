@@ -6,7 +6,8 @@
  * Builds the e2e fixture (scripts/e2e/fixture.mjs) plus a two-part region whose first part is saved
  * locked, opens it in the editor against the mocked GitHub API and checks that a locked part can't be
  * dragged, nudged or moved with the whole region, while its vertices and midpoints still edit; that the
- * Lock button and the L key toggle it; that deleting a part leaves the other parts' locks on the right
+ * Lock button and the L key toggle it (every part starts locked; only an explicit false in the saved
+ * partLocked opens unlocked); that deleting a part leaves the other parts' locks on the right
  * parts; and that saving writes partLocked in one commit.
  *
  * Screenshots and report.json go to .e2e/locks/. Exits non-zero if any check fails.
@@ -204,6 +205,9 @@ await step(A, "deleting a part keeps the other parts' locks", async () => {
 });
 
 await step(A, "save", async () => {
+  // Both parts are locked now; unlock part 2 so the saved file has something to say.
+  await ed.lockBtn(1).click();
+  check(A, "unlocking part 2 from its row", same((await ed.state()).locked, [true, false]), JSON.stringify((await ed.state()).locked));
   const n0 = mock.log.length;
   await page.click("dialog.editor .ed-save");
   const t0 = Date.now();
@@ -212,7 +216,7 @@ await step(A, "save", async () => {
   const c = mock.log.slice(n0);
   check(A, "save is one commit to content/regions/lock-test.json", c.length === 1 && c[0].branch === BRANCH, JSON.stringify(c));
   const f = JSON.parse(mock.read(BRANCH, "content/regions/lock-test.json"));
-  check(A, "saved with partLocked", same(f.properties.partLocked, [true, true]), JSON.stringify(f.properties.partLocked));
+  check(A, "saved with partLocked (true = locked, false = left unlocked)", same(f.properties.partLocked, [true, false]), JSON.stringify(f.properties.partLocked));
 });
 
 check(A, "no errors or dialogs in the admin page", errors.length === 0 && dialogs.length === 0, [...errors, ...dialogs].join(" | ") || "none");

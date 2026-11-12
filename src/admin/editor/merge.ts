@@ -281,7 +281,7 @@ function assemble(s: EditorState, list: number[], rings: Ring[], parent: number,
   next.parts = kept.map((q) => (q === into ? rings : s.parts[q].map((r) => r.map(([x, y]) => [x, y] as Position))));
   next.styles = kept.map((q) => s.styles[q] ?? OWN_COLOUR);
   next.labels = kept.map((q) => (q === into ? label : (s.labels[q] ?? "")));
-  next.locked = kept.map((q) => (q === into ? list.some((r) => s.locked[r] === true) : s.locked[q] === true));
+  next.locked = kept.map((q) => (q === into ? list.some((r) => s.locked[r] !== false) : s.locked[q] !== false));
   next.contested = kept.map((q) => {
     if (q === into) return parent < 0 ? -1 : (index[parent] ?? -1);
     const k = s.contested[q] ?? -1;

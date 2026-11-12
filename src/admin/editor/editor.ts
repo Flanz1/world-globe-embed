@@ -98,7 +98,8 @@ import {
   type RingProblem,
   type VRef,
 } from "./model.ts";
-import { findSnap, followBorders, insertOnEdges, partRings, sharedEdges, snapRing, traceBetween, vertexIndex, withGlued, type Snap, type SnapRing } from "./snap.ts";
+import { Coast, loadCoast, thinTrace } from "./coast.ts";
+import { carryLines, posKey, findSnap, followBorders, lineCarry, type LineCarry, insertOnEdges, partRings, sharedEdges, snapRing, traceBetween, vertexIndex, withGlued, type Snap, type SnapRing } from "./snap.ts";
 
 export interface EditorOptions {
   gh: GitHub;
@@ -129,6 +130,9 @@ const SNAP_COLOUR = "#4dd0e1";
 const SNAP_PREF = "wge.editor.snap";
 /** Gaps up to this many screen pixels between an Extend shape and its part are filled. */
 const EXTEND_GAP_PX = 12;
+const COAST_PREF = "wge.editor.coast";
+/** The map's coastline, drawn while coast snapping is on. */
+const COAST_COLOUR = "rgba(255,196,64,.8)";
 
 /** Git's blob SHA-1 of a text file, to know the file's SHA after our own commit without asking GitHub. */
 async function gitBlobSha(text: string): Promise<string> {
@@ -181,6 +185,7 @@ export const SHORTCUTS: [string, string][] = [
   ["Ctrl+drag a vertex", "Move just that vertex, without snapping (pulls it off a shared border)"],
   ["Drag a midpoint", "Insert a vertex there (on a shared border, on both sides)"],
   ["S", "Snapping on or off; hold Ctrl to place one point freely"],
+  ["O", "Coast snapping on or off: points also snap to the map's coastline (when no part or region is in reach); click two points on the coast to follow it"],
   ["Click two points on one border (polygon)", "Fills in that border's vertices in between; Tab takes the other way round. Clicking the first point to close follows the border too"],
   ["Freehand along a border", "The stroke follows that border's vertices exactly"],
   ["Click a line", "Select every vertex of that outline or hole (Shift adds); Delete then removes it"],
@@ -244,6 +249,13 @@ export function openEditor(o: EditorOptions): void {
     () => toggleSnap(),
     "snap",
   );
+  const coastBtn = btn(
+    "Coast",
+    "Also snap to the map's coastline (shown in amber) where no part or region is in reach, and follow it between two clicks (O). Rivers, lakes and marshes count as land.",
+    () => toggleCoast(),
+    "coast",
+  );
+  coastBtn.hidden = true;
   const simplifyBtn = btn("Simplify…", "Fewer vertices, same shape", () => toggleSimplify(), "simplify");
   const smoothBtn = btn("Smooth", "Round the corners (one Chaikin pass; doubles the vertices)", () => smooth(), "smooth");
 
@@ -319,6 +331,7 @@ export function openEditor(o: EditorOptions): void {
       smoothBtn,
       h("span", { className: "sep" }),
       snapBtn,
+      coastBtn,
       gridBtn,
       btn("?", "Keyboard shortcuts", () => showHelp(), "help"),
     ),
@@ -408,6 +421,14 @@ export function openEditor(o: EditorOptions): void {
   let img: HTMLImageElement | null = null;
   let imgW = 0;
   let upgrading = false;
+  // The coastline, for coast snapping (the Coast button shows once it's here).
+  void loadCoast(map?.coast ? new URL(map.coast, SITE).href : null).then((data) => {
+    if (!data || !dlg.isConnected) return;
+    coast = new Coast(data, ky);
+    coastBtn.hidden = false;
+    ringCache.version = -1;
+    draw();
+  });
   if (map) void loadMapImage(map, 2048).then((i) => ((img = i), (imgW = 2048), draw()), () => setMsg("The map image isn't deployed yet; you can still draw.", "error"));
   function maybeUpgrade(): void {
     if (!map || upgrading) return;
@@ -537,6 +558,15 @@ export function openEditor(o: EditorOptions): void {
   } catch {
     /* storage blocked: default on */
   }
+  /** The map's coastline (loaded after the editor opens; null when the map has none). */
+  let coast: Coast | null = null;
+  /** Snapping to the coastline too (O, or the Coast button); remembered per browser. Only with snapping on. */
+  let coastOn = true;
+  try {
+    coastOn = localStorage.getItem(COAST_PREF) !== "off";
+  } catch {
+    /* storage blocked: default on */
+  }
   /** Where the pointer would snap right now (drawn as a ring), with the rings it refers to. */
   let snapHint: { snap: Snap; rings: readonly SnapRing[] } | null = null;
   /** Per point of `drawing`: where it snapped (null for a free point), for tracing along a border. */
@@ -558,8 +588,12 @@ export function openEditor(o: EditorOptions): void {
         /** Snap targets for this drag, leaving out the rings being reshaped. */
         rings: SnapRing[];
         skip: (ring: number) => boolean;
+        /** Province borders as they were, and which points sit on outlines (they follow the vertices). */
+        baseLines: Position[][];
+        carry: LineCarry;
       }
-    | { kind: "shape"; base: Parts; part: number[] | null; w0: Position; moved: boolean }
+    | { kind: "lvertex"; l: number; k: number; base: Position[][]; x0: number; y0: number; moved: boolean; rings: SnapRing[]; skip: (ring: number) => boolean }
+    | { kind: "shape"; base: Parts; part: number[] | null; w0: Position; moved: boolean; baseLines: Position[][]; carry: LineCarry }
     | { kind: "pan"; x0: number; y0: number; v0: typeof view }
     | { kind: "box"; x0: number; y0: number; x1: number; y1: number; add: boolean; refused?: string }
     | { kind: "free"; pts: Position[] }
@@ -571,7 +605,7 @@ export function openEditor(o: EditorOptions): void {
   let pinch: { d: number; mx: number; my: number } | null = null;
 
   const parts = () => hist.state.parts;
-  /** Geometry edits. `styles`, `labels`, `contested` and `locked` must be given whenever parts are removed (added parts start unlocked). */
+  /** Geometry edits. `styles`, `labels`, `contested` and `locked` must be given whenever parts are removed (added parts start locked). */
   const setParts = (
     label: string,
     next: Parts,
@@ -736,6 +770,7 @@ export function openEditor(o: EditorOptions): void {
       drawTiles(offs);
     }
     if (gridOn) drawGrid(offs);
+    if (coastActive()) drawCoast(offs);
     // Neighbours on the same slot: thin grey outlines to trace against.
     if (neighbours.length) {
       g.save();
@@ -835,7 +870,7 @@ export function openEditor(o: EditorOptions): void {
       drawHandles(offs);
       drawLineHandles(offs);
     }
-    if ((parts().length > 1 || hist.state.locked.some(Boolean)) && !simplifyPreview) drawBadges(offs);
+    if ((parts().length > 1 || hist.state.locked.some((l) => l !== false)) && !simplifyPreview) drawBadges(offs);
     else badgeAt = [];
     if (drawing || drag?.kind === "free") {
       const pts = drawing ?? (drag as { pts: Position[] }).pts;
@@ -978,7 +1013,7 @@ export function openEditor(o: EditorOptions): void {
           g.strokeText(String(p + 1), x, y + 0.5);
         }
         g.fillText(String(p + 1), x, y + 0.5);
-        if (hist.state.locked[p]) drawLock(x + r * 0.8, y - r * 0.8);
+        if (hist.state.locked[p] !== false) drawLock(x + r * 0.8, y - r * 0.8);
       }
     });
     g.restore();
@@ -990,12 +1025,21 @@ export function openEditor(o: EditorOptions): void {
     g.strokeStyle = "#000";
     (hist.state.lines ?? []).forEach((line, l) => {
       if (l !== selLine) return;
-      for (const pt of line)
+      for (let k = 0; k + 1 < line.length; k++) {
+        g.save();
+        g.fillStyle = "rgba(255,255,255,.55)";
         for (const off of offs) {
           g.beginPath();
-          g.arc(sx(pt[0] + off), sy(pt[1]), 3.5, 0, Math.PI * 2);
+          g.arc(sx((line[k][0] + line[k + 1][0]) / 2 + off), sy((line[k][1] + line[k + 1][1]) / 2), 3, 0, Math.PI * 2);
           g.fill();
           g.stroke();
+        }
+        g.restore();
+      }
+      for (const pt of line)
+        for (const off of offs) {
+          g.fillRect(sx(pt[0] + off) - HANDLE / 2, sy(pt[1]) - HANDLE / 2, HANDLE, HANDLE);
+          g.strokeRect(sx(pt[0] + off) - HANDLE / 2, sy(pt[1]) - HANDLE / 2, HANDLE, HANDLE);
         }
     });
     g.restore();
@@ -1108,6 +1152,7 @@ export function openEditor(o: EditorOptions): void {
     for (const b of dlg.querySelectorAll<HTMLButtonElement>("button.tool")) b.setAttribute("aria-pressed", String(b.dataset.tool === tool));
     gridBtn.setAttribute("aria-pressed", String(gridOn));
     snapBtn.setAttribute("aria-pressed", String(snapOn));
+    coastBtn.setAttribute("aria-pressed", String(coastActive()));
     // The spherical area is skipped mid-drag (it costs a few ms at 2,000 vertices) and refreshed on release.
     if (!hist.dragging || lastArea < 0) lastArea = parts_ ? areaPercent(mapGeometry(toGeometry(parts()), (p) => imageToGlobe(p, frame))) : 0;
     const area = lastArea;
@@ -1218,7 +1263,7 @@ export function openEditor(o: EditorOptions): void {
   }
   function togglePartLock(p: number): void {
     if (p < 0 || p >= parts().length) return;
-    const on = !hist.state.locked[p];
+    const on = hist.state.locked[p] === false;
     hist.apply(on ? "Lock part" : "Unlock part", setLocked(hist.state, p, on));
     setMsg(on ? `Part ${p + 1} is locked: it won't move, but its vertices and midpoints still edit.` : `Part ${p + 1} is unlocked.`, "ok");
     changed();
@@ -1368,7 +1413,7 @@ export function openEditor(o: EditorOptions): void {
       row.classList.toggle("hot", p === hoverPart);
       row.classList.toggle("sel", p === selPart);
       row.querySelector("button[data-act=part-select]")?.setAttribute("aria-pressed", String(p === selPart));
-      const locked = !!s.locked[p];
+      const locked = s.locked[p] !== false;
       row.classList.toggle("locked", locked);
       const lock = row.querySelector<HTMLButtonElement>("button[data-act=part-lock]");
       if (lock) {
@@ -1570,11 +1615,57 @@ export function openEditor(o: EditorOptions): void {
       setMsg(`Province borders can have at most ${PROVINCE_BORDER_MAX.toLocaleString()} points in all.`, "error");
       return false;
     }
-    hist.apply("Add province border", { ...hist.state, lines: [...lines.map((l) => l.map(([x, y]) => [x, y] as Position)), line.map(([x, y]) => [x, y] as Position)] });
-    selLine = lines.length;
-    setMsg("Province border added. Click it to select it; Delete removes it. Draw another with Province border.", "ok");
+    const copy = lines.map((l) => l.map(([x, y]) => [x, y] as Position));
+    const nl = line.map(([x, y]) => [x, y] as Position);
+    // Starting (or ending) on the end of an existing border continues that border.
+    const same = (a: Position, b: Position) => posKey(a) === posKey(b);
+    const at = copy.findIndex((l) => same(l[l.length - 1], nl[0]) || same(l[0], nl[0]) || same(l[l.length - 1], nl[nl.length - 1]) || same(l[0], nl[nl.length - 1]));
+    let sel = copy.length;
+    if (at >= 0) {
+      let base = copy[at];
+      let add = nl;
+      if (same(base[0], add[0]) || same(base[0], add[add.length - 1])) base = [...base].reverse(); // join at base's start: flip so the join is at its end
+      if (!same(base[base.length - 1], add[0])) add = [...add].reverse();
+      if (same(base[base.length - 1], add[0])) {
+        const unwrapped = unwrapRing([...base, ...add.slice(1)]);
+        copy[at] = unwrapped;
+        sel = at;
+      } else copy.push(nl);
+    } else copy.push(nl);
+    hist.apply(sel < lines.length ? "Extend province border" : "Add province border", { ...hist.state, lines: copy });
+    selLine = sel;
+    setMsg(sel < lines.length ? "Province border extended." : "Province border added. Click it to select it, drag its points, drag a midpoint to add one, Alt+click a point to remove it. Delete removes the border.", "ok");
     endDraw();
     return true;
+  }
+  /** A point or midpoint of the selected province border under the pointer: {k, pos, mid}. Points win over midpoints. */
+  function hitLinePoint(x: number, y: number): { k: number; pos: Position; mid: boolean } | null {
+    const line = (hist.state.lines ?? [])[selLine];
+    if (!line) return null;
+    const cl = wx(x);
+    for (let k = line.length - 1; k >= 0; k--) {
+      if (Math.hypot(sx(nearest(line[k][0], cl)) - x, sy(line[k][1]) - y) <= HIT) return { k, pos: line[k], mid: false };
+    }
+    for (let k = 0; k + 1 < line.length; k++) {
+      const m: Position = [(line[k][0] + line[k + 1][0]) / 2, (line[k][1] + line[k + 1][1]) / 2];
+      if (Math.hypot(sx(nearest(m[0], cl)) - x, sy(m[1]) - y) <= HIT - 1) return { k, pos: m, mid: true };
+    }
+    return null;
+  }
+  /** Snap targets for dragging a point of line l: everything but that line itself. */
+  function lineDragSnap(l: number): { rings: SnapRing[]; skip: (ring: number) => boolean } {
+    const rings = [...partRings(parts()), ...lineRings(), ...nbSnapRings];
+    const mine = parts().reduce((n, rs) => n + rs.length, 0) + l;
+    return { rings, skip: (i) => i === mine };
+  }
+  /** Removes point k of province border l (a border keeps at least 2 points: with 2 it deletes the border). */
+  function deleteLinePoint(l: number, k: number): void {
+    const lines = hist.state.lines ?? [];
+    const line = lines[l];
+    if (!line) return;
+    if (line.length <= 2) return deleteBorder(l);
+    hist.apply("Delete border point", { ...hist.state, lines: lines.map((q, i) => (i === l ? q.filter((_, j) => j !== k) : q.map(([x, y]) => [x, y] as Position))) });
+    changed();
   }
   /** Deletes province border l (one undo step). */
   function deleteBorder(l: number): void {
@@ -1863,15 +1954,28 @@ export function openEditor(o: EditorOptions): void {
   let ringCache: { version: number; rings: SnapRing[] } = { version: -1, rings: [] };
   /** Every snap target for the current parts: the region's own rings, then the neighbours'. */
   function snapRings(): SnapRing[] {
-    if (ringCache.version !== hist.version) ringCache = { version: hist.version, rings: [...partRings(parts()), ...lineRings(), ...nbSnapRings] };
+    if (ringCache.version !== hist.version) ringCache = { version: hist.version, rings: [...partRings(parts()), ...lineRings(), ...nbSnapRings, ...coastRings()] };
     return ringCache.rings;
+  }
+  /** The coastline as snap targets, when coast snapping is on (at full detail, or simplified to `tol` degrees). */
+  const coastRings = (tol = 0): SnapRing[] => (coast && coastOn ? (tol ? coast.ringsAt(tol) : coast.rings()) : []);
+  /**
+   * The nearest snap within reach: a vertex or line of a part, province border or region first;
+   * only when there's none, the coast. Rings that `skip` returns true for are left out.
+   */
+  function snapIn(rings: readonly SnapRing[], pos: Position, skip?: (ring: number) => boolean): Snap | null {
+    const sc = scale();
+    const isCoast = (i: number) => rings[i].src.kind === "coast";
+    const first = findSnap(rings, pos, sc, SNAP_PX, (i) => isCoast(i) || !!skip?.(i));
+    if (first || !coastActive()) return first;
+    return findSnap(rings, pos, sc, SNAP_PX, (i) => !isCoast(i) || !!skip?.(i));
   }
   /** The province borders as snap targets (open lines). */
   const lineRings = (): SnapRing[] => (hist.state.lines ?? []).map((l, i) => snapRing(l, { kind: "line", l: i }));
   const scale = () => ({ k: view.k, ky });
   /** Where a point would snap (null when snapping is off or nothing is near). */
   const snapAt = (pos: Position, rings: readonly SnapRing[] = snapRings(), skip: (ring: number) => boolean = extendSkip): Snap | null =>
-    snapOn ? findSnap(rings, pos, scale(), SNAP_PX, skip) : null;
+    snapOn ? snapIn(rings, pos, skip) : null;
   /** Extending a part: its own outline isn't a snap target (the tool already joins a shape that touches or nearly touches it). */
   const extendSkip = (ri: number): boolean => {
     const src = snapRings()[ri]?.src;
@@ -1883,6 +1987,7 @@ export function openEditor(o: EditorOptions): void {
     const what = sn.kind === "vertex" ? "vertex" : "line";
     if (src.kind === "part") return `${what} of ${src.r ? `a hole in ${partName(src.p)}` : partName(src.p)}`;
     if (src.kind === "line") return `${what} of province border ${src.l + 1}`;
+    if (src.kind === "coast") return "the coast";
     return `${what} of region ${neighbourName(src.n)}`;
   }
   function toggleSnap(): void {
@@ -1915,7 +2020,17 @@ export function openEditor(o: EditorOptions): void {
     const rings = snapRings();
     const ring = rings[next.ring];
     if (!ring) return [];
-    return traceBetween(ring.pts, from, next, ky, traceFlip, ring.src.kind === "line").map((t) => ({ pos: t.pos, ring: next.ring, at: t.at, kind: "vertex" as const }));
+    let tr = traceBetween(ring.pts, from, next, ky, traceFlip, ring.src.kind === "line");
+    // The coast is traced finely: add only as many of its points as the screen shows.
+    if (ring.src.kind === "coast" && tr.length > 2) {
+      const all = [from.pos, ...tr.map((t) => t.pos), next.pos];
+      // (Never finer than a pixel of the raster the coast was traced on: finer is just its stair-steps.)
+      const tol = Math.max(0.75 / view.k, coast ? 360 / coast.data.width : 0);
+      tr = thinTrace(all, tol, ky)
+        .filter((i) => i > 0 && i < all.length - 1)
+        .map((i) => tr[i - 1]);
+    }
+    return tr.map((t) => ({ pos: t.pos, ring: next.ring, at: t.at, kind: "vertex" as const }));
   }
   /** Whether a click at screen (x, y) would close the outline on its first point. */
   const closesAt = (x: number, y: number) => !!drawing && !lineTarget() && drawing.length >= 3 && Math.hypot(sx(drawing[0][0]) - x, sy(drawing[0][1]) - y) <= HIT;
@@ -1947,7 +2062,7 @@ export function openEditor(o: EditorOptions): void {
       res.kept.map((p) => hist.state.styles[p] ?? OWN_COLOUR),
       res.kept.map((p) => hist.state.labels[p] ?? ""),
       zones.contested,
-      res.kept.map((p) => hist.state.locked[p] ?? false),
+      res.kept.map((p) => hist.state.locked[p] ?? true),
     );
     selection.clear();
     if (res.removedParts) selPart = selPart >= 0 ? res.kept.indexOf(selPart) : -1;
@@ -1983,15 +2098,19 @@ export function openEditor(o: EditorOptions): void {
     if (hist.state !== s) return setMsg("The region changed while the warning was open, so nothing was deleted.", "error");
     const res = deleteParts(s.parts, [p]);
     const remapped = remapContested(s.contested, res.kept);
+    // Province borders that lay in the deleted part go with it.
+    const owners = lineCarry(s.parts, s.lines ?? [], s.contested).owners;
+    const keptLines = (s.lines ?? []).filter((_, l) => owners[l] !== p);
     setParts(
       `Delete part ${p + 1}`,
       res.parts,
-      undefined,
+      `del-lines:${p}`,
       res.kept.map((k) => s.styles[k] ?? OWN_COLOUR),
       res.kept.map((k) => s.labels[k] ?? ""),
       remapped.contested,
-      res.kept.map((k) => s.locked[k] ?? false),
+      res.kept.map((k) => s.locked[k] ?? true),
     );
+    if (keptLines.length !== (s.lines ?? []).length) hist.apply(`Delete part ${p + 1}`, { ...hist.state, lines: keptLines }, `del-lines:${p}`);
     selection.clear();
     selPart = -1;
     setMsg(`${name} deleted (undo brings it back).`);
@@ -2006,12 +2125,16 @@ export function openEditor(o: EditorOptions): void {
       const next = parts().map((rings, p) => rings.map((ring, r) => ring.map((pt, i) => (keys.has(vkey({ p, r, i })) ? ([pt[0] + dLon, Math.max(-90, Math.min(90, pt[1] + dLat))] as Position) : pt))));
       const prob = ringProblem(next, refs);
       if (prob) return setMsg(prob.message, "error");
-      setParts("Nudge", next, "nudge");
+      // Same parts, same count: the province borders pinned to the nudged vertices go with them.
+      const lb = lineBase(parts());
+      hist.apply("Nudge", { ...hist.state, parts: next, lines: carryLines(lb.baseLines, lb.carry, parts(), next, []) }, "nudge");
     } else if (parts().length) {
       const one = selPart >= 0 && !!parts()[selPart];
       const plan = moveSet(one ? selPart : null);
       if ("refused" in plan) return setMsg(plan.refused, "error");
-      setParts(one ? "Nudge part" : "Nudge shape", translate(parts(), plan.parts, dLon, dLat), one ? "nudge-part" : "nudge");
+      const moved = translate(parts(), plan.parts, dLon, dLat);
+      const lb = lineBase(parts());
+      hist.apply(one ? "Nudge part" : "Nudge shape", { ...hist.state, parts: moved, lines: carryLines(lb.baseLines, lb.carry, parts(), moved, plan.parts) }, one ? "nudge-part" : "nudge");
     }
     changed();
   }
@@ -2029,6 +2152,51 @@ export function openEditor(o: EditorOptions): void {
     selection.clear();
     changed();
   }
+  /** Whether coast lines are snap targets right now. */
+  const coastActive = () => !!coast && coastOn && snapOn;
+  /** Coast lines on screen, simplified to about a pixel. */
+  function drawCoast(offs: number[]): void {
+    if (!coast) return;
+    const tol = 1 / view.k;
+    const w = canvas.width / (window.devicePixelRatio || 1);
+    const hgt = canvas.height / (window.devicePixelRatio || 1);
+    g.save();
+    g.lineWidth = 1;
+    g.strokeStyle = COAST_COLOUR;
+    g.setLineDash([]);
+    g.beginPath();
+    for (const r of coast.ringsAt(tol)) {
+      const [west, south, east, north] = r.box;
+      if (sy(north) > hgt || sy(south) < 0) continue;
+      for (const off of offs) {
+        if (sx(east + off) < 0 || sx(west + off) > w) continue;
+        r.pts.forEach(([x, y], i) => (i ? g.lineTo(sx(x + off), sy(y)) : g.moveTo(sx(x + off), sy(y))));
+        g.closePath();
+      }
+    }
+    g.stroke();
+    g.restore();
+  }
+  function toggleCoast(): void {
+    if (!coast) return;
+    coastOn = !coastOn;
+    try {
+      localStorage.setItem(COAST_PREF, coastOn ? "on" : "off");
+    } catch {
+      /* not remembered: fine */
+    }
+    ringCache.version = -1;
+    snapHint = null;
+    if (coastOn && !snapOn) toggleSnap();
+    setMsg(
+      coastOn
+        ? "Coast snapping on: points also snap to the coastline (amber) where no part or region is in reach. Click two points on the coast to follow it; hold Ctrl to place a point freely."
+        : "Coast snapping off: points snap to parts and regions only.",
+    );
+    draw();
+    updateStatus();
+  }
+
   function toggleGrid(): void {
     gridOn = !gridOn;
     draw();
@@ -2070,9 +2238,14 @@ export function openEditor(o: EditorOptions): void {
     changed();
   }
 
+  /** The lines as they are and what carries them, for a drag that starts from `base` parts. */
+  function lineBase(base: Parts): { baseLines: Position[][]; carry: LineCarry } {
+    const baseLines = hist.state.lines ?? [];
+    return { baseLines, carry: lineCarry(base, baseLines, hist.state.contested) };
+  }
   /** Snap targets for dragging `refs`: everything but the rings they belong to (so nothing snaps to itself). */
   function dragSnap(base: Parts, refs: VRef[]): { rings: SnapRing[]; skip: (ring: number) => boolean } {
-    const rings = [...partRings(base), ...lineRings(), ...nbSnapRings];
+    const rings = [...partRings(base), ...lineRings(), ...nbSnapRings, ...coastRings()];
     const moving = new Set(refs.map((q) => `${q.p}:${q.r}`));
     return {
       rings,
@@ -2144,6 +2317,25 @@ export function openEditor(o: EditorOptions): void {
     }
     // Select tool.
     edgePick = null;
+    if (selLine >= 0 && !simplifyPreview) {
+      const lh = hitLinePoint(x, y);
+      if (lh) {
+        const lines = hist.state.lines ?? [];
+        if (lh.mid) {
+          // A midpoint of the selected border: insert a point there and drag it.
+          const next = lines.map((l) => l.map(([qx, qy]) => [qx, qy] as Position));
+          next[selLine].splice(lh.k + 1, 0, [lh.pos[0], lh.pos[1]]);
+          hist.begin();
+          hist.preview({ ...hist.state, lines: next });
+          drag = { kind: "lvertex", l: selLine, k: lh.k + 1, base: next, x0: x, y0: y, moved: true, ...lineDragSnap(selLine) };
+          return changed();
+        }
+        if (e.altKey) return deleteLinePoint(selLine, lh.k);
+        hist.begin();
+        drag = { kind: "lvertex", l: selLine, k: lh.k, base: lines, x0: x, y0: y, moved: false, ...lineDragSnap(selLine) };
+        return draw();
+      }
+    }
     const v = hitVertex(x, y);
     if (v) {
       if (e.altKey) return deleteRefs([v]);
@@ -2171,6 +2363,7 @@ export function openEditor(o: EditorOptions): void {
         label: chosen.length > 1 ? `Move ${chosen.length} vertices` : "Move vertex",
         toggle: was && e.shiftKey,
         ...dragSnap(parts(), refs),
+        ...lineBase(parts()),
       };
       return draw();
     }
@@ -2196,6 +2389,7 @@ export function openEditor(o: EditorOptions): void {
         label: "Insert vertex",
         toggle: false,
         ...dragSnap(ins.parts, ins.refs),
+        ...lineBase(ins.parts),
       };
       changed();
       return;
@@ -2235,7 +2429,8 @@ export function openEditor(o: EditorOptions): void {
       const moving = plan.parts;
       beginClashDrag(moving ?? parts().map((_, k) => k));
       hist.begin();
-      drag = { kind: "shape", base: parts(), part: moving, w0, moved: false };
+      const baseLines = hist.state.lines ?? [];
+      drag = { kind: "shape", base: parts(), part: moving, w0, moved: false, baseLines, carry: lineCarry(parts(), baseLines, hist.state.contested) };
       canvas.style.cursor = "move";
       return;
     }
@@ -2270,7 +2465,7 @@ export function openEditor(o: EditorOptions): void {
       if (tool === "select") {
         const over = hitVertex(x, y) || hitMidpoint(x, y) || hitEdge(x, y);
         const under = cursor ? partAt(parts(), cursor, hist.state.contested) : -1;
-        canvas.style.cursor = spaceHeld ? "grab" : over ? "pointer" : under >= 0 && !hist.state.locked[under] ? "move" : "default";
+        canvas.style.cursor = spaceHeld ? "grab" : over ? "pointer" : under >= 0 && hist.state.locked[under] === false ? "move" : "default";
         setHoverPart(under);
       }
       return draw();
@@ -2295,10 +2490,29 @@ export function openEditor(o: EditorOptions): void {
       if (Math.hypot(sx(last[0]) - x, sy(last[1]) - y) >= 2) drag.pts.push([wx(x), wy(y)]);
       return draw();
     }
+    if (drag.kind === "lvertex") {
+      if (!drag.moved && Math.hypot(x - drag.x0, y - drag.y0) < 3) return;
+      drag.moved = true;
+      let at: Position = [cursor[0], cursor[1]];
+      snapHint = null;
+      if (snapOn && !free) {
+        const t = findSnap(drag.rings, at, scale(), SNAP_PX, drag.skip);
+        if (t) {
+          at = t.pos;
+          snapHint = { snap: t, rings: drag.rings };
+        }
+      }
+      const old = drag.base[drag.l][drag.k];
+      at = [nearest(at[0], old[0]), Math.max(-90, Math.min(90, at[1]))];
+      const { l: dl, k: dk, base: dbase } = drag;
+      const moved = at;
+      hist.preview({ ...hist.state, lines: dbase.map((q, i) => (i === dl ? q.map((pt, j) => (j === dk ? moved : pt)) : q)) });
+      return changed();
+    }
     if (drag.kind === "shape") {
       drag.moved = true;
       const next = translate(drag.base, drag.part, cursor[0] - drag.w0[0], cursor[1] - drag.w0[1]);
-      hist.preview({ ...hist.state, parts: next });
+      hist.preview({ ...hist.state, parts: next, lines: carryLines(drag.baseLines, drag.carry, drag.base, next, drag.part) });
       return changed();
     }
     // Vertex drag.
@@ -2310,7 +2524,7 @@ export function openEditor(o: EditorOptions): void {
     if (snapOn && !free) {
       const g0 = drag.base[drag.grab.p][drag.grab.r][drag.grab.i];
       const want: Position = [g0[0] + dLon, g0[1] + dLat];
-      const t = findSnap(drag.rings, want, scale(), SNAP_PX, drag.skip);
+      const t = snapIn(drag.rings, want, drag.skip);
       if (t) {
         dLon = t.pos[0] - g0[0];
         dLat = t.pos[1] - g0[1];
@@ -2323,7 +2537,7 @@ export function openEditor(o: EditorOptions): void {
       rings.map((ring, r) => ring.map((q, i) => (keys.has(vkey({ p, r, i })) ? ([q[0] + dLon, Math.max(-90, Math.min(90, q[1] + dLat))] as Position) : q))),
     );
     problem = ringProblem(next, refs);
-    hist.preview({ ...hist.state, parts: next });
+    hist.preview({ ...hist.state, parts: next, lines: carryLines(drag.baseLines, drag.carry, drag.base, next, []) });
     changed();
   });
 
@@ -2335,7 +2549,7 @@ export function openEditor(o: EditorOptions): void {
     }
     const d = drag;
     drag = null;
-    if (d?.kind === "vertex") snapHint = null;
+    if (d?.kind === "vertex" || d?.kind === "lvertex") snapHint = null;
     if (!d) return;
     if (d.kind === "pan") canvas.style.cursor = spaceHeld ? "grab" : "default";
     if (d.kind === "box") {
@@ -2373,8 +2587,9 @@ export function openEditor(o: EditorOptions): void {
       const simple = (pts: Position[]) => simplifyRing(pts.map(([px, py]) => [px, py * ky]), tol).map(([px, py]) => [px, py / ky] as Position);
       // Stretches drawn along a border follow that border's own vertices (unless snapping is off or Ctrl is held).
       const follow = snapOn && !(e.ctrlKey || e.metaKey);
-      const rings = snapRings();
-      const traced = (closedRing: boolean) => followBorders(d.pts, (q) => findSnap(rings, q, scale(), SNAP_PX, extendSkip), rings, ky, tol, closedRing).pts;
+      // (The coast at about the sketch's own precision, so following it adds no more points than drawing would.)
+      const rings = [...snapRings().filter((r) => r.src.kind !== "coast"), ...coastRings(tol / 2)];
+      const traced = (closedRing: boolean) => followBorders(d.pts, (q) => snapIn(rings, q, extendSkip), rings, ky, tol, closedRing).pts;
       if (lineTarget()) {
         if (d.pts.length < 2) return draw();
         const line = follow ? traced(false) : douglasPeucker(d.pts.map(([px, py]) => [px, py * ky]), tol).map(([px, py]) => [px, py / ky] as Position);
@@ -2384,6 +2599,11 @@ export function openEditor(o: EditorOptions): void {
       if (d.pts.length < 3) return draw();
       if (!finishRing(follow ? traced(true) : simple(d.pts))) draw();
       return;
+    }
+    if (d.kind === "lvertex") {
+      if (d.moved) hist.commit("Move border point");
+      else hist.cancel();
+      return changed();
     }
     if (d.kind === "shape") {
       canvas.style.cursor = "default";
@@ -2547,6 +2767,7 @@ export function openEditor(o: EditorOptions): void {
     else if (k === "l" && selPart >= 0) togglePartLock(selPart);
     else if (k === "c" && !drawing) openCombine();
     else if (k === "e" && !drawing) startExtend();
+    else if (k === "o") toggleCoast();
     else if (e.key === "?") showHelp();
   });
   dlg.addEventListener("keyup", (e) => {
@@ -2632,7 +2853,7 @@ export function openEditor(o: EditorOptions): void {
           : {}),
         ...(partLabels.some((t) => t.trim()) ? { partLabels: partLabels.map((t) => t.trim().slice(0, PART_LABEL_MAX)) } : {}),
         ...(hasZones ? { partContested } : {}),
-        ...(partLocked.some(Boolean) ? { partLocked } : {}),
+        ...(partLocked.some((l) => !l) ? { partLocked } : {}),
         ...(provinceLines.length ? { provinceBorders: provinceLines } : {}),
         updated: stamp(),
       },
@@ -2741,6 +2962,8 @@ export function openEditor(o: EditorOptions): void {
     selectedVertices: () => [...selection.values()],
     clashes: () => clashState().clashes,
     snapOn: () => snapOn,
+    coastLines: () => coast?.data.lines.length ?? 0,
+    coastOn: () => coastActive(),
     borders: () => clashState().spec.borders ?? null,
     lines: () => (hist.state.lines ?? []).map((l) => l.map((q) => [...q])),
     drawing: () => (drawing ? drawing.map((q) => [...q]) : null),
