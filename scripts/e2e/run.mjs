@@ -1,0 +1,68 @@
+/**
+ * Runs the e2e suites in parallel, each with its own port range (E2E_PORT_BASE) so they can't collide.
+ *
+ *   npm run e2e                       all suites
+ *   npm run e2e -- snap locks         just those
+ *   npm run e2e -- --jobs 2           limit concurrency (default: half the CPUs, 1–4; software GL is CPU-hungry and screenshots time out when oversubscribed)
+ *
+ * Output of each suite goes to .e2e/logs/<suite>.log; a failing suite's log tail is printed.
+ * Exits non-zero if any suite fails.
+ */
+import { spawn } from "node:child_process";
+import { mkdirSync, createWriteStream, readFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
+import path from "node:path";
+
+const HERE = path.dirname(new URL(import.meta.url).pathname);
+// Slowest first, so the long ones start immediately and short ones fill the gaps.
+const ALL = ["contested", "regions", "snap", "merge", "coast", "cut", "locks", "ring-select", "tiles", "tiers", "view", "upload"];
+
+const args = process.argv.slice(2);
+let jobs = Math.max(1, Math.min(4, Math.floor(availableParallelism() / 2)));
+const names = [];
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === "--jobs") jobs = Math.max(1, Number(args[++i]) || 1);
+  else names.push(args[i]);
+}
+const suites = names.length ? names : ALL;
+for (const s of suites) {
+  if (ALL.includes(s)) continue;
+  console.error(`unknown suite: ${s} (have: ${ALL.join(", ")})`);
+  process.exit(2);
+}
+
+const LOGS = path.resolve(".e2e/logs");
+mkdirSync(LOGS, { recursive: true });
+const t00 = Date.now();
+const results = [];
+
+function runSuite(name, index) {
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    const logFile = path.join(LOGS, `${name}.log`);
+    const log = createWriteStream(logFile);
+    const child = spawn(process.execPath, ["--import", "tsx", path.join(HERE, `${name}.mjs`)], {
+      env: { ...process.env, E2E_PORT_BASE: String(20000 + index * 20) },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    child.stdout.pipe(log, { end: false });
+    child.stderr.pipe(log, { end: false });
+    child.on("close", (code) => {
+      log.end();
+      const secs = (Date.now() - t0) / 1000;
+      const summary = (readFileSync(logFile, "utf8").match(/\d+\/\d+ checks passed/g) ?? []).pop() ?? "";
+      results.push({ name, code, secs, summary });
+      console.log(`${code === 0 ? "PASS" : "FAIL"} ${name.padEnd(12)} ${secs.toFixed(1).padStart(6)}s  ${summary}`);
+      if (code !== 0) console.log(readFileSync(logFile, "utf8").split("\n").filter((l) => /✗|Error|threw/.test(l)).slice(-15).join("\n") + `\n  full log: ${logFile}`);
+      resolve();
+    });
+  });
+}
+
+const queue = suites.map((name, i) => [name, i]);
+await Promise.all(Array.from({ length: Math.min(jobs, queue.length) }, async () => {
+  for (let next = queue.shift(); next; next = queue.shift()) await runSuite(...next);
+}));
+const failed = results.filter((r) => r.code !== 0);
+console.log(`\n${results.length - failed.length}/${results.length} suites passed in ${((Date.now() - t00) / 1000).toFixed(1)}s (${jobs} parallel)`);
+process.exit(failed.length ? 1 : 0);

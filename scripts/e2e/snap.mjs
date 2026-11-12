@@ -24,13 +24,14 @@ import { MockGitHub } from "./mock-github.mjs";
 import { geometryBounds } from "../../src/shared/geo.ts";
 import { flatFit } from "../../src/shared/region.ts";
 
+import { port } from "./ports.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 const sharp = require("sharp");
 
 const OUT = path.resolve(".e2e/snap");
 const BRANCH = "test/snap";
-const SITE = "http://localhost:4173";
+const SITE = `http://localhost:${port(4173)}`;
 await mkdir(OUT, { recursive: true });
 
 const results = [];
@@ -81,7 +82,7 @@ const server = createServer(async (req, res) => {
   if (!p.startsWith(DIST) || !existsSync(p)) return res.writeHead(404).end();
   res.writeHead(200, { "Content-Type": TYPES[path.extname(p)] ?? "application/octet-stream", "Cache-Control": "no-store" });
   res.end(await readFile(p));
-}).listen(4173, "localhost");
+}).listen(port(4173), "localhost");
 
 const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
 

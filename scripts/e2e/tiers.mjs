@@ -13,7 +13,7 @@
  * Screenshots (the region at 4096 and at 8192) and report.json go to .e2e/tiers/. Exits non-zero if any check fails.
  */
 import { createServer } from "node:http";
-import { cpSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync, existsSync, statSync, mkdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, existsSync, statSync, mkdirSync } from "node:fs";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -21,12 +21,14 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+import { port } from "./ports.mjs";
+import { copyRepo } from "./fixture.mjs";
 const require = createRequire(path.join(ROOT, "package.json"));
 const sharp = require("sharp");
 const { chromium, devices } = require("playwright");
 
 const OUT = path.resolve(".e2e/tiers");
-const SITE = "http://localhost:4174";
+const SITE = `http://localhost:${port(4174)}`;
 await mkdir(OUT, { recursive: true });
 
 const results = [];
@@ -52,9 +54,7 @@ function mapSvg(W, H) {
 }
 
 const dir = mkdtempSync(path.join(tmpdir(), "wge-tiers-"));
-for (const f of ["package.json", "tsconfig.json", "vite.config.ts", "eslint.config.js", "admin", "content", "public", "schema", "scripts", "src"])
-  cpSync(path.join(ROOT, f), path.join(dir, f), { recursive: true });
-symlinkSync(path.join(ROOT, "node_modules"), path.join(dir, "node_modules"), "dir");
+copyRepo(dir);
 await sharp(Buffer.from(mapSvg(8192, 4096))).png().toFile(path.join(dir, "content/incoming/big-map.png"));
 await sharp(Buffer.from(mapSvg(6000, 3000))).png().toFile(path.join(dir, "content/incoming/mid-map.png"));
 const run = (cmd, args) => execFileSync(cmd, args, { cwd: dir, env: { ...process.env, GITHUB_ACTOR: "e2e" }, stdio: "pipe" });
@@ -93,7 +93,7 @@ const site = createServer(async (req, res) => {
   if (!p.startsWith(DIST) || !existsSync(p)) return res.writeHead(404).end();
   res.writeHead(200, { "Content-Type": TYPES[path.extname(p)] ?? "application/octet-stream", "Cache-Control": "no-store" });
   res.end(await readFile(p));
-}).listen(4174, "localhost");
+}).listen(port(4174), "localhost");
 
 const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
 
