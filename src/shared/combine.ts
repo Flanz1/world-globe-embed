@@ -132,7 +132,7 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
   if (polygons.length > PARTS_MAX) errors.push(`Together these regions have ${polygons.length} parts; a region can have at most ${PARTS_MAX}.`);
   const geometry: RegionGeometry = polygons.length === 1 ? { type: "Polygon", coordinates: polygons[0] } : { type: "MultiPolygon", coordinates: polygons };
   const vertices = vertexCount(geometry);
-  if (vertices > MAX_VERTICES) errors.push(`Together these regions have ${vertices} vertices; a region can have at most ${MAX_VERTICES}. Simplify some of them first.`);
+  if (vertices > MAX_VERTICES) errors.push(`Together these regions have ${vertices} vertices; a region can have at most ${MAX_VERTICES.toLocaleString("en")}. Leave some of them out.`);
 
   const others = regionBases(sources).filter((b) => baseKey(b) !== baseKey(target.base));
   for (const b of others)
