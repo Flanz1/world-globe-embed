@@ -21,12 +21,13 @@ import { makeFixture, SLOT } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 
+import { port } from "./ports.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
 const OUT = path.resolve(".e2e/view");
 const BRANCH = "test/region-overlays";
-const SITE = "http://localhost:4173";
+const SITE = `http://localhost:${port(4173)}`;
 await mkdir(OUT, { recursive: true });
 
 const results = [];
@@ -59,7 +60,7 @@ const site = createServer(async (req, res) => {
   if (!p.startsWith(DIST) || !existsSync(p)) return res.writeHead(404).end();
   res.writeHead(200, { "Content-Type": TYPES[path.extname(p)] ?? "application/octet-stream", "Cache-Control": "no-store" });
   res.end(await readFile(p));
-}).listen(4173, "localhost");
+}).listen(port(4173), "localhost");
 
 const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
 const ready = (frame) => frame.waitForFunction(() => ["hires", "interactive", "fallback"].includes(document.documentElement.dataset.state), null, { timeout: 30000 });

@@ -22,6 +22,7 @@
     "test": "vitest run",
     "measure": "node scripts/measure.mjs",
     "check": "npm run typecheck && npm run lint && npm test",
+    "e2e": "node scripts/e2e/run.mjs",
     "e2e:regions": "tsx scripts/e2e/regions.mjs",
     "e2e:coast": "tsx scripts/e2e/coast.mjs",
     "e2e:contested": "tsx scripts/e2e/contested.mjs",
