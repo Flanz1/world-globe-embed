@@ -304,7 +304,7 @@ export async function start(ctx: StartContext): Promise<void> {
     g.clearRect(0, 0, W, H);
     // Clashes are worked out once per region (or live update), not per redraw.
     if (specFor !== reg) {
-      spec = regionPaintSpec(reg, R?.clash ?? true);
+      spec = regionPaintSpec(reg);
       specFor = reg;
     }
     // Map-image frame → texture pixels, exactly like the map texture's own UVs.

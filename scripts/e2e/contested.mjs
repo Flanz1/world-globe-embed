@@ -6,7 +6,7 @@
  * 1. Builds the e2e fixture (scripts/e2e/fixture.mjs) plus a few overlapping regions, with the admin
  *    page pointed at the branch test/contested.
  * 2. Embeds (globe and flat, cross-origin iframe, padded and shifted slot): dashed borders, hatching,
- *    the "Contested" legend row, key=0, build-time clash data and clash=0.
+ *    the "Contested" legend row, key=0, and other regions on the slot never marking each other.
  * 3. Pixel identity: a region without zones or overlaps renders exactly like a build of origin/main
  *    (skipped with a note if origin/main can't be checked out).
  * 4. Editor against the mocked GitHub API: contested zones (polygon, freehand, picker, Parts list),
@@ -249,36 +249,26 @@ for (const view of want("embed") ? ["flat", "globe"] : []) {
     await k0.ctx.close();
   });
 
-  await step(G, "cross-region overlap from the build-time clash data", async () => {
+  await step(G, "other regions on the slot never mark this one", async () => {
+    // contested-neighbour overlaps contested-test, but each region is its own map: no clash data, no marks.
     const data = await (await fetch(`${SITE}/regions/contested-test.json`)).json();
-    check(G, "regions/contested-test.json has the neighbour's ring as clash data", JSON.stringify(data.clash) === JSON.stringify([[box(...NEIGHBOUR).slice(0, -1)]]), JSON.stringify(data.clash));
+    check(G, "regions/contested-test.json carries nothing about the neighbour", data.clash === undefined && !JSON.stringify(data).includes("2979ff"), JSON.stringify(data.clash));
+    const nd = await (await fetch(`${SITE}/regions/contested-neighbour.json`)).json();
+    check(G, "regions/contested-neighbour.json carries nothing about contested-test", nd.clash === undefined, JSON.stringify(nd.clash));
+    // Old embed codes may still carry clash=0: it's ignored, and the picture is the same either way.
     const on = await openEmbed(q());
     const off = await openEmbed(q("&clash=0"));
     const a = await raw(await canvasShot(on));
     const b = await raw(await canvasShot(off));
-    let inside;
-    let outside;
-    if (view === "flat") {
-      const at = flatMap();
-      const [x0, y0] = at(44.3, -8.3);
-      const [x1, y1] = at(45.7, -13.7);
-      inside = diffCount(a, b, { x0: Math.round(x0), y0: Math.round(y0), x1: Math.round(x1), y1: Math.round(y1) });
-      const [ox0, oy0] = at(12, -12);
-      const [ox1, oy1] = at(34, -19);
-      outside = diffCount(a, b, { x0: Math.round(ox0), y0: Math.round(oy0), x1: Math.round(ox1), y1: Math.round(oy1) });
-      check(G, "clash=0 changes only the overlap with the other region", inside > 5 && outside === 0, `${inside} px differ inside the overlap, ${outside} elsewhere`);
-    } else {
-      inside = diffCount(a, b, { x0: 0, y0: 0, x1: a.info.width, y1: a.info.height });
-      check(G, "clash=0 turns the cross-region marks off", inside > 5, `${inside} px differ`);
-    }
-    await writeFile(path.join(OUT, `embed-${view}-clash0.png`), await canvasShot(off));
-    check(G, "no errors with or without clash=0", on.errors.length === 0 && off.errors.length === 0, [...on.errors, ...off.errors].join(" | "));
+    const d = diffCount(a, b, { x0: 0, y0: 0, x1: a.info.width, y1: a.info.height });
+    check(G, "nothing changes with an old clash=0 param (no cross-region marks to turn off)", d === 0, `${d} px differ`);
+    check(G, "no errors", on.errors.length === 0 && off.errors.length === 0, [...on.errors, ...off.errors].join(" | "));
     await on.ctx.close();
     await off.ctx.close();
-    // The neighbour's own embed shows the overlap with the zone too.
+    // The neighbour's own embed is a plain region: no "Contested" row, no hatching.
     const n = await openEmbed(`${SITE}/v/${SLOT.slug}/?region=contested-neighbour${view === "flat" ? "&view=flat" : ""}`);
     const nk = await n.frame.evaluate(() => [...document.querySelectorAll(".rkey li")].map((li) => li.textContent));
-    check(G, "the other region marks the overlap too (legend 'Contested')", JSON.stringify(nk) === '["Contested"]', JSON.stringify(nk));
+    check(G, "the other region shows no contested marks of its own (no legend rows)", nk.length === 0, JSON.stringify(nk));
     await writeFile(path.join(OUT, `embed-${view}-neighbour.png`), await canvasShot(n));
     await n.ctx.close();
   });
@@ -384,7 +374,8 @@ if (want("editor")) {
     check(A, "opens with two normal parts", start.parts.length === 2 && JSON.stringify(start.contested) === "[-1,-1]", JSON.stringify(start.contested));
     const list = await page.evaluate(() => [...document.querySelectorAll("dialog.editor .ed-clashes li")].map((li) => li.textContent));
     const imgs = await page.evaluate(() => document.querySelectorAll("dialog.editor img").length);
-    check(A, "overlap with another region is listed, its hostile name as plain text", list.length === 1 && list[0] === `Part 1 (${HOSTILE}) overlaps ${HOSTILE_N}` && imgs === 0 && dialogs.length === 0, JSON.stringify(list));
+    // Part 1 lies under the (hostile-named) neighbour, a different map: not an overlap.
+    check(A, "another region overlapping a part isn't listed as an overlap", list.length === 1 && list[0] === "No overlaps." && imgs === 0 && dialogs.length === 0, JSON.stringify(list));
   });
 
   await step(A, "contested zones", async () => {

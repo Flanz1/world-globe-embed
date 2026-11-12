@@ -21,11 +21,10 @@ import {
   simplifyRing,
   type Position,
   type RegionGeometry,
-  type Ring,
 } from "../../shared/geo.ts";
-import { findClashes, findClashesBetween, prepare, type Prepared } from "../../shared/clash.ts";
+import { findClashes, prepare, type Prepared } from "../../shared/clash.ts";
 import { paintSpec, traceGeometry, traceRing } from "../../shared/raster.ts";
-import { capClash, clashPolygon, paintSpecOf, partColours, type Clashes } from "../../shared/region-paint.ts";
+import { paintSpecOf, partColours, type Clashes } from "../../shared/region-paint.ts";
 import {
   DEFAULT_FILL_OPACITY,
   LEGEND_LABEL_MAX,
@@ -561,12 +560,11 @@ export function openEditor(o: EditorOptions): void {
   }
   const asGeometry = (p: Parts): RegionGeometry => ({ type: "MultiPolygon", coordinates: p.map((rings) => rings.map(closeRing)) });
 
-  /* ── Overlaps (clashes), with each other and with the neighbours ── */
-  const nbPolys: Ring[][] = [];
-  const nbOwner: { f: RegionFeature; p: number }[] = [];
-  for (const n of neighbours) polygonsOf(n.geometry).forEach((poly, p) => (nbPolys.push(poly), nbOwner.push({ f: n, p })));
-  let nbPreps: Prepared[] | null = null;
-  const nbPrepared = () => (nbPreps ??= nbPolys.map((poly) => prepare(poly)));
+  /*
+   * ── Overlaps (clashes) between this region's own parts ──
+   * Neighbours (other regions on the slot) are separate maps: they're drawn as outlines to trace against
+   * and snap to, but never compared with this region, so they can't make dashed lines or contested marks.
+   */
   type ClashState = { version: number; preps: Prepared[]; clashes: Clashes; spec: ReturnType<typeof paintSpecOf> };
   let clashCache: ClashState | null = null;
   /** During a drag: the clashes where it began, and which parts the drag moves. */
@@ -586,14 +584,13 @@ export function openEditor(o: EditorOptions): void {
       preps = ps.map((r, i) => (mv.has(i) ? prepare(r) : base.cs.preps[i]));
       clashes = {
         internal: [...base.cs.clashes.internal.filter(([i, j]) => !mv.has(i) && !mv.has(j)), ...findClashes(preps, mv)],
-        external: [...base.cs.clashes.external.filter(([i]) => !mv.has(i)), ...findClashesBetween(preps, nbPrepared(), mv)],
       };
     } else {
       preps = ps.map((r) => prepare(r));
-      clashes = { internal: findClashes(preps), external: findClashesBetween(preps, nbPrepared()) };
+      clashes = { internal: findClashes(preps) };
     }
     const st = hist.state;
-    const spec = paintSpecOf({ color: st.props.color, legend: st.props.legend, parts: st.styles, contested: st.contested, geometry: asGeometry(ps) }, clashes, nbPolys);
+    const spec = paintSpecOf({ color: st.props.color, legend: st.props.legend, parts: st.styles, contested: st.contested, geometry: asGeometry(ps) }, clashes);
     clashCache = { version: hist.version, preps, clashes, spec };
     return clashCache;
   }
@@ -601,12 +598,6 @@ export function openEditor(o: EditorOptions): void {
   function beginClashDrag(moving: Iterable<number>): void {
     dragBase = { cs: clashState(), moving: new Set(moving) };
   }
-  const neighbourName = (e: number): string => {
-    const o = nbOwner[e];
-    if (!o) return "another region";
-    const pl = o.f.properties.partLabels?.[o.p];
-    return (typeof pl === "string" && pl.trim()) || o.f.properties.name?.trim() || o.f.id;
-  };
   const partName = (p: number): string => {
     const t = hist.state.labels[p]?.trim();
     return t ? `part ${p + 1} (${t})` : `part ${p + 1}`;
@@ -624,7 +615,6 @@ export function openEditor(o: EditorOptions): void {
       if (c[i] === j || c[j] === i) continue;
       rows.push(h("li", { dataset: { clash: `${i}:${j}` } }, `${cap(partName(i))} overlaps ${partName(j)}`));
     }
-    for (const [i, e] of cs.clashes.external) rows.push(h("li", { dataset: { clash: `${i}:n${e}` } }, `${cap(partName(i))} overlaps `, h("em", { textContent: neighbourName(e) })));
     if (!rows.length) rows.push(h("li", { className: "muted", textContent: "No overlaps." }));
     clashList.replaceChildren(...rows);
   }
@@ -936,8 +926,6 @@ export function openEditor(o: EditorOptions): void {
     ...(({ geometry, partLegend, partLabels, partContested }) => ({ geometry, parts: partLegend, labels: partLabels.map((t) => t.slice(0, PART_LABEL_MAX)), contested: partContested }))(
       toStyledGeometry(parts(), hist.state.styles, hist.state.labels, hist.state.contested),
     ),
-    // What the build will add: the neighbours' polygons this region overlaps.
-    clash: capClash([...new Set(clashState().clashes.external.map(([, e]) => e))].sort((a, b) => a - b).map((e) => clashPolygon(nbPolys[e]))),
   });
   let previewRaf = 0;
   let lastSent = -1;

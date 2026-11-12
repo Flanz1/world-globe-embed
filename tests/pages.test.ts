@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generatePreviewPage, generateRegionFiles, generateSlotPages } from "../scripts/lib/pages.ts";
 import { defaultEmbedOptions, regionEmbedCode } from "../src/shared/embed.ts";
-import { capClash } from "../src/shared/region-paint.ts";
 import type { RegionFeature } from "../src/shared/region.ts";
 import type { Content } from "../scripts/lib/content.ts";
 import type { MapMeta } from "../src/shared/types.ts";
@@ -169,35 +168,19 @@ describe("regions in the build", () => {
     expect(file.json).not.toMatch(/\n/);
   });
 
-  it("adds the other regions' overlapping polygons as clash data, and contested zones", () => {
+  it("never adds other regions' overlaps (each region is its own map), and keeps contested zones", () => {
     const sq = (x: number, y: number, s = 10): [number, number][] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s], [x, y]];
     const base = { $schema: "../../schema/region.schema.json", type: "Feature" as const };
     const a = { ...base, id: "a", properties: { slot: "aerthos", map: "terra", color: "#c33", partContested: [-1, 0] }, geometry: { type: "MultiPolygon" as const, coordinates: [[sq(0, 0)], [sq(8, 0, 4)]] } };
+    // b overlaps a on the same slot: a different map, so neither gets anything from the other.
     const b = { ...base, id: "b", properties: { slot: "aerthos", map: "terra", color: "#33c" }, geometry: { type: "MultiPolygon" as const, coordinates: [[sq(5, 5)], [sq(60, 0)]] } };
-    const far = { ...base, id: "far", properties: { slot: "aerthos", map: "terra", color: "#3c3" }, geometry: { type: "Polygon" as const, coordinates: [sq(100, 0)] } };
-    const other = { ...base, id: "other", properties: { slot: "plain", map: "terra", color: "#3c3" }, geometry: { type: "Polygon" as const, coordinates: [sq(0, 0)] } };
-    const files = generateRegionFiles({ ...content, regions: new Map([["a", a], ["b", b], ["far", far], ["other", other]] as [string, RegionFeature][]) });
+    const files = generateRegionFiles({ ...content, regions: new Map([["a", a], ["b", b]] as [string, RegionFeature][]) });
     const get = (id: string) => JSON.parse(files.find((f) => f.path === `regions/${id}.json`)!.json);
-    // a's part 1 clashes with b's first polygon (open rings, no names or colours).
-    expect(get("a").clash).toEqual([[sq(5, 5).slice(0, -1)]]);
+    expect(get("a").clash).toBeUndefined();
+    expect(get("b").clash).toBeUndefined();
     expect(get("a").contested).toEqual([-1, 0]);
-    expect(get("b").clash).toEqual([[sq(0, 0).slice(0, -1)]]);
     expect(get("b").contested).toBeUndefined();
-    expect(get("far").clash).toBeUndefined();
-    // Another slot never counts.
-    expect(get("other").clash).toBeUndefined();
-    expect(JSON.stringify(get("a").clash)).not.toMatch(/#|name/);
-  });
-
-  it("caps clash data with Douglas–Peucker", () => {
-    const ring: [number, number][] = Array.from({ length: 3000 }, (_, i) => {
-      const t = (i / 3000) * Math.PI * 2;
-      return [Math.cos(t) * 10, Math.sin(t) * 5 + 0.001 * Math.sin(i)];
-    });
-    const out = capClash([[ring]]);
-    const n = out.reduce((s, p) => s + p.reduce((m, r) => m + r.length, 0), 0);
-    expect(n).toBeLessThanOrEqual(2000);
-    expect(n).toBeGreaterThan(20);
+    expect(JSON.stringify(get("a"))).not.toContain("#33c");
   });
 
   it("re-checks region data in the generator", () => {
@@ -218,8 +201,8 @@ describe("regions in the build", () => {
   });
 
   it("embed URL options: flat, label off, dim, start unlocked, custom domain", () => {
-    const code = regionEmbedCode("https://maps.example.org/", "aerthos", "Aerthos", { id: "vael", name: "Vael", label: true }, { view: "flat", height: 600, label: false, dim: true, lock: false, key: false, clash: false });
-    expect(code).toContain('src="https://maps.example.org/v/aerthos/?region=vael&amp;view=flat&amp;label=0&amp;dim=1&amp;lock=0&amp;key=0&amp;clash=0"');
+    const code = regionEmbedCode("https://maps.example.org/", "aerthos", "Aerthos", { id: "vael", name: "Vael", label: true }, { view: "flat", height: 600, label: false, dim: true, lock: false, key: false });
+    expect(code).toContain('src="https://maps.example.org/v/aerthos/?region=vael&amp;view=flat&amp;label=0&amp;dim=1&amp;lock=0&amp;key=0"');
     expect(code).toContain('height="600"');
   });
 });

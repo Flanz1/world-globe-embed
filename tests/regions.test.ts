@@ -274,36 +274,20 @@ describe("region colours and legend", () => {
     expect(regionData({ ...multi(), properties: { ...multi().properties, partContested: [-1, 0, -1] } }).contested).toEqual([-1, 0, -1]);
   });
 
-  it("parseRegionData keeps contested zones and validates clash data, dropping it when malformed", () => {
+  it("parseRegionData keeps contested zones and ignores cross-region clash data from older builds", () => {
     const d = regionData(multi());
     const ok = parseRegionData({ ...d, contested: [-1, 0, 0], clash: [[[[0, 0], [5, 0], [5, 5]]]] })!;
     expect(ok.contested).toEqual([-1, 0, 0]);
-    expect(ok.clash).toEqual([[[[0, 0], [5, 0], [5, 5]]]]);
-    // Older data without either still loads.
+    expect("clash" in ok).toBe(false);
+    // Malformed old clash data doesn't stop the region loading either.
+    expect(parseRegionData({ ...d, clash: "x" })).not.toBeNull();
+    // Older data without contested zones still loads.
     const older: Record<string, unknown> = { ...d };
     delete older.contested;
     expect(parseRegionData(older)!.contested).toEqual([-1, -1, -1]);
-    expect(parseRegionData(older)!.clash).toBeUndefined();
     // Bad contested entries become normal parts.
     expect(parseRegionData({ ...d, contested: [5, "x", -1] })!.contested).toEqual([-1, -1, -1]);
     expect(parseRegionData({ ...d, contested: [-1, 0] })!.contested).toEqual([-1, -1, -1]);
-    // Malformed clash: dropped, the region itself still loads.
-    const huge = Array.from({ length: 2100 }, (_, i) => [i % 180, 0]);
-    for (const clash of [
-      "x",
-      { a: 1 },
-      [[[[0, 0], [5, "0"], [5, 5]]]],
-      [[[[0, 0], [5, NaN], [5, 5]]]],
-      [[[[0, 0], [5, 0], [500, 5]]]],
-      [[[[0, 0], [5, 0]]]],
-      [[[[0, 0, 1], [5, 0], [5, 5]]]],
-      [[huge]],
-      [{ type: "Polygon" }],
-    ]) {
-      const r = parseRegionData({ ...d, clash });
-      expect(r, JSON.stringify(clash).slice(0, 40)).not.toBeNull();
-      expect(r!.clash).toEqual([]);
-    }
   });
 
   it("regionData and regionLayers group the parts by colour, region colour first", () => {

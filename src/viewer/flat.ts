@@ -386,7 +386,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     });
     const setRegion = (r: RegionData) => {
       reg = r;
-      spec = regionPaintSpec(r, R.clash);
+      spec = regionPaintSpec(r);
       regionKey?.set(R.key ? r.legend : [], r.legendTitle, R.key && hasContestedMarks(spec));
       const pts = (R.label ?? r.label) ? regionLabelPoints(r) : [];
       labelAt = pts.map((p) => p.at);

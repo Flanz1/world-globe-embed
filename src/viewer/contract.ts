@@ -53,8 +53,6 @@ export interface RegionContext {
   label: boolean | null;
   /** Show the region's legend, if it has one (key=0 hides it). */
   key: boolean;
-  /** Mark overlaps with other regions from the build-time clash data (clash=0 turns it off). */
-  clash: boolean;
   dim: boolean;
   /** Start locked on the selected position (lock=0 starts unlocked). */
   lock: boolean;

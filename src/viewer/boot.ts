@@ -97,7 +97,6 @@ if (regionId !== null) {
       subscribe,
       label: label === "1" ? true : label === "0" ? false : null,
       key: q.get("key") !== "0",
-      clash: q.get("clash") !== "0",
       dim: q.get("dim") === "1",
       lock: q.get("lock") !== "0",
       explicit,
