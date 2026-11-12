@@ -99,7 +99,7 @@ import {
   type VRef,
 } from "./model.ts";
 import { Coast, loadCoast, thinTrace } from "./coast.ts";
-import { findSnap, followBorders, insertOnEdges, partRings, sharedEdges, snapRing, traceBetween, vertexIndex, withGlued, type Snap, type SnapRing } from "./snap.ts";
+import { carryLines, findSnap, followBorders, lineCarry, type LineCarry, insertOnEdges, partRings, sharedEdges, snapRing, traceBetween, vertexIndex, withGlued, type Snap, type SnapRing } from "./snap.ts";
 
 export interface EditorOptions {
   gh: GitHub;
@@ -584,8 +584,11 @@ export function openEditor(o: EditorOptions): void {
         /** Snap targets for this drag, leaving out the rings being reshaped. */
         rings: SnapRing[];
         skip: (ring: number) => boolean;
+        /** Province borders as they were, and which points sit on outlines (they follow the vertices). */
+        baseLines: Position[][];
+        carry: LineCarry;
       }
-    | { kind: "shape"; base: Parts; part: number[] | null; w0: Position; moved: boolean }
+    | { kind: "shape"; base: Parts; part: number[] | null; w0: Position; moved: boolean; baseLines: Position[][]; carry: LineCarry }
     | { kind: "pan"; x0: number; y0: number; v0: typeof view }
     | { kind: "box"; x0: number; y0: number; x1: number; y1: number; add: boolean; refused?: string }
     | { kind: "free"; pts: Position[] }
@@ -2003,15 +2006,19 @@ export function openEditor(o: EditorOptions): void {
     if (hist.state !== s) return setMsg("The region changed while the warning was open, so nothing was deleted.", "error");
     const res = deleteParts(s.parts, [p]);
     const remapped = remapContested(s.contested, res.kept);
+    // Province borders that lay in the deleted part go with it.
+    const owners = lineCarry(s.parts, s.lines ?? [], s.contested).owners;
+    const keptLines = (s.lines ?? []).filter((_, l) => owners[l] !== p);
     setParts(
       `Delete part ${p + 1}`,
       res.parts,
-      undefined,
+      `del-lines:${p}`,
       res.kept.map((k) => s.styles[k] ?? OWN_COLOUR),
       res.kept.map((k) => s.labels[k] ?? ""),
       remapped.contested,
       res.kept.map((k) => s.locked[k] ?? false),
     );
+    if (keptLines.length !== (s.lines ?? []).length) hist.apply(`Delete part ${p + 1}`, { ...hist.state, lines: keptLines }, `del-lines:${p}`);
     selection.clear();
     selPart = -1;
     setMsg(`${name} deleted (undo brings it back).`);
@@ -2026,12 +2033,16 @@ export function openEditor(o: EditorOptions): void {
       const next = parts().map((rings, p) => rings.map((ring, r) => ring.map((pt, i) => (keys.has(vkey({ p, r, i })) ? ([pt[0] + dLon, Math.max(-90, Math.min(90, pt[1] + dLat))] as Position) : pt))));
       const prob = ringProblem(next, refs);
       if (prob) return setMsg(prob.message, "error");
-      setParts("Nudge", next, "nudge");
+      // Same parts, same count: the province borders pinned to the nudged vertices go with them.
+      const lb = lineBase(parts());
+      hist.apply("Nudge", { ...hist.state, parts: next, lines: carryLines(lb.baseLines, lb.carry, parts(), next, []) }, "nudge");
     } else if (parts().length) {
       const one = selPart >= 0 && !!parts()[selPart];
       const plan = moveSet(one ? selPart : null);
       if ("refused" in plan) return setMsg(plan.refused, "error");
-      setParts(one ? "Nudge part" : "Nudge shape", translate(parts(), plan.parts, dLon, dLat), one ? "nudge-part" : "nudge");
+      const moved = translate(parts(), plan.parts, dLon, dLat);
+      const lb = lineBase(parts());
+      hist.apply(one ? "Nudge part" : "Nudge shape", { ...hist.state, parts: moved, lines: carryLines(lb.baseLines, lb.carry, parts(), moved, plan.parts) }, one ? "nudge-part" : "nudge");
     }
     changed();
   }
@@ -2135,6 +2146,11 @@ export function openEditor(o: EditorOptions): void {
     changed();
   }
 
+  /** The lines as they are and what carries them, for a drag that starts from `base` parts. */
+  function lineBase(base: Parts): { baseLines: Position[][]; carry: LineCarry } {
+    const baseLines = hist.state.lines ?? [];
+    return { baseLines, carry: lineCarry(base, baseLines, hist.state.contested) };
+  }
   /** Snap targets for dragging `refs`: everything but the rings they belong to (so nothing snaps to itself). */
   function dragSnap(base: Parts, refs: VRef[]): { rings: SnapRing[]; skip: (ring: number) => boolean } {
     const rings = [...partRings(base), ...lineRings(), ...nbSnapRings, ...coastRings()];
@@ -2236,6 +2252,7 @@ export function openEditor(o: EditorOptions): void {
         label: chosen.length > 1 ? `Move ${chosen.length} vertices` : "Move vertex",
         toggle: was && e.shiftKey,
         ...dragSnap(parts(), refs),
+        ...lineBase(parts()),
       };
       return draw();
     }
@@ -2261,6 +2278,7 @@ export function openEditor(o: EditorOptions): void {
         label: "Insert vertex",
         toggle: false,
         ...dragSnap(ins.parts, ins.refs),
+        ...lineBase(ins.parts),
       };
       changed();
       return;
@@ -2298,7 +2316,8 @@ export function openEditor(o: EditorOptions): void {
       const moving = plan.parts;
       beginClashDrag(moving ?? parts().map((_, k) => k));
       hist.begin();
-      drag = { kind: "shape", base: parts(), part: moving, w0, moved: false };
+      const baseLines = hist.state.lines ?? [];
+      drag = { kind: "shape", base: parts(), part: moving, w0, moved: false, baseLines, carry: lineCarry(parts(), baseLines, hist.state.contested) };
       canvas.style.cursor = "move";
       return;
     }
@@ -2361,7 +2380,7 @@ export function openEditor(o: EditorOptions): void {
     if (drag.kind === "shape") {
       drag.moved = true;
       const next = translate(drag.base, drag.part, cursor[0] - drag.w0[0], cursor[1] - drag.w0[1]);
-      hist.preview({ ...hist.state, parts: next });
+      hist.preview({ ...hist.state, parts: next, lines: carryLines(drag.baseLines, drag.carry, drag.base, next, drag.part) });
       return changed();
     }
     // Vertex drag.
@@ -2386,7 +2405,7 @@ export function openEditor(o: EditorOptions): void {
       rings.map((ring, r) => ring.map((q, i) => (keys.has(vkey({ p, r, i })) ? ([q[0] + dLon, Math.max(-90, Math.min(90, q[1] + dLat))] as Position) : q))),
     );
     problem = ringProblem(next, refs);
-    hist.preview({ ...hist.state, parts: next });
+    hist.preview({ ...hist.state, parts: next, lines: carryLines(drag.baseLines, drag.carry, drag.base, next, []) });
     changed();
   });
 

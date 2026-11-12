@@ -118,6 +118,9 @@ async function click(lon, lat, mods = []) {
   await page.waitForTimeout(60);
 }
 /** Drags from a map position along a list of map positions. */
+async function clicks(pts) {
+  for (const [lon, lat] of pts) await click(lon, lat);
+}
 async function dragPath(pts, mods = []) {
   const [x0, y0] = await ed.xy(...pts[0]);
   for (const m of mods) await page.keyboard.down(m);
@@ -263,6 +266,34 @@ await step(A, "province border tool", async () => {
   check(A, "a province border is added as a line", lines.length === 1 && lines[0].length === 3, JSON.stringify(lines));
   check(A, "its ends snapped to the outline's corners", has(lines[0], [110, -56]) && has(lines[0], [100, -46]), JSON.stringify(lines));
   check(A, "the parts didn't change", JSON.stringify((await ed.state()).parts) === JSON.stringify(parts0));
+  // It belongs to part 1 (the big square): moving the part carries it, vertex drags slide its pinned ends.
+  const L0 = lines[0];
+  await page.keyboard.press("v");
+  await dragPath([[108, -48], [109.5, -48], [111, -48]]);
+  lines = await call("lines");
+  check(A, "moving the part moves its province border too", lines[0].every((q, i) => Math.abs(q[0] - (L0[i][0] + 3)) < 0.06 && Math.abs(q[1] - L0[i][1]) < 0.06), JSON.stringify(lines));
+  await undo();
+  lines = await call("lines");
+  check(A, "undo puts both back", JSON.stringify(lines) === JSON.stringify([L0]));
+  await dragPath([[110, -56], [110, -57], [110, -58]]);
+  lines = await call("lines");
+  check(
+    A,
+    "dragging a vertex the border is attached to takes that end of the border with it; the free point stays",
+    Math.abs(lines[0][0][1] + 58) < 0.06 && Math.abs(lines[0][0][0] - 110) < 0.06 && lines[0][1][0] === L0[1][0] && lines[0][1][1] === L0[1][1],
+    JSON.stringify(lines),
+  );
+  await undo();
+  // Cut a bite out of the part: the border stays where it was (only what's inside the parts shows).
+  await page.click('dialog.editor button[data-act="cut-hole"]');
+  await page.keyboard.press("p");
+  await clicks([[108, -50], [112, -50], [112, -44], [108, -44]]);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(150);
+  lines = await call("lines");
+  check(A, "cutting the part leaves its province border", JSON.stringify(lines) === JSON.stringify([L0]), JSON.stringify(lines));
+  await undo();
+  await page.keyboard.press("v");
   // Select it by clicking and delete it.
   await click(107.5, -53.5);
   await page.keyboard.press("Delete");

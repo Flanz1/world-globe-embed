@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Position } from "../src/shared/geo.ts";
-import { findSnap, followBorders, insertOnEdges, partRings, posKey, sharedEdges, snapRing, traceBetween, tracePath, vertexIndex, withGlued } from "../src/admin/editor/snap.ts";
+import { carryLines, lineCarry, lineOwners, linePins, findSnap, followBorders, insertOnEdges, partRings, posKey, sharedEdges, snapRing, traceBetween, tracePath, vertexIndex, withGlued } from "../src/admin/editor/snap.ts";
 import type { Parts } from "../src/admin/editor/model.ts";
 
 // 1 degree = 10 px, square pixels.
@@ -152,5 +152,52 @@ describe("attached vertices", () => {
       { kind: "part", p: 0, r: 0 },
       { kind: "part", p: 1, r: 0 },
     ]);
+  });
+});
+
+describe("province borders follow their part", () => {
+  const A = square(0, 0);
+  const B = square(10, 0);
+  const parts: Parts = [[A], [B]];
+  // A line inside A from its bottom edge midpoint (5, 0) up to (5, 10)'s top edge, with a free point at (5, 5).
+  const lines: Position[][] = [[[5, 0], [5, 5], [5, 10]]];
+  it("assigns each line to the part it lies in", () => {
+    expect(lineOwners(parts, lines)).toEqual([0]);
+    expect(lineOwners(parts, [[[15, 2], [15, 8]]])).toEqual([1]);
+    expect(lineOwners(parts, [[[50, 2], [50, 8]]])).toEqual([-1]);
+  });
+  it("finds the points on outlines, with the edge and fraction", () => {
+    const pins = linePins(parts, lines);
+    expect(pins.map((q) => [q.k, q.p, q.e])).toEqual([[0, 0, 0], [2, 0, 2]]);
+    expect(pins[0].t).toBeCloseTo(0.5);
+  });
+  it("moving the part carries the whole line", () => {
+    const carry = lineCarry(parts, lines);
+    const moved: Parts = [[A.map(([x, y]) => [x + 3, y + 2] as Position)], [B]];
+    const out = carryLines(lines, carry, parts, moved, [0]);
+    expect(out[0]).toEqual([[8, 2], [8, 7], [8, 12]]);
+  });
+  it("moving another part leaves it", () => {
+    const carry = lineCarry(parts, lines);
+    const moved: Parts = [[A], [B.map(([x, y]) => [x + 3, y] as Position)]];
+    expect(carryLines(lines, carry, parts, moved, [1])[0]).toEqual(lines[0]);
+  });
+  it("dragging a vertex slides the pinned points along their edges, the free point stays", () => {
+    const carry = lineCarry(parts, lines);
+    // Pull A's bottom-right corner (10, 0) down to (10, -4): the bottom edge's midpoint moves to (5, -2).
+    const dragged: Parts = [[[[0, 0], [10, -4], [10, 10], [0, 10]]], [B]];
+    const out = carryLines(lines, carry, parts, dragged, [])[0];
+    expect(out[0][0]).toBeCloseTo(5);
+    expect(out[0][1]).toBeCloseTo(-2);
+    expect(out[1]).toEqual([5, 5]);
+    expect(out[2]).toEqual([5, 10]);
+  });
+  it("is the same across the antimeridian copy", () => {
+    const west: Parts = [[square(170, 0)]];
+    const line: Position[][] = [[[-185, 0], [-185, 10]]]; // lon 175 in another copy
+    expect(lineOwners(west, line)).toEqual([0]);
+    const carry = lineCarry(west, line);
+    const moved: Parts = [[square(172, 0)]];
+    expect(carryLines(line, carry, west, moved, [0])[0][0][0]).toBeCloseTo(-183);
   });
 });

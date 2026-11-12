@@ -345,3 +345,157 @@ export function insertOnEdges(parts: Parts, edges: readonly VRef[], pos: Positio
   }
   return { parts: out, refs };
 }
+
+/* ── Province borders follow their part ── */
+
+/**
+ * Province borders are stored as plain lines, but they belong to the part they lie in and follow it:
+ * moving the part moves them, and a line point sitting on an outline (snapped to a vertex or a line
+ * of the part) stays on it when the outline's vertices move. Nothing about this is stored: ownership
+ * and attachment are worked out from the geometry when an edit starts (see carryLines), so cutting,
+ * splitting and combining parts leave the lines where they are.
+ */
+
+const lonNear = (lon: number, near: number) => lon + 360 * Math.round((near - lon) / 360);
+
+function inPart(rings: readonly Position[][], pt: Position): boolean {
+  if (!rings[0]?.length) return false;
+  const p: Position = [lonNear(pt[0], rings[0][0][0]), pt[1]];
+  const inside = (ring: readonly Position[]) => {
+    let c = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i];
+      const [xj, yj] = ring[j];
+      if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  };
+  return inside(rings[0]) && !rings.slice(1).some((h) => inside(h.map(([x, y]) => [lonNear(x, rings[0][0][0]), y] as Position)));
+}
+
+/** The part each line lies in (most of its points and segment midpoints inside it; contested zones don't own lines), or -1. */
+export function lineOwners(parts: Parts, lines: readonly Position[][], contested: readonly number[] = []): number[] {
+  return lines.map((line) => {
+    const samples: Position[] = [];
+    line.forEach((pt, i) => {
+      samples.push(pt);
+      if (i) samples.push([(pt[0] + line[i - 1][0]) / 2, (pt[1] + line[i - 1][1]) / 2]);
+    });
+    let best = -1;
+    let bestN = 0;
+    parts.forEach((rings, p) => {
+      if ((contested[p] ?? -1) >= 0) return;
+      const n = samples.filter((s) => inPart(rings, s)).length;
+      if (n > bestN) {
+        bestN = n;
+        best = p;
+      }
+    });
+    return best;
+  });
+}
+
+/** A line point on a part's outline: line l, point k, on edge e (e → e + 1) of ring (p, r) at fraction t. */
+export interface LinePin {
+  l: number;
+  k: number;
+  p: number;
+  r: number;
+  e: number;
+  t: number;
+}
+
+/** The line points that sit on an outline (within `eps` degrees), each with the edge it's on. */
+export function linePins(parts: Parts, lines: readonly Position[][], eps = 1e-6, owners: readonly number[] = []): LinePin[] {
+  const out: LinePin[] = [];
+  lines.forEach((line, l) =>
+    line.forEach((pt, k) => {
+      let best: LinePin | null = null;
+      let bestD = eps;
+      // A point on an outline the line's own part shares with another part is pinned to its own part's edge.
+      const own = owners[l] ?? -1;
+      const order = parts.map((_, p) => p).sort((a, b) => Number(b === own) - Number(a === own));
+      const seen = new Set<number>();
+      order.forEach((p) => {
+        if (seen.size && best && own >= 0 && p !== own) return;
+        seen.add(p);
+        const rings = parts[p];
+        rings.forEach((ring, r) => {
+          const n = ring.length;
+          for (let e = 0; e < n; e++) {
+            const a = ring[e];
+            const b = ring[(e + 1) % n];
+            const ax = lonNear(a[0], pt[0]);
+            const bx = ax + (b[0] - a[0]);
+            const dx = bx - ax;
+            const dy = b[1] - a[1];
+            const len2 = dx * dx + dy * dy;
+            if (!len2) continue;
+            const t = Math.max(0, Math.min(1, ((pt[0] - ax) * dx + (pt[1] - a[1]) * dy) / len2));
+            const d = Math.hypot(pt[0] - (ax + t * dx), pt[1] - (a[1] + t * dy));
+            if (d <= bestD) {
+              bestD = d;
+              best = { l, k, p, r, e, t };
+            }
+          }
+        });
+      });
+      if (best) out.push(best);
+    }),
+  );
+  return out;
+}
+
+export interface LineCarry {
+  pins: LinePin[];
+  owners: number[];
+}
+
+/** What an edit needs to know up front to carry the lines along (computed on the parts before the edit). */
+export function lineCarry(parts: Parts, lines: readonly Position[][], contested: readonly number[] = []): LineCarry {
+  const owners = lineOwners(parts, lines, contested);
+  return { pins: linePins(parts, lines, 1e-6, owners), owners };
+}
+
+/**
+ * The lines after an edit that kept every part and vertex index (a move, nudge or vertex drag):
+ * `before`/`after` are the parts either side. Lines owned by a part in `moved` (null: all parts; [] :
+ * none) shift by the part's displacement; every point pinned to an outline is then put back on that
+ * outline's edge, wherever the edge's vertices went.
+ */
+export function carryLines(lines: readonly Position[][], carry: LineCarry, before: Parts, after: Parts, moved: readonly number[] | null): Position[][] {
+  const out = lines.map((l) => l.map(([x, y]) => [x, y] as Position));
+  const pinned = new Set(carry.pins.map((q) => `${q.l}:${q.k}`));
+  // Displacement of a moved part: how far its first vertex went.
+  const shift = (p: number): [number, number] => {
+    const a = before[p]?.[0]?.[0];
+    const b = after[p]?.[0]?.[0];
+    return a && b ? [b[0] - a[0], b[1] - a[1]] : [0, 0];
+  };
+  const all = moved === null;
+  const set = new Set(moved ?? []);
+  out.forEach((line, l) => {
+    const o = carry.owners[l];
+    if (o < 0 || !(all || set.has(o))) return;
+    const [dx, dy] = shift(o);
+    if (!dx && !dy) return;
+    line.forEach((pt, k) => {
+      if (pinned.has(`${l}:${k}`)) return;
+      pt[0] += dx;
+      pt[1] = Math.max(-90, Math.min(90, pt[1] + dy));
+    });
+  });
+  for (const q of carry.pins) {
+    const ring = after[q.p]?.[q.r];
+    const was = out[q.l]?.[q.k];
+    if (!ring || !was) continue;
+    const a = ring[q.e];
+    const b = ring[(q.e + 1) % ring.length];
+    if (!a || !b) continue;
+    const old = before[q.p][q.r][q.e];
+    // Same copy of the map as the point was in.
+    const ax = a[0] + (lonNear(old[0], lines[q.l][q.k][0]) - old[0]);
+    out[q.l][q.k] = [ax + q.t * (b[0] - a[0]), a[1] + q.t * (b[1] - a[1])];
+  }
+  return out;
+}
