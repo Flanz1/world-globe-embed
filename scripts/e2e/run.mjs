@@ -12,8 +12,9 @@ import { spawn } from "node:child_process";
 import { mkdirSync, createWriteStream, readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const HERE = path.dirname(new URL(import.meta.url).pathname);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Slowest first, so the long ones start immediately and short ones fill the gaps.
 const ALL = ["contested", "regions", "snap", "merge", "coast", "cut", "locks", "ring-select", "tiles", "tiers", "view", "upload"];
 
