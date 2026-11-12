@@ -122,8 +122,8 @@ export interface PaintSpec {
 /** National borders: dark ink over a light parchment casing; provincial: fine ink dots. Widths in line widths. */
 export const BORDER_INK = "rgba(20,14,10,0.95)";
 export const BORDER_CASING = "rgba(243,230,200,0.85)";
-export const NATIONAL_W = 1.75;
-export const CASING_W = 3;
+export const NATIONAL_W = 1;
+export const CASING_W = 1.8;
 export const PROVINCIAL_W = 1.2;
 export const PROVINCIAL_GAP = 2.5;
 

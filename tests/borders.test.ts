@@ -58,7 +58,7 @@ describe("paint spec", () => {
   const base = { color: "#c0392b", legend: [{ label: "Breza", color: "#c0392b" }, { label: "Selbia", color: "#2e86c1" }], contested: [-1, -1, -1] };
   const geometry = { type: "MultiPolygon" as const, coordinates: [[box(0, 0, 10, 10)], [box(10, 0, 20, 10)], [box(20, 0, 30, 10)]] };
   it("a national border (different colours) makes the spec non-plain and hides the shared edges", () => {
-    const spec = regionPaintSpec({ ...base, parts: [0, 0, 1], geometry });
+    const spec = regionPaintSpec({ ...base, parts: [0, 0, 1], geometry, nationalBorders: true });
     expect(spec.plain).toBe(false);
     expect(spec.borders?.national).toHaveLength(1);
     expect(spec.parts[2].hide?.[0].size).toBe(1);
@@ -71,7 +71,7 @@ describe("paint spec", () => {
   });
   it("shared lines alone don't add a Contested legend row", async () => {
     const { hasContestedMarks } = await import("../src/shared/region-paint.ts");
-    expect(hasContestedMarks(regionPaintSpec({ ...base, parts: [0, 0, 1], geometry }))).toBe(false);
+    expect(hasContestedMarks(regionPaintSpec({ ...base, parts: [0, 0, 1], geometry, nationalBorders: true }))).toBe(false);
   });
   it("a region without shared lines stays plain", () => {
     const apart = { type: "MultiPolygon" as const, coordinates: [[box(0, 0, 10, 10)], [box(11, 0, 20, 10)], [box(21, 0, 30, 10)]] };
@@ -79,8 +79,14 @@ describe("paint spec", () => {
     expect(spec.plain).toBe(true);
     expect(spec.borders).toBeUndefined();
   });
+  it("parts that share a line just touch unless national borders are asked for", () => {
+    const spec = regionPaintSpec({ ...base, parts: [0, 0, 1], geometry });
+    expect(spec.plain).toBe(true);
+    expect(spec.borders).toBeUndefined();
+    expect(spec.parts.every((p) => !p.hide)).toBe(true);
+  });
   it("contested zones keep their own border", () => {
-    const spec = regionPaintSpec({ ...base, parts: [0, 0, 1], contested: [-1, 0, -1], geometry });
+    const spec = regionPaintSpec({ ...base, parts: [0, 0, 1], contested: [-1, 0, -1], geometry, nationalBorders: true });
     expect(spec.borders).toBeUndefined();
     expect(spec.parts.every((p) => !p.hide)).toBe(true);
   });

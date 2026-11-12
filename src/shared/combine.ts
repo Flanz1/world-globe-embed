@@ -160,6 +160,7 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
       label: sources.some((f) => f.properties.label ?? true),
       ...(desc ? { description: desc } : {}),
       ...(legendTitle ? { legendTitle } : {}),
+      ...(sources.some((f) => f.properties.nationalBorders === true) ? { nationalBorders: true } : {}),
       ...(legend.length ? { legend, partLegend: styles } : {}),
       partLabels: labels,
       ...(hasZones ? { partContested: contested } : {}),

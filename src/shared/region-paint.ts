@@ -6,11 +6,11 @@
  */
 import { regionBorders } from "./borders.ts";
 import { findClashes, prepare, type Prepared } from "./clash.ts";
-import { polygonsOf, type Ring } from "./geo.ts";
+import { polygonsOf, type Position, type Ring } from "./geo.ts";
 import type { PaintSpec } from "./raster.ts";
 import { OWN_COLOUR, regionLayers, type RegionData } from "./region.ts";
 
-export type PaintInput = Pick<RegionData, "color" | "legend" | "parts" | "contested" | "geometry" | "provinceBorders">;
+export type PaintInput = Pick<RegionData, "color" | "legend" | "parts" | "contested" | "geometry" | "provinceBorders" | "nationalBorders">;
 
 /** The colour each part is drawn in: its legend colour, else (for a contested zone) its parent's, else the region's. */
 export function partColours(r: Pick<RegionData, "color" | "legend" | "parts" | "contested">, n: number): string[] {
@@ -39,9 +39,12 @@ export function regionClashes(polys: Ring[][], prepared?: Prepared[]): Clashes {
 export function paintSpecOf(r: PaintInput, clashes: Clashes): PaintSpec {
   const polys = polygonsOf(r.geometry);
   const contested = polys.map((_, i) => (r.contested[i] ?? OWN_COLOUR) >= 0);
-  // Lines parts share exactly: national borders between different legend colours, hidden within one
-  // (the parts read as one province). Province borders are the region's own drawn lines.
-  const borders = regionBorders(polys, (i) => (contested[i] ? null : (r.parts[i] ?? OWN_COLOUR)));
+  // Only when the region asks for them: lines parts share exactly are national borders between different
+  // legend colours, hidden within one (the parts read as one province). Otherwise parts that touch just
+  // touch. Province borders are the region's own drawn lines.
+  const borders = r.nationalBorders
+    ? regionBorders(polys, (i) => (contested[i] ? null : (r.parts[i] ?? OWN_COLOUR)))
+    : { hide: polys.map((poly) => poly.map(() => new Set<number>())), national: [] as Position[][] };
   const provincial = r.provinceBorders ?? [];
   const hidden = borders.hide.some((poly) => poly.some((h) => h.size));
   const shared = hidden || borders.national.length > 0 || provincial.length > 0;

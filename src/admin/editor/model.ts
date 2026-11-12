@@ -37,6 +37,8 @@ export interface RegionProps {
   description: string;
   legendTitle: string;
   legend: LegendEntry[];
+  /** Draw national borders where parts share a line (off unless asked). */
+  nationalBorders?: boolean;
 }
 
 export interface EditorState {

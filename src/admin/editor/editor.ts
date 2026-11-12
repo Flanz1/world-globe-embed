@@ -177,6 +177,7 @@ function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"): Edit
       description: fp?.description ?? "",
       legendTitle: (fp?.legendTitle ?? "").slice(0, LEGEND_TITLE_MAX),
       legend,
+      nationalBorders: fp?.nationalBorders === true,
     },
   };
 }
@@ -289,6 +290,7 @@ export function openEditor(o: EditorOptions): void {
   const opacityIn = h("input", { type: "range", min: "0", max: "1", step: "0.05", value: String(hist.state.props.fillOpacity), name: "opacity" });
   const opacityOut = h("output", {});
   const labelIn = h("input", { type: "checkbox", checked: hist.state.props.label, name: "label" });
+  const borderIn = h("input", { type: "checkbox", checked: hist.state.props.nationalBorders === true, name: "national-borders" });
   const descIn = h("textarea", { maxLength: 500, rows: 3, value: hist.state.props.description, name: "description" });
   const stats = h("p", { className: "muted small ed-stats" });
   const keyTitleIn = h("input", { type: "text", maxLength: LEGEND_TITLE_MAX, placeholder: "Legend", value: hist.state.props.legendTitle, name: "legend-title" });
@@ -374,6 +376,7 @@ export function openEditor(o: EditorOptions): void {
         h("p", { className: "muted small", textContent: `Slot: ${slotName} · map: ${slot.map}` }),
         h("label", { className: "inline grow ed-fill" }, "Fill", opacityIn, opacityOut),
         h("label", { className: "check" }, labelIn, "Show part labels in embed"),
+        h("label", { className: "check", title: "Draw a dark border where parts of different colours share a line (parts of one colour read as one). Off: parts that touch just touch." }, borderIn, "Draw national borders"),
         h("label", {}, "Description (plain text)", descIn),
         h(
           "fieldset",
@@ -751,7 +754,7 @@ export function openEditor(o: EditorOptions): void {
       clashes = { internal: findClashes(preps) };
     }
     const st = hist.state;
-    const spec = paintSpecOf({ color: st.props.color, legend: st.props.legend, parts: st.styles, contested: st.contested, geometry: asGeometry(ps), ...(st.lines?.length ? { provinceBorders: st.lines } : {}) }, clashes);
+    const spec = paintSpecOf({ color: st.props.color, legend: st.props.legend, parts: st.styles, contested: st.contested, geometry: asGeometry(ps), ...(st.lines?.length ? { provinceBorders: st.lines } : {}), ...(st.props.nationalBorders ? { nationalBorders: true } : {}) }, clashes);
     clashCache = { version: hist.version, preps, clashes, spec };
     return clashCache;
   }
@@ -1225,6 +1228,7 @@ export function openEditor(o: EditorOptions): void {
     fillOpacity: hist.state.props.fillOpacity,
     label: hist.state.props.label,
     legendTitle: hist.state.props.legendTitle.slice(0, LEGEND_TITLE_MAX),
+    ...(hist.state.props.nationalBorders ? { nationalBorders: true } : {}),
     legend: hist.state.props.legend.map((e) => ({ label: e.label.slice(0, LEGEND_LABEL_MAX), color: e.color })),
     ...(({ geometry, partLegend, partLabels, partContested }) => ({ geometry, parts: partLegend, labels: partLabels.map((t) => t.slice(0, PART_LABEL_MAX)), contested: partContested }))(
       toStyledGeometry(parts(), hist.state.styles, hist.state.labels, hist.state.contested),
@@ -1256,6 +1260,7 @@ export function openEditor(o: EditorOptions): void {
     opacityIn.value = String(s.fillOpacity);
     opacityOut.value = `${Math.round(s.fillOpacity * 100)}%`;
     labelIn.checked = s.label;
+    borderIn.checked = s.nationalBorders === true;
     if (document.activeElement !== descIn) descIn.value = s.description;
     if (document.activeElement !== keyTitleIn) keyTitleIn.value = s.legendTitle;
     syncColours();
@@ -1276,6 +1281,7 @@ export function openEditor(o: EditorOptions): void {
   colorIn.addEventListener("input", () => (setProp("color", colorIn.value.toLowerCase(), "Default colour"), changed()));
   opacityIn.addEventListener("input", () => (setProp("fillOpacity", Number(opacityIn.value), "Fill opacity"), changed()));
   labelIn.addEventListener("change", () => (setProp("label", labelIn.checked, "Label"), changed()));
+  borderIn.addEventListener("change", () => (setProp("nationalBorders", borderIn.checked, "National borders"), changed()));
   descIn.addEventListener("input", () => (setProp("description", descIn.value, "Description"), changed()));
   keyTitleIn.addEventListener("input", () => (setProp("legendTitle", keyTitleIn.value.slice(0, LEGEND_TITLE_MAX), "Legend title"), changed()));
 
@@ -2920,6 +2926,7 @@ export function openEditor(o: EditorOptions): void {
         ...(hasZones ? { partContested } : {}),
         ...(partLocked.some((l) => !l) ? { partLocked } : {}),
         ...(provinceLines.length ? { provinceBorders: provinceLines } : {}),
+        ...(props.nationalBorders ? { nationalBorders: true } : {}),
         updated: stamp(),
         ...creatorFields(isNew),
         updatedBy: account(),
