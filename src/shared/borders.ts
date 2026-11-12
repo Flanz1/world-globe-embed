@@ -1,12 +1,14 @@
 /**
- * Shared borders: lines a region's part shares exactly with another part (a province border) or with
- * another region on the same slot (a national border). Two lines are shared when they join the same
- * two positions (either way round); the editor's snapping and border tracing make them so.
+ * Shared borders: lines two parts of a region share exactly. Between parts of different legend colours
+ * they're national borders; between parts of the same colour the parts read as one (the line isn't
+ * drawn at all). Two lines are shared when they join the same two positions (either way round); the
+ * editor's snapping and border tracing make them so. Other regions on the slot are separate maps and
+ * never count. Province borders are separate lines the editor draws (RegionData.provinceBorders).
  *
  * Rings may be open or closed (a closing position is ignored). Edge i of a ring runs from its open
  * ring's vertex i to vertex i + 1 (wrapping), so the indices match tracing the closed ring.
  */
-import { openRing, round, unwrapRing, wrapLon, type Position, type Ring } from "./geo.ts";
+import { openRing, unwrapRing, type Position, type Ring } from "./geo.ts";
 
 /** A key for a position, the same in every copy of the map. */
 const pkey = ([x, y]: Position): string => `${Math.round((((x % 360) + 360) % 360) * 1e6) % 360000000}:${Math.round(y * 1e6)}`;
@@ -52,20 +54,38 @@ function runsOf(open: Ring, shared: boolean[]): Position[][] {
   return out;
 }
 
-export interface InternalBorders {
-  /** Per polygon, per ring: the edges shared with another polygon (their coloured outline is left off). */
+export interface Borders {
+  /** Per polygon, per ring: the edges it shares with another polygon (their coloured outline is left off). */
   hide: Set<number>[][];
-  /** The shared lines, each once, as open polylines. */
-  lines: Position[][];
+  /** Lines between polygons of different groups (different legend colours): open polylines, each once. */
+  national: Position[][];
 }
 
 /**
- * Lines shared between this region's own polygons. `use(p)` false leaves polygon p out (contested
- * zones keep their own dashed border).
+ * Lines a region's polygons share exactly with each other. `group(p)` is polygon p's group (its legend
+ * colour), or null to leave it out (contested zones keep their own dashed border). A line between
+ * different groups is national; within one group it's only hidden.
  */
-export function internalBorders(polys: readonly Ring[][], use: (p: number) => boolean = () => true): InternalBorders {
+export function regionBorders(polys: readonly Ring[][], group: (p: number) => number | null): Borders {
+  const none = (): Borders => ({ hide: polys.map((poly) => poly.map(() => new Set<number>())), national: [] });
+  if (polys.length < 2) return none();
+  // Quick out: without a position two polygons share there are no shared lines (most regions, and every drag of a lone part).
+  const first = new Map<number, number>();
+  let any = false;
+  for (let p = 0; p < polys.length && !any; p++)
+    for (const ring of polys[p])
+      for (const [x, y] of ring) {
+        const k = Math.round((((x % 360) + 360) % 360) * 1e4) * 2e6 + Math.round((y + 90) * 1e4);
+        const o = first.get(k);
+        if (o === undefined) first.set(k, p);
+        else if (o !== p) {
+          any = true;
+          break;
+        }
+      }
+  if (!any) return none();
   const opened = polys.map((poly) => poly.map((r) => openRing(r)));
-  const keys = opened.map((poly, p) => (use(p) ? poly.map(ringKeys) : poly.map(() => [] as string[])));
+  const keys = opened.map((poly, p) => (group(p) === null ? poly.map(() => [] as string[]) : poly.map(ringKeys)));
   // Which polygons each line belongs to.
   const owners = new Map<string, number[]>();
   keys.forEach((poly, p) =>
@@ -79,52 +99,20 @@ export function internalBorders(polys: readonly Ring[][], use: (p: number) => bo
     ),
   );
   const hide: Set<number>[][] = opened.map((poly) => poly.map(() => new Set<number>()));
-  const lines: Position[][] = [];
+  const national: Position[][] = [];
   keys.forEach((poly, p) =>
     poly.forEach((ring, r) => {
-      const shared = ring.map((k) => !!k && (owners.get(k)?.length ?? 0) > 1);
-      shared.forEach((s, i) => s && hide[p][r].add(i));
+      const others = ring.map((k) => (k ? (owners.get(k) ?? []).filter((q) => q !== p) : []));
+      others.forEach((o, i) => o.length && hide[p][r].add(i));
       // Each line once: from the lowest-numbered polygon that has it.
-      const mine = ring.map((k, i) => shared[i] && Math.min(...owners.get(k)!) === p);
-      if (mine.some(Boolean)) lines.push(...runsOf(opened[p][r], mine));
+      const mine = others.map((o) => o.length > 0 && o.every((q) => q > p));
+      if (!mine.some(Boolean)) return;
+      const g = group(p);
+      const nat = others.map((o, i) => mine[i] && o.some((q) => group(q) !== g));
+      if (nat.some(Boolean)) national.push(...runsOf(opened[p][r], nat));
     }),
   );
-  return { hide, lines };
-}
-
-/**
- * Lines of this region's polygons (those with `use(p)`) that other regions' polygons share exactly.
- * Open polylines, in this region's positions.
- */
-export function nationalBorders(polys: readonly Ring[][], others: readonly Ring[][], use: (p: number) => boolean = () => true): Position[][] {
-  const theirs = new Set<string>();
-  for (const poly of others) for (const r of poly) for (const k of ringKeys(openRing(r))) if (k) theirs.add(k);
-  if (!theirs.size) return [];
-  const lines: Position[][] = [];
-  polys.forEach((poly, p) => {
-    if (!use(p)) return;
-    for (const r of poly) {
-      const open = openRing(r);
-      const shared = ringKeys(open).map((k) => !!k && theirs.has(k));
-      if (shared.some(Boolean)) lines.push(...runsOf(open, shared));
-    }
-  });
-  return lines;
-}
-
-/** Positions in a set of polylines. */
-export const lineCount = (lines: readonly Position[][]): number => lines.reduce((n, l) => n + l.length, 0);
-
-/** Polylines as the `shared` field stores them: wrapped, rounded. Dropped from the end past `max` positions. */
-export function storedLines(lines: readonly Position[][], max: number): Position[][] {
-  const out: Position[][] = [];
-  let n = 0;
-  for (const l of lines) {
-    if (l.length < 2 || n + l.length > max) continue;
-    n += l.length;
-    out.push(l.map(([x, y]) => [round(wrapLon(x)), round(y)] as Position));
-  }
-  return out;
+  return { hide, national };
 }
 
 /** Adds an open polyline (once per offset) to the current path, unwrapped so it can cross the antimeridian. */

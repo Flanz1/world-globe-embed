@@ -19,6 +19,7 @@ import {
   openRing,
   polygonsOf,
   round,
+  wrapLon,
   simplifyRing,
   unwrapRing,
   type Position,
@@ -43,6 +44,7 @@ import {
   normalizePartLegend,
   normalizePartLocked,
   PART_LABEL_MAX,
+  PROVINCE_BORDER_MAX,
   slugify,
   uniqueId,
   type RegionData,
@@ -116,8 +118,8 @@ export interface EditorOptions {
 }
 
 type Tool = "select" | "polygon" | "freehand";
-/** What the polygon and freehand tools draw: a part, a shape to cut away, a split line, a contested zone or land to add to a part. */
-type DrawTarget = "part" | "cut" | "split" | "contested" | "extend";
+/** What the polygon and freehand tools draw: a part, a shape to cut away, a split line, a contested zone, land to add to a part or a province border. */
+type DrawTarget = "part" | "cut" | "split" | "contested" | "extend" | "border";
 
 const HANDLE = 5;
 const HIT = 8;
@@ -158,6 +160,7 @@ function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"): Edit
     labels: normalizePartLabels(fp?.partLabels ?? legacy, parts.length),
     contested: normalizePartContested(fp?.partContested, parts.length),
     locked: normalizePartLocked(fp?.partLocked, parts.length),
+    lines: (fp?.provinceBorders ?? []).filter((l) => l.length >= 2).map((l) => unwrapRing(l.map(([x, y]) => [x, y] as Position))),
     props: {
       color: fp && REGION_COLOR.test(fp.color) ? expandHex(fp.color) : fallbackColour,
       fillOpacity: fp?.fillOpacity ?? DEFAULT_FILL_OPACITY,
@@ -300,6 +303,12 @@ export function openEditor(o: EditorOptions): void {
       btn("Split", "Draw a line right across a part to split it into separate parts", () => startDraw("split"), "split"),
       btn("Combine…", "Combine the selected part with parts that touch or nearly touch it into one part, filling small gaps (C)", () => openCombine(), "combine"),
       btn("Extend", "Draw a shape that touches the selected part to add it to that part (E)", () => startExtend(), "extend"),
+      btn(
+        "Province border",
+        "Draw a province border inside the region: a dotted line in the embed, shown only inside the parts. It doesn't change the parts. Click a border to select it; Delete removes it.",
+        () => startDraw("border"),
+        "province-border",
+      ),
       btn("Add contested zone", "Draw land a part claims but doesn't firmly hold (dashed in the embed)", () => addContested(), "add-contested"),
       h("span", { className: "sep" }),
       undoBtn,
@@ -501,6 +510,8 @@ export function openEditor(o: EditorOptions): void {
   let zoneParent = -1;
   /** The selected part (-1 for none): click inside it, its badge or its row. Separate from the vertex selection. */
   let selPart = -1;
+  /** The selected province border (-1 for none): click its line. */
+  let selLine = -1;
   /** Alt+click cycling through the parts under one spot. */
   let cycle: { x: number; y: number; list: number[]; i: number } | null = null;
   let pickHint = "";
@@ -656,7 +667,7 @@ export function openEditor(o: EditorOptions): void {
       clashes = { internal: findClashes(preps) };
     }
     const st = hist.state;
-    const spec = paintSpecOf({ color: st.props.color, legend: st.props.legend, parts: st.styles, contested: st.contested, geometry: asGeometry(ps) }, clashes);
+    const spec = paintSpecOf({ color: st.props.color, legend: st.props.legend, parts: st.styles, contested: st.contested, geometry: asGeometry(ps), ...(st.lines?.length ? { provinceBorders: st.lines } : {}) }, clashes);
     clashCache = { version: hist.version, preps, clashes, spec };
     return clashCache;
   }
@@ -721,6 +732,18 @@ export function openEditor(o: EditorOptions): void {
     syncClashList(cs);
     if (p.length) {
       paintSpec(g, cs.spec, sx, sy, offs, { fillOpacity: simplifyPreview ? s.fillOpacity * 0.4 : s.fillOpacity, lineWidth: 2 }, { w, h: hh });
+      const sl = (hist.state.lines ?? [])[selLine];
+      if (sl) {
+        g.save();
+        g.lineWidth = 4;
+        g.lineJoin = "round";
+        g.strokeStyle = "#ffd400";
+        g.globalAlpha = 0.7;
+        g.beginPath();
+        for (const off of offs) sl.forEach((pt, i) => (i ? g.lineTo(sx(pt[0] + off), sy(pt[1])) : g.moveTo(sx(pt[0] + off), sy(pt[1]))));
+        g.stroke();
+        g.restore();
+      }
       const sp = parts()[selPart];
       if (sp) {
         g.save();
@@ -775,7 +798,10 @@ export function openEditor(o: EditorOptions): void {
       }
     }
     if (combine) drawCombine(offs);
-    if (tool === "select" && !simplifyPreview && !combine) drawHandles(offs);
+    if (tool === "select" && !simplifyPreview && !combine) {
+      drawHandles(offs);
+      drawLineHandles(offs);
+    }
     if ((parts().length > 1 || hist.state.locked.some(Boolean)) && !simplifyPreview) drawBadges(offs);
     else badgeAt = [];
     if (drawing || drag?.kind === "free") {
@@ -925,6 +951,22 @@ export function openEditor(o: EditorOptions): void {
     g.restore();
   }
 
+  function drawLineHandles(offs: number[]): void {
+    g.save();
+    g.fillStyle = "#fff";
+    g.strokeStyle = "#000";
+    (hist.state.lines ?? []).forEach((line, l) => {
+      if (l !== selLine) return;
+      for (const pt of line)
+        for (const off of offs) {
+          g.beginPath();
+          g.arc(sx(pt[0] + off), sy(pt[1]), 3.5, 0, Math.PI * 2);
+          g.fill();
+          g.stroke();
+        }
+    });
+    g.restore();
+  }
   function drawHandles(offs: number[]): void {
     const { w, h: hh } = size();
     const glued = glue().glued;
@@ -953,11 +995,11 @@ export function openEditor(o: EditorOptions): void {
           }
         }
         for (let i = 0; i < n; i++) {
-          const key = vkey({ p, r, i });
-          const sel = selection.has(key);
+          const key = selection.size > 0 || glued.size > 0 ? vkey({ p, r, i }) : "";
+          const sel = selection.size > 0 && selection.has(key);
           g.fillStyle = sel ? "#ffd400" : "#ffffff";
           g.strokeStyle = "#000";
-          const stuck = glued.has(key);
+          const stuck = glued.size > 0 && glued.has(key);
           for (const off of offs) {
             const x = sx(ring[i][0] + off);
             const y = sy(ring[i][1]);
@@ -1017,7 +1059,7 @@ export function openEditor(o: EditorOptions): void {
   function updateStatus(): void {
     const n = countVertices(parts());
     const parts_ = parts().length;
-    const what = target === "cut" ? "Cut" : target === "split" ? "Split" : target === "contested" ? `Contested zone of part ${zoneParent + 1}` : target === "extend" ? (extendTarget >= 0 ? `Extend part ${extendTarget + 1}` : "Extend") : "";
+    const what = target === "cut" ? "Cut" : target === "split" ? "Split" : target === "border" ? "Province border" : target === "contested" ? `Contested zone of part ${zoneParent + 1}` : target === "extend" ? (extendTarget >= 0 ? `Extend part ${extendTarget + 1}` : "Extend") : "";
     let line = `${tool === "select" ? "Select" : `${tool === "polygon" ? "Polygon" : "Freehand"}${what ? ` (${what})` : ""}`} · ${n} vertices`;
     if (tool === "select" && selPart >= 0) line += ` · ${pickHint || `Part ${selPart + 1} selected`}`;
     if (snapHint && snapOn) line += ` · snaps to ${snapName(snapHint.snap, snapHint.rings)}`;
@@ -1043,6 +1085,13 @@ export function openEditor(o: EditorOptions): void {
 
   /* ── Live globe preview ── */
   const previewId = () => (REGION_ID.test(id) ? id : "new-region");
+  /** Province borders as stored: wrapped and rounded, within the position cap. */
+  const storedLines = (lines: Position[][]): Position[][] => {
+    let n = 0;
+    return lines
+      .filter((l) => l.length >= 2 && (n += l.length) <= PROVINCE_BORDER_MAX)
+      .map((l) => l.map(([x, y]) => [round(wrapLon(x)), round(y)] as Position));
+  };
   const regionNow = (): RegionData => ({
     id: previewId(),
     slot: slotName,
@@ -1055,6 +1104,7 @@ export function openEditor(o: EditorOptions): void {
     ...(({ geometry, partLegend, partLabels, partContested }) => ({ geometry, parts: partLegend, labels: partLabels.map((t) => t.slice(0, PART_LABEL_MAX)), contested: partContested }))(
       toStyledGeometry(parts(), hist.state.styles, hist.state.labels, hist.state.contested),
     ),
+    ...(hist.state.lines?.length ? { provinceBorders: storedLines(hist.state.lines) } : {}),
   });
   let previewRaf = 0;
   let lastSent = -1;
@@ -1316,6 +1366,8 @@ export function openEditor(o: EditorOptions): void {
   }
 
   /* ── Tools ── */
+  /** Whether the drawing tools draw an open line (a split line or a province border) rather than an outline. */
+  const lineTarget = () => target === "split" || target === "border";
   /** The drawing tool Add part, Cut and Split use: freehand until the polygon tool is picked. */
   let drawTool: "polygon" | "freehand" = "freehand";
   function setTool(t: Tool): void {
@@ -1330,6 +1382,10 @@ export function openEditor(o: EditorOptions): void {
   }
   function drawHint(t: DrawTarget): string {
     const zone = t === "contested" ? `Contested zone of part ${zoneParent + 1}: ` : "";
+    if (t === "border")
+      return drawTool === "freehand"
+        ? "Drag a province border across the region; only the stretch inside it shows. It snaps to outlines and other borders. Press P for the polygon tool."
+        : "Click points along the province border; double-click or Enter to finish. Points snap to outlines and other borders; click two points on one outline to follow it.";
     if (t === "split")
       return drawTool === "freehand"
         ? "Drag a line right across a part, from outside it to outside it; let go to split it. Press P for the polygon tool."
@@ -1349,7 +1405,8 @@ export function openEditor(o: EditorOptions): void {
   }
   function startDraw(t: DrawTarget): void {
     closeCombine(true);
-    if ((t === "cut" || t === "split") && !parts().length) return setMsg(`Draw a part first, then ${t} it.`, "error");
+    if ((t === "cut" || t === "split" || t === "border") && !parts().length) return setMsg(`Draw a part first, then ${t === "border" ? "draw province borders in it" : `${t} it`}.`, "error");
+    selLine = -1;
     target = t;
     drawing = null;
     tool = drawTool;
@@ -1463,13 +1520,56 @@ export function openEditor(o: EditorOptions): void {
     return true;
   }
 
-  /** Finishes a split line from the polygon or freehand tool. */
+  /** Finishes a split line or a province border from the polygon or freehand tool. */
   function finishLine(line: Position[]): boolean {
     if (line.length < 2) {
-      setMsg("A split line needs at least 2 points.", "error");
+      setMsg(`A ${target === "border" ? "province border" : "split line"} needs at least 2 points.`, "error");
       return false;
     }
+    if (target === "border") return addBorder(line);
     return applyCut(splitParts(hist.state, line, undefined, ky), "Split");
+  }
+  /** Adds a province border (one undo step). */
+  function addBorder(line: Position[]): boolean {
+    const lines = hist.state.lines ?? [];
+    const used = lines.reduce((n, l) => n + l.length, 0);
+    if (used + line.length > PROVINCE_BORDER_MAX) {
+      setMsg(`Province borders can have at most ${PROVINCE_BORDER_MAX.toLocaleString()} points in all.`, "error");
+      return false;
+    }
+    hist.apply("Add province border", { ...hist.state, lines: [...lines.map((l) => l.map(([x, y]) => [x, y] as Position)), line.map(([x, y]) => [x, y] as Position)] });
+    selLine = lines.length;
+    setMsg("Province border added. Click it to select it; Delete removes it. Draw another with Province border.", "ok");
+    endDraw();
+    return true;
+  }
+  /** Deletes province border l (one undo step). */
+  function deleteBorder(l: number): void {
+    const lines = hist.state.lines ?? [];
+    if (l < 0 || l >= lines.length) return;
+    hist.apply("Delete province border", { ...hist.state, lines: lines.filter((_, i) => i !== l) });
+    selLine = -1;
+    setMsg("Province border deleted (undo brings it back).");
+    changed();
+  }
+  /** The province border whose line passes within EDGE_HIT pixels of the point, or -1. */
+  function hitBorder(x: number, y: number): number {
+    const cl = wx(x);
+    let best = -1;
+    let bestD = EDGE_HIT;
+    (hist.state.lines ?? []).forEach((line, l) => {
+      for (let i = 1; i < line.length; i++) {
+        const a = line[i - 1];
+        const b = line[i];
+        const shift = nearest((a[0] + b[0]) / 2, cl) - (a[0] + b[0]) / 2;
+        const d = pointSegmentDistance(x, y, sx(a[0] + shift), sy(a[1]), sx(b[0] + shift), sy(b[1]));
+        if (d <= bestD) {
+          bestD = d;
+          best = l;
+        }
+      }
+    });
+    return best;
   }
 
   /* ── Combine and extend ── */
@@ -1716,13 +1816,22 @@ export function openEditor(o: EditorOptions): void {
   }
   /* ── Snapping, tracing along borders, attached vertices (see snap.ts) ── */
   /** The neighbours' rings, as snap targets (they never change while the editor is open). */
-  const nbSnapRings: SnapRing[] = nbPolys.flatMap((poly, n) => poly.map((r, ri) => snapRing(openRing(unwrapRing(r)), { kind: "neighbour", n, r: ri })));
+  const nbSnapRings: SnapRing[] = neighbours.flatMap((f, n) =>
+    polygonsOf(f.geometry).flatMap((poly) => poly.map((r, ri) => snapRing(openRing(unwrapRing(r)), { kind: "neighbour", n, r: ri }))),
+  );
+  /** A neighbouring region's name, for the status line (plain text: names are untrusted). */
+  const neighbourName = (n: number): string => {
+    const f = neighbours[n];
+    return f ? f.properties.name?.trim() || f.id : "another region";
+  };
   let ringCache: { version: number; rings: SnapRing[] } = { version: -1, rings: [] };
   /** Every snap target for the current parts: the region's own rings, then the neighbours'. */
   function snapRings(): SnapRing[] {
-    if (ringCache.version !== hist.version) ringCache = { version: hist.version, rings: [...partRings(parts()), ...nbSnapRings] };
+    if (ringCache.version !== hist.version) ringCache = { version: hist.version, rings: [...partRings(parts()), ...lineRings(), ...nbSnapRings] };
     return ringCache.rings;
   }
+  /** The province borders as snap targets (open lines). */
+  const lineRings = (): SnapRing[] => (hist.state.lines ?? []).map((l, i) => snapRing(l, { kind: "line", l: i }));
   const scale = () => ({ k: view.k, ky });
   /** Where a point would snap (null when snapping is off or nothing is near). */
   const snapAt = (pos: Position, rings: readonly SnapRing[] = snapRings(), skip?: (ring: number) => boolean): Snap | null =>
@@ -1732,7 +1841,8 @@ export function openEditor(o: EditorOptions): void {
     if (!src) return "";
     const what = sn.kind === "vertex" ? "vertex" : "line";
     if (src.kind === "part") return `${what} of ${src.r ? `a hole in ${partName(src.p)}` : partName(src.p)}`;
-    return `${what} of ${neighbourName(src.n)}`;
+    if (src.kind === "line") return `${what} of province border ${src.l + 1}`;
+    return `${what} of region ${neighbourName(src.n)}`;
   }
   function toggleSnap(): void {
     snapOn = !snapOn;
@@ -1748,7 +1858,8 @@ export function openEditor(o: EditorOptions): void {
   /** Vertices of the region's own rings that sit on the same spot as another (attached), per state. */
   let glueCache: { version: number; index: ReturnType<typeof vertexIndex>; glued: Set<string> } = { version: -1, index: new Map(), glued: new Set() };
   function glue(): typeof glueCache {
-    if (glueCache.version === hist.version) return glueCache;
+    // While a drag moves vertices, the attached ones move together, so who is attached doesn't change.
+    if (glueCache.version === hist.version || (hist.dragging && glueCache.version >= 0)) return glueCache;
     const index = vertexIndex(parts());
     const glued = new Set<string>();
     for (const list of index.values()) if (list.length > 1) for (const v of list) glued.add(vkey(v));
@@ -1763,10 +1874,10 @@ export function openEditor(o: EditorOptions): void {
     const rings = snapRings();
     const ring = rings[next.ring];
     if (!ring) return [];
-    return traceBetween(ring.pts, from, next, ky, traceFlip).map((t) => ({ pos: t.pos, ring: next.ring, at: t.at, kind: "vertex" as const }));
+    return traceBetween(ring.pts, from, next, ky, traceFlip, ring.src.kind === "line").map((t) => ({ pos: t.pos, ring: next.ring, at: t.at, kind: "vertex" as const }));
   }
   /** Whether a click at screen (x, y) would close the outline on its first point. */
-  const closesAt = (x: number, y: number) => !!drawing && target !== "split" && drawing.length >= 3 && Math.hypot(sx(drawing[0][0]) - x, sy(drawing[0][1]) - y) <= HIT;
+  const closesAt = (x: number, y: number) => !!drawing && !lineTarget() && drawing.length >= 3 && Math.hypot(sx(drawing[0][0]) - x, sy(drawing[0][1]) - y) <= HIT;
   /** What the polygon tool would add on the next click (for the preview), and whether it follows a border. */
   function pendingTail(): { pts: Position[]; traced: boolean } | null {
     if (!drawing || !cursor || tool !== "polygon") return null;
@@ -1920,7 +2031,7 @@ export function openEditor(o: EditorOptions): void {
 
   /** Snap targets for dragging `refs`: everything but the rings they belong to (so nothing snaps to itself). */
   function dragSnap(base: Parts, refs: VRef[]): { rings: SnapRing[]; skip: (ring: number) => boolean } {
-    const rings = [...partRings(base), ...nbSnapRings];
+    const rings = [...partRings(base), ...lineRings(), ...nbSnapRings];
     const moving = new Set(refs.map((q) => `${q.p}:${q.r}`));
     return {
       rings,
@@ -2046,6 +2157,11 @@ export function openEditor(o: EditorOptions): void {
         ...dragSnap(ins.parts, ins.refs),
       };
       changed();
+      return;
+    }
+    // On a province border (and not on an outline): a click selects it, a drag draws a selection box.
+    if (!e.altKey && !hitEdge(x, y) && hitBorder(x, y) >= 0) {
+      drag = { kind: "box", x0: x, y0: y, x1: x, y1: y, add: e.shiftKey };
       return;
     }
     // On a line: a click selects its ring, a drag falls through to the usual part move / box select.
@@ -2187,6 +2303,11 @@ export function openEditor(o: EditorOptions): void {
       // (Not a click on a locked part: that click selected it.)
       const click = x1 - x0 <= 2 && y1 - y0 <= 2;
       if (click && !d.add && d.refused === undefined && !edgePick) selectPart(-1);
+      if (click) {
+        const bl = hitBorder(d.x0, d.y0);
+        if (bl >= 0 && !edgePick) selLine = bl;
+        else if (!edgePick && !d.add) selLine = -1;
+      }
       if (click && edgePick) pickRing(edgePick, d.add);
       edgePick = null;
       if (x1 - x0 > 2 || y1 - y0 > 2) {
@@ -2211,7 +2332,7 @@ export function openEditor(o: EditorOptions): void {
       const follow = snapOn && !(e.ctrlKey || e.metaKey);
       const rings = snapRings();
       const traced = (closedRing: boolean) => followBorders(d.pts, (q) => findSnap(rings, q, scale(), SNAP_PX), rings, ky, tol, closedRing).pts;
-      if (target === "split") {
+      if (lineTarget()) {
         if (d.pts.length < 2) return draw();
         const line = follow ? traced(false) : douglasPeucker(d.pts.map(([px, py]) => [px, py * ky]), tol).map(([px, py]) => [px, py / ky] as Position);
         if (!finishLine(line)) draw();
@@ -2262,7 +2383,7 @@ export function openEditor(o: EditorOptions): void {
     e.preventDefault();
     // The double-click's second click added a point on top of the previous one; drop it.
     const pts = drawing.filter((p, i) => i === 0 || Math.hypot(sx(p[0]) - sx(drawing![i - 1][0]), sy(p[1]) - sy(drawing![i - 1][1])) > 3);
-    if (target === "split") {
+    if (lineTarget()) {
       if (pts.length >= 2) finishLine(pts);
     } else if (pts.length >= 3) finishRing(pts);
   });
@@ -2337,7 +2458,7 @@ export function openEditor(o: EditorOptions): void {
     }
     if (e.key === "Enter" && drawing) {
       e.preventDefault();
-      return void (target === "split" ? finishLine(drawing) : finishRing(drawing));
+      return void (lineTarget() ? finishLine(drawing) : finishRing(drawing));
     }
     if (e.key === "Backspace" && drawing) {
       e.preventDefault();
@@ -2359,6 +2480,10 @@ export function openEditor(o: EditorOptions): void {
       if (outlines.length === 1) return void askDeletePart(outlines[0].p);
       if (outlines.length > 1) return setMsg("Several whole outlines are selected. Select one outline at a time to delete a part.", "error");
       return deleteRefs([...selection.values()]);
+    }
+    if ((e.key === "Delete" || e.key === "Backspace") && tool === "select" && selLine >= 0 && !selection.size && !drawing) {
+      e.preventDefault();
+      return deleteBorder(selLine);
     }
     if ((e.key === "Delete" || e.key === "Backspace") && tool === "select" && selPart >= 0 && !drawing) {
       e.preventDefault();
@@ -2439,7 +2564,11 @@ export function openEditor(o: EditorOptions): void {
     if (!s.parts.length) return setMsg("Draw the region first.", "error");
     const { geometry, partLegend, partLabels, partContested, partLocked } = toStyledGeometry(s.parts, s.styles, s.labels, s.contested, s.locked);
     const hasZones = partContested.some((k) => k !== -1);
-    const errs = [...checkGeometry(geometry), ...checkParts({ slot: slotName, map: slot.map, color: s.props.color, ...(hasZones ? { partContested } : {}) }, geometry, "Contested zones")];
+    const provinceLines = storedLines(s.lines ?? []);
+    const errs = [
+      ...checkGeometry(geometry),
+      ...checkParts({ slot: slotName, map: slot.map, color: s.props.color, ...(hasZones ? { partContested } : {}), ...(provinceLines.length ? { provinceBorders: provinceLines } : {}) }, geometry, "Contested zones"),
+    ];
     if (errs.length) return setMsg(errs[0], "error");
     const props = s.props;
     const feature: RegionFeature = {
@@ -2460,6 +2589,7 @@ export function openEditor(o: EditorOptions): void {
         ...(partLabels.some((t) => t.trim()) ? { partLabels: partLabels.map((t) => t.trim().slice(0, PART_LABEL_MAX)) } : {}),
         ...(hasZones ? { partContested } : {}),
         ...(partLocked.some(Boolean) ? { partLocked } : {}),
+        ...(provinceLines.length ? { provinceBorders: provinceLines } : {}),
         updated: stamp(),
       },
       geometry,
@@ -2567,6 +2697,8 @@ export function openEditor(o: EditorOptions): void {
     selectedVertices: () => [...selection.values()],
     clashes: () => clashState().clashes,
     snapOn: () => snapOn,
+    borders: () => clashState().spec.borders ?? null,
+    lines: () => (hist.state.lines ?? []).map((l) => l.map((q) => [...q])),
     drawing: () => (drawing ? drawing.map((q) => [...q]) : null),
   };
 }

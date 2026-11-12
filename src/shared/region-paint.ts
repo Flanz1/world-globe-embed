@@ -4,12 +4,13 @@
  * separate maps (a religion's spread, a kingdom's borders) and never mark this one. Loaded with the
  * viewers and the admin page, not the boot script.
  */
+import { regionBorders } from "./borders.ts";
 import { findClashes, prepare, type Prepared } from "./clash.ts";
 import { polygonsOf, type Ring } from "./geo.ts";
 import type { PaintSpec } from "./raster.ts";
 import { OWN_COLOUR, regionLayers, type RegionData } from "./region.ts";
 
-export type PaintInput = Pick<RegionData, "color" | "legend" | "parts" | "contested" | "geometry">;
+export type PaintInput = Pick<RegionData, "color" | "legend" | "parts" | "contested" | "geometry" | "provinceBorders">;
 
 /** The colour each part is drawn in: its legend colour, else (for a contested zone) its parent's, else the region's. */
 export function partColours(r: Pick<RegionData, "color" | "legend" | "parts" | "contested">, n: number): string[] {
@@ -38,7 +39,13 @@ export function regionClashes(polys: Ring[][], prepared?: Prepared[]): Clashes {
 export function paintSpecOf(r: PaintInput, clashes: Clashes): PaintSpec {
   const polys = polygonsOf(r.geometry);
   const contested = polys.map((_, i) => (r.contested[i] ?? OWN_COLOUR) >= 0);
-  const plain = !contested.some(Boolean) && !clashes.internal.length;
+  // Lines parts share exactly: national borders between different legend colours, hidden within one
+  // (the parts read as one province). Province borders are the region's own drawn lines.
+  const borders = regionBorders(polys, (i) => (contested[i] ? null : (r.parts[i] ?? OWN_COLOUR)));
+  const provincial = r.provinceBorders ?? [];
+  const hidden = borders.hide.some((poly) => poly.some((h) => h.size));
+  const shared = hidden || borders.national.length > 0 || provincial.length > 0;
+  const plain = !contested.some(Boolean) && !clashes.internal.length && !shared;
   const colours = partColours(r, polys.length);
   const partners: Ring[][][] = polys.map(() => []);
   const hatches: PaintSpec["hatches"] = [];
@@ -53,9 +60,10 @@ export function paintSpecOf(r: PaintInput, clashes: Clashes): PaintSpec {
   return {
     plain,
     layers: plain ? regionLayers(r) : [],
-    parts: polys.map((rings, i) => ({ rings, color: colours[i], contested: contested[i] })),
+    parts: polys.map((rings, i) => ({ rings, color: colours[i], contested: contested[i], ...(shared && borders.hide[i].some((h) => h.size) ? { hide: borders.hide[i] } : {}) })),
     partners,
     hatches,
+    ...(shared ? { borders: { national: borders.national, provincial } } : {}),
   };
 }
 
@@ -65,4 +73,4 @@ export function regionPaintSpec(r: PaintInput): PaintSpec {
 }
 
 /** Whether the legend should get its "Contested" row. */
-export const hasContestedMarks = (spec: PaintSpec): boolean => !spec.plain;
+export const hasContestedMarks = (spec: PaintSpec): boolean => spec.parts.some((p) => p.contested) || spec.hatches.length > 0;

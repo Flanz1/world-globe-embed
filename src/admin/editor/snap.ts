@@ -14,8 +14,8 @@ import type { Parts, VRef } from "./model.ts";
 export interface SnapRing {
   /** Open, unwrapped. */
   pts: Position[];
-  /** The region's own ring (part p, ring r), or a neighbour's polygon n (its ring r). */
-  src: { kind: "part"; p: number; r: number } | { kind: "neighbour"; n: number; r: number };
+  /** The region's own ring (part p, ring r), a neighbour's polygon n (its ring r), or province border line l (open: no closing line). */
+  src: { kind: "part"; p: number; r: number } | { kind: "neighbour"; n: number; r: number } | { kind: "line"; l: number };
   /** Bounds of pts: [west, south, east, north]. */
   box: [number, number, number, number];
 }
@@ -95,7 +95,8 @@ export function findSnap(
   for (const { ri } of near) {
     const pts = rings[ri].pts;
     const n = pts.length;
-    for (let i = 0; i < n; i++) {
+    const last = rings[ri].src.kind === "line" ? n - 1 : n;
+    for (let i = 0; i < last; i++) {
       const j = (i + 1) % n;
       if (skipVertex?.(ri, i) || skipVertex?.(ri, j)) continue;
       const a = pts[i];
@@ -131,11 +132,12 @@ export interface TracePoint {
  * The ring's vertices strictly between two snapped positions on it, going forward (dir 1, increasing
  * index) or backward (-1). Longitudes follow on from `from.pos`, so the trace stays in that copy.
  */
-export function tracePath(ring: readonly Position[], from: { pos: Position; at: number }, to: { at: number }, dir: 1 | -1): TracePoint[] {
+export function tracePath(ring: readonly Position[], from: { pos: Position; at: number }, to: { at: number }, dir: 1 | -1, open = false): TracePoint[] {
   const n = ring.length;
   if (n < 2) return [];
   const eps = 1e-9;
-  const dist = (x: number) => (((dir === 1 ? x - from.at : from.at - x) % n) + n) % n;
+  // An open line doesn't wrap round: a vertex the other way is out of reach.
+  const dist = (x: number) => (open ? (dir === 1 ? x - from.at : from.at - x) : (((dir === 1 ? x - from.at : from.at - x) % n) + n) % n);
   const end = dist(to.at);
   if (end < eps) return [];
   const idx: number[] = [];
@@ -161,8 +163,9 @@ function pathLength(pts: Position[], ky: number): number {
   return s;
 }
 
-/** The shorter way round the ring between two snaps (by length), or the other way when `flip`. */
-export function traceBetween(ring: readonly Position[], from: Snap, to: Snap, ky: number, flip = false): TracePoint[] {
+/** The shorter way round the ring between two snaps (by length), or the other way when `flip`. Along an open line there's only one way. */
+export function traceBetween(ring: readonly Position[], from: Snap, to: Snap, ky: number, flip = false, open = false): TracePoint[] {
+  if (open) return tracePath(ring, from, to, to.at >= from.at ? 1 : -1, true);
   const f = tracePath(ring, from, to, 1);
   const b = tracePath(ring, from, to, -1);
   const lf = pathLength([from.pos, ...f.map((q) => q.pos), to.pos], ky);
@@ -209,12 +212,13 @@ export function followBorders(
     }
     // A run along ring s.ring: which way round did the pen go?
     const ring = rings[s.ring].pts;
+    const open = rings[s.ring].src.kind === "line";
     let sum = 0;
-    for (let q = i + 1; q < j; q++) sum += ringStep(snaps[q - 1]!.at, snaps[q]!.at, ring.length);
+    for (let q = i + 1; q < j; q++) sum += open ? snaps[q]!.at - snaps[q - 1]!.at : ringStep(snaps[q - 1]!.at, snaps[q]!.at, ring.length);
     const last = snaps[j - 1]!;
     out.push({ pos: s.pos, keep: true });
     let prev = s.pos[0];
-    for (const t of tracePath(ring, s, last, sum >= 0 ? 1 : -1)) {
+    for (const t of tracePath(ring, s, last, open ? (last.at >= s.at ? 1 : -1) : sum >= 0 ? 1 : -1, open)) {
       const pos: Position = [nearest(t.pos[0], prev), t.pos[1]];
       out.push({ pos, keep: true });
       prev = pos[0];
