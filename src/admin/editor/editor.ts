@@ -1156,6 +1156,14 @@ export function openEditor(o: EditorOptions): void {
   }
 
   let lastArea = -1;
+  // Drawing tips (the long how-to line above the map) are off by default; the "?" dialog turns them on.
+  let tipsOn = ((): boolean => {
+    try {
+      return localStorage.getItem("ed-tips") === "on";
+    } catch {
+      return false;
+    }
+  })();
   function updateStatus(): void {
     const n = countVertices(parts());
     const parts_ = parts().length;
@@ -1167,7 +1175,8 @@ export function openEditor(o: EditorOptions): void {
     if (cursor) {
       const lon = ((((cursor[0] + 180) % 360) + 360) % 360) - 180;
       const gl = imageToGlobe([lon, cursor[1]], frame);
-      line += ` · map lon ${round(lon, 3)}, lat ${round(cursor[1], 3)} (stored) · globe lon ${round(gl[0], 2)}, lat ${round(gl[1], 2)}`;
+      line += ` · lon ${round(lon, 3)}, lat ${round(cursor[1], 3)}`;
+      if (tipsOn) line += ` (stored) · globe lon ${round(gl[0], 2)}, lat ${round(gl[1], 2)}`;
     }
     status.textContent = line;
     undoBtn.disabled = !hist.canUndo;
@@ -1512,7 +1521,7 @@ export function openEditor(o: EditorOptions): void {
     drawing = null;
     tool = drawTool;
     canvas.style.cursor = "crosshair";
-    setMsg(drawHint(t));
+    setMsg(tipsOn ? drawHint(t) : "");
     changed();
   }
 
@@ -2840,6 +2849,19 @@ export function openEditor(o: EditorOptions): void {
 
   function showHelp(): void {
     const m = modal("Keyboard shortcuts", "help-dlg");
+    const cb = h("input", { type: "checkbox", checked: tipsOn, id: "tips-toggle" }) as HTMLInputElement;
+    cb.addEventListener("change", () => {
+      tipsOn = cb.checked;
+      try {
+        localStorage.setItem("ed-tips", tipsOn ? "on" : "off");
+      } catch {
+        /* ignore */
+      }
+      if (!tipsOn) setMsg("");
+      else if (target) setMsg(drawHint(target));
+      updateStatus();
+    });
+    m.body.append(h("label", { className: "muted small" }, cb, " Show drawing tips above the map"));
     m.body.append(h("dl", { className: "shortcuts" }, ...SHORTCUTS.flatMap(([k, v]) => [h("dt", {}, h("kbd", { textContent: k })), h("dd", { textContent: v })])));
   }
 
@@ -2986,7 +3008,7 @@ export function openEditor(o: EditorOptions): void {
   measure();
   fitView();
   setTool(parts().length ? "select" : "freehand");
-  if (!parts().length) setMsg(drawHint("part"));
+  if (!parts().length && tipsOn) setMsg(drawHint("part"));
   syncPanel();
   canvas.focus();
   // Test hook: lets the browser tests read the editor's state; exposes nothing the page doesn't already have.
