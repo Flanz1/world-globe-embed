@@ -153,3 +153,18 @@ describe("extend part", () => {
     expect(r.state.contested).toEqual([-1, 0]);
   });
 });
+
+describe("province borders survive combining and extending", () => {
+  const lines = [[[2, 5], [8, 5]] as [number, number][]];
+  const withLines = (parts: Parameters<typeof st>[0]) => ({ ...st(parts), lines: lines.map((l) => l.map(([x, y]) => [x, y] as [number, number])) });
+  it("extend keeps them", () => {
+    const r = extendPart(withLines([[rect(0, 0, 10, 10)]]), 0, rect(8, 2, 16, 6), 0, 1);
+    expect(typeof r).not.toBe("string");
+    expect((r as MergeResult).state.lines).toEqual(lines);
+  });
+  it("combine keeps them", () => {
+    const r = combineParts(withLines([[rect(0, 0, 10, 10)], [rect(10, 0, 20, 10)]]), [0, 1], 0.5, 1);
+    expect(typeof r).not.toBe("string");
+    expect((r as MergeResult).state.lines).toEqual(lines);
+  });
+});

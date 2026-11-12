@@ -164,3 +164,16 @@ describe("split tool", () => {
     expect(res.state.parts).toHaveLength(2);
   });
 });
+
+describe("province borders survive reshaping edits", () => {
+  const lines: Position[][] = [[[2, 5], [8, 5]], [[5, 1], [5, 9]]];
+  const base = () => st([[square(0, 0)]], { lines: lines.map((l) => l.map(([x, y]) => [x, y] as Position)) });
+  it("a cut keeps them", () => {
+    expect(cutParts(base(), [square(3, 3, 2)]).state.lines).toEqual(lines);
+  });
+  it("a split keeps them", () => {
+    const res = splitParts(base(), [[5, -2], [5, 12]]);
+    expect(res.added).toBe(1);
+    expect(res.state.lines).toEqual(lines);
+  });
+});
