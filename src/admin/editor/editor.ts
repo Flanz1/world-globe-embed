@@ -191,7 +191,8 @@ export const SHORTCUTS: [string, string][] = [
   ["Click inside a part", "Select that part (or click its badge or its row in the Parts list)"],
   ["Alt+click inside", "Select the next part under the pointer, where parts overlap"],
   ["Drag inside a part", "Move that part; Ctrl+drag (Cmd on macOS) moves the whole region"],
-  ["C", "Combine the selected part with the parts touching it (click parts to add or remove them, Enter to apply)"],
+  ["Shift+click a part", "Pick several parts (also Shift+click Select in the Parts list); Esc clears the picks"],
+  ["C", "Combine the picked parts into one, filling small gaps (with one part selected: it and the parts touching it; click parts to add or remove them, Enter to apply)"],
   ["E", "Extend the selected part: draw a shape that touches it and it's added to the part"],
   ["L", "Lock or unlock the selected part (a locked part can't be moved; its vertices and midpoints still edit)"],
   ["Arrow keys", "Nudge the selected vertices, else the selected part, else the whole region, 1 px; Shift for 10 px"],
@@ -278,7 +279,7 @@ export function openEditor(o: EditorOptions): void {
   const combApply = btn("Combine", "Combine the picked parts into one (one undo step; Enter)", () => applyCombine(), "combine-apply");
   const combPanel = h(
     "div",
-    { className: "ed-simplify ed-combine", hidden: true },
+    { className: "ed-combine", hidden: true },
     h("strong", { textContent: "Combine parts" }),
     h("p", { className: "muted small", textContent: "Click parts on the map to add or remove them. Small gaps between them are filled." }),
     h("label", {}, "Fill gaps up to", combRange, combGapOut),
@@ -301,7 +302,7 @@ export function openEditor(o: EditorOptions): void {
       btn("Add part", "Draw another polygon (an island or exclave)", () => startDraw("part"), "add-part"),
       btn("Cut", "Draw a shape to cut away: inside a part it makes a hole, across a part's edge it bites it, right across it splits it into separate parts", () => startDraw("cut"), "cut-hole"),
       btn("Split", "Draw a line right across a part to split it into separate parts", () => startDraw("split"), "split"),
-      btn("Combine…", "Combine the selected part with parts that touch or nearly touch it into one part, filling small gaps (C)", () => openCombine(), "combine"),
+      btn("Combine…", "Combine the parts you picked (click one, Shift+click the others) into one part, filling small gaps (C)", () => openCombine(), "combine"),
       btn("Extend", "Draw a shape that touches the selected part to add it to that part (E)", () => startExtend(), "extend"),
       btn(
         "Province border",
@@ -510,6 +511,9 @@ export function openEditor(o: EditorOptions): void {
   let zoneParent = -1;
   /** The selected part (-1 for none): click inside it, its badge or its row. Separate from the vertex selection. */
   let selPart = -1;
+  /** Parts picked together with Shift+click (in the order picked; the first keeps its place when combined), and the history version they were picked at. */
+  let picked: number[] = [];
+  let pickedVersion = -1;
   /** The selected province border (-1 for none): click its line. */
   let selLine = -1;
   /** Alt+click cycling through the parts under one spot. */
@@ -603,9 +607,26 @@ export function openEditor(o: EditorOptions): void {
     partRows.querySelectorAll<HTMLElement>(".ed-part-row").forEach((row) => {
       const on = Number(row.dataset.row) === selPart;
       row.classList.toggle("sel", on);
+      row.classList.toggle("pick", picked.includes(Number(row.dataset.row)));
       row.querySelector<HTMLButtonElement>("button[data-act=part-select]")?.setAttribute("aria-pressed", String(on));
     });
     draw();
+  }
+  /** Shift+click: adds part p to the picked parts, or takes it out. The selected part counts as picked from the first Shift+click. */
+  function togglePick(p: number): void {
+    if (pickedVersion !== hist.version) picked = [];
+    pickedVersion = hist.version;
+    if (!picked.length && selPart >= 0 && selPart !== p) picked = [selPart];
+    picked = picked.includes(p) ? picked.filter((q) => q !== p) : [...picked, p];
+    selectPart(p, picked.length > 1 ? `${picked.length} parts picked: press C to combine them, Esc to clear` : "");
+    if (picked.length > 1) setMsg(`${picked.length} parts picked (Shift+click adds or removes). Press C or Combine to merge them.`);
+  }
+  /** The picked parts, or none if an edit made the picks stale. */
+  const pickedNow = (): number[] => (pickedVersion === hist.version ? picked.filter((q) => q < parts().length) : []);
+  function clearPicks(): void {
+    if (!picked.length) return;
+    picked = [];
+    selectPart(selPart);
   }
   /**
    * The parts a move of part p (or the whole region, null) takes along: p, plus its unlocked contested
@@ -752,6 +773,18 @@ export function openEditor(o: EditorOptions): void {
         g.strokeStyle = "#ffd400";
         g.beginPath();
         for (const ring of sp) traceRing(g, ring, sx, sy, offs);
+        g.stroke();
+        g.restore();
+      }
+      const pk = pickedNow();
+      if (pk.length) {
+        g.save();
+        g.lineWidth = 3;
+        g.lineJoin = "round";
+        g.setLineDash([8, 4]);
+        g.strokeStyle = "#ffd400";
+        g.beginPath();
+        for (const q of pk) for (const ring of parts()[q] ?? []) traceRing(g, ring, sx, sy, offs);
         g.stroke();
         g.restore();
       }
@@ -1283,7 +1316,7 @@ export function openEditor(o: EditorOptions): void {
             hist.apply("Part label", { ...hist.state, labels }, `part-label:${p}`);
             changed();
           });
-          const pick = h("button", { type: "button", className: "ghost tiny", textContent: "Select", title: `Select part ${p + 1}`, dataset: { act: "part-select" }, onclick: () => (setTool("select"), selectPart(p)) });
+          const pick = h("button", { type: "button", className: "ghost tiny", textContent: "Select", title: `Select part ${p + 1}`, dataset: { act: "part-select" }, onclick: (ev: MouseEvent) => (setTool("select"), ev.shiftKey ? togglePick(p) : (picked = [], selectPart(p))) });
           const centre = h("button", { type: "button", className: "ghost tiny", textContent: "Centre", title: `Show part ${p + 1} on the map and the globe`, dataset: { act: "part-centre" }, onclick: () => centrePart(p) });
           const lock = h("button", { type: "button", className: "ghost tiny ed-lock", dataset: { act: "part-lock" }, onclick: () => togglePartLock(p) });
           const del = h("button", { type: "button", className: "ghost tiny danger", textContent: "Delete", title: `Delete part ${p + 1} (asks first)`, dataset: { act: "part-delete" }, onclick: () => void askDeletePart(p) });
@@ -1620,12 +1653,15 @@ export function openEditor(o: EditorOptions): void {
   function openCombine(): void {
     if (parts().length < 2) return setMsg("Combine needs at least two parts.", "error");
     if (drawing) return;
+    const pk = pickedNow();
     let p = selPart;
-    if (p < 0 && parts().length === 2) p = 0;
-    if (p < 0) return setMsg("Select a part first (click inside it), then Combine. You can then click more parts to add them.", "error");
+    if (pk.length < 2 && p < 0 && parts().length === 2) p = 0;
+    if (pk.length < 2 && p < 0) return setMsg("Pick the parts to combine first: click one, then Shift+click the others. Then press C.", "error");
     if (tool !== "select") setTool("select");
     toggleSimplify(false);
-    combine = { set: [p, ...combineNeighbours(p)], res: "", version: hist.version };
+    // The picked parts are what gets combined; with only one selected, its touching neighbours are offered.
+    combine = { set: pk.length >= 2 ? [...pk] : [p, ...combineNeighbours(p)], res: "", version: hist.version };
+    picked = [];
     combPanel.hidden = false;
     updateCombine();
     combRange.focus();
@@ -2185,7 +2221,9 @@ export function openEditor(o: EditorOptions): void {
     const p = badge >= 0 ? badge : here.includes(selPart) ? selPart : (here[0] ?? -1);
     if (p >= 0) {
       cycle = null;
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey) return togglePick(p);
       const i = here.indexOf(p);
+      if (picked.length && !pickedNow().includes(p)) picked = [];
       selectPart(p, here.length > 1 && i >= 0 ? `Part ${p + 1} (${i + 1} of ${here.length} here, Alt+click for the next)` : "");
       const whole = e.ctrlKey || e.metaKey;
       const plan = moveSet(whole ? null : p);
@@ -2536,6 +2574,7 @@ export function openEditor(o: EditorOptions): void {
       selection.clear();
       return draw();
     }
+    if (picked.length) return clearPicks();
     if (selPart >= 0) return selectPart(-1);
     if (target === "contested" && (tool === "polygon" || tool === "freehand")) {
       target = "part";

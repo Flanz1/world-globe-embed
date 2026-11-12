@@ -124,7 +124,7 @@ dialog.editor[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr
 .ed-menu button { display: block; width: 100%; text-align: left; background: transparent; color: var(--fg); border: 0; }
 .ed-menu button:hover, .ed-menu button:focus { background: var(--bg); }
 .ed-menu button.danger-item { color: var(--err); }
-.ed-simplify { position: absolute; left: 8px; top: 8px; display: grid; gap: 6px; max-width: 340px; padding: 10px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
+.ed-simplify, .ed-combine { position: absolute; left: 8px; top: 8px; display: grid; gap: 6px; max-width: 340px; padding: 10px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
 .ed-combine label { display: flex; align-items: center; gap: 6px; }
 .ed-comb-info { margin: 0; }
 .ed-side { display: grid; gap: 10px; align-content: start; padding: 10px; overflow: auto; border-left: 1px solid var(--line); }
@@ -147,6 +147,7 @@ dialog.editor[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr
 .ed-part-row .ed-of { grid-column: 2 / 4; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; align-items: center; margin: 0; }
 .ed-part-row .ed-part-acts { grid-column: 2 / 4; display: flex; gap: 4px; }
 .ed-part-row.zone { margin-left: 18px; border-left: 2px dashed rgba(255, 255, 255, .25); }
+.ed-part-row.pick { background: rgba(255, 212, 0, .08); box-shadow: inset 0 0 0 1px rgba(255, 212, 0, .35); }
 .ed-part-row.sel { background: rgba(255, 212, 0, .12); box-shadow: inset 0 0 0 1px rgba(255, 212, 0, .55); }
 .ed-badge.zone { border-style: dashed; }
 button.tiny { padding: 1px 7px; font-size: 12px; }
