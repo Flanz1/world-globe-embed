@@ -8,8 +8,10 @@ import { baseKey, combineRegions, combinedId, regionBases, type RegionBase } fro
 import { checkGeometry, geometryBounds, polygonsOf, vertexCount } from "../shared/geo.ts";
 import { paintSpec } from "../shared/raster.ts";
 import { REGION_COLOR, REGION_ID, copyId, flatFit, normalizePartContested, normalizePartLegend, regionData, type RegionFeature } from "../shared/region.ts";
+import { placements, type Category } from "../shared/categories.ts";
 import { paintSpecOf, regionClashes } from "../shared/region-paint.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
+import { categories, canAddCategory, canEditCategory, creatorOf, initCategories, loadCategories, moveRegions, newCategory, remove as removeCategory, rename as renameCategory, shift as shiftCategory } from "./categories.ts";
 import { $, h } from "./dom.ts";
 import { openEditor } from "./editor/editor.ts";
 import type { FileCommit, GitHub } from "./github.ts";
@@ -73,6 +75,8 @@ export async function loadRegions(): Promise<void> {
       }
     }),
   );
+  // Categories are optional: if the file can't be read, regions just show uncategorized.
+  await loadCategories().catch(() => {});
   renderRegions();
   // Last commit (author and date) per file, filled in as they arrive.
   for (const e of entries) {
@@ -188,6 +192,7 @@ function card(e: RegionEntry): HTMLElement {
         e.problem ? h("span", { className: "badge error", textContent: "invalid shape", title: e.problem }) : null,
       ),
       h("div", { className: "muted small", dataset: { regionMeta: e.id }, textContent: metaText(e) }),
+      categorySelect(e, f),
       h(
         "div",
         { className: "actions" },
@@ -200,6 +205,89 @@ function card(e: RegionEntry): HTMLElement {
     ),
   );
 }
+
+/** "Category" dropdown on a card: only shown once categories exist. Moving needs the right to edit the region. */
+function categorySelect(e: RegionEntry, f: RegionFeature): HTMLElement | null {
+  const cats = categories().categories;
+  if (!cats.length) return null;
+  const now = placements(categories()).get(e.id) ?? "";
+  const ok = canEdit(f);
+  const sel = h(
+    "select",
+    { ariaLabel: `Category of ${e.id}`, disabled: !ok, title: ok ? "" : "You can't edit this region, so you can't move it to another category.", dataset: { action: "category" } },
+    h("option", { value: "", textContent: "Uncategorized", selected: !now || !cats.some((k) => k.id === now) }),
+    ...cats.map((k) => h("option", { value: k.id, textContent: k.name, selected: k.id === now })),
+  );
+  sel.addEventListener("change", () => void moveRegions([e.id], sel.value || null));
+  return h("label", { className: "small rcat" }, "Category ", sel);
+}
+
+const COLLAPSED_KEY = "globe-admin-collapsed-folders";
+const collapsed = new Set<string>(
+  (() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]") as unknown;
+      return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+    } catch {
+      return [];
+    }
+  })(),
+);
+const UNCATEGORIZED = "~uncategorized";
+
+function toggleFolder(id: string, el: HTMLElement): void {
+  const open = collapsed.has(id);
+  if (open) collapsed.delete(id);
+  else collapsed.add(id);
+  try {
+    localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed]));
+  } catch {
+    /* remembering is a convenience */
+  }
+  setFolderOpen(el, open);
+}
+
+function setFolderOpen(el: HTMLElement, open: boolean): void {
+  el.classList.toggle("closed", !open);
+  el.querySelector(".rfolder-toggle")?.setAttribute("aria-expanded", String(open));
+  el.querySelector<HTMLElement>(".rfolder-body")!.hidden = !open;
+}
+
+/** One folder: a header (open/close, name, count, and the buttons for whoever may change it) over its region cards. */
+function folder(id: string, title: string, members: RegionEntry[], k: Category | null, pos: { first: boolean; last: boolean }, forceOpen: boolean): HTMLElement {
+  const el = h("section", { className: "rfolder", dataset: { category: id } });
+  const edit = !!k && canEditCategory(k);
+  const small = (text: string, action: string, onclick: () => void, why = "", cls = "ghost") =>
+    h("button", { type: "button", className: cls, textContent: text, onclick, disabled: !!why, title: why, dataset: { action } });
+  el.append(
+    h(
+      "div",
+      { className: "rfolder-head" },
+      h(
+        "button",
+        { type: "button", className: "rfolder-toggle ghost", onclick: () => toggleFolder(id, el), ariaExpanded: "true", title: "Open or close this folder" },
+        h("span", { className: "rfolder-arrow", ariaHidden: "true", textContent: "▾" }),
+        h("strong", { className: "rfolder-name", textContent: title }),
+        h("span", { className: "badge", textContent: String(members.length), title: `${members.length} region${members.length === 1 ? "" : "s"}` }),
+        k?.createdBy ? h("span", { className: "muted small", textContent: ` by ${creatorOf(k)}` }) : null,
+      ),
+      k
+        ? h(
+            "div",
+            { className: "actions" },
+            small("↑", "up", () => void shiftCategory(k, -1), pos.first ? "Already first" : can_reorder() ? "" : "You don't have permission to reorder categories."),
+            small("↓", "down", () => void shiftCategory(k, 1), pos.last ? "Already last" : can_reorder() ? "" : "You don't have permission to reorder categories."),
+            small("Rename", "rename", () => renameCategory(k), edit ? "" : `${creatorOf(k)} created this category, and you can't edit other people's.`),
+            small("Delete", "delete", () => void removeCategory(k), edit ? "" : `${creatorOf(k)} created this category, and you can't edit other people's.`, "ghost danger"),
+          )
+        : null,
+    ),
+    h("div", { className: "rfolder-body" }, ...(members.length ? members.map(card) : [h("p", { className: "muted small", textContent: "No regions in this category yet. Use a region's Category menu to move it here." })])),
+  );
+  setFolderOpen(el, forceOpen || !collapsed.has(id));
+  return el;
+}
+const can_reorder = () => canAddCategory();
 
 const ui = {
   search: () => $<HTMLInputElement>("#r-search"),
@@ -265,9 +353,28 @@ export function renderRegions(): void {
     });
   $("#regions-empty").hidden = entries.length > 0;
   $("#regions-tools").hidden = entries.length === 0;
-  $("#regions").replaceChildren(
-    ...(entries.length && !shown.length ? [h("p", { className: "muted", textContent: "No regions match." })] : shown.map(card)),
-  );
+  const cats = categories().categories;
+  $<HTMLButtonElement>("#r-new-category").hidden = !entries.length;
+  $<HTMLButtonElement>("#r-new-category").disabled = !canAddCategory();
+  $<HTMLButtonElement>("#r-new-category").title = canAddCategory() ? "" : "You don't have permission to create categories.";
+  const filtering = !!(q || slot || whoId != null);
+  let out: HTMLElement[];
+  if (entries.length && !shown.length) out = [h("p", { className: "muted", textContent: "No regions match." })];
+  else if (!cats.length) out = shown.map(card);
+  else {
+    // Folders in their saved order, then whatever isn't in one. Regions whose folder is gone count as uncategorized.
+    const home = placements(categories());
+    const known = new Set(cats.map((k) => k.id));
+    const inFolder = (e: RegionEntry, id: string) => home.get(e.id) === id;
+    out = cats
+      .map((k, i) => ({ k, i, members: shown.filter((e) => inFolder(e, k.id)) }))
+      // While searching or filtering, folders with nothing to show stay out of the way.
+      .filter(({ members }) => !filtering || members.length)
+      .map(({ k, i, members }) => folder(k.id, k.name, members, k, { first: i === 0, last: i === cats.length - 1 }, filtering));
+    const rest = shown.filter((e) => !known.has(home.get(e.id) ?? ""));
+    if (rest.length) out.push(folder(UNCATEGORIZED, "Uncategorized", rest, null, { first: true, last: true }, filtering));
+  }
+  $("#regions").replaceChildren(...out);
 }
 
 /** The part labels (or, for an older region, its name), for the card and the search. */
@@ -419,5 +526,7 @@ export function initRegions(d: RegionsDeps): void {
   ui.sort().addEventListener("change", renderRegions);
   ui.creator().addEventListener("change", renderRegions);
   $("#r-combine").addEventListener("click", openCombine);
+  $("#r-new-category").addEventListener("click", newCategory);
+  initCategories({ gh: d.gh, act: d.act, regionIds: () => new Set(entries.map((e) => e.id)) });
   for (const b of document.querySelectorAll<HTMLButtonElement>(".r-new")) b.addEventListener("click", () => newRegion($<HTMLSelectElement>("#r-new-slot").value));
 }

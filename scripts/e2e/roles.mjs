@@ -299,6 +299,127 @@ await step(U, "Users tab", async () => {
 });
 
 /* ═════════════ 5. The owner, and removal ═════════════ */
+/* ═════════════ Region categories (folders in the Regions tab) ═════════════ */
+const K = "categories";
+const cats = () => JSON.parse(mock.read("main", "content/categories.json") ?? '{"categories":[]}').categories;
+const folders = (page) => page.locator("#regions .rfolder").evaluateAll((els) => els.map((e) => e.dataset.category));
+const inFolder = (page, id) => page.locator(`#regions .rfolder[data-category="${id}"] .rcard`).evaluateAll((els) => els.map((e) => e.dataset.region));
+/** Runs `fn` (a click) and waits until it has made a commit and the page has reloaded the list. */
+async function commits(page, fn) {
+  const n = mock.log.length;
+  await fn();
+  await waitFor(page, async () => mock.log.length > n);
+  // The page stays busy until the list has been reloaded.
+  await waitFor(page, async () => (await page.locator("button[aria-busy=true]").count()) === 0);
+  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+}
+async function addCategory(page, name) {
+  await commits(page, async () => {
+    await page.click("#r-new-category");
+    await page.fill('dialog [data-field="category-name"]', name);
+    await page.click('dialog [data-action="confirm-category"]');
+  });
+}
+
+await step(K, "the owner adds, renames, reorders, fills and deletes categories", async () => {
+  const { ctx, page, errors } = await open("Flanz1");
+  await page.goto(`${ADMIN}#regions`);
+  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  check(K, "with no categories the list is flat, as before", (await folders(page)).length === 0 && (await page.locator("#regions .rcard").count()) > 2);
+  check(K, "no Category menu on cards yet", (await page.locator(".rcat").count()) === 0);
+  await addCategory(page, "Kingdoms");
+  await addCategory(page, "Seas");
+  check(K, "two folders saved with the owner as creator", JSON.stringify(cats().map((k) => [k.id, k.name, k.createdBy?.login])) === JSON.stringify([["kingdoms", "Kingdoms", "Flanz1"], ["seas", "Seas", "Flanz1"]]), JSON.stringify(cats()));
+  const f1 = await folders(page);
+  check(K, "folders show in order, then Uncategorized with every region", f1.join() === "kingdoms,seas,~uncategorized" && (await inFolder(page, "~uncategorized")).length > 2, f1.join());
+  // Duplicate names are refused in the dialog.
+  await page.click("#r-new-category");
+  await page.fill('dialog [data-field="category-name"]', "seas");
+  await page.click('dialog [data-action="confirm-category"]');
+  check(K, "a duplicate name is refused", /already a category/.test((await page.textContent("dialog .error")) ?? ""));
+  await page.click("dialog.small-dlg .pv-head button");
+  // Move a region into Kingdoms with its Category menu.
+  await commits(page, () => page.selectOption('[data-region="provinces"] [data-action="category"]', "kingdoms"));
+  check(K, "the region moved into the folder", (await inFolder(page, "kingdoms")).join() === "provinces" && !(await inFolder(page, "~uncategorized")).includes("provinces"), (await inFolder(page, "kingdoms")).join());
+  check(K, "…and is saved in categories.json", JSON.stringify(cats()[0].regions) === '["provinces"]');
+  // Collapse and reopen.
+  await page.click('.rfolder[data-category="kingdoms"] .rfolder-toggle');
+  check(K, "a folder collapses", (await page.locator('.rfolder[data-category="kingdoms"] .rcard').first().isHidden()) && (await page.getAttribute('.rfolder[data-category="kingdoms"] .rfolder-toggle', "aria-expanded")) === "false");
+  await page.screenshot({ path: path.join(OUT, "categories-owner.png"), fullPage: true });
+  await page.click('.rfolder[data-category="kingdoms"] .rfolder-toggle');
+  // Searching opens folders and hides the empty ones.
+  await page.fill("#r-search", "provinces");
+  check(K, "searching hides folders with nothing to show, and opens the others", !(await folders(page)).includes("seas") && (await folders(page)).includes("kingdoms") && (await page.locator('.rfolder[data-category="kingdoms"] .rcard').first().isVisible()), (await folders(page)).join());
+  await page.fill("#r-search", "");
+  // Reorder.
+  await commits(page, () => page.click('.rfolder[data-category="seas"] .rfolder-head [data-action="up"]'));
+  check(K, "↑ moves a folder up", (await folders(page)).join() === "seas,kingdoms,~uncategorized" && cats()[0].id === "seas", (await folders(page)).join());
+  check(K, "first folder can't go further up, last can't go down", (await disabled(page, '.rfolder[data-category="seas"] .rfolder-head [data-action="up"]')) && (await disabled(page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="down"]')));
+  // Rename.
+  await commits(page, async () => {
+    await page.click('.rfolder[data-category="seas"] .rfolder-head [data-action="rename"]');
+    await page.fill('dialog [data-field="category-name"]', "Oceans");
+    await page.click('dialog [data-action="confirm-category"]');
+  });
+  check(K, "rename keeps the id", cats().some((k) => k.id === "seas" && k.name === "Oceans") && (await page.textContent('.rfolder[data-category="seas"] .rfolder-name')) === "Oceans");
+  // Delete a category that has a region: the region isn't deleted.
+  await commits(page, async () => {
+    await page.click('.rfolder[data-category="kingdoms"] .rfolder-head [data-action="delete"]');
+    await page.click('dialog button:has-text("Delete category")');
+  });
+  check(K, "deleting a category keeps its regions, now uncategorized", cats().length === 1 && !!regionOn("provinces") && (await inFolder(page, "~uncategorized")).includes("provinces"));
+  check(K, "no page errors", errors.length === 0, errors.join(" | ") || "none");
+  await ctx.close();
+});
+
+await step(K, "contributors and editors follow the region rules", async () => {
+  // Earlier checks made carto-ann an Editor: put the plain contributor back.
+  const people = access();
+  people.users.find((u) => u.login === "carto-ann").permissions = ["regions"];
+  mock.externalWrite("main", "content/access.json", JSON.stringify(people, null, 2) + "\n");
+  await (async () => {
+    // Start from a known file: the owner's Kingdoms (with provinces, which isn't Ann's) and a category of Bo's.
+    mock.externalWrite(
+      "main",
+      "content/categories.json",
+      JSON.stringify({ categories: [{ id: "kingdoms", name: "Kingdoms", regions: ["provinces"], createdBy: { id: 45669787, login: "Flanz1" } }, { id: "oceans", name: "Oceans", regions: [], createdBy: { id: 5003, login: "drafter-bo" } }] }, null, 2) + "\n",
+    );
+  })();
+  const ann = await open("carto-ann");
+  await ann.page.goto(`${ADMIN}#regions`);
+  await ann.page.waitForSelector("#regions .rfolder", { timeout: 15000 });
+  check(K, "a contributor can add a category", !(await disabled(ann.page, "#r-new-category")));
+  check(K, "…but not rename or delete other people's", (await disabled(ann.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]')) && (await disabled(ann.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="delete"]')));
+  check(K, "…with the reason on hover", /created this category/.test((await ann.page.getAttribute('.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]', "title")) ?? ""));
+  check(K, "can move her own region, not someone else's", !(await disabled(ann.page, '[data-region="landmark-disc"] [data-action="category"]')) && (await disabled(ann.page, '[data-region="provinces"] [data-action="category"]')));
+  await commits(ann.page, () => ann.page.selectOption('[data-region="landmark-disc"] [data-action="category"]', "kingdoms"));
+  check(K, "her region goes into the owner's folder", (await inFolder(ann.page, "kingdoms")).includes("landmark-disc"), (await inFolder(ann.page, "kingdoms")).join());
+  await addCategory(ann.page, "Ann's places");
+  const mineCat = cats().find((k) => k.name === "Ann's places");
+  check(K, "her new category is stamped with her", mineCat?.createdBy?.login === "carto-ann", JSON.stringify(mineCat));
+  check(K, "she can rename and delete her own", !(await disabled(ann.page, `.rfolder[data-category="${mineCat.id}"] .rfolder-head [data-action="rename"]`)) && !(await disabled(ann.page, `.rfolder[data-category="${mineCat.id}"] .rfolder-head [data-action="delete"]`)));
+  await ann.page.screenshot({ path: path.join(OUT, "categories-contributor.png"), fullPage: true });
+  // The API refuses what the page hides.
+  const cur = JSON.parse(mock.read("main", "content/categories.json"));
+  cur.categories.find((k) => k.id === "kingdoms").name = "Mine now";
+  const r = await forceCommit(ann.page, { path: "content/categories.json", content: JSON.stringify(cur, null, 2) + "\n" });
+  check(K, "renaming someone else's category directly is refused", r.status === 403 && /can't rename the category/.test(r.body.message), `${r.status} ${r.body.message}`);
+  await ann.ctx.close();
+
+  const bo = await open("drafter-bo");
+  await bo.page.goto(`${ADMIN}#regions`);
+  await bo.page.waitForSelector("#regions .rfolder", { timeout: 15000 });
+  check(K, "an editor of others' regions can rename and delete anyone's category", !(await disabled(bo.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]')) && !(await disabled(bo.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="delete"]')));
+  check(K, "…and move anyone's region", !(await disabled(bo.page, '[data-region="provinces"] [data-action="category"]')));
+  await commits(bo.page, async () => {
+    await bo.page.click('.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]');
+    await bo.page.fill('dialog [data-field="category-name"]', "Realms");
+    await bo.page.click('dialog [data-action="confirm-category"]');
+  });
+  check(K, "the editor renamed the owner's category", cats().some((k) => k.id === "kingdoms" && k.name === "Realms"));
+  await bo.ctx.close();
+});
+
 const O = "owner";
 await step(O, "owner sees everything; a removed person is locked out", async () => {
   const { ctx, page } = await open("Flanz1");

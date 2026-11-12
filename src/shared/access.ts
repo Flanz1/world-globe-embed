@@ -8,13 +8,15 @@
  * every permission, whatever that file says, so nobody can lock them out.
  */
 
+import { CATEGORIES_PATH, checkCategories, diffCategories, placements, type CategoriesFile } from "./categories.ts";
+
 export const PERMISSIONS = ["maps", "regions", "editOthers", "deleteOthers", "users"] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
 export const PERMISSION_LABELS: Record<Permission, { label: string; help: string }> = {
   maps: { label: "Maps & slots", help: "Open the Maps & slots tab: upload or replace map images, add slots and change slot settings." },
-  regions: { label: "Create regions", help: "Draw new regions, and edit or delete the regions they created." },
-  editOthers: { label: "Edit others' regions", help: "Change regions other people created." },
+  regions: { label: "Create regions", help: "Draw new regions, and edit or delete the regions they created. Also create region categories (folders) and manage your own." },
+  editOthers: { label: "Edit others' regions", help: "Change regions other people created, and rename, reorder, delete or fill other people's region categories." },
   deleteOthers: { label: "Delete others' regions", help: "Delete regions other people created." },
   users: { label: "Manage users", help: "Open the Users tab: add people and change what they can do (only up to their own permissions)." },
 };
@@ -97,22 +99,28 @@ export const canDeleteRegion = (perms: ReadonlySet<Permission> | null, userId: n
   !!perms && (owner === userId ? perms.has("regions") : perms.has("deleteOthers"));
 
 /** What a path in the repository is, for the rules below. */
-export type PathKind = "region" | "maps" | "access" | "content" | "outside";
+export type PathKind = "region" | "maps" | "access" | "categories" | "content" | "outside";
 const REGION_FILE = /^content\/regions\/([a-z0-9][a-z0-9-]{0,63})\.json$/;
 
 export function pathKind(path: string): PathKind {
   if (REGION_FILE.test(path)) return "region";
   if (path === ACCESS_PATH) return "access";
+  if (path === CATEGORIES_PATH) return "categories";
   if (path === "content/slots.json" || path.startsWith("content/maps/") || path.startsWith("content/incoming/")) return "maps";
   if (path.startsWith("content/")) return "content";
   return "outside";
 }
 
-/** One file a commit adds, changes or removes. `before`/`after` are the file's text (null = absent); only read for regions and access.json. */
+/** One file a commit adds, changes or removes. `before`/`after` are the file's text (null = absent); only read for regions, access.json and categories.json. */
 export interface FileDiff {
   path: string;
   before: string | null;
   after: string | null;
+  /**
+   * For categories.json: who created each region whose category changes, as of the commit being built on
+   * (region id → creator's account id, or null when no such region exists). The API looks these up.
+   */
+  regionOwners?: Record<string, number | null>;
 }
 
 export interface Actor extends Account {
@@ -148,6 +156,8 @@ export function checkChange(d: FileDiff, actor: Actor, ownerId: number): string 
       return checkAccessChange(d, actor, ownerId);
     case "region":
       return checkRegionChange(d, actor, ownerId);
+    case "categories":
+      return checkCategoriesChange(d, actor, ownerId);
   }
 }
 
@@ -205,3 +215,56 @@ function checkAccessChange(d: FileDiff, actor: Actor, ownerId: number): string |
   }
   return null;
 }
+
+/**
+ * categories.json follows the region rules. "Create regions" lets someone add categories and rename or
+ * delete their own; "Edit others' regions" does the same for anyone's. Moving a region into or out of a
+ * folder needs the right to edit that region. Order is cosmetic: anyone who can create regions may
+ * reorder. (A category with no creator recorded belongs to the repository owner.)
+ */
+function checkCategoriesChange(d: FileDiff, actor: Actor, ownerId: number): string | null {
+  const mayCreate = actor.owner || actor.permissions.has("regions");
+  const mayEditAny = actor.owner || actor.permissions.has("editOthers");
+  if (!mayCreate) return "You don't have permission to change categories.";
+  const parsed = d.after === null ? { categories: [] } : (parse(d.after) as CategoriesFile | undefined);
+  if (d.after !== null) {
+    if (parsed === undefined) return `${d.path} isn't valid JSON.`;
+    const errs = checkCategories(parsed);
+    if (errs.length) return `categories.json: ${errs[0]}`;
+  }
+  const after = parsed as CategoriesFile;
+  const before = d.before === null ? null : (parse(d.before) as CategoriesFile | undefined);
+  if (before === undefined) return "categories.json before this change isn't valid JSON.";
+  const diff = diffCategories(before, after);
+  const owned = (k: { createdBy?: Account }) => (k.createdBy?.id ?? ownerId) === actor.id;
+  const mayEdit = (k: { createdBy?: Account }) => mayEditAny || owned(k);
+  const was = new Map((before?.categories ?? []).map((k) => [k.id, k]));
+  const now = new Map(after.categories.map((k) => [k.id, k]));
+  for (const id of diff.added) {
+    const c = now.get(id)!.createdBy;
+    if (actor.owner && c) continue; // The owner may record someone else as the creator.
+    if (!c || c.id !== actor.id || c.login !== actor.login) return `The new category "${now.get(id)!.name}" must have createdBy set to you (${actor.login}).`;
+  }
+  for (const id of diff.removed) if (!mayEdit(was.get(id)!)) return `You can't delete the category "${was.get(id)!.name}": ${creatorName(was.get(id)!)} created it.`;
+  for (const id of diff.renamed) if (!mayEdit(was.get(id)!)) return `You can't rename the category "${was.get(id)!.name}": ${creatorName(was.get(id)!)} created it.`;
+  for (const [id, k] of was) if (now.has(id) && !actor.owner && !same(k.createdBy, now.get(id)!.createdBy)) return `Only the repository owner can change who created "${k.name}".`;
+  // Regions leaving a category that is being deleted just become uncategorized: that isn't moving them.
+  const gone = new Set(diff.removed);
+  const placedBefore = placements(before);
+  const placedAfter = placements(after);
+  for (const id of diff.moved) {
+    if (actor.owner) break; // The repository owner may move any region.
+    if (gone.has(placedBefore.get(id) ?? "") && !placedAfter.has(id)) continue;
+    const owner = d.regionOwners?.[id];
+    if (owner === undefined) return `Can't tell who created "${id}".`;
+    // A leftover id of a region that was deleted: anyone may tidy it away, but nobody may reserve a new one.
+    if (owner === null) {
+      if (placedAfter.has(id)) return `There's no region "${id}" to put in a category.`;
+      continue;
+    }
+    if (!canEditRegion(actor.permissions, actor.id, owner)) return `You can't move "${id}" between categories: someone else created it, and you can't edit other people's regions.`;
+  }
+  return null;
+}
+
+const creatorName = (k: { createdBy?: Account }) => k.createdBy?.login ?? "the owner";

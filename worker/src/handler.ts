@@ -12,9 +12,10 @@
  *
  * `handle` takes the upstream fetch as an argument so tests can point it at an in-memory GitHub.
  */
-import { ACCESS_PATH, PERMISSIONS, checkChange, pathKind, permissionsOf, type AccessFile, type Actor, type FileDiff, type Permission } from "../../src/shared/access.ts";
+import { diffCategories, type CategoriesFile } from "../../src/shared/categories.ts";
+import { ACCESS_PATH, PERMISSIONS, checkChange, pathKind, permissionsOf, regionOwner, type AccessFile, type Actor, type FileDiff, type Permission } from "../../src/shared/access.ts";
 import { appJwt, nonce, sign, verify } from "./crypto.ts";
-import { validateAccess, validateRegion, type ValidateFn } from "./generated/validators.js";
+import { validateAccess, validateCategories, validateRegion, type ValidateFn } from "./generated/validators.js";
 
 export interface KV {
   put(key: string, value: string, opts?: { expirationTtl?: number; metadata?: unknown }): Promise<void>;
@@ -373,6 +374,37 @@ function schemaError(v: ValidateFn, data: unknown, file: string): string | null 
   return `${file} doesn't match its schema${e ? `: ${e.instancePath || "(top level)"} ${e.message ?? ""}` : ""}.`;
 }
 
+/** Ids of the regions a categories.json change moves between folders (empty if the file doesn't parse; the checks report that). */
+function movedRegions(d: FileDiff): string[] {
+  try {
+    const before = d.before === null ? null : (JSON.parse(d.before) as CategoriesFile);
+    const after = d.after === null ? null : (JSON.parse(d.after) as CategoriesFile);
+    return diffCategories(before, after).moved;
+  } catch {
+    return [];
+  }
+}
+
+/** Who created each of these regions as of commit `ref` (null = no such region there). Regions saved before owners existed belong to the repository owner. */
+async function regionOwners(env: Env, up: Upstream, ref: string, ids: string[]): Promise<Record<string, number | null>> {
+  const out: Record<string, number | null> = {};
+  await Promise.all(
+    ids.map(async (id) => {
+      if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) return void (out[id] = null);
+      const r = await gh(env, up, `${repoPath(env)}/contents/content/regions/${id}.json?ref=${encodeURIComponent(ref)}`);
+      if (r.status === 404) return void (out[id] = null);
+      if (!r.ok) throw new HttpError(502, `Couldn't read the region ${id} (${r.status}).`);
+      const f = await readJson<{ content: string }>(r);
+      try {
+        out[id] = regionOwner(JSON.parse(utf8(f.content)) as { properties?: { createdBy?: { id: number; login: string } } }, ownerId(env));
+      } catch {
+        out[id] = ownerId(env);
+      }
+    }),
+  );
+  return out;
+}
+
 /** Checks a commit the admin page wants to put on the branch; returns the reasons it's refused (empty = fine). */
 export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentSha: string, commitSha: string): Promise<string[]> {
   const [parent, next] = await Promise.all([
@@ -383,7 +415,7 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
   const problems: string[] = [];
   const reads = changes.filter((c) => {
     const k = pathKind(c.path);
-    return k === "region" || k === "access";
+    return k === "region" || k === "access" || k === "categories";
   });
   if (reads.length > MAX_READ_FILES) return [`That commit changes ${reads.length} regions; the admin page saves at most ${MAX_READ_FILES} at a time.`];
   for (const c of changes) {
@@ -397,8 +429,16 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
     }
     const kind = pathKind(c.path);
     const d: FileDiff = { path: c.path, before: null, after: null };
-    if (kind === "region" || kind === "access") {
+    if (kind === "region" || kind === "access" || kind === "categories") {
       [d.before, d.after] = await Promise.all([c.before ? blobText(env, up, c.before) : null, c.after ? blobText(env, up, c.after) : null]);
+      if (kind === "categories" && !actor.owner) {
+        const moved = movedRegions(d);
+        if (moved.length > MAX_READ_FILES) {
+          problems.push(`That commit moves ${moved.length} regions between categories; the admin page does at most ${MAX_READ_FILES} at a time.`);
+          continue;
+        }
+        d.regionOwners = await regionOwners(env, up, parentSha, moved);
+      }
     } else {
       // Only whether the file exists matters for these.
       d.before = c.before ? "" : null;
@@ -409,7 +449,7 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
       problems.push(why);
       continue;
     }
-    if (d.after !== null && (kind === "region" || kind === "access")) {
+    if (d.after !== null && (kind === "region" || kind === "access" || kind === "categories")) {
       let data: unknown;
       try {
         data = JSON.parse(d.after);
@@ -417,7 +457,7 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
         problems.push(`${c.path} isn't valid JSON.`);
         continue;
       }
-      const err = schemaError(kind === "region" ? validateRegion : validateAccess, data, c.path);
+      const err = schemaError(kind === "region" ? validateRegion : kind === "access" ? validateAccess : validateCategories, data, c.path);
       if (err) problems.push(err);
     }
   }
