@@ -3,7 +3,7 @@
   "type": "Feature",
   "id": "kethregion",
   "properties": {
-    "slot": "aerthos",
+    "slot": "inara",
     "map": "globe-map",
     "color": "#5881ad",
     "fillOpacity": 0.35,
@@ -13,12 +13,7 @@
       "",
       ""
     ],
-    "updated": "2026-11-11T21:58:47Z",
-    "createdBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
-    },
-    "created": "2026-11-11T21:58:48Z"
+    "updated": "2026-11-11T21:58:47Z"
   },
   "geometry": {
     "type": "MultiPolygon",

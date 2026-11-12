@@ -328,7 +328,7 @@ for (const view of want("embed") ? ["globe", "flat"] : []) {
 }
 
 if (want("embed")) await step("embed globe", "plain slot embed unchanged (spins, no lock)", async () => {
-  const e = await openEmbed("v/aerthos/");
+  const e = await openEmbed("v/inara/");
   const a = await canvasShot(e);
   await e.page.waitForTimeout(600);
   const b = await canvasShot(e);
@@ -412,7 +412,7 @@ await step(A, "sign in and Regions tab", async () => {
   await page.fill("#r-search", "dateline");
   check(A, "search filters by id/labels", (await page.locator("#regions .rcard").count()) === 1);
   await page.fill("#r-search", "");
-  await page.selectOption("#r-slot", "aerthos");
+  await page.selectOption("#r-slot", "inara");
   check(A, "slot filter", (await page.locator("#regions .rcard").count()) === 1);
   await page.selectOption("#r-slot", "");
   await page.selectOption("#r-sort", "updated");

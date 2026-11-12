@@ -2,8 +2,8 @@
  * Builds (or rebuilds) the coast file of maps that are already processed, from their textures:
  *
  *   npm run coast                 every map
- *   npm run coast -- world-map    one map
- *   npm run coast -- world-map --mask out/mask.png   also write the land mask (white = land) for checking
+ *   npm run coast -- my-map    one map
+ *   npm run coast -- my-map --mask out/mask.png   also write the land mask (white = land) for checking
  *
  * Writes public/maps/<id>/<hash>-coast.bin and adds "coast" to content/maps/<id>.json.
  * New uploads get one from process-maps automatically.

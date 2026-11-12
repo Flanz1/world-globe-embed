@@ -120,7 +120,7 @@ export async function makeFixture({ quiet = false } = {}) {
   // On the other slot, drawn on a map that slot no longer shows: a warning in CI, a badge in the admin page.
   writeFileSync(
     path.join(regionsDir, "old-map-region.json"),
-    JSON.stringify({ ...region("old-map-region", "Old Province", { type: "Polygon", coordinates: [[[0, 0], [20, 0], [20, 15], [0, 15], [0, 0]]] }), properties: { name: "Old Province", slot: "aerthos", map: "world-map", color: "#2e86de" } }, null, 2) + "\n",
+    JSON.stringify({ ...region("old-map-region", "Old Province", { type: "Polygon", coordinates: [[[0, 0], [20, 0], [20, 15], [0, 15], [0, 0]]] }), properties: { name: "Old Province", slot: "inara", map: "retired-map", color: "#2e86de" } }, null, 2) + "\n",
   );
   // Several colours with a legend (one label hostile), for the legend checks.
   write(

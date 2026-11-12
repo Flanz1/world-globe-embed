@@ -3,21 +3,16 @@
   "type": "Feature",
   "id": "twintailborder",
   "properties": {
-    "slot": "aerthos",
+    "slot": "inara",
     "map": "globe-map",
     "color": "#c01630",
     "fillOpacity": 0.35,
     "label": true,
     "partLabels": [
       "Imperium Proper",
-      "Lakals Island"
+      ""
     ],
-    "updated": "2026-11-12T16:09:05Z",
-    "createdBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
-    },
-    "created": "2026-11-12T16:08:48Z"
+    "updated": "2026-11-12T16:21:01Z"
   },
   "geometry": {
     "type": "MultiPolygon",
