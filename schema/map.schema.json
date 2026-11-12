@@ -35,6 +35,7 @@
         "32768": { "$ref": "#/$defs/tiles" }
       }
     },
+    "coast": { "type": "string", "pattern": "^maps/[a-z0-9-]+/[0-9a-f]{12}-coast\\.bin$" },
     "lqip": { "type": "string", "pattern": "^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$", "maxLength": 2800 }
   },
   "$defs": {
