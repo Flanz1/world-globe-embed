@@ -62,7 +62,8 @@ export interface RegionProperties {
   partContested?: number[];
   /**
    * One entry per part, in order: true for a part locked in the admin editor (it can't be dragged or
-   * nudged as a whole; its vertices still can). Editor-only: the embed ignores it. Missing means all false.
+   * nudged as a whole; its vertices still can), false for one left unlocked. Editor-only: the embed
+   * ignores it. Locked is the default: a missing list or entry means locked.
    */
   partLocked?: boolean[];
   /** Province borders: open lines drawn inside the region (dotted in the embed). They don't change the parts. */
@@ -161,9 +162,9 @@ export function normalizePartContested(v: readonly unknown[] | undefined, n: num
   return first.map((k) => (k >= 0 && first[k] !== OWN_COLOUR ? OWN_COLOUR : k));
 }
 
-/** partLocked padded or cut to `n` parts; anything but `true` is unlocked. */
+/** partLocked padded or cut to `n` parts. Locked is the default: only an explicit `false` unlocks a part. */
 export function normalizePartLocked(v: readonly unknown[] | undefined, n: number): boolean[] {
-  return Array.from({ length: n }, (_, i) => v?.[i] === true);
+  return Array.from({ length: n }, (_, i) => v?.[i] !== false);
 }
 
 /** Problems with a saved region's partContested (beyond what the schema checks). */

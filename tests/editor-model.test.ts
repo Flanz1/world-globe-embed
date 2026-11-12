@@ -323,7 +323,8 @@ describe("editor model: locked parts", () => {
     expect(h.state.locked).toEqual([false, false, true]);
     // Out of range does nothing; a short array is padded.
     expect(setLocked(h.state, 9, true).locked).toEqual([false, false, true]);
-    expect(setLocked({ ...h.state, locked: [] }, 1, true).locked).toEqual([false, true, false]);
+    // A short array is padded with the default (locked).
+    expect(setLocked({ ...h.state, locked: [] }, 1, false).locked).toEqual([true, false, true]);
   });
 
   it("a locked part refuses to move; unlocked parts still move", () => {
@@ -359,7 +360,8 @@ describe("editor model: locked parts", () => {
     const parts: Parts = [[[[0, 0], [0, 0.000001], [0.000001, 0]]], ...s.parts.slice(1)];
     expect(toStyledGeometry(parts, s.styles, s.labels, s.contested, s.locked).partLocked).toEqual([true, true]);
     expect(toStyledGeometry(s.parts, s.styles, s.labels, s.contested, s.locked).partLocked).toEqual([false, true, true]);
-    expect(toStyledGeometry(s.parts, s.styles).partLocked).toEqual([false, false, false]);
+    // Without lock info every part is locked.
+    expect(toStyledGeometry(s.parts, s.styles).partLocked).toEqual([true, true, true]);
   });
 });
 

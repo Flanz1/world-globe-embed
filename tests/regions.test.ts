@@ -260,9 +260,10 @@ describe("region colours and legend", () => {
     const bad = multi();
     (bad.properties as unknown as Record<string, unknown>).partLocked = [1, 0, 0];
     expect(loadContent(project({ "kingdom-of-vael.json": bad })).errors.join("\n")).toMatch(/partLocked/);
-    expect(normalizePartLocked([true, "yes", 1], 4)).toEqual([true, false, false, false]);
-    expect(normalizePartLocked([true, true, true], 2)).toEqual([true, true]);
-    expect(normalizePartLocked(undefined, 2)).toEqual([false, false]);
+    // Locked is the default: only an explicit false unlocks a part.
+    expect(normalizePartLocked([false, "yes", 0, true], 5)).toEqual([false, true, true, true, true]);
+    expect(normalizePartLocked([false, false, false], 2)).toEqual([false, false]);
+    expect(normalizePartLocked(undefined, 2)).toEqual([true, true]);
   });
 
   it("normalizePartContested drops anything that isn't a zone of a normal part", () => {
