@@ -11,3 +11,8 @@ BRANCH = "main"
 OWNER_ID = "45669787"
 ADMIN_URLS = "https://flanz1.github.io/world-globe-embed/admin/"
 # APP_ID and APP_CLIENT_ID come from the workflow (repository variables), so they aren't hard-coded here.
+
+# People who signed in but aren't on the admin list yet (the Users tab's "Asked for access").
+[[kv_namespaces]]
+binding = "WAITING"
+id = "c8f164f05c0e444a93563e0cd54c7ee6"

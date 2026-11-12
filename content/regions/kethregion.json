@@ -13,7 +13,12 @@
       "",
       ""
     ],
-    "updated": "2026-11-11T21:58:47Z"
+    "updated": "2026-11-11T21:58:47Z",
+    "createdBy": {
+      "id": 138310181,
+      "login": "LoopSimon"
+    },
+    "created": "2026-11-11T21:58:48Z"
   },
   "geometry": {
     "type": "MultiPolygon",
