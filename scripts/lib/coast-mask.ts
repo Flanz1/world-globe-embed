@@ -13,6 +13,11 @@
  *  - Sea names painted in white over the water are not islands: white blobs surrounded by sea
  *    are checked for lettering (crisp edges, pure white, even stroke width) and the lettering goes.
  *    Ice and snow (soft edges, textured, uneven) stay land.
+ *  - Pictures drawn in the sea (ships, mermaids, sea monsters, a whirlpool's black eye and its
+ *    swirls) are not islands either: they're inked, so a blob of up to island size whose edge is
+ *    mostly near-black line work around a brighter inside goes, and so does a blob that is
+ *    nearly all darker than the sea. Painted islands have soft, coloured shores; dark islands
+ *    (dark all through, not just at the edge) stay.
  *  - Specks smaller than `minIsland` are dropped.
  *
  * Works on a raw RGB(A) raster; sizes are tuned for a 16384 px wide map and scale with the width.
@@ -50,6 +55,8 @@ export interface CoastStats {
   labelsRemoved: number;
   /** Name boxes (cream labels) standing mostly in the sea, taken out. */
   boxesRemoved: number;
+  /** Pictures in the sea (ships, sea creatures, whirlpools) taken out. */
+  decorationsRemoved: number;
   /** Specks dropped. */
   specksRemoved: number;
   lines: number;
@@ -468,6 +475,54 @@ export interface LandMask {
   stats: Omit<CoastStats, "lines" | "points">;
 }
 
+const lum3 = (r: number, g: number, b: number) => 0.3 * r + 0.59 * g + 0.11 * b;
+
+/** Offsets within Manhattan distance 3 (the band along a blob's edge). */
+const EDGE_BAND: [number, number][] = [];
+for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) if ((dx || dy) && Math.abs(dx) + Math.abs(dy) <= 3) EDGE_BAND.push([dx, dy]);
+
+/**
+ * How inked a land blob looks: `dark` is the share of its pixels darker than the sea, `edgeInk` the
+ * share of near-black pixels in the 3 px band along its edge, `lum` its mean brightness.
+ */
+export function inkFeatures(
+  rgb: Uint8Array,
+  ch: number,
+  w: number,
+  h: number,
+  st: Uint8Array,
+  pixels: Int32Array,
+  count: number,
+  seaLum: number,
+): { dark: number; edgeInk: number; lum: number } {
+  let dark = 0;
+  let band = 0;
+  let ink = 0;
+  let sum = 0;
+  for (let k = 0; k < count; k++) {
+    const i = pixels[k];
+    const o = i * ch;
+    const l = lum3(rgb[o], rgb[o + 1], rgb[o + 2]);
+    sum += l;
+    if (l < 0.86 * seaLum) dark++;
+    const x = i % w;
+    const y = (i - x) / w;
+    let edge = false;
+    for (const [dx, dy] of EDGE_BAND) {
+      const yy = y + dy;
+      if (yy < 0 || yy >= h || st[yy * w + ((x + dx + w) % w)] & SEA) {
+        edge = true;
+        break;
+      }
+    }
+    if (edge) {
+      band++;
+      if (l < 0.68 * seaLum) ink++;
+    }
+  }
+  return { dark: dark / count, edgeInk: band ? ink / band : 0, lum: sum / count };
+}
+
 /** Land/sea mask of a raw raster (channels 3 or 4). See the file comment for the rules. */
 export function buildLandMask(rgb: Uint8Array, w: number, h: number, ch: number, opts: CoastOptions = {}): LandMask {
   const s = w / 16384;
@@ -476,6 +531,9 @@ export function buildLandMask(rgb: Uint8Array, w: number, h: number, ch: number,
   const inlandR = ((opts.inlandSeaWidth ?? 50) * s) / 2;
   const minIsland = Math.max(2, (opts.minIsland ?? 16) * s * s);
   const maxLabel = 2_000_000 * s * s;
+  // Pictures in the sea: from a few hundred px to the size of a big ship or sea monster.
+  const minDecoration = 300 * s * s;
+  const maxDecoration = 80_000 * s * s;
   const sea = opts.seaColour ?? findSeaColour(rgb, w, h, ch);
   // Blobs mostly in shades between the sea colour and white are checked for lettering (outlined
   // lettering has dark outline pixels, so away from the poles, where there's no drifting ice, half is enough).
@@ -521,9 +579,11 @@ export function buildLandMask(rgb: Uint8Array, w: number, h: number, ch: number,
     }
   }
   const boxesRemoved = removeLabelBoxes(rgb, ch, w, h, st, s, stack);
-  // Land blobs (8-connected): lettering goes back to sea, specks go.
+  // Land blobs (8-connected): lettering and pictures go back to sea, specks go.
   let labelsRemoved = 0;
+  let decorationsRemoved = 0;
   let specksRemoved = 0;
+  const seaLum = lum3(sea[0], sea[1], sea[2]);
   let buf = new Int32Array(1 << 16);
   for (let i0 = 0; i0 < n; i0++) {
     if (st[i0] & (SEA | SEEN)) continue;
@@ -581,6 +641,12 @@ export function buildLandMask(rgb: Uint8Array, w: number, h: number, ch: number,
     } else if (count <= maxLabel && white > (midLatitude(yMin, yMax) ? 0.5 : 0.6) * ink && looksLikeLettering(rgb, ch, w, buf, count, seaLike)) {
       drop = true;
       labelsRemoved++;
+    } else if (count <= maxDecoration) {
+      const { dark, edgeInk, lum } = inkFeatures(rgb, ch, w, h, st, buf, count, seaLum);
+      if (dark >= 0.8 || (count >= minDecoration && edgeInk >= 0.2 && lum >= 1.4 * seaLum)) {
+        drop = true;
+        decorationsRemoved++;
+      }
     }
     if (drop) for (let k = 0; k < count; k++) st[buf[k]] |= SEA;
   }
@@ -603,6 +669,7 @@ export function buildLandMask(rgb: Uint8Array, w: number, h: number, ch: number,
       inlandSeas,
       labelsRemoved,
       boxesRemoved,
+      decorationsRemoved,
       specksRemoved,
     },
   };

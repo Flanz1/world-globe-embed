@@ -60,4 +60,4 @@ export async function loadMapRaster(meta: MapMeta, publicDir: string): Promise<R
 export const describeStats = (s: CoastStats) =>
   `sea colour rgb(${s.seaColour.join(", ")}); ${((100 * s.seaPixels) / (s.width * s.height)).toFixed(1)}% open sea; ` +
   `${s.inlandWaterPixels.toLocaleString("en")} px of rivers/lakes/marsh counted as land; ${s.inlandSeas} inland sea(s); ` +
-  `${s.labelsRemoved} sea labels, ${s.boxesRemoved} name boxes and ${s.specksRemoved} specks removed; ${s.lines.toLocaleString("en")} coast lines, ${s.points.toLocaleString("en")} points`;
+  `${s.labelsRemoved} sea labels, ${s.boxesRemoved} name boxes, ${s.decorationsRemoved} pictures and ${s.specksRemoved} specks removed; ${s.lines.toLocaleString("en")} coast lines, ${s.points.toLocaleString("en")} points`;

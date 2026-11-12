@@ -12,7 +12,7 @@ const SEA = "#1e3236";
 /**
  * A small painted world: a continent with a lake and a river (sea-coloured, 2 px) ending in a pond, a delta of
  * three channels, a big inland sea joined to the ocean by a river-wide neck, white lettering in the
- * sea, and a small island.
+ * sea, a small island, and two pictures in the sea: an inked one (a "ship") and a black whirlpool eye.
  */
 const scene = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
   <rect width="100%" height="100%" fill="${SEA}"/>
@@ -26,6 +26,8 @@ const scene = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}
   <path d="M1200 500 L1350 500" stroke="${SEA}" stroke-width="2"/>
   <path d="M120 520 q 15 -40 30 0 t 30 0 t 30 0 M220 490 l 0 40 M250 490 q 20 0 20 20 q 0 20 -20 20" stroke="#ffffff" stroke-width="4" fill="none"/>
   <circle cx="200" cy="800" r="12" fill="#5a8a3c"/>
+  <circle cx="1000" cy="900" r="14" fill="#e0d0a0" stroke="#000000" stroke-width="3"/>
+  <circle cx="1100" cy="900" r="6" fill="#000000"/>
 </svg>`;
 
 async function raster() {
@@ -58,6 +60,9 @@ describe("land mask", () => {
     expect(at(150, 500)).toBe(0); // lettering is not an island
     expect(at(220, 510)).toBe(0);
     expect(at(200, 800)).toBe(1); // a real island stays
+    expect(at(1000, 900)).toBe(0); // an inked picture is not an island
+    expect(at(1100, 900)).toBe(0); // nor a black whirlpool eye
+    expect(stats.decorationsRemoved).toBe(2);
     expect(stats.labelsRemoved).toBeGreaterThan(0);
     expect(stats.inlandSeas).toBeGreaterThan(0);
   });
