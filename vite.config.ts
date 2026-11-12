@@ -52,13 +52,22 @@ function devSlotPages(): Plugin {
  * headers, so it goes in a <meta> tag (which can't express frame-ancestors; main.ts refuses to run framed).
  * The dev server is left alone because Vite's client needs inline scripts and a websocket.
  */
+/** The admin API's origin (worker/), the only other place the admin page may talk to. */
+function adminApiOrigin(): string {
+  const api = (process.env.VITE_ADMIN_API ?? "").trim();
+  if (!api) return "";
+  const u = new URL(api);
+  if (u.protocol !== "https:" && u.hostname !== "localhost" && u.hostname !== "127.0.0.1") throw new Error("VITE_ADMIN_API must be an https:// address.");
+  return u.origin;
+}
+
 export const ADMIN_CSP = [
   "default-src 'none'",
   "script-src 'self'",
   "style-src 'self'",
   "img-src 'self' data:",
-  // The editor fetches the map's coast file from this site.
-  "connect-src 'self' https://api.github.com",
+  // The editor fetches the map's coast file from this site; everything else goes through the admin API.
+  `connect-src 'self'${adminApiOrigin() ? ` ${adminApiOrigin()}` : ""}`,
   // The preview dialog shows this site's own preview/ page.
   "frame-src 'self'",
   "base-uri 'none'",

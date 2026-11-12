@@ -1,0 +1,13 @@
+# The admin API for the globe admin page. Deployed by .github/workflows/admin-api.yml.
+# Secrets (set by that workflow from the repository's secrets): APP_PRIVATE_KEY, APP_CLIENT_SECRET, SESSION_KEY.
+name = "world-globe-admin"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[vars]
+REPO = "Flanz1/world-globe-embed"
+BRANCH = "main"
+OWNER_ID = "45669787"
+ADMIN_URLS = "https://flanz1.github.io/world-globe-embed/admin/"
+# APP_ID and APP_CLIENT_ID come from the workflow (repository variables), so they aren't hard-coded here.

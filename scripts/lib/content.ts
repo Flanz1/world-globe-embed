@@ -6,6 +6,7 @@ import { Ajv2020, type ErrorObject } from "ajv/dist/2020.js";
 import type { MapMeta, SlotsFile } from "../../src/shared/types.ts";
 import { checkGeometry } from "../../src/shared/geo.ts";
 import { checkLegend, checkParts, type RegionFeature } from "../../src/shared/region.ts";
+import { checkAccess } from "../../src/shared/access.ts";
 import { ROOT, contentPaths, type ContentPaths } from "./paths.ts";
 
 const readJson = (file: string): unknown => JSON.parse(readFileSync(file, "utf8"));
@@ -17,6 +18,7 @@ function compile(file: string) {
 const validateSlots = compile("slots.schema.json");
 const validateMap = compile("map.schema.json");
 const validateRegion = compile("region.schema.json");
+const validateAccess = compile("access.schema.json");
 
 function describe(file: string, errors: ErrorObject[] | null | undefined): string[] {
   // if/then/else failures are always accompanied by the specific error inside the branch.
@@ -170,6 +172,18 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
     }
     if (!maps.has(map)) warnings.push(`${rel}: the map it was drawn on ("${map}") no longer exists.`);
     if (ok) regions.set(region.id, region);
+  }
+
+  // Who may use the admin page (optional: without it only the repository owner can sign in).
+  const accessFile = path.join(paths.content, "access.json");
+  if (existsSync(accessFile)) {
+    try {
+      const data = readJson(accessFile);
+      if (!validateAccess(data)) errors.push(...describe("content/access.json", validateAccess.errors));
+      else errors.push(...checkAccess(data).map((e) => `content/access.json: ${e}`));
+    } catch (e) {
+      errors.push(`content/access.json: is not valid JSON (${(e as Error).message})`);
+    }
   }
 
   return { content: errors.length || !slots ? null : { slots, maps, regions }, errors, warnings };
