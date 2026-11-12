@@ -66,7 +66,7 @@ const regions = [
   feature(
     "borders-test",
     { type: "MultiPolygon", coordinates: BORDERS.map((r) => [r]) },
-    { color: "#c0392b", fillOpacity: 0.35, legend: [{ label: "Breza", color: "#c0392b" }, { label: "Selbia", color: "#2e86c1" }], partLegend: [0, 0, 1], partLocked: [false, false, false], provinceBorders: [[[15, -20], [15, -10]]] },
+    { color: "#c0392b", fillOpacity: 0.35, legend: [{ label: "Breza", color: "#c0392b" }, { label: "Selbia", color: "#2e86c1" }], partLegend: [0, 0, 1], nationalBorders: true, partLocked: [false, false, false], provinceBorders: [[[15, -20], [15, -10]]] },
   ),
 ];
 
@@ -167,6 +167,7 @@ await step(A, "polygon tool traces along a border", async () => {
   check(A, "the new part shares the whole west border exactly", s.parts.length === 2 && ring.length === 6 && [[100, -46], [100, -49], [100, -53], [100, -56]].every((p) => has(ring, p)), JSON.stringify(ring));
   const b = await call("borders");
   check(A, "a line shared by two same-colour parts isn't a national border", b === null || b.national.length === 0, JSON.stringify(b));
+  check(A, "national borders are off by default (parts that touch just touch)", (await page.locator('dialog.editor input[name="national-borders"]').isChecked()) === false);
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(OUT, "editor-traced.png") });
 });

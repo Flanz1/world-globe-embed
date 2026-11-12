@@ -69,6 +69,12 @@ export interface RegionProperties {
   partLocked?: boolean[];
   /** Province borders: open lines drawn inside the region (dotted in the embed). They don't change the parts. */
   provinceBorders?: Position[][];
+  /**
+   * Draw national borders: where two parts share a line exactly, a dark line on a light casing between
+   * different legend colours (the line is left off between parts of one colour). Off unless true: parts
+   * that touch just touch.
+   */
+  nationalBorders?: boolean;
   updated?: string;
   /** When the region was first saved. */
   created?: string;
@@ -107,6 +113,8 @@ export interface RegionData {
   geometry: RegionGeometry;
   /** Province borders (open lines), drawn dotted where they lie inside the region's parts. Missing: none. */
   provinceBorders?: Position[][];
+  /** Draw national borders where parts share a line (see RegionProperties.nationalBorders). Missing: no. */
+  nationalBorders?: boolean;
 }
 
 /** Most positions in a region's province borders, all lines together. */
@@ -138,6 +146,7 @@ export function regionData(f: RegionFeature): RegionData {
     contested: normalizePartContested(p.partContested, polygonsOf(f.geometry).length),
     geometry: f.geometry,
     ...(p.provinceBorders?.length ? { provinceBorders: p.provinceBorders.map((l) => l.map(([x, y]) => [x, y] as Position)) } : {}),
+    ...(p.nationalBorders === true ? { nationalBorders: true } : {}),
   };
 }
 
@@ -316,7 +325,7 @@ export function parseGeometry(v: unknown): RegionGeometry | null {
  */
 export function parseRegionData(v: unknown): RegionData | null {
   if (!isObj(v)) return null;
-  const { id, slot, name, color, fillOpacity, label, geometry, legend, legendTitle, parts, labels, contested, provinceBorders } = v;
+  const { id, slot, name, color, fillOpacity, label, geometry, legend, legendTitle, parts, labels, contested, provinceBorders, nationalBorders } = v;
   if (typeof id !== "string" || !REGION_ID.test(id)) return null;
   if (typeof slot !== "string" || !REGION_ID.test(slot)) return null;
   if (typeof name !== "string" || name.length > NAME_MAX) return null;
@@ -361,6 +370,7 @@ export function parseRegionData(v: unknown): RegionData | null {
     geometry: g,
     // Malformed province borders are dropped (the region still loads).
     ...(provinceBorders !== undefined && parseProvinceBorders(provinceBorders)?.length ? { provinceBorders: parseProvinceBorders(provinceBorders)! } : {}),
+    ...(nationalBorders === true ? { nationalBorders: true } : {}),
   };
 }
 
