@@ -91,6 +91,8 @@ const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--ena
 const A = "editor";
 const mock = new MockGitHub({ root: dir, branches: ["main", BRANCH] });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+// Other regions are hidden in the editor until switched on (wge.editor.overlays); these checks snap to this neighbour.
+await ctx.addInitScript(() => localStorage.setItem("wge.editor.overlays", JSON.stringify(["snap-neighbour"])));
 await ctx.route("https://api.github.com/**", (r) => mock.handle(r));
 await useAdminApi(ctx, mock, { branch: BRANCH });
 const page = await ctx.newPage();

@@ -13,9 +13,11 @@ import { paintSpecOf, regionClashes } from "../shared/region-paint.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
 import { categories, canAddCategory, canEditCategory, creatorOf, initCategories, loadCategories, moveRegions, newCategory, remove as removeCategory, rename as renameCategory, shift as shiftCategory } from "./categories.ts";
 import { $, h } from "./dom.ts";
-import { openEditor } from "./editor/editor.ts";
+import { openEditor, type EditorOptions } from "./editor/editor.ts";
+import type { OverlayMeta } from "./editor/overlay-filter.ts";
 import type { FileCommit, GitHub } from "./github.ts";
 import { loadMapImage } from "./images.ts";
+import { compareBy, creatorChoices, creatorId, matchesQuery, type Filterable } from "./region-filter.ts";
 import { modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
 import { OWNER_ID, can, canDelete, canEdit, currentUser, ownerOf } from "./session.ts";
 
@@ -301,9 +303,7 @@ function creatorOptions(): void {
   const sel = ui.creator();
   const keep = sel.value;
   const me = currentUser();
-  const people = new Map<number, string>();
-  for (const e of entries) if (e.feature) people.set(ownerOf(e.feature), creatorName(e));
-  const opts = [...people].filter(([id]) => id !== me?.id).sort((a, b) => a[1].localeCompare(b[1]));
+  const opts = creatorChoices(entries.filter((e) => e.feature).map(filterable), me?.id);
   sel.replaceChildren(
     h("option", { value: "", textContent: "Anyone" }),
     h("option", { value: "me", textContent: "Me" }),
@@ -332,25 +332,12 @@ export function renderRegions(): void {
   const slot = slotSel.value;
   const sort = ui.sort().value;
   const who = ui.creator().value;
-  const whoId = who === "me" ? currentUser()?.id : who ? Number(who) : null;
+  const whoId = creatorId(who, currentUser()?.id);
   const shown = entries
     .filter((e) => !slot || e.feature?.properties.slot === slot)
     .filter((e) => whoId == null || (!!e.feature && ownerOf(e.feature) === whoId))
-    .filter((e) => !q || e.id.includes(q) || labelsText(e.feature?.properties).toLowerCase().includes(q) || creatorName(e).toLowerCase().includes(q))
-    .sort((a, b) => {
-      if (sort === "updated") {
-        const da = a.commit?.date || a.feature?.properties.updated || "";
-        const db = b.commit?.date || b.feature?.properties.updated || "";
-        return db.localeCompare(da) || a.id.localeCompare(b.id);
-      }
-      if (sort === "created") {
-        const da = a.feature?.properties.created || "";
-        const db = b.feature?.properties.created || "";
-        return db.localeCompare(da) || a.id.localeCompare(b.id);
-      }
-      if (sort === "creator") return creatorName(a).localeCompare(creatorName(b), undefined, { sensitivity: "base" }) || a.id.localeCompare(b.id);
-      return a.id.localeCompare(b.id);
-    });
+    .filter((e) => matchesQuery(q, filterable(e)))
+    .sort((a, b) => compareBy(sort, filterable(a), filterable(b)));
   $("#regions-empty").hidden = entries.length > 0;
   $("#regions-tools").hidden = entries.length === 0;
   const cats = categories().categories;
@@ -377,6 +364,19 @@ export function renderRegions(): void {
   $("#regions").replaceChildren(...out);
 }
 
+/** What the search, creator filter and sorting see of a region (shared with the editor's overlay panel). */
+export function filterable(e: RegionEntry): Filterable {
+  const p = e.feature?.properties;
+  return {
+    id: e.id,
+    labels: labelsText(p),
+    creator: creatorName(e),
+    creatorId: e.feature ? ownerOf(e.feature) : OWNER_ID,
+    updated: e.commit?.date || p?.updated || "",
+    created: p?.created || "",
+  };
+}
+
 /** The part labels (or, for an older region, its name), for the card and the search. */
 function labelsText(p: RegionFeature["properties"] | undefined): string {
   if (!p) return "";
@@ -390,14 +390,22 @@ function others(e?: RegionEntry) {
   return entries.filter((x) => x !== e && x.feature).map((x) => x.feature!);
 }
 
+/** What the editor's "Other regions" panel needs to know about the other regions: who made them, which folder they're in. */
+function overlayMeta(): EditorOptions["neighbourMeta"] {
+  const home = placements(categories());
+  const meta = new Map<string, OverlayMeta>();
+  for (const e of entries) if (e.feature) meta.set(e.id, { ...filterable(e), categoryId: home.get(e.id) ?? null });
+  return { meta, categories: categories().categories.map((k) => ({ id: k.id, name: k.name })), meId: currentUser()?.id };
+}
+
 function edit(e: RegionEntry): void {
   if (!e.feature || !canEdit(e.feature)) return;
-  openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature: e.feature, sha: e.sha, isNew: false, neighbours: others(e), takenIds: new Set(entries.map((x) => x.id)), afterCommit: deps.afterCommit });
+  openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature: e.feature, sha: e.sha, isNew: false, neighbours: others(e), neighbourMeta: overlayMeta(), takenIds: new Set(entries.map((x) => x.id)), afterCommit: deps.afterCommit });
 }
 
 export function newRegion(slot: string): void {
   if (!deps.slots().slots[slot] || !can("regions")) return;
-  openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), slot, sha: null, isNew: true, neighbours: others(), takenIds: new Set(entries.map((x) => x.id)), afterCommit: deps.afterCommit });
+  openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), slot, sha: null, isNew: true, neighbours: others(), neighbourMeta: overlayMeta(), takenIds: new Set(entries.map((x) => x.id)), afterCommit: deps.afterCommit });
 }
 
 function duplicate(e: RegionEntry): void {
@@ -405,7 +413,7 @@ function duplicate(e: RegionEntry): void {
   const taken = new Set(entries.map((x) => x.id));
   const id = copyId(e.id, taken);
   const feature: RegionFeature = { ...e.feature, id };
-  openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature, sha: null, isNew: true, neighbours: others(), takenIds: taken, afterCommit: deps.afterCommit });
+  openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature, sha: null, isNew: true, neighbours: others(), neighbourMeta: overlayMeta(), takenIds: taken, afterCommit: deps.afterCommit });
 }
 
 /**
@@ -499,7 +507,7 @@ export function openCombine(): void {
     if (!r.feature) return;
     r.feature.properties.map = deps.slots().slots[base.slot]?.map ?? base.map;
     m.close();
-    openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature: r.feature, sha: null, isNew: true, neighbours: others(), takenIds: taken, afterCommit: deps.afterCommit });
+    openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature: r.feature, sha: null, isNew: true, neighbours: others(), neighbourMeta: overlayMeta(), takenIds: taken, afterCommit: deps.afterCommit });
   });
 
   m.body.append(

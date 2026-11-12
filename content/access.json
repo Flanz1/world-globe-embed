@@ -22,6 +22,15 @@
         "deleteOthers",
         "users"
       ]
+    },
+    {
+      "id": 167983516,
+      "login": "tombo661",
+      "permissions": [
+        "regions"
+      ],
+      "added": "2026-11-12T21:46:35Z",
+      "addedBy": "LoopSimon"
     }
   ]
 }

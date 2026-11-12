@@ -58,6 +58,7 @@ import { h } from "../dom.ts";
 import type { GitHub } from "../github.ts";
 import { loadMapImage } from "../images.ts";
 import { SITE } from "../dom.ts";
+import { createOverlayFilter, type OverlayCategory, type OverlayMeta } from "./overlay-filter.ts";
 import { TILE_BUDGET, TILE_LEVELS, TileCache, levelFor, tileRect, tilesAt, tileUrl, type TileLevel } from "../../shared/tiles.ts";
 import { alertBox, confirmBox, modal, openEmbedDialog, previewUrl, sendRegion } from "../region-dialogs.ts";
 import { regionPath, serialize, stamp } from "../regions.ts";
@@ -116,6 +117,8 @@ export interface EditorOptions {
   isNew: boolean;
   /** Other regions (the ones on the same slot are drawn as grey outlines and are snap targets). */
   neighbours: RegionFeature[];
+  /** For the "Other regions" panel: creator, category and dates of the regions in `neighbours`. Without it the panel just lists ids. */
+  neighbourMeta?: { meta: Map<string, OverlayMeta>; categories: OverlayCategory[]; meId: number | undefined };
   takenIds: Set<string>;
   afterCommit: (sha: string) => Promise<void>;
 }
@@ -222,6 +225,26 @@ export function openEditor(o: EditorOptions): void {
   const pad = clampPadding(slot.north ?? 0, slot.south ?? 0);
   const frame = { north: pad.north, south: pad.south, shift: slot.shift ?? 0 };
   const neighbours = o.neighbours.filter((n) => n.properties.slot === slotName);
+  // Other regions are hidden until switched on in the "Other regions" panel (top right of the map).
+  const overlays = createOverlayFilter({
+    items: neighbours.map((n, index) => ({
+      categoryId: null,
+      id: n.id as string,
+      labels: n.properties.name ?? "",
+      creator: n.properties.createdBy?.login ?? "the owner",
+      creatorId: n.properties.createdBy?.id ?? 0,
+      updated: n.properties.updated ?? "",
+      created: n.properties.created ?? "",
+      ...o.neighbourMeta?.meta.get(n.id as string),
+      index,
+    })),
+    categories: o.neighbourMeta?.categories ?? [],
+    meId: o.neighbourMeta?.meId,
+    onChange: () => {
+      ringCache.version = -1;
+      draw();
+    },
+  });
 
   const hist = new History(stateOf(o.feature));
   let id = o.feature?.id ?? uniqueId("region", o.takenIds);
@@ -342,7 +365,7 @@ export function openEditor(o: EditorOptions): void {
     h(
       "div",
       { className: "ed-body" },
-      h("div", { className: "ed-canvas-wrap" }, canvas, ctxMenu, tip, simpPanel, combPanel, status),
+      h("div", { className: "ed-canvas-wrap" }, canvas, overlays.el, ctxMenu, tip, simpPanel, combPanel, status),
       h(
         "div",
         { className: "ed-side" },
@@ -781,13 +804,14 @@ export function openEditor(o: EditorOptions): void {
     if (gridOn) drawGrid(offs);
     if (coastActive()) drawCoast(offs);
     // Neighbours on the same slot: thin grey outlines to trace against.
-    if (neighbours.length) {
+    const shownNb = neighbours.filter((_, i) => overlays.visible(i));
+    if (shownNb.length) {
       g.save();
       g.lineWidth = 1;
       g.strokeStyle = "rgba(220,220,220,.75)";
       g.setLineDash([]);
       g.beginPath();
-      for (const n of neighbours) traceGeometry(g, n.geometry, sx, sy, offs);
+      for (const n of shownNb) traceGeometry(g, n.geometry, sx, sy, offs);
       g.stroke();
       g.restore();
     }
@@ -1159,6 +1183,14 @@ export function openEditor(o: EditorOptions): void {
   }
 
   let lastArea = -1;
+  // Drawing tips (the long how-to line above the map) are off by default; the "?" dialog turns them on.
+  let tipsOn = ((): boolean => {
+    try {
+      return localStorage.getItem("ed-tips") === "on";
+    } catch {
+      return false;
+    }
+  })();
   function updateStatus(): void {
     const n = countVertices(parts());
     const parts_ = parts().length;
@@ -1170,7 +1202,8 @@ export function openEditor(o: EditorOptions): void {
     if (cursor) {
       const lon = ((((cursor[0] + 180) % 360) + 360) % 360) - 180;
       const gl = imageToGlobe([lon, cursor[1]], frame);
-      line += ` · map lon ${round(lon, 3)}, lat ${round(cursor[1], 3)} (stored) · globe lon ${round(gl[0], 2)}, lat ${round(gl[1], 2)}`;
+      line += ` · lon ${round(lon, 3)}, lat ${round(cursor[1], 3)}`;
+      if (tipsOn) line += ` (stored) · globe lon ${round(gl[0], 2)}, lat ${round(gl[1], 2)}`;
     }
     status.textContent = line;
     undoBtn.disabled = !hist.canUndo;
@@ -1518,7 +1551,7 @@ export function openEditor(o: EditorOptions): void {
     drawing = null;
     tool = drawTool;
     canvas.style.cursor = "crosshair";
-    setMsg(drawHint(t));
+    setMsg(tipsOn ? drawHint(t) : "");
     changed();
   }
 
@@ -1683,7 +1716,7 @@ export function openEditor(o: EditorOptions): void {
   }
   /** Snap targets for dragging a point of line l: everything but that line itself. */
   function lineDragSnap(l: number): { rings: SnapRing[]; skip: (ring: number) => boolean } {
-    const rings = [...partRings(parts()), ...lineRings(), ...nbSnapRings];
+    const rings = [...partRings(parts()), ...lineRings(), ...shownNbRings()];
     const mine = parts().reduce((n, rs) => n + rs.length, 0) + l;
     return { rings, skip: (i) => i === mine };
   }
@@ -1975,6 +2008,8 @@ export function openEditor(o: EditorOptions): void {
   const nbSnapRings: SnapRing[] = neighbours.flatMap((f, n) =>
     polygonsOf(f.geometry).flatMap((poly) => poly.map((r, ri) => snapRing(openRing(unwrapRing(r)), { kind: "neighbour", n, r: ri }))),
   );
+  /** Only the neighbours switched on in the "Other regions" panel are snap targets: you can't snap to what you can't see. */
+  const shownNbRings = (): SnapRing[] => nbSnapRings.filter((r) => r.src.kind === "neighbour" && overlays.visible(r.src.n));
   /** A neighbouring region's name, for the status line (plain text: names are untrusted). */
   const neighbourName = (n: number): string => {
     const f = neighbours[n];
@@ -1983,7 +2018,7 @@ export function openEditor(o: EditorOptions): void {
   let ringCache: { version: number; rings: SnapRing[] } = { version: -1, rings: [] };
   /** Every snap target for the current parts: the region's own rings, then the neighbours'. */
   function snapRings(): SnapRing[] {
-    if (ringCache.version !== hist.version) ringCache = { version: hist.version, rings: [...partRings(parts()), ...lineRings(), ...nbSnapRings, ...coastRings()] };
+    if (ringCache.version !== hist.version) ringCache = { version: hist.version, rings: [...partRings(parts()), ...lineRings(), ...shownNbRings(), ...coastRings()] };
     return ringCache.rings;
   }
   /** The coastline as snap targets, when coast snapping is on (at full detail, or simplified to `tol` degrees). */
@@ -2274,7 +2309,7 @@ export function openEditor(o: EditorOptions): void {
   }
   /** Snap targets for dragging `refs`: everything but the rings they belong to (so nothing snaps to itself). */
   function dragSnap(base: Parts, refs: VRef[]): { rings: SnapRing[]; skip: (ring: number) => boolean } {
-    const rings = [...partRings(base), ...lineRings(), ...nbSnapRings, ...coastRings()];
+    const rings = [...partRings(base), ...lineRings(), ...shownNbRings(), ...coastRings()];
     const moving = new Set(refs.map((q) => `${q.p}:${q.r}`));
     return {
       rings,
@@ -2846,6 +2881,19 @@ export function openEditor(o: EditorOptions): void {
 
   function showHelp(): void {
     const m = modal("Keyboard shortcuts", "help-dlg");
+    const cb = h("input", { type: "checkbox", checked: tipsOn, id: "tips-toggle" }) as HTMLInputElement;
+    cb.addEventListener("change", () => {
+      tipsOn = cb.checked;
+      try {
+        localStorage.setItem("ed-tips", tipsOn ? "on" : "off");
+      } catch {
+        /* ignore */
+      }
+      if (!tipsOn) setMsg("");
+      else if (target) setMsg(drawHint(target));
+      updateStatus();
+    });
+    m.body.append(h("label", { className: "muted small" }, cb, " Show drawing tips above the map"));
     m.body.append(h("dl", { className: "shortcuts" }, ...SHORTCUTS.flatMap(([k, v]) => [h("dt", {}, h("kbd", { textContent: k })), h("dd", { textContent: v })])));
   }
 
@@ -2993,7 +3041,7 @@ export function openEditor(o: EditorOptions): void {
   measure();
   fitView();
   setTool(parts().length ? "select" : "freehand");
-  if (!parts().length) setMsg(drawHint("part"));
+  if (!parts().length && tipsOn) setMsg(drawHint("part"));
   syncPanel();
   canvas.focus();
   // Test hook: lets the browser tests read the editor's state; exposes nothing the page doesn't already have.
