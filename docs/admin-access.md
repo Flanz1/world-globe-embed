@@ -53,7 +53,7 @@ The admin API lives at `https://admin-api.garmeley.com` (set under `[[routes]]` 
 - Leave **Expire user authorization tokens** on. Leave **Request user authorization (OAuth) during installation** off.
 - **Webhook:** untick **Active**.
 - **Repository permissions:** Contents **Read and write**, Actions **Read-only** (Metadata read-only is added automatically). Nothing else, and no account permissions.
-- **Where can this GitHub App be installed?** Only on this account.
+- **Where can this GitHub App be installed?** **Any account.** This makes the App public, which other people need in order to sign in with it (GitHub answers 404 to anyone but the owner for a private App). It doesn't give anyone access to this repository: the admin API only works with `REPO` and checks every save against `content/access.json`. An App created as private can be switched under **Advanced → Make public**.
 
 Then, on the App's page:
 
