@@ -180,11 +180,36 @@ await step(E, "combine and extend", async () => {
   let s = await ed.state();
   check(E, "opens with five parts and a contested zone", s.parts.length === 5 && JSON.stringify(s.contested) === "[-1,-1,1,-1,-1]", JSON.stringify(s.contested));
 
+  // 0. Pick parts with Shift+click: Combine works off the picks, not the touching parts.
+  const shiftClick = async (lon, lat) => {
+    await page.keyboard.down("Shift");
+    await clickAt(lon, lat);
+    await page.keyboard.up("Shift");
+  };
+  await clickAt(97, -43); // part 5 (overlaps part 1)
+  await shiftClick(104, -50); // part 1
+  await shiftClick(116, -48); // part 2
+  check(E, "Shift+click picks several parts and says so", /3 parts picked/.test(await ed.msg()), await ed.msg());
+  await page.mouse.move(2, 2);
+  await page.screenshot({ path: path.join(OUT, "editor-multi-pick.png") });
+  await page.keyboard.press("c");
+  await page.waitForSelector("dialog.editor .ed-combine:not([hidden])");
+  let t = await info();
+  check(E, "C combines the picks, in the order picked (part 5 keeps its place)", /^Parts 5, 1, 2 → one part \(part 5 keeps/.test(t), t);
+  await page.keyboard.press("Escape");
+  await clickAt(145, -50); // part 4, far from the rest
+  await shiftClick(116, -48); // part 2
+  await page.keyboard.press("c");
+  await page.waitForSelector("dialog.editor .ed-combine:not([hidden])");
+  t = await info();
+  check(E, "the picked parts are used as they are: a far part isn't swapped for touching ones", /^Parts 4, 2: .*don't touch/.test(t), t);
+  await page.keyboard.press("Escape");
+
   // 1. Select part 1, press C: it and the parts touching it (5 overlaps, 2 is 6 px away) are picked.
   await clickAt(104, -50);
   await page.keyboard.press("c");
   await page.waitForSelector("dialog.editor .ed-combine:not([hidden])");
-  let t = await info();
+  t = await info();
   check(E, "Combine picks the selected part and the parts touching it, not the far one or the zone", /^Parts 1, 2, 5 → one part/.test(t), t);
   await page.mouse.move(2, 2);
   await page.screenshot({ path: path.join(OUT, "editor-combine-preview.png") });
@@ -249,9 +274,9 @@ await step(E, "combine and extend", async () => {
   const m = await ed.msg();
   check(E, "a shape that doesn't touch the part is refused", JSON.stringify(await ed.state()) === before && /touch or overlap/.test(m), m);
   // Esc cancels Extend first (the part stays selected); a click on empty map clears that.
-  await page.keyboard.press("Escape");
-  check(E, "Esc cancels Extend", /Extend cancelled/.test(await ed.msg()) && (await page.evaluate(() => document.querySelector("dialog.editor").wgeEditor.selectedPart())) === 2, await ed.msg());
-  await clickAt(130, -30);
+  await page.keyboard.press("v");
+  check(E, "V leaves Extend with the part still selected", (await page.evaluate(() => document.querySelector("dialog.editor").wgeEditor.selectedPart())) === 2);
+  await clickAt(132, -46);
   check(E, "a click on empty map clears the part selection", (await page.evaluate(() => document.querySelector("dialog.editor").wgeEditor.selectedPart())) === -1);
 
   // 8. Nothing selected: the polygon tool; the shape starts inside the combined part, so that one grows.
