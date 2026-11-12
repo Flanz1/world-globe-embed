@@ -8,12 +8,7 @@
     "color": "#f1ea1e",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-12T16:44:46Z",
-    "createdBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
-    },
-    "created": "2026-11-12T16:44:47Z"
+    "updated": "2026-11-12T16:44:46Z"
   },
   "geometry": {
     "type": "MultiPolygon",

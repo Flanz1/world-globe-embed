@@ -41,12 +41,7 @@
       -1,
       -1
     ],
-    "updated": "2026-11-12T17:58:15Z",
-    "createdBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
-    },
-    "created": "2026-11-11T22:46:49Z"
+    "updated": "2026-11-12T17:58:15Z"
   },
   "geometry": {
     "type": "MultiPolygon",
