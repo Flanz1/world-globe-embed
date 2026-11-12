@@ -181,7 +181,6 @@ function lineProfile(img, a, b, colour, tol = 60) {
   return { on: on / (n + 1), flips, n };
 }
 const isSolid = (p) => p.on > 0.9 && p.flips <= 2;
-const isDashed = (p) => p.on > 0.25 && p.on < 0.85 && p.flips >= 4;
 const fmt = (p) => `${Math.round(p.on * 100)}% on, ${p.flips} flips over ${p.n} px`;
 const diffCount = (a, b, rect) => {
   let n = 0;
