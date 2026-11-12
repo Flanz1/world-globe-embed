@@ -81,6 +81,8 @@ export interface MapMeta {
   sizes: Partial<Record<`${TextureWidth}`, string>>;
   /** Tile levels above 8192 (see shared/tiles.ts); `url` is a path prefix relative to the site root. */
   tiles?: Partial<Record<`${TileLevelWidth}`, TileLevel>>;
+  /** Coast lines for snapping in the region editor (see shared/coast.ts), path relative to the site root. */
+  coast?: string;
   /** Tiny blurred preview as a data: URI. */
   lqip: string;
 }

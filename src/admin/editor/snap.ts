@@ -14,8 +14,8 @@ import type { Parts, VRef } from "./model.ts";
 export interface SnapRing {
   /** Open, unwrapped. */
   pts: Position[];
-  /** The region's own ring (part p, ring r), a neighbour's polygon n (its ring r), or province border line l (open: no closing line). */
-  src: { kind: "part"; p: number; r: number } | { kind: "neighbour"; n: number; r: number } | { kind: "line"; l: number };
+  /** The region's own ring (part p, ring r), a neighbour's polygon n (its ring r), province border line l (open: no closing line), or coast line c (see coast.ts). */
+  src: { kind: "part"; p: number; r: number } | { kind: "neighbour"; n: number; r: number } | { kind: "line"; l: number } | { kind: "coast"; c: number };
   /** Bounds of pts: [west, south, east, north]. */
   box: [number, number, number, number];
 }

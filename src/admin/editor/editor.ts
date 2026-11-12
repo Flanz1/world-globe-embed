@@ -98,6 +98,7 @@ import {
   type RingProblem,
   type VRef,
 } from "./model.ts";
+import { Coast, loadCoast, thinTrace } from "./coast.ts";
 import { findSnap, followBorders, insertOnEdges, partRings, sharedEdges, snapRing, traceBetween, vertexIndex, withGlued, type Snap, type SnapRing } from "./snap.ts";
 
 export interface EditorOptions {
@@ -129,6 +130,9 @@ const SNAP_COLOUR = "#4dd0e1";
 const SNAP_PREF = "wge.editor.snap";
 /** Gaps up to this many screen pixels between an Extend shape and its part are filled. */
 const EXTEND_GAP_PX = 12;
+const COAST_PREF = "wge.editor.coast";
+/** The map's coastline, drawn while coast snapping is on. */
+const COAST_COLOUR = "rgba(255,196,64,.8)";
 
 /** Git's blob SHA-1 of a text file, to know the file's SHA after our own commit without asking GitHub. */
 async function gitBlobSha(text: string): Promise<string> {
@@ -181,6 +185,7 @@ export const SHORTCUTS: [string, string][] = [
   ["Ctrl+drag a vertex", "Move just that vertex, without snapping (pulls it off a shared border)"],
   ["Drag a midpoint", "Insert a vertex there (on a shared border, on both sides)"],
   ["S", "Snapping on or off; hold Ctrl to place one point freely"],
+  ["O", "Coast snapping on or off: points also snap to the map's coastline (when no part or region is in reach); click two points on the coast to follow it"],
   ["Click two points on one border (polygon)", "Fills in that border's vertices in between; Tab takes the other way round. Clicking the first point to close follows the border too"],
   ["Freehand along a border", "The stroke follows that border's vertices exactly"],
   ["Click a line", "Select every vertex of that outline or hole (Shift adds); Delete then removes it"],
@@ -243,6 +248,13 @@ export function openEditor(o: EditorOptions): void {
     () => toggleSnap(),
     "snap",
   );
+  const coastBtn = btn(
+    "Coast",
+    "Also snap to the map's coastline (shown in amber) where no part or region is in reach, and follow it between two clicks (O). Rivers, lakes and marshes count as land.",
+    () => toggleCoast(),
+    "coast",
+  );
+  coastBtn.hidden = true;
   const simplifyBtn = btn("Simplify…", "Fewer vertices, same shape", () => toggleSimplify(), "simplify");
   const smoothBtn = btn("Smooth", "Round the corners (one Chaikin pass; doubles the vertices)", () => smooth(), "smooth");
 
@@ -318,6 +330,7 @@ export function openEditor(o: EditorOptions): void {
       smoothBtn,
       h("span", { className: "sep" }),
       snapBtn,
+      coastBtn,
       gridBtn,
       btn("?", "Keyboard shortcuts", () => showHelp(), "help"),
     ),
@@ -407,6 +420,14 @@ export function openEditor(o: EditorOptions): void {
   let img: HTMLImageElement | null = null;
   let imgW = 0;
   let upgrading = false;
+  // The coastline, for coast snapping (the Coast button shows once it's here).
+  void loadCoast(map?.coast ? new URL(map.coast, SITE).href : null).then((data) => {
+    if (!data || !dlg.isConnected) return;
+    coast = new Coast(data, ky);
+    coastBtn.hidden = false;
+    ringCache.version = -1;
+    draw();
+  });
   if (map) void loadMapImage(map, 2048).then((i) => ((img = i), (imgW = 2048), draw()), () => setMsg("The map image isn't deployed yet; you can still draw.", "error"));
   function maybeUpgrade(): void {
     if (!map || upgrading) return;
@@ -530,6 +551,15 @@ export function openEditor(o: EditorOptions): void {
   let snapOn = true;
   try {
     snapOn = localStorage.getItem(SNAP_PREF) !== "off";
+  } catch {
+    /* storage blocked: default on */
+  }
+  /** The map's coastline (loaded after the editor opens; null when the map has none). */
+  let coast: Coast | null = null;
+  /** Snapping to the coastline too (O, or the Coast button); remembered per browser. Only with snapping on. */
+  let coastOn = true;
+  try {
+    coastOn = localStorage.getItem(COAST_PREF) !== "off";
   } catch {
     /* storage blocked: default on */
   }
@@ -715,6 +745,7 @@ export function openEditor(o: EditorOptions): void {
       drawTiles(offs);
     }
     if (gridOn) drawGrid(offs);
+    if (coastActive()) drawCoast(offs);
     // Neighbours on the same slot: thin grey outlines to trace against.
     if (neighbours.length) {
       g.save();
@@ -1075,6 +1106,7 @@ export function openEditor(o: EditorOptions): void {
     for (const b of dlg.querySelectorAll<HTMLButtonElement>("button.tool")) b.setAttribute("aria-pressed", String(b.dataset.tool === tool));
     gridBtn.setAttribute("aria-pressed", String(gridOn));
     snapBtn.setAttribute("aria-pressed", String(snapOn));
+    coastBtn.setAttribute("aria-pressed", String(coastActive()));
     // The spherical area is skipped mid-drag (it costs a few ms at 2,000 vertices) and refreshed on release.
     if (!hist.dragging || lastArea < 0) lastArea = parts_ ? areaPercent(mapGeometry(toGeometry(parts()), (p) => imageToGlobe(p, frame))) : 0;
     const area = lastArea;
@@ -1827,15 +1859,28 @@ export function openEditor(o: EditorOptions): void {
   let ringCache: { version: number; rings: SnapRing[] } = { version: -1, rings: [] };
   /** Every snap target for the current parts: the region's own rings, then the neighbours'. */
   function snapRings(): SnapRing[] {
-    if (ringCache.version !== hist.version) ringCache = { version: hist.version, rings: [...partRings(parts()), ...lineRings(), ...nbSnapRings] };
+    if (ringCache.version !== hist.version) ringCache = { version: hist.version, rings: [...partRings(parts()), ...lineRings(), ...nbSnapRings, ...coastRings()] };
     return ringCache.rings;
+  }
+  /** The coastline as snap targets, when coast snapping is on (at full detail, or simplified to `tol` degrees). */
+  const coastRings = (tol = 0): SnapRing[] => (coast && coastOn ? (tol ? coast.ringsAt(tol) : coast.rings()) : []);
+  /**
+   * The nearest snap within reach: a vertex or line of a part, province border or region first;
+   * only when there's none, the coast. Rings that `skip` returns true for are left out.
+   */
+  function snapIn(rings: readonly SnapRing[], pos: Position, skip?: (ring: number) => boolean): Snap | null {
+    const sc = scale();
+    const isCoast = (i: number) => rings[i].src.kind === "coast";
+    const first = findSnap(rings, pos, sc, SNAP_PX, (i) => isCoast(i) || !!skip?.(i));
+    if (first || !coastActive()) return first;
+    return findSnap(rings, pos, sc, SNAP_PX, (i) => !isCoast(i) || !!skip?.(i));
   }
   /** The province borders as snap targets (open lines). */
   const lineRings = (): SnapRing[] => (hist.state.lines ?? []).map((l, i) => snapRing(l, { kind: "line", l: i }));
   const scale = () => ({ k: view.k, ky });
   /** Where a point would snap (null when snapping is off or nothing is near). */
   const snapAt = (pos: Position, rings: readonly SnapRing[] = snapRings(), skip: (ring: number) => boolean = extendSkip): Snap | null =>
-    snapOn ? findSnap(rings, pos, scale(), SNAP_PX, skip) : null;
+    snapOn ? snapIn(rings, pos, skip) : null;
   /** Extending a part: its own outline isn't a snap target (the tool already joins a shape that touches or nearly touches it). */
   const extendSkip = (ri: number): boolean => {
     const src = snapRings()[ri]?.src;
@@ -1847,6 +1892,7 @@ export function openEditor(o: EditorOptions): void {
     const what = sn.kind === "vertex" ? "vertex" : "line";
     if (src.kind === "part") return `${what} of ${src.r ? `a hole in ${partName(src.p)}` : partName(src.p)}`;
     if (src.kind === "line") return `${what} of province border ${src.l + 1}`;
+    if (src.kind === "coast") return "the coast";
     return `${what} of region ${neighbourName(src.n)}`;
   }
   function toggleSnap(): void {
@@ -1879,7 +1925,17 @@ export function openEditor(o: EditorOptions): void {
     const rings = snapRings();
     const ring = rings[next.ring];
     if (!ring) return [];
-    return traceBetween(ring.pts, from, next, ky, traceFlip, ring.src.kind === "line").map((t) => ({ pos: t.pos, ring: next.ring, at: t.at, kind: "vertex" as const }));
+    let tr = traceBetween(ring.pts, from, next, ky, traceFlip, ring.src.kind === "line");
+    // The coast is traced finely: add only as many of its points as the screen shows.
+    if (ring.src.kind === "coast" && tr.length > 2) {
+      const all = [from.pos, ...tr.map((t) => t.pos), next.pos];
+      // (Never finer than a pixel of the raster the coast was traced on: finer is just its stair-steps.)
+      const tol = Math.max(0.75 / view.k, coast ? 360 / coast.data.width : 0);
+      tr = thinTrace(all, tol, ky)
+        .filter((i) => i > 0 && i < all.length - 1)
+        .map((i) => tr[i - 1]);
+    }
+    return tr.map((t) => ({ pos: t.pos, ring: next.ring, at: t.at, kind: "vertex" as const }));
   }
   /** Whether a click at screen (x, y) would close the outline on its first point. */
   const closesAt = (x: number, y: number) => !!drawing && !lineTarget() && drawing.length >= 3 && Math.hypot(sx(drawing[0][0]) - x, sy(drawing[0][1]) - y) <= HIT;
@@ -1993,6 +2049,51 @@ export function openEditor(o: EditorOptions): void {
     selection.clear();
     changed();
   }
+  /** Whether coast lines are snap targets right now. */
+  const coastActive = () => !!coast && coastOn && snapOn;
+  /** Coast lines on screen, simplified to about a pixel. */
+  function drawCoast(offs: number[]): void {
+    if (!coast) return;
+    const tol = 1 / view.k;
+    const w = canvas.width / (window.devicePixelRatio || 1);
+    const hgt = canvas.height / (window.devicePixelRatio || 1);
+    g.save();
+    g.lineWidth = 1;
+    g.strokeStyle = COAST_COLOUR;
+    g.setLineDash([]);
+    g.beginPath();
+    for (const r of coast.ringsAt(tol)) {
+      const [west, south, east, north] = r.box;
+      if (sy(north) > hgt || sy(south) < 0) continue;
+      for (const off of offs) {
+        if (sx(east + off) < 0 || sx(west + off) > w) continue;
+        r.pts.forEach(([x, y], i) => (i ? g.lineTo(sx(x + off), sy(y)) : g.moveTo(sx(x + off), sy(y))));
+        g.closePath();
+      }
+    }
+    g.stroke();
+    g.restore();
+  }
+  function toggleCoast(): void {
+    if (!coast) return;
+    coastOn = !coastOn;
+    try {
+      localStorage.setItem(COAST_PREF, coastOn ? "on" : "off");
+    } catch {
+      /* not remembered: fine */
+    }
+    ringCache.version = -1;
+    snapHint = null;
+    if (coastOn && !snapOn) toggleSnap();
+    setMsg(
+      coastOn
+        ? "Coast snapping on: points also snap to the coastline (amber) where no part or region is in reach. Click two points on the coast to follow it; hold Ctrl to place a point freely."
+        : "Coast snapping off: points snap to parts and regions only.",
+    );
+    draw();
+    updateStatus();
+  }
+
   function toggleGrid(): void {
     gridOn = !gridOn;
     draw();
@@ -2036,7 +2137,7 @@ export function openEditor(o: EditorOptions): void {
 
   /** Snap targets for dragging `refs`: everything but the rings they belong to (so nothing snaps to itself). */
   function dragSnap(base: Parts, refs: VRef[]): { rings: SnapRing[]; skip: (ring: number) => boolean } {
-    const rings = [...partRings(base), ...lineRings(), ...nbSnapRings];
+    const rings = [...partRings(base), ...lineRings(), ...nbSnapRings, ...coastRings()];
     const moving = new Set(refs.map((q) => `${q.p}:${q.r}`));
     return {
       rings,
@@ -2272,7 +2373,7 @@ export function openEditor(o: EditorOptions): void {
     if (snapOn && !free) {
       const g0 = drag.base[drag.grab.p][drag.grab.r][drag.grab.i];
       const want: Position = [g0[0] + dLon, g0[1] + dLat];
-      const t = findSnap(drag.rings, want, scale(), SNAP_PX, drag.skip);
+      const t = snapIn(drag.rings, want, drag.skip);
       if (t) {
         dLon = t.pos[0] - g0[0];
         dLat = t.pos[1] - g0[1];
@@ -2335,8 +2436,9 @@ export function openEditor(o: EditorOptions): void {
       const simple = (pts: Position[]) => simplifyRing(pts.map(([px, py]) => [px, py * ky]), tol).map(([px, py]) => [px, py / ky] as Position);
       // Stretches drawn along a border follow that border's own vertices (unless snapping is off or Ctrl is held).
       const follow = snapOn && !(e.ctrlKey || e.metaKey);
-      const rings = snapRings();
-      const traced = (closedRing: boolean) => followBorders(d.pts, (q) => findSnap(rings, q, scale(), SNAP_PX, extendSkip), rings, ky, tol, closedRing).pts;
+      // (The coast at about the sketch's own precision, so following it adds no more points than drawing would.)
+      const rings = [...snapRings().filter((r) => r.src.kind !== "coast"), ...coastRings(tol / 2)];
+      const traced = (closedRing: boolean) => followBorders(d.pts, (q) => snapIn(rings, q, extendSkip), rings, ky, tol, closedRing).pts;
       if (lineTarget()) {
         if (d.pts.length < 2) return draw();
         const line = follow ? traced(false) : douglasPeucker(d.pts.map(([px, py]) => [px, py * ky]), tol).map(([px, py]) => [px, py / ky] as Position);
@@ -2509,6 +2611,7 @@ export function openEditor(o: EditorOptions): void {
     else if (k === "l" && selPart >= 0) togglePartLock(selPart);
     else if (k === "c" && !drawing) openCombine();
     else if (k === "e" && !drawing) startExtend();
+    else if (k === "o") toggleCoast();
     else if (e.key === "?") showHelp();
   });
   dlg.addEventListener("keyup", (e) => {
@@ -2702,6 +2805,8 @@ export function openEditor(o: EditorOptions): void {
     selectedVertices: () => [...selection.values()],
     clashes: () => clashState().clashes,
     snapOn: () => snapOn,
+    coastLines: () => coast?.data.lines.length ?? 0,
+    coastOn: () => coastActive(),
     borders: () => clashState().spec.borders ?? null,
     lines: () => (hist.state.lines ?? []).map((l) => l.map((q) => [...q])),
     drawing: () => (drawing ? drawing.map((q) => [...q]) : null),
