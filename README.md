@@ -260,7 +260,7 @@ set -e GITHUB_REPOSITORY
 
 # Point the admin page at an admin API (worker/). The branch it writes to is the API's BRANCH setting;
 # the page says "Writing to branch … (not main)" at the top when that isn't the default branch.
-env VITE_ADMIN_API=https://world-globe-admin.example.workers.dev npm run build
+env VITE_ADMIN_API=https://admin-api.garmeley.com npm run build
 
 # Timings for a region embed (globe, then flat)
 env SLUG=inara QUERY='region=old-kingdom' npm run measure

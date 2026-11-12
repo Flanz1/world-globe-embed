@@ -36,9 +36,10 @@ You do this once. Until it's done, the Admin API workflow skips its deploy and t
 
 ### 1. Cloudflare
 
-1. In the Cloudflare dashboard, open **Workers & Pages** once so your account gets a `*.workers.dev` subdomain. The admin API will live at `https://world-globe-admin.<your-subdomain>.workers.dev`.
-2. **My Profile → API Tokens → Create Token → "Edit Cloudflare Workers"** template. Under Account Resources pick your account, then create it and copy the token.
-3. Copy your **Account ID** (on the Workers & Pages overview, right-hand side).
+The admin API lives at `https://admin-api.garmeley.com` (set under `[[routes]]` in `worker/wrangler.toml`). `garmeley.com` must be a site in the same Cloudflare account; the first deploy creates the DNS record and certificate.
+
+1. **My Profile → API Tokens → Create Token → "Edit Cloudflare Workers"** template. Under **Account Resources** pick your account; under **Zone Resources** pick *Specific zone → garmeley.com* (the template's *Workers Routes: Edit* is what attaches the address). Create it and copy the token.
+2. Copy your **Account ID** (on the Workers & Pages overview, right-hand side).
 
 (The KV namespace for the waiting list, `world-globe-admin-waiting`, already exists and is set in `worker/wrangler.toml`.)
 
@@ -48,7 +49,7 @@ You do this once. Until it's done, the Admin API workflow skips its deploy and t
 
 - **Name:** for example `World Globe Admin` (people see it on the sign-in screen).
 - **Homepage URL:** `https://flanz1.github.io/world-globe-embed/admin/`
-- **Callback URL:** `https://world-globe-admin.<your-subdomain>.workers.dev/auth/callback`
+- **Callback URL:** `https://admin-api.garmeley.com/auth/callback`
 - Leave **Expire user authorization tokens** on. Leave **Request user authorization (OAuth) during installation** off.
 - **Webhook:** untick **Active**.
 - **Repository permissions:** Contents **Read and write**, Actions **Read-only** (Metadata read-only is added automatically). Nothing else, and no account permissions.
@@ -81,7 +82,7 @@ Variables:
 | `CLOUDFLARE_ACCOUNT_ID` | your Cloudflare account id |
 | `APP_ID` | the App ID |
 | `APP_CLIENT_ID` | the Client ID |
-| `ADMIN_API_URL` | `https://world-globe-admin.<your-subdomain>.workers.dev` |
+| `ADMIN_API_URL` | `https://admin-api.garmeley.com` |
 
 ### 4. Deploy
 
