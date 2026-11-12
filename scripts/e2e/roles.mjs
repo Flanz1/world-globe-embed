@@ -17,12 +17,13 @@ import { createRequire } from "node:module";
 import { makeFixture } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { ADMIN_API, sessionFor, useAdminApi } from "./admin-api.mjs";
+import { port } from "./ports.mjs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
 const OUT = path.resolve(".e2e/roles");
-const PORT = 4175;
+const PORT = port(4173);
 const SITE = `http://localhost:${PORT}`;
 const ADMIN = `${SITE}/admin/`;
 const REPO = "Flanz1/world-globe-embed";
@@ -147,7 +148,9 @@ await step(S, "sign in with GitHub", async () => {
   check(S, "signed-out page offers Sign in with GitHub, no token field", (await page.locator("#token").count()) === 0 && !(await disabled(page, "#signin-github")));
   await page.screenshot({ path: path.join(OUT, "signin.png") });
   await page.click("#signin-github");
-  await page.waitForSelector("#main", { state: "visible", timeout: 15000 });
+  await page.waitForSelector("#main", { state: "visible", timeout: 15000 }).catch(async (e) => {
+    throw new Error(`${e.message.split("\n")[0]} at ${page.url()}: ${await page.textContent("body").catch(() => "")}`.slice(0, 600));
+  });
   check(S, "back on the admin page, signed in as the GitHub account", ((await page.textContent("#who")) ?? "").endsWith("signed in as carto-ann"), await page.textContent("#who"));
   check(S, "the session isn't left in the address", !page.url().includes("session="), page.url());
   check(S, "session kept in sessionStorage only", await page.evaluate(() => !!sessionStorage.getItem("wge-admin-session") && !localStorage.getItem("wge-admin-session")));

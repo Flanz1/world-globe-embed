@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Slowest first, so the long ones start immediately and short ones fill the gaps.
-const ALL = ["contested", "regions", "snap", "merge", "coast", "cut", "locks", "ring-select", "tiles", "tiers", "view", "upload"];
+const ALL = ["contested", "regions", "snap", "merge", "coast", "cut", "locks", "ring-select", "tiles", "tiers", "view", "upload", "roles"];
 
 const args = process.argv.slice(2);
 let jobs = Math.max(1, Math.min(4, Math.floor(availableParallelism() / 2)));

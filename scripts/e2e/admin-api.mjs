@@ -12,6 +12,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { handle, resetCaches } from "../../worker/src/handler.ts";
 import { sign } from "../../worker/src/crypto.ts";
 import { ACCOUNTS, mockFetch } from "./mock-github.mjs";
+import { port } from "./ports.mjs";
 
 export const ADMIN_API = "https://admin-api.test";
 process.env.VITE_ADMIN_API = ADMIN_API;
@@ -40,14 +41,16 @@ class MemoryKV {
   }
 }
 
+/** One waiting list for every context in this process, like the real KV namespace. */
+const kv = new MemoryKV();
+
 /**
  * Routes ADMIN_API for `ctx` to the Worker (backed by `mock`), and signs the context in as `as`
  * (a session in sessionStorage before any page script runs). Pass as: null to stay signed out.
  * Returns { env, kv, requests, signInAs(login) }.
  */
-export async function useAdminApi(ctx, mock, { branch = "main", as = "Flanz1", adminUrl = "http://localhost:4173/admin/" } = {}) {
+export async function useAdminApi(ctx, mock, { branch = "main", as = "Flanz1", adminUrl = `http://localhost:${port(4173)}/admin/` } = {}) {
   resetCaches();
-  const kv = new MemoryKV();
   const env = {
     REPO: mock.repo,
     BRANCH: branch,
@@ -62,21 +65,23 @@ export async function useAdminApi(ctx, mock, { branch = "main", as = "Flanz1", a
   };
   const up = mockFetch(mock);
   const requests = [];
+  let next = as;
   await ctx.route(`${ADMIN_API}/**`, async (route) => {
     const r = route.request();
     const body = r.postDataBuffer();
     requests.push({ method: r.method(), url: r.url() });
-    const res = await handle(new Request(r.url(), { method: r.method(), headers: r.headers(), body: body && r.method() !== "GET" ? body : undefined }), env, up);
+    let res = await handle(new Request(r.url(), { method: r.method(), headers: r.headers(), body: body && r.method() !== "GET" ? body : undefined }), env, up);
+    // GitHub's own sign-in page, stood in for here: it approves at once and sends the browser back to the
+    // callback with a code for the mock account `next` (Playwright doesn't route the redirect's next hop).
+    const loc = res.headers.get("Location") ?? "";
+    if (res.status === 302 && loc.startsWith("https://github.com/login/oauth/authorize")) {
+      const u = new URL(loc);
+      const back = new URL(u.searchParams.get("redirect_uri"));
+      back.searchParams.set("code", mock.oauthCode(next ?? "Flanz1"));
+      back.searchParams.set("state", u.searchParams.get("state"));
+      res = await handle(new Request(back.href), env, up);
+    }
     await route.fulfill({ status: res.status, headers: Object.fromEntries(res.headers), body: Buffer.from(await res.arrayBuffer()) });
-  });
-  // GitHub's own sign-in page: hands straight back to the callback with a code for the mock account.
-  let next = as;
-  await ctx.route("https://github.com/login/oauth/authorize**", (route) => {
-    const u = new URL(route.request().url());
-    const back = new URL(u.searchParams.get("redirect_uri"));
-    back.searchParams.set("code", mock.oauthCode(next ?? "Flanz1"));
-    back.searchParams.set("state", u.searchParams.get("state"));
-    return route.fulfill({ status: 302, headers: { Location: back.href } });
   });
   if (as) {
     const token = await sessionFor(as);
