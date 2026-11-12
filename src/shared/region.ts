@@ -65,6 +65,8 @@ export interface RegionProperties {
    * nudged as a whole; its vertices still can). Editor-only: the embed ignores it. Missing means all false.
    */
   partLocked?: boolean[];
+  /** Province borders: open lines drawn inside the region (dotted in the embed). They don't change the parts. */
+  provinceBorders?: Position[][];
   updated?: string;
 }
 
@@ -95,7 +97,12 @@ export interface RegionData {
   /** Per polygon: -1, or the normal part this contested zone extends. */
   contested: number[];
   geometry: RegionGeometry;
+  /** Province borders (open lines), drawn dotted where they lie inside the region's parts. Missing: none. */
+  provinceBorders?: Position[][];
 }
+
+/** Most positions in a region's province borders, all lines together. */
+export const PROVINCE_BORDER_MAX = 5000;
 
 /** Inlined per region into its slot page so the poster can face it before anything loads. */
 export interface RegionIndexEntry {
@@ -122,7 +129,21 @@ export function regionData(f: RegionFeature): RegionData {
     labels: normalizePartLabels(p.partLabels, polygonsOf(f.geometry).length),
     contested: normalizePartContested(p.partContested, polygonsOf(f.geometry).length),
     geometry: f.geometry,
+    ...(p.provinceBorders?.length ? { provinceBorders: p.provinceBorders.map((l) => l.map(([x, y]) => [x, y] as Position)) } : {}),
   };
+}
+
+/** Province borders from outside the page: lines of at least 2 positions in range, PROVINCE_BORDER_MAX in all; else null. */
+export function parseProvinceBorders(v: unknown): Position[][] | null {
+  if (!Array.isArray(v) || v.length > 500) return null;
+  const budget = { n: PROVINCE_BORDER_MAX };
+  const out: Position[][] = [];
+  for (const l of v) {
+    const line = parseRing(l, budget);
+    if (!line || line.length < 2) return null;
+    out.push(line);
+  }
+  return out;
 }
 
 /**
@@ -148,6 +169,15 @@ export function normalizePartLocked(v: readonly unknown[] | undefined, n: number
 /** Problems with a saved region's partContested (beyond what the schema checks). */
 export function checkParts(p: RegionProperties, g: RegionGeometry, where: string): string[] {
   const errors: string[] = [];
+  const pb = p.provinceBorders;
+  if (pb !== undefined && parseProvinceBorders(pb) === null) {
+    const n = Array.isArray(pb) ? pb.reduce((m: number, l: unknown) => m + (Array.isArray(l) ? l.length : 0), 0) : 0;
+    errors.push(
+      n > PROVINCE_BORDER_MAX
+        ? `${where}: "provinceBorders" has ${n} positions; at most ${PROVINCE_BORDER_MAX} in all`
+        : `${where}: "provinceBorders" must be lines of at least 2 [lon, lat] positions within range`,
+    );
+  }
   const c = p.partContested;
   if (!c) return errors;
   const n = polygonsOf(g).length;
@@ -278,7 +308,7 @@ export function parseGeometry(v: unknown): RegionGeometry | null {
  */
 export function parseRegionData(v: unknown): RegionData | null {
   if (!isObj(v)) return null;
-  const { id, slot, name, color, fillOpacity, label, geometry, legend, legendTitle, parts, labels, contested } = v;
+  const { id, slot, name, color, fillOpacity, label, geometry, legend, legendTitle, parts, labels, contested, provinceBorders } = v;
   if (typeof id !== "string" || !REGION_ID.test(id)) return null;
   if (typeof slot !== "string" || !REGION_ID.test(slot)) return null;
   if (typeof name !== "string" || name.length > NAME_MAX) return null;
@@ -321,6 +351,8 @@ export function parseRegionData(v: unknown): RegionData | null {
     // (overlaps with other regions) is ignored: regions are separate maps and never mark each other.
     contested: normalizePartContested(Array.isArray(contested) && contested.length === n ? contested : undefined, n),
     geometry: g,
+    // Malformed province borders are dropped (the region still loads).
+    ...(provinceBorders !== undefined && parseProvinceBorders(provinceBorders)?.length ? { provinceBorders: parseProvinceBorders(provinceBorders)! } : {}),
   };
 }
 

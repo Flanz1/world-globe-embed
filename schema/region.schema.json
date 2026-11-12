@@ -136,6 +136,25 @@
             "type": "boolean"
           }
         },
+        "provinceBorders": {
+          "type": "array",
+          "maxItems": 500,
+          "description": "Province borders drawn inside the region with the editor's Province border tool: open lines of [lon, lat] positions (at least 2 each, in the map image's frame like the geometry; each step takes the shorter way round). The embed draws them as fine dotted dark lines, only where they lie inside the region's (non-contested) parts. They don't change the parts. At most 5000 positions in all. Leave it out when there are none.",
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 5000,
+            "items": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "prefixItems": [
+                { "type": "number", "minimum": -180, "maximum": 180 },
+                { "type": "number", "minimum": -90, "maximum": 90 }
+              ]
+            }
+          }
+        },
         "updated": {
           "type": "string",
           "maxLength": 40,

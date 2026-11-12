@@ -49,6 +49,8 @@ export interface EditorState {
   contested: number[];
   /** Per part: true when it's locked (can't be moved as a whole; its vertices still edit). */
   locked: boolean[];
+  /** Province borders: open lines drawn inside the region (unwrapped, like the rings). Not tied to any part. */
+  lines?: Position[][];
   props: RegionProps;
 }
 
@@ -68,6 +70,7 @@ export const cloneState = (s: EditorState): EditorState => ({
   labels: [...s.labels],
   contested: [...(s.contested ?? [])],
   locked: [...(s.locked ?? [])],
+  lines: (s.lines ?? []).map((l) => l.map(([x, y]) => [x, y] as Position)),
   props: { ...s.props, legend: s.props.legend.map((e) => ({ ...e })) },
 });
 

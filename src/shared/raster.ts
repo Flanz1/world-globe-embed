@@ -2,6 +2,7 @@
  * Draws a region onto a 2D canvas. Used for the globe overlay texture, the flat embed, and the admin
  * page's thumbnails and editor, so they all trace the same shape the same way.
  */
+import { traceLine } from "./borders.ts";
 import { polygonsOf, unwrapRing, type Position, type RegionGeometry } from "./geo.ts";
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -98,6 +99,8 @@ export interface PaintPart {
   rings: Position[][];
   color: string;
   contested: boolean;
+  /** Per ring: edges shared with another part, left out of this part's coloured outline (see borders.ts). */
+  hide?: Set<number>[];
 }
 
 /**
@@ -112,7 +115,17 @@ export interface PaintSpec {
   partners: Position[][][][];
   /** Overlap areas (inside both a and b) to hatch, in `color`. */
   hatches: { a: Position[][]; b: Position[][]; color: string }[];
+  /** National borders (lines parts of different legend colours share) and province borders (lines drawn inside the region), as open polylines. */
+  borders?: { national: Position[][]; provincial: Position[][] };
 }
+
+/** National borders: dark ink over a light parchment casing; provincial: fine ink dots. Widths in line widths. */
+export const BORDER_INK = "rgba(20,14,10,0.95)";
+export const BORDER_CASING = "rgba(243,230,200,0.85)";
+export const NATIONAL_W = 1.75;
+export const CASING_W = 3;
+export const PROVINCIAL_W = 1.2;
+export const PROVINCIAL_GAP = 2.5;
 
 /** Dash and gap, in multiples of the line width (round caps add half a width to each end of a dash). */
 export const DASH = [2, 3] as const;
@@ -156,7 +169,7 @@ function hatchPattern(ctx: Ctx, color: string, lw: number): CanvasPattern | null
   return pat;
 }
 
-function tracePoly(ctx: Ctx, rings: Position[][], x: (lon: number) => number, y: (lat: number) => number, offsets: number[]): void {
+function tracePoly(ctx: Ctx, rings: Position[][], x: (lon: number) => number, y: (lat: number) => number, offsets: number[], hide?: Set<number>[]): void {
   // Holes in the outer ring's copy, so a clip or fill with evenodd cuts them out at every offset.
   const outer = rings[0] ? unwrapRing(rings[0]) : [];
   const lon0 = outer[0]?.[0] ?? 0;
@@ -166,8 +179,67 @@ function tracePoly(ctx: Ctx, rings: Position[][], x: (lon: number) => number, y:
       const k = Math.round((lon0 - u[0][0]) / 360) * 360;
       if (k) u = u.map(([a, b]) => [a + k, b] as Position);
     }
-    traceRing(ctx, u, x, y, offsets);
+    const skip = hide?.[i];
+    if (skip?.size) traceRingEdges(ctx, u, skip, x, y, offsets);
+    else traceRing(ctx, u, x, y, offsets);
   });
+}
+
+/** Like traceRing for an outline, leaving out the edges in `skip` (edge i runs from vertex i to i + 1). */
+function traceRingEdges(ctx: Ctx, ring: Position[], skip: Set<number>, x: (lon: number) => number, y: (lat: number) => number, offsets: number[]): void {
+  // The ring may be closed (last position repeats the first): edges are over the open ring.
+  const closed = ring.length > 1 && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1];
+  const n = closed ? ring.length - 1 : ring.length;
+  if (n < 2) return;
+  for (const off of offsets) {
+    let pen = false;
+    for (let i = 0; i < n; i++) {
+      if (skip.has(i)) {
+        pen = false;
+        continue;
+      }
+      const a = ring[i];
+      const b = i + 1 < ring.length ? ring[i + 1] : ring[0];
+      if (!pen) ctx.moveTo(x(a[0] + off), y(a[1]));
+      ctx.lineTo(x(b[0] + off), y(b[1]));
+      pen = true;
+    }
+  }
+}
+
+/** Draws the borders (see PaintSpec.borders) at line width `lw`. Province borders show only inside the (non-contested) parts. */
+function paintBorders(ctx: Ctx, spec: PaintSpec, x: (lon: number) => number, y: (lat: number) => number, offsets: number[], lw: number): void {
+  const b = spec.borders!;
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  if (b.provincial.length) {
+    for (const p of spec.parts) {
+      if (p.contested) continue;
+      ctx.save();
+      ctx.beginPath();
+      tracePoly(ctx, p.rings, x, y, offsets);
+      ctx.clip("evenodd");
+      ctx.beginPath();
+      for (const l of b.provincial) traceLine(ctx, l, x, y, offsets);
+      ctx.setLineDash([0.01, PROVINCIAL_GAP * lw]);
+      ctx.lineWidth = PROVINCIAL_W * lw;
+      ctx.strokeStyle = BORDER_INK;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+  if (b.national.length) {
+    ctx.beginPath();
+    for (const l of b.national) traceLine(ctx, l, x, y, offsets);
+    ctx.lineWidth = CASING_W * lw;
+    ctx.strokeStyle = BORDER_CASING;
+    ctx.stroke();
+    ctx.lineWidth = NATIONAL_W * lw;
+    ctx.strokeStyle = BORDER_INK;
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /**
@@ -243,7 +315,7 @@ export function paintSpec(
     ctx.strokeStyle = p.color;
     const trace = () => {
       ctx.beginPath();
-      tracePoly(ctx, p.rings, x, y, offsets);
+      tracePoly(ctx, p.rings, x, y, offsets, p.hide);
     };
     if (p.contested) {
       ctx.save();
@@ -281,5 +353,6 @@ export function paintSpec(
       ctx.restore();
     }
   }
+  if (spec.borders) paintBorders(ctx, spec, x, y, offsets, lw);
   ctx.restore();
 }
