@@ -3,7 +3,7 @@
   "type": "Feature",
   "id": "razmyrregion",
   "properties": {
-    "slot": "aerthos",
+    "slot": "inara",
     "map": "globe-map",
     "color": "#f1ea1e",
     "fillOpacity": 0.35,
