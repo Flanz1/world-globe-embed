@@ -196,3 +196,16 @@ button.tiny { padding: 1px 7px; font-size: 12px; }
 .combine-out p { margin: 2px 0; }
 .warn { color: #b9770e; }
 .ed-part-row.locked .ed-lock { background: var(--accent); color: var(--card); border-color: var(--accent); }
+
+/* Editor: "Other regions" tool (top right of the map) */
+.ed-ov { position: absolute; right: 8px; top: 8px; display: grid; gap: 6px; justify-items: end; max-width: calc(100% - 16px); }
+.ed-ov-btn { background: var(--card); box-shadow: 0 2px 8px rgba(0, 0, 0, .3); }
+.ed-ov-btn.active { background: var(--accent); color: var(--card); }
+.ed-ov-panel { display: grid; gap: 6px; width: min(340px, 100%); max-height: min(70vh, 520px); grid-template-rows: auto auto auto auto auto minmax(0, 1fr); padding: 10px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
+.ed-ov-panel[hidden] { display: none; }
+.ed-ov-panel .row { display: flex; flex-wrap: wrap; gap: 6px; }
+.ed-ov-panel select { flex: 1 1 90px; min-width: 0; }
+.ed-ov-list { overflow: auto; display: grid; align-content: start; gap: 2px; }
+.ed-ov-row { display: flex; align-items: baseline; gap: 6px; padding: 2px 0; cursor: pointer; }
+.ed-ov-name { font-weight: 600; }
+.ed-ov-info { margin: 0; }
