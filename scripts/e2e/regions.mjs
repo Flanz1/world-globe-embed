@@ -498,8 +498,8 @@ await step(A, "editor: draw and edit", async () => {
   s = await ed.state();
   check(A, "smooth (Chaikin, one pass per click)", verts(s) === 16, `${verts(s)} vertices`);
   await page.click('dialog.editor [data-act="simplify"]');
-  await page.locator("dialog.editor .ed-simplify input[type=range]").fill("85");
-  const info = await page.textContent("dialog.editor .ed-simplify span");
+  await page.locator("dialog.editor .ed-simplify:not(.ed-combine) input[type=range]").fill("85");
+  const info = await page.textContent("dialog.editor .ed-simplify:not(.ed-combine) span");
   await page.click('dialog.editor [data-act="simplify-apply"]');
   s = await ed.state();
   check(A, "simplify (slider preview with counts, then Apply)", verts(s) < 16 && verts(s) >= 3 && /16 → \d+ vertices/.test(info), `${info}; now ${verts(s)}`);
