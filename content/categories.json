@@ -1,0 +1,15 @@
+{
+  "$schema": "../schema/categories.schema.json",
+  "categories": [
+    {
+      "id": "religion",
+      "name": "religion",
+      "regions": [],
+      "createdBy": {
+        "id": 45669787,
+        "login": "Flanz1"
+      },
+      "created": "2026-11-13T15:18:05Z"
+    }
+  ]
+}
