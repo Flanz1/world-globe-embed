@@ -4,7 +4,9 @@
     {
       "id": "religion",
       "name": "religion",
-      "regions": [],
+      "regions": [
+        "diarism"
+      ],
       "createdBy": {
         "id": 45669787,
         "login": "Flanz1"
