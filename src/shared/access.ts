@@ -15,8 +15,8 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 export const PERMISSION_LABELS: Record<Permission, { label: string; help: string }> = {
   maps: { label: "Maps & slots", help: "Open the Maps & slots tab: upload or replace map images, add slots and change slot settings." },
-  regions: { label: "Create regions", help: "Draw new regions, and edit or delete the regions they created. Also create region categories (folders) and manage your own." },
-  editOthers: { label: "Edit others' regions", help: "Change regions other people created, and rename, reorder, delete or fill other people's region categories." },
+  regions: { label: "Create regions", help: "Draw new regions, and edit or delete the regions they created. Also create region folders and manage your own." },
+  editOthers: { label: "Edit others' regions", help: "Change regions other people created, and rename, move, delete or fill other people's region folders." },
   deleteOthers: { label: "Delete others' regions", help: "Delete regions other people created." },
   users: { label: "Manage users", help: "Open the Users tab: add people and change what they can do (only up to their own permissions)." },
 };
@@ -248,6 +248,12 @@ function checkCategoriesChange(d: FileDiff, actor: Actor, ownerId: number): stri
   for (const id of diff.removed) if (!mayEdit(was.get(id)!)) return `You can't delete the category "${was.get(id)!.name}": ${creatorName(was.get(id)!)} created it.`;
   for (const id of diff.renamed) if (!mayEdit(was.get(id)!)) return `You can't rename the category "${was.get(id)!.name}": ${creatorName(was.get(id)!)} created it.`;
   for (const [id, k] of was) if (now.has(id) && !actor.owner && !same(k.createdBy, now.get(id)!.createdBy)) return `Only the repository owner can change who created "${k.name}".`;
+  // A folder moved into another folder (or out to the top level) is changed like a rename: the folder's owner, or someone who may edit others'. Folders whose own parent is being deleted just move up a level.
+  for (const id of diff.reparented) {
+    const k = was.get(id)!;
+    if (k.parent && diff.removed.includes(k.parent)) continue;
+    if (!mayEdit(k)) return `You can't move the category "${k.name}": ${creatorName(k)} created it.`;
+  }
   // Regions leaving a category that is being deleted just become uncategorized: that isn't moving them.
   const gone = new Set(diff.removed);
   const placedBefore = placements(before);
