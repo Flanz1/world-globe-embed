@@ -95,6 +95,9 @@ const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, d
 await ctx.route("https://api.github.com/**", (r) => mock.handle(r));
 await useAdminApi(ctx, mock, { branch: BRANCH });
 const page = await ctx.newPage();
+// Software GL on a small CI runner can take over a minute for one screenshot (a frame of the big map);
+// the default 30 s then fails a suite that is only slow, so give every action room.
+page.setDefaultTimeout(120000);
 const errors = [];
 const dialogs = [];
 page.on("pageerror", (e) => errors.push(String(e)));

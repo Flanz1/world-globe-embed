@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { buildViewerConfig, previewMaps, renderSlotPage } from "../../src/shared/page.ts";
 import { DEFAULT_VIEW } from "../../src/shared/types.ts";
 import { checkGeometry, mapGeometry, round, vertexCount } from "../../src/shared/geo.ts";
@@ -38,6 +39,9 @@ export function regionIndex(content: Content, slug: string): Record<string, Regi
   return out;
 }
 
+/** base64 SHA-256, as a CSP script hash wants it. */
+const sha256 = (s: string) => createHash("sha256").update(s, "utf8").digest("base64");
+
 /** One page per slot at v/<slug>/index.html. Module paths are from the site root. */
 export function generateSlotPages(
   content: Content,
@@ -57,6 +61,7 @@ export function generateSlotPages(
         cfg,
         lqip: map.lqip,
         bootJs,
+        bootHash: sha256(bootJs),
         globeUrl: rel(mods.globe),
         modulePreloads: (mods.globePreloads ?? []).map(rel),
         flatUrl: mods.flat ? rel(mods.flat) : undefined,
@@ -123,6 +128,7 @@ export function generatePreviewPage(
       cfg,
       lqip: "",
       bootJs,
+      bootHash: sha256(bootJs),
       globeUrl: rel(mods.globe),
       modulePreloads: (mods.globePreloads ?? []).map(rel),
       flatUrl: mods.flat ? rel(mods.flat) : undefined,
