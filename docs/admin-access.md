@@ -92,12 +92,6 @@ Secrets:
 | `APP_CLIENT_SECRET` | the App's client secret |
 | `SESSION_KEY` | a long random string (at least 32 characters). Changing it later signs everyone out. |
 
-**Keep the secrets in an environment limited to main (recommended).** Repository secrets can be read by a workflow on *any* branch, so anyone who can push a branch could read them. The Admin API and Process maps jobs run in an environment called `production`:
-
-1. **Settings → Environments → production** (it appears after the first run; or **New environment** → `production`).
-2. **Deployment branches and tags → Selected branches and tags → Add rule → `main`**.
-3. Under **Environment secrets**, add the four secrets above, then delete them from the repository secrets.
-
 Variables:
 
 | Name | Value |

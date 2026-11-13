@@ -75,8 +75,6 @@ jobs:
     needs: process
     if: needs.process.outputs.changed == 'true'
     runs-on: ubuntu-latest
-    # The App key lives here (see docs/admin-access.md: an environment limited to main).
-    environment: production
     permissions:
       contents: write
     outputs:

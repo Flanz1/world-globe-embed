@@ -19,8 +19,6 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # The deploy secrets live here: an environment that only main can use (docs/admin-access.md).
-    environment: production
     steps:
       - name: Check that the secrets are set
         id: ready
