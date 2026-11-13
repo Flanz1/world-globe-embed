@@ -117,17 +117,24 @@ export interface VRef {
 export const vkey = (v: VRef): string => `${v.p}:${v.r}:${v.i}`;
 
 export const cloneParts = (parts: Parts): Parts => parts.map((rings) => rings.map((ring) => ring.map(([x, y]) => [x, y] as Position)));
-export const cloneState = (s: EditorState): EditorState => ({
-  parts: cloneParts(s.parts),
+/**
+ * A deep copy. `share` keeps the given geometry (parts and lines) instead of copying it: the editor never
+ * mutates those arrays, it replaces them, so a state that only changed a property can share them (a
+ * 30,000-vertex outline would otherwise be copied three times per keystroke).
+ */
+const cloneStateOf = (s: EditorState, share?: Pick<EditorState, "parts" | "lines">): EditorState => ({
+  parts: share ? share.parts : cloneParts(s.parts),
   styles: [...s.styles],
   labels: [...s.labels],
   labelHidden: [...(s.labelHidden ?? [])],
   contested: [...(s.contested ?? [])],
   locked: [...(s.locked ?? [])],
   ...(s.owners ? { owners: [...s.owners] } : {}),
-  lines: (s.lines ?? []).map((l) => l.map(([x, y]) => [x, y] as Position)),
+  lines: share ? share.lines : (s.lines ?? []).map((l) => l.map(([x, y]) => [x, y] as Position)),
   props: { ...s.props, legend: s.props.legend.map((e) => ({ ...e })) },
 });
+
+export const cloneState = (s: EditorState): EditorState => cloneStateOf(s);
 
 const expandHex = (c: string) => (/^#[0-9a-f]{3}$/i.test(c) ? `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}` : c).toLowerCase();
 
@@ -811,6 +818,9 @@ export class History {
 
   apply(label: string, next: EditorState, merge?: string, now = Date.now()): void {
     const last = this.undos[this.undos.length - 1];
+    // Same geometry objects as now (a property edit): share them instead of copying every vertex.
+    const same = next.parts === this.state.parts && next.lines === this.state.lines;
+    const cloneState = same ? (s: EditorState) => cloneStateOf(s, { parts: next.parts, lines: next.lines }) : cloneStateOf;
     if (merge && last && last.merge === merge && now - last.t < MERGE_MS && !this.redos.length) {
       last.after = cloneState(next);
       last.t = now;

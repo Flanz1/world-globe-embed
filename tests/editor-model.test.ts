@@ -123,6 +123,20 @@ describe("undo/redo", () => {
     expect(h.state.parts[0][0][0][0]).toBeCloseTo(3, 10);
   });
 
+  it("shares the geometry for a property edit instead of copying every vertex, and still undoes correctly", () => {
+    const h = new History(st([[square(0, 0)]]));
+    const geo = h.state.parts;
+    h.apply("Description", { ...h.state, props: { ...h.state.props, description: "a" } }, "description", 1000);
+    h.apply("Description", { ...h.state, props: { ...h.state.props, description: "ab" } }, "description", 1100);
+    expect(h.state.parts).toBe(geo);
+    // A geometry edit still copies (the undo steps don't alias the live state).
+    h.apply("Move", { ...h.state, parts: moveVertices(h.state.parts, [{ p: 0, r: 0, i: 0 }], 1, 0) });
+    expect(h.state.parts).not.toBe(geo);
+    expect(h.undo() && h.undo()).toBe(true);
+    expect(h.state.props.description).toBe("");
+    expect(h.state.parts[0][0][0]).toEqual([0, 0]);
+  });
+
   it("keeps at least 100 steps", () => {
     const h = new History(st([[square(0, 0)]]));
     for (let i = 0; i < 150; i++) h.apply("Nudge", { ...h.state, parts: translate(h.state.parts, null, 1, 0) });

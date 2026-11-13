@@ -887,7 +887,7 @@ export function openEditor(o: EditorOptions): void {
   let clashListVersion = -1;
   /** The side panel's list of overlaps (plain text only: labels and names are untrusted). */
   function syncClashList(cs: ClashState): void {
-    if (clashListVersion === cs.version) return;
+    if (clashListVersion === cs.version || hist.dragging) return;
     clashListVersion = cs.version;
     const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
     const rows: HTMLElement[] = [];
@@ -1387,15 +1387,22 @@ export function openEditor(o: EditorOptions): void {
   });
   let previewRaf = 0;
   let lastSent = -1;
+  let lastSentAt = 0;
+  const PREVIEW_DRAG_MS = 250;
   function sendPreview(centre = false, focus?: number): void {
     if (centre) return sendRegion(frameEl, regionNow(), true, focus);
-    // At most one update per animation frame, even while dragging.
+    // At most one update per animation frame; while dragging, one every PREVIEW_DRAG_MS (the globe shares the
+    // main thread with the editor, and redrawing it per pointer move is what makes a drag lag).
     if (previewRaf || lastSent === hist.version) return;
-    previewRaf = requestAnimationFrame(() => {
+    const wait = hist.dragging ? Math.max(0, lastSentAt + PREVIEW_DRAG_MS - performance.now()) : 0;
+    const send = () => {
       previewRaf = 0;
+      if (lastSent === hist.version) return;
       lastSent = hist.version;
+      lastSentAt = performance.now();
       sendRegion(frameEl, regionNow());
-    });
+    };
+    previewRaf = wait ? window.setTimeout(send, wait) : requestAnimationFrame(send);
   }
   frameEl.addEventListener("load", () => {
     lastSent = -1;
@@ -1437,7 +1444,7 @@ export function openEditor(o: EditorOptions): void {
   opacityIn.addEventListener("input", () => (setProp("fillOpacity", Number(opacityIn.value), "Fill opacity"), changed()));
   labelIn.addEventListener("change", () => (setProp("label", labelIn.checked, "Label"), changed()));
   borderIn.addEventListener("change", () => (setProp("nationalBorders", borderIn.checked, "National borders"), changed()));
-  descIn.addEventListener("input", () => (setProp("description", descIn.value, "Description"), changed()));
+  descIn.addEventListener("input", () => (setProp("description", descIn.value, "Description"), changed("panel")));
   keyTitleIn.addEventListener("input", () => (setProp("legendTitle", keyTitleIn.value.slice(0, LEGEND_TITLE_MAX), "Legend title"), changed()));
 
   /* ── Colours and legend ── */
@@ -1804,13 +1811,22 @@ export function openEditor(o: EditorOptions): void {
   }
 
   /** After any state change: redraw, update the panel and the globe. */
-  function changed(): void {
+  function changed(only?: "panel"): void {
+    if (only === "panel") {
+      // An edit that neither moves nor recolours anything (the description): skip the map redraw and the globe update.
+      if (combine && combine.version !== hist.version) closeCombine(true);
+      undoBtn.disabled = !hist.canUndo;
+      redoBtn.disabled = !hist.canRedo;
+      return;
+    }
     // Drop selections that no longer exist.
     for (const [k, v] of selection) if (!parts()[v.p]?.[v.r]?.[v.i]) selection.delete(k);
     if (selPart >= parts().length) selPart = -1;
     // Any other edit while combining (undo, a delete in the Parts list…) makes the picked parts stale.
     if (combine && combine.version !== hist.version) closeCombine(true);
-    syncPanel();
+    // Mid-drag only the map and the globe change; the side panel (colour folders, part rows, buttons) is
+    // brought up to date once, when the drag ends. With a hundred parts it costs more than the drawing.
+    if (!hist.dragging) syncPanel();
     undoBtn.disabled = !hist.canUndo;
     redoBtn.disabled = !hist.canRedo;
     draw();
