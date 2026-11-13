@@ -240,3 +240,8 @@ button.tiny { padding: 1px 7px; font-size: 12px; }
 .checks { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 4px; font-size: 13px; }
 .checks .warn { color: #b26a00; }
 @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .layout > .content, .layout > .sidebar { grid-column: 1; } .sidebar { position: static; max-height: none; order: -1; } }
+
+/* Editor: several regions edited together */
+.ed-part-row select[data-part-owner] { grid-column: 2 / 4; }
+.ed-folder-head .ed-src { font-size: 11px; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-live-note { margin: 0; }
