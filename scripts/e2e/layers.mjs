@@ -6,7 +6,8 @@
  * 1. Builds the e2e fixture (scripts/e2e/fixture.mjs) plus a few overlapping regions, with the admin
  *    page pointed at the branch test/layers.
  * 2. Embeds (globe and flat, cross-origin iframe, padded and shifted slot): where parts overlap the
- *    later part covers the earlier one; the legend lists every labelled colour (the region's own colour
+ *    later part covers the earlier one, and where their colours differ the overlap is contested (the
+ *    upper colour filled, the lower one hatched over it, plus a "Contested" legend row); the legend lists every labelled colour (the region's own colour
  *    first once it's renamed); an old contested zone draws as a plain part; other regions on the slot
  *    never mark each other.
  * 3. Pixel identity: a region without overlaps renders exactly like a build of origin/main (skipped
@@ -231,8 +232,8 @@ for (const view of want("embed") ? ["flat", "globe"] : []) {
     });
     check(
       G,
-      "legend lists the renamed default colour first, then the other colours; no Contested row",
-      key?.visible && key.head === "Realm" && JSON.stringify(key.rows) === JSON.stringify([["Heartland", "rgb(255, 59, 48)"], ["March", "rgb(41, 121, 255)"]]),
+      "legend lists the renamed default colour first, then the other colours, then Contested (the parts overlap)",
+      key?.visible && key.head === "Realm" && JSON.stringify(key.rows.slice(0, 2)) === JSON.stringify([["Heartland", "rgb(255, 59, 48)"], ["March", "rgb(41, 121, 255)"]]) && key.rows.length === 3 && key.rows[2][0] === "Contested",
       JSON.stringify(key),
     );
     const shot = await canvasShot(e);
@@ -246,8 +247,25 @@ for (const view of want("embed") ? ["flat", "globe"] : []) {
       check(G, "the lower part's border is hidden under the part on top", absent(pUnder), fmt(pUnder));
       check(G, "…and solid where nothing covers it", isSolid(pOut), fmt(pOut));
       // Q's south edge (lat -15) between lon 31 and 39 lies inside P: Q is on top, so it's drawn.
-      const qIn = lineProfile(img, at(31, -15), at(39, -15), "#2979ff");
+      const qIn = lineProfile(img, at(31, -15), at(39, -15), "#2979ff", 120);
       check(G, "the upper part's border shows over the lower part", isSolid(qIn), fmt(qIn));
+      // Contested: the overlap (lon 30…40, lat -15…-8) is Q's blue with P's red hatched over it; Q alone (lon 41…46) has no red.
+      const redness = (w, s, e, n) => {
+        const [x0, y0] = at(w, n);
+        const [x1, y1] = at(e, s);
+        let red = 0;
+        let all = 0;
+        for (let y = Math.round(y0); y < Math.round(y1); y++)
+          for (let x = Math.round(x0); x < Math.round(x1); x++) {
+            const k = (y * img.info.width + x) * img.info.channels;
+            all++;
+            if (img.data[k] - img.data[k + 2] > 40) red++;
+          }
+        return red / all;
+      };
+      const hatched = redness(32, -13.5, 38, -9.5);
+      const plainQ = redness(41.5, -13.5, 45, -9.5);
+      check(G, "the overlap is contested: hatched in the lower part's colour over the upper one's", hatched > 0.1 && plainQ < 0.02, `${Math.round(hatched * 100)}% red in the overlap, ${Math.round(plainQ * 100)}% in Q alone`);
     }
     await e.page.screenshot({ path: path.join(OUT, `embed-${view}-page.png`) });
     await e.ctx.close();
@@ -375,7 +393,7 @@ const partBox = (s, p) => {
 const moved = (a, b) => a.map((v, i) => +(b[i] - v).toFixed(4));
 /** Unselects by clicking empty map, so the selection outline doesn't cover the borders. */
 const unselect = async () => {
-  const [x, y] = await ed.xy(136, -28);
+  const [x, y] = await ed.xy(134, -58); // empty map, clear of the layer bar at the top right
   await page.mouse.click(x, y);
   await page.waitForTimeout(80);
 };
@@ -472,7 +490,7 @@ if (want("editor")) {
     const cl = await ed.clashes();
     check(A, "the overlap is detected live", cl.internal.some(([i, j]) => i === 0 && j === 1), JSON.stringify(cl));
     const listed = await page.evaluate(() => [...document.querySelectorAll("dialog.editor .ed-clashes li")].map((li) => li.textContent));
-    check(A, "Overlaps says which part covers which", listed.length === 1 && listed[0].startsWith("Part 2 covers part 1"), JSON.stringify(listed));
+    check(A, "Overlaps says which part is on top in the contested overlap", listed.length === 1 && /^Part 2 over part 1 .*: contested, part 2's colour is the main one$/.test(listed[0]), JSON.stringify(listed));
     await unselect();
     let img = await canvasImg();
     const [bw] = partBox(s, 1);
@@ -493,7 +511,7 @@ if (want("editor")) {
     bOver = await edgeProfile(img, [bw, -45], [bw, -48.5], B_COL);
     // (A vertex handle sits on this edge, hence a short gap.)
     check(A, "editor: now A's border shows over B…", aUnder.on > 0.8, fmt(aUnder));
-    check(A, "…and B's is hidden under A", absent(bOver), fmt(bOver));
+    check(A, "…and B's border is hidden under A (only its contested hatch shows there)", !isSolid(bOver) && bOver.on < 0.7, fmt(bOver));
     await page.screenshot({ path: path.join(OUT, "editor-layers-a-on-top.png") });
     await page.waitForTimeout(500);
     // ] brings the selected part forward again.
@@ -506,6 +524,24 @@ if (want("editor")) {
     await page.keyboard.press("[");
     await page.keyboard.press("]");
     check(A, "[ then ] ends where it started", JSON.stringify((await ed.state()).styles) === "[-1,0]");
+    // The layer bar in the top right of the map, while a part is selected.
+    // (The bar updates on the next frame.)
+    const bar = () => page.evaluate(async () => {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const b = document.querySelector("dialog.editor .ed-layer-bar");
+      const r = b.getBoundingClientRect();
+      const w = document.querySelector("dialog.editor .ed-canvas-wrap").getBoundingClientRect();
+      return { shown: !b.hidden, text: b.querySelector(".ed-layer-name").textContent, fwd: b.querySelector('[data-act="layer-forward"]').disabled, back: b.querySelector('[data-act="layer-backward"]').disabled, topRight: Math.abs(r.right - w.right) < 20 && Math.abs(r.top - w.top) < 20 };
+    });
+    let lb = await bar();
+    check(A, "a selected part shows the layer bar in the map's top right", lb.shown && lb.topRight && lb.text === "Part 2 of 2" && lb.fwd && !lb.back, JSON.stringify(lb));
+    await page.click('dialog.editor .ed-layer-bar [data-act="layer-backward"]');
+    lb = await bar();
+    check(A, "its Back sends the part under the other", JSON.stringify((await ed.state()).styles) === "[0,-1]" && (await ed.sel()) === 0 && lb.text === "Part 1 of 2" && !lb.fwd && lb.back, JSON.stringify(lb));
+    await page.click('dialog.editor .ed-layer-bar [data-act="layer-forward"]');
+    check(A, "…and Forward brings it back on top", JSON.stringify((await ed.state()).styles) === "[-1,0]" && (await ed.sel()) === 1);
+    await unselect();
+    check(A, "nothing selected: no layer bar", !(await bar()).shown);
     await page.screenshot({ path: path.join(OUT, "editor-overlap.png") });
   });
 

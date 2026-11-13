@@ -231,6 +231,26 @@ export function openEditor(o: EditorOptions): void {
   const frame = { north: pad.north, south: pad.south, shift: slot.shift ?? 0 };
   const neighbours = o.neighbours.filter((n) => n.properties.slot === slotName);
   // Other regions are hidden until switched on in the "Other regions" panel (top right of the map).
+  /** The part the map selection is on: the selected part, else the one part the selected vertices belong to. */
+  function layerBarPart(): number {
+    if (selPart >= 0 && selPart < parts().length) return selPart;
+    const ps = new Set([...selection.values()].map((v) => v.p));
+    return ps.size === 1 ? [...ps][0] : -1;
+  }
+  function layerBarMove(dir: 1 | -1): void {
+    const p = layerBarPart();
+    if (p >= 0) moveLayer(p, dir);
+  }
+  function syncLayerBar(): void {
+    const p = layerBarPart();
+    const show = p >= 0 && overlays.panel.hidden;
+    layerBar.el.hidden = !show;
+    if (!show) return;
+    const n = parts().length;
+    layerBar.label.textContent = `Part ${p + 1} of ${n}`;
+    layerBar.fwd.disabled = p >= n - 1;
+    layerBar.back.disabled = p <= 0;
+  }
   const overlays = createOverlayFilter({
     items: neighbours.map((n, index) => ({
       categoryId: null,
@@ -271,6 +291,15 @@ export function openEditor(o: EditorOptions): void {
     h("button", { type: "button", className: "ghost tool", textContent: text, title: `${text} (${key})${more}`, dataset: { tool: t }, onclick: () => setTool(t) });
   const btn = (text: string, title: string, onclick: () => void, data = "") =>
     h("button", { type: "button", className: "ghost", textContent: text, title, onclick, dataset: data ? { act: data } : {} });
+  /** Top right of the map while a part is selected (or its vertices): send it forward or backward. */
+  const layerBar = (() => {
+    const label = h("span", { className: "ed-layer-name" });
+    const fwd = btn("Forward", "Bring the selected part forward: on top of the next part it overlaps (])", () => layerBarMove(1), "layer-forward");
+    const back = btn("Back", "Send the selected part backward: under the next part it overlaps ([)", () => layerBarMove(-1), "layer-backward");
+    const el = h("div", { className: "ed-layer-bar", hidden: true, role: "toolbar", ariaLabel: "Layer order" }, label, back, fwd);
+    for (const t of ["pointerdown", "mousedown", "wheel"] as const) el.addEventListener(t, (e) => e.stopPropagation());
+    return { el, label, fwd, back };
+  })();
   const undoBtn = btn("Undo", "Undo (Ctrl+Z)", () => undo(), "undo");
   const redoBtn = btn("Redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)", () => redo(), "redo");
   const gridBtn = btn("Grid", "Show the globe's 15° grid (G)", () => toggleGrid(), "grid");
@@ -378,7 +407,7 @@ export function openEditor(o: EditorOptions): void {
     h(
       "div",
       { className: "ed-body" },
-      h("div", { className: "ed-canvas-wrap" }, canvas, overlays.panel, ctxMenu, tip, simpPanel, combPanel, status),
+      h("div", { className: "ed-canvas-wrap" }, canvas, overlays.panel, layerBar.el, ctxMenu, tip, simpPanel, combPanel, status),
       h(
         "div",
         { className: "ed-side" },
@@ -408,7 +437,7 @@ export function openEditor(o: EditorOptions): void {
           "fieldset",
           { className: "ed-overlaps" },
           h("legend", { textContent: "Overlaps" }),
-          h("p", { className: "muted small", textContent: "Where parts overlap, the one on top covers the one below, in the embed too." }),
+          h("p", { className: "muted small", textContent: "Where parts of different colours overlap, the overlap is contested: the upper layer's colour is the main one and the lower one's is hatched over it, in the embed too. Forward / Back decide which is on top." }),
           clashList,
         ),
         stats,
@@ -782,7 +811,9 @@ export function openEditor(o: EditorOptions): void {
     const rows: HTMLElement[] = [];
     for (const [i, j] of cs.clashes.internal) {
       const [lo, hi] = i < j ? [i, j] : [j, i];
-      rows.push(h("li", { dataset: { clash: `${i}:${j}` } }, `${cap(partName(hi))} covers ${partName(lo)}`));
+      // The upper layer's colour is the main one in the overlap, the lower one's is hatched over it.
+      const contested = partColour(hi) !== partColour(lo);
+      rows.push(h("li", { dataset: { clash: `${i}:${j}` } }, contested ? `${cap(partName(hi))} over ${partName(lo)}: contested, ${partName(hi)}'s colour is the main one` : `${cap(partName(hi))} covers ${partName(lo)} (same colour)`));
     }
     if (!rows.length) rows.push(h("li", { className: "muted", textContent: "No overlaps." }));
     clashList.replaceChildren(...rows);
@@ -790,6 +821,7 @@ export function openEditor(o: EditorOptions): void {
 
   function render(): void {
     raf = 0;
+    syncLayerBar();
     const { w, h: hh } = size();
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(hh * dpr)) {

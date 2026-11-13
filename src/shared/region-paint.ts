@@ -58,6 +58,10 @@ export function paintSpecOf(r: PaintInput, clashes: Clashes): PaintSpec {
   };
 }
 
+/** Whether the legend gets its "Contested" row: some parts of different colours overlap (and so are hatched). */
+export const hasContestedMarks = (spec: PaintSpec): boolean =>
+  spec.front.some((f, j) => f.some((i) => spec.parts[i] && spec.parts[j] && spec.parts[i].color !== spec.parts[j].color));
+
 /** The embed's spec: the region's parts as layers. */
 export function regionPaintSpec(r: PaintInput): PaintSpec {
   return paintSpecOf(r, regionClashes(polygonsOf(r.geometry)));
