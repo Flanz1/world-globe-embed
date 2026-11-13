@@ -133,8 +133,13 @@ dialog.rpreview { width: min(980px, calc(100vw - 32px)); }
 .seg button { border-radius: 0; }
 .seg button:first-child { border-radius: 6px 0 0 6px; }
 .seg button:last-child { border-radius: 0 6px 6px 0; }
-.shortcuts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }
+.shortcuts { display: grid; grid-template-columns: 14em 1fr; align-items: baseline; gap: 6px 14px; margin: 0; font-size: 14px; }
 .shortcuts dd { margin: 0; }
+.sc-group h3 { margin: 4px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.sc-group + .sc-group { border-top: 1px solid var(--line); padding-top: 10px; }
+.sc-notes { margin: 0; display: grid; gap: 8px; font-size: 14px; }
+.sc-notes dt { font-weight: 600; }
+.sc-notes dd { margin: 0; color: var(--muted); }
 kbd { font: 12px ui-monospace, monospace; padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--bg); }
 
 /* ── Region editor ── */
