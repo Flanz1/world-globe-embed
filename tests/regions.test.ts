@@ -6,7 +6,7 @@ import { loadContent } from "../scripts/lib/content.ts";
 import { contentPaths } from "../scripts/lib/paths.ts";
 import type { MapMeta } from "../src/shared/types.ts";
 import type { RegionFeature } from "../src/shared/region.ts";
-import { copyId, legendRows, migrateZoneColours, normalizePartContested, normalizePartLocked, normalizePartOccupied, normalizePartLabels, normalizePartLegend, regionLabelPoints, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
+import { copyId, legendRows, migrateZoneColours, normalizePartContested, normalizePartLocked, normalizePartOccupied, normalizePartLabelHidden, normalizePartLabels, normalizePartLegend, regionLabelPoints, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
 import { MAX_VERTICES } from "../src/shared/geo.ts";
 import { ZOOM_MAX, ZOOM_MIN } from "../src/shared/params.ts";
 
@@ -407,5 +407,46 @@ describe("occupied parts", () => {
     expect(parseRegionData(JSON.parse(JSON.stringify(d)))?.occupied).toEqual([false, true]);
     expect(parseRegionData({ ...JSON.parse(JSON.stringify(d)), occupied: [true] })).toBeNull();
     expect(regionData(f({ partContested: [-1, 0] })).occupied).toEqual([false, true]);
+  });
+});
+
+describe("per-part label switch (partLabelHidden)", () => {
+  const multi = (): RegionFeature => {
+    const f = good();
+    f.geometry = {
+      type: "MultiPolygon",
+      coordinates: [
+        [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]],
+        [[[20, 0], [30, 0], [30, 10], [20, 10], [20, 0]]],
+        [[[175, 0], [-175, 0], [-175, 10], [175, 10], [175, 0]]],
+      ],
+    };
+    delete f.properties.name;
+    f.properties.partLabels = ["West", "", "<b>Date line</b>"];
+    return f;
+  };
+  const withHidden = (hidden: boolean[]): RegionFeature => {
+    const f = multi();
+    return { ...f, properties: { ...f.properties, partLabelHidden: hidden } };
+  };
+  it("normalizePartLabelHidden pads and cuts; only true hides", () => {
+    expect(normalizePartLabelHidden(undefined, 3)).toEqual([false, false, false]);
+    expect(normalizePartLabelHidden([true, "x", false, true], 3)).toEqual([true, false, false]);
+  });
+  it("a hidden part gets no label point; the others keep theirs", () => {
+    const all = regionLabelPoints(regionData(multi()));
+    expect(all.length).toBeGreaterThan(1);
+    const some = regionLabelPoints(regionData(withHidden([true, ...all.slice(1).map(() => false)])));
+    expect(some.length).toBe(all.length - 1);
+    expect(some.map((p) => p.text)).not.toContain(all[0].text);
+  });
+  it("regionData only carries labelHidden when something is hidden, and parseRegionData round-trips it", () => {
+    expect(regionData(multi()).labelHidden).toBeUndefined();
+    const n = regionData(multi()).labels.length;
+    const d = regionData(withHidden(Array.from({ length: n }, (_, i) => i === 0)));
+    expect(d.labelHidden?.[0]).toBe(true);
+    expect(parseRegionData(JSON.parse(JSON.stringify(d)))?.labelHidden?.[0]).toBe(true);
+    expect(parseRegionData({ ...d, labelHidden: [true] })).toBeNull();
+    expect(parseRegionData({ ...d, labelHidden: d.labels.map(() => "no") })).toBeNull();
   });
 });

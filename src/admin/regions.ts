@@ -54,48 +54,71 @@ export function regionEntries(): RegionEntry[] {
   return entries;
 }
 
-export async function loadRegions(): Promise<void> {
-  const gh = deps.gh();
-  const files = (await gh.listDir("content/regions")).filter((f) => f.type === "file" && f.name.endsWith(".json"));
-  const loaded = await Promise.all(
-    files.map(async (f): Promise<RegionEntry> => {
-      const id = f.name.slice(0, -5);
-      try {
-        const { text, sha } = await gh.readFile(f.path);
-        let feature: RegionFeature | null = null;
-        let problem: string | undefined;
-        try {
-          feature = JSON.parse(text) as RegionFeature;
-          if (feature?.type !== "Feature" || !feature.geometry || !feature.properties) throw new Error("not a region");
-          const errs = checkGeometry(feature.geometry);
-          if (errs.length) problem = errs[0];
-        } catch {
-          feature = null;
-          problem = "This file isn't a valid region (broken JSON or wrong shape).";
-        }
-        return { id, path: f.path, sha, feature, problem };
-      } catch (e) {
-        return { id, path: f.path, sha: "", feature: null, problem: (e as Error).message };
-      }
+/** Parsed region files by blob SHA: a blob never changes, so a reload after a save only reads the file that changed. */
+const parsed = new Map<string, { feature: RegionFeature | null; problem?: string }>();
+const READ_PARALLEL = 8;
+/** Regions with no `updated` stamp (saved before it existed) get their last commit looked up, up to this many per load. */
+const MAX_COMMIT_LOOKUPS = 24;
+
+/** Runs `work` on every item, at most `limit` at a time. */
+async function pool<T>(items: T[], limit: number, work: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) await work(items[next++]);
     }),
   );
+}
+
+export async function loadRegions(): Promise<void> {
+  const gh = deps.gh();
+  // One listing request per folder level, however many regions there are (the contents API stops at 1,000).
+  const files = (await gh.listTree("content/regions")).filter((f) => f.type === "file" && f.name.endsWith(".json"));
+  const loaded: RegionEntry[] = [];
+  await pool(files, READ_PARALLEL, async (f) => {
+    const id = f.name.slice(0, -5);
+    let hit = parsed.get(f.sha);
+    if (!hit) {
+      try {
+        const text = await gh.readBlob(f.sha);
+        try {
+          const feature = JSON.parse(text) as RegionFeature;
+          if (feature?.type !== "Feature" || !feature.geometry || !feature.properties) throw new Error("not a region");
+          const errs = checkGeometry(feature.geometry);
+          hit = { feature, problem: errs.length ? errs[0] : undefined };
+        } catch {
+          hit = { feature: null, problem: "This file isn't a valid region (broken JSON or wrong shape)." };
+        }
+        parsed.set(f.sha, hit);
+      } catch (e) {
+        loaded.push({ id, path: f.path, sha: "", feature: null, problem: (e as Error).message });
+        return;
+      }
+    }
+    // A copy, so editing an entry in memory can never change what the cache holds for that blob.
+    loaded.push({ id, path: f.path, sha: f.sha, feature: hit.feature ? structuredClone(hit.feature) : null, problem: hit.problem });
+  });
+  // Forget files that are no longer current so the cache doesn't grow with every edit.
+  const current = new Set(files.map((f) => f.sha));
+  for (const k of parsed.keys()) if (!current.has(k)) parsed.delete(k);
+  loaded.sort((a, b) => a.id.localeCompare(b.id));
   if (!hasPendingSaves()) entries = loaded;
   // Categories are optional: if the file can't be read, regions just show uncategorized.
   await loadCategories().catch(() => {});
   // A change is still being saved: this read may predate it. The save reloads when it's done.
   if (hasPendingSaves()) return;
   renderRegions();
-  // Last commit (author and date) per file, filled in as they arrive.
-  for (const e of entries) {
-    void gh
-      .lastCommit(e.path)
-      .then((c) => {
-        e.commit = c;
-        const el = document.querySelector<HTMLElement>(`[data-region-meta="${CSS.escape(e.id)}"]`);
-        if (el) el.textContent = metaText(e);
-      })
-      .catch(() => {});
-  }
+  // Who saved a region last and when is in the file (the admin API requires it). Only older files without it need a commit lookup.
+  const old = entries.filter((e) => !e.feature?.properties.updated).slice(0, MAX_COMMIT_LOOKUPS);
+  void pool(old, 4, async (e) => {
+    try {
+      e.commit = await gh.lastCommit(e.path);
+    } catch {
+      return;
+    }
+    const el = document.querySelector<HTMLElement>(`[data-region-meta="${CSS.escape(e.id)}"]`);
+    if (el) el.textContent = metaText(e);
+  });
 }
 
 const fmtDate = (s: string | undefined) => (s ? new Date(s).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "");

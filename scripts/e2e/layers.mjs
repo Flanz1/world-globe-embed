@@ -705,6 +705,28 @@ if (want("editor")) {
     await page.screenshot({ path: path.join(OUT, "editor-saved.png") });
   });
 
+  await step(A, "labels switch off per part and per colour folder", async () => {
+    const row0 = 'dialog.editor .ed-part-row[data-row="0"] [data-act="part-label"]';
+    check(A, "a part's label starts on", (await page.getAttribute(row0, "aria-pressed")) === "true");
+    await page.click(row0);
+    check(A, "the Label button turns the part's label off", (await page.getAttribute(row0, "aria-pressed")) === "false" && (await page.textContent(row0)) === "Label off");
+    check(A, "the text is kept", (await page.inputValue('dialog.editor .ed-part-row[data-row="0"] input[type=text]')) === HOSTILE);
+    const n0 = mock.log.length;
+    await page.click("dialog.editor .ed-save");
+    const t0 = Date.now();
+    while (mock.log.length < n0 + 1 && Date.now() - t0 < 15000) await page.waitForTimeout(100);
+    await page.waitForTimeout(400);
+    const p = JSON.parse(mock.read(BRANCH, "content/regions/editor-test.json")).properties;
+    check(A, "saved as partLabelHidden with the label text kept", JSON.stringify(p.partLabelHidden) === "[true,false,false]" && p.partLabels[0] === HOSTILE, JSON.stringify([p.partLabelHidden, p.partLabels]));
+    await page.click('dialog.editor [data-act="undo"]');
+    check(A, "undo shows it again", (await page.getAttribute(row0, "aria-pressed")) === "true");
+    const folder = 'dialog.editor .ed-folder[data-key="-1"] [data-act="folder-labels"]';
+    await page.click(folder);
+    check(A, "a colour folder's Labels button hides all its labels", (await page.textContent(folder)) === "Labels off" && (await page.getAttribute(row0, "aria-pressed")) === "false");
+    await page.click(folder);
+    check(A, "and shows them again", (await page.textContent(folder)) === "Labels on" && (await page.getAttribute(row0, "aria-pressed")) === "true");
+  });
+
   await step(A, "delete a whole part (always asks first)", async () => {
     const warn = "dialog.small-dlg.danger[open]";
     const s0 = await ed.state();

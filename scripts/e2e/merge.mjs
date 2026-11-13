@@ -178,7 +178,7 @@ await step(E, "combine and extend", async () => {
   await ed.setView(126, -50, 14);
   await page.waitForTimeout(150);
   let s = await ed.state();
-  check(E, "opens with five parts, the old contested zone a plain part", s.parts.length === 5 && JSON.stringify(s.contested) === "[-1,-1,-1,-1,-1]" && JSON.stringify(s.styles) === "[0,-1,-1,-1,-1]", JSON.stringify([s.styles, s.contested]));
+  check(E, "opens with five parts, the old contested zone an occupied (contested) area", s.parts.length === 5 && JSON.stringify(s.contested) === "[-1,-1,-2,-1,-1]" && JSON.stringify(s.styles) === "[0,-1,-1,-1,-1]", JSON.stringify([s.styles, s.contested]));
 
   // 0. Pick parts with Shift+click: Combine works off the picks, not the touching parts.
   const shiftClick = async (lon, lat) => {
@@ -219,7 +219,7 @@ await step(E, "combine and extend", async () => {
   t = await info();
   check(E, "adding a part that doesn't touch says so and disables Combine", /don't touch/.test(t) && (await page.isDisabled('dialog.editor [data-act="combine-apply"]')), t);
   await clickAt(145, -50);
-  // The old contested zone is a plain part now: it can be added (it overlaps part 2), and dropped again.
+  // The old contested zone is an occupied area now, still a part: it can be added (it overlaps part 2), and dropped again.
   await clickAt(125, -47);
   t = await info();
   check(E, "the former contested zone can be combined like any part", /^Parts 1, 2, 5, 3 → one part|^Parts 1, 2, 3, 5 → one part/.test(t), t);

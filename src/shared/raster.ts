@@ -144,12 +144,13 @@ export interface PaintSpec {
   borders?: { national: Position[][]; provincial: Position[][] };
 }
 
-/** National borders: dark ink over a light parchment casing; provincial: fine ink dots. Widths in line widths. */
+/** National borders: dark ink over a light parchment casing; provincial: fine ink dashes, thinner than the outline and longer than their gaps. Widths and lengths in line widths. */
 export const BORDER_INK = "rgba(20,14,10,0.95)";
 export const BORDER_CASING = "rgba(243,230,200,0.85)";
 export const NATIONAL_W = 1;
 export const CASING_W = 1.8;
-export const PROVINCIAL_W = 1.2;
+export const PROVINCIAL_W = 0.6;
+export const PROVINCIAL_DASH = 5;
 export const PROVINCIAL_GAP = 2.5;
 
 /** Contested stripes: their opacity, and their width in line widths (every colour's stripe is the same width). */
@@ -269,7 +270,8 @@ function paintBorders(ctx: Ctx, spec: PaintSpec, x: (lon: number) => number, y: 
       ctx.clip("evenodd");
       ctx.beginPath();
       for (const l of b.provincial) traceLine(ctx, l, x, y, offsets);
-      ctx.setLineDash([0.01, PROVINCIAL_GAP * lw]);
+      ctx.lineCap = "butt";
+      ctx.setLineDash([PROVINCIAL_DASH * lw, PROVINCIAL_GAP * lw]);
       ctx.lineWidth = PROVINCIAL_W * lw;
       ctx.strokeStyle = BORDER_INK;
       ctx.stroke();

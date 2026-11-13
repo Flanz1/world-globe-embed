@@ -12,6 +12,8 @@ export const CATEGORY_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 export const CATEGORY_NAME_MAX = 60;
 /** How many levels of folders may sit inside each other. */
 export const MAX_DEPTH = 5;
+/** Regions one commit may move between folders: the admin API looks up each one's owner (a subrequest each), so the admin page moves a bigger batch in several commits. */
+export const MAX_MOVED_PER_COMMIT = 24;
 
 /** A GitHub account (same shape as access.ts's Account). */
 interface Creator {

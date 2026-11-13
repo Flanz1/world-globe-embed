@@ -322,6 +322,8 @@ function assemble(s: EditorState, list: number[], rings: Ring[], parent: number,
   next.parts = kept.map((q) => (q === into ? rings : s.parts[q].map((r) => r.map(([x, y]) => [x, y] as Position))));
   next.styles = kept.map((q) => s.styles[q] ?? OWN_COLOUR);
   next.labels = kept.map((q) => (q === into ? label : (s.labels[q] ?? "")));
+  // The merged part's label shows unless every part that fed it had its label switched off.
+  next.labelHidden = kept.map((q) => (q === into ? list.every((r) => s.labelHidden?.[r] === true || !s.labels[r]?.trim()) && list.some((r) => s.labelHidden?.[r] === true) : s.labelHidden?.[q] === true));
   next.locked = kept.map((q) => (q === into ? list.some((r) => s.locked[r] !== false) : s.locked[q] !== false));
   next.contested = kept.map((q) => {
     // An occupied area (OCCUPIED) stays one; combined with others, the result is one if any of them was.

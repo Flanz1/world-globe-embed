@@ -55,6 +55,8 @@ export interface EditorState {
    * Every part-reshaping helper carries it along with the parts.
    */
   contested: number[];
+  /** Per part: true when its label is switched off in the embed (the text is kept). Missing entries: shown. */
+  labelHidden: boolean[];
   /** Per part: true when it's locked (can't be moved as a whole; its vertices still edit). */
   locked: boolean[];
   /** Province borders: open lines drawn inside the region (unwrapped, like the rings). Not tied to any part. */
@@ -87,6 +89,7 @@ export const cloneState = (s: EditorState): EditorState => ({
   parts: cloneParts(s.parts),
   styles: [...s.styles],
   labels: [...s.labels],
+  labelHidden: [...(s.labelHidden ?? [])],
   contested: [...(s.contested ?? [])],
   locked: [...(s.locked ?? [])],
   lines: (s.lines ?? []).map((l) => l.map(([x, y]) => [x, y] as Position)),
@@ -365,10 +368,11 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
   const parts: Parts = [];
   const styles: number[] = [];
   const labels: string[] = [];
+  const labelHidden: boolean[] = [];
   const locked: boolean[] = [];
   const parentOld: number[] = [];
   const index = s.parts.map(() => -1);
-  const extra: { rings: Ring[]; style: number; parent: number; lock: boolean }[] = [];
+  const extra: { rings: Ring[]; style: number; parent: number; lock: boolean; hide: boolean }[] = [];
   const cut: number[] = [];
   let removed = 0;
   s.parts.forEach((rings, p) => {
@@ -376,20 +380,23 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
     const style = s.styles[p] ?? OWN_COLOUR;
     const parent = s.contested[p] ?? -1;
     const lock = s.locked?.[p] !== false;
+    const hide = s.labelHidden?.[p] === true;
     if (pc) cut.push(p);
     if (pc && !pc.length) return void removed++;
     index[p] = parts.length;
     parts.push(pc ? pc[0] : rings.map((r) => r.map(([x, y]) => [x, y] as Position)));
     styles.push(style);
     labels.push(s.labels[p] ?? "");
+    labelHidden.push(hide);
     locked.push(lock);
     parentOld.push(parent);
-    for (const more of pc?.slice(1) ?? []) extra.push({ rings: more, style, parent, lock });
+    for (const more of pc?.slice(1) ?? []) extra.push({ rings: more, style, parent, lock, hide });
   });
   for (const e of extra) {
     parts.push(e.rings);
     styles.push(e.style);
     labels.push("");
+    labelHidden.push(e.hide);
     locked.push(e.lock);
     parentOld.push(e.parent);
   }
@@ -404,6 +411,7 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
   next.parts = parts;
   next.styles = styles;
   next.labels = labels;
+  next.labelHidden = labelHidden;
   next.contested = contested;
   next.locked = locked;
   // Check the changed parts as they'd be stored (rounded): a cut can leave a hole touching the edge.
@@ -570,6 +578,22 @@ export function smoothParts(parts: Parts): Parts | null {
   return countVertices(out) > MAX_VERTICES ? null : out;
 }
 
+/** Switches part p's label off (`hidden`) or on in the embed. The text is kept either way. */
+export function setLabelHidden(s: EditorState, p: number, hidden: boolean): EditorState {
+  const next = cloneState(s);
+  while (next.labelHidden.length < next.parts.length) next.labelHidden.push(false);
+  if (p >= 0 && p < next.parts.length) next.labelHidden[p] = hidden;
+  return next;
+}
+
+/** Switches the labels of all the parts in `members` off or on at once. */
+export function setLabelsHidden(s: EditorState, members: readonly number[], hidden: boolean): EditorState {
+  const next = cloneState(s);
+  while (next.labelHidden.length < next.parts.length) next.labelHidden.push(false);
+  for (const p of members) if (p >= 0 && p < next.parts.length) next.labelHidden[p] = hidden;
+  return next;
+}
+
 /* ── Part colours and the legend ── */
 
 
@@ -583,12 +607,14 @@ export function toStyledGeometry(
   labels: string[] = [],
   contested: number[] = [],
   locked: boolean[] = [],
-): { geometry: RegionGeometry; partLegend: number[]; partLabels: string[]; partContested: number[]; partOccupied: boolean[]; partLocked: boolean[] } {
+  labelHidden: boolean[] = [],
+): { geometry: RegionGeometry; partLegend: number[]; partLabels: string[]; partLabelHidden: boolean[]; partContested: number[]; partOccupied: boolean[]; partLocked: boolean[] } {
   const keep: Parts = [];
   const kept: number[] = [];
   const partLegend: number[] = [];
   const partLabels: string[] = [];
   const partLocked: boolean[] = [];
+  const partLabelHidden: boolean[] = [];
   parts.forEach((rings, p) => {
     if (polygonsOf(toStoredGeometry([rings])).length) {
       keep.push(rings);
@@ -596,10 +622,11 @@ export function toStyledGeometry(
       partLegend.push(styles[p] ?? OWN_COLOUR);
       partLabels.push(labels[p] ?? "");
       partLocked.push(locked[p] !== false);
+      partLabelHidden.push(labelHidden[p] === true);
     }
   });
   const partContested = remapContested(contested, kept).contested;
-  return { geometry: toStoredGeometry(keep), partLegend, partLabels, partContested, partOccupied: partContested.map((k) => k !== -1), partLocked };
+  return { geometry: toStoredGeometry(keep), partLegend, partLabels, partLabelHidden, partContested, partOccupied: partContested.map((k) => k !== -1), partLocked };
 }
 
 /** Removes legend entry `k`: its parts go back to the region's colour, later indices shift down. */
@@ -637,6 +664,7 @@ export function reorderPart(s: EditorState, p: number, to: number): EditorState 
   next.parts = order.map((i) => next.parts[i]);
   next.styles = order.map((i) => s.styles[i] ?? OWN_COLOUR);
   next.labels = order.map((i) => s.labels[i] ?? "");
+  next.labelHidden = order.map((i) => s.labelHidden?.[i] === true);
   next.contested = order.map((i) => ((s.contested[i] ?? -1) >= 0 ? inv[s.contested[i]] : (s.contested[i] ?? -1)));
   next.locked = order.map((i) => s.locked[i] ?? true);
   return next;

@@ -16,7 +16,7 @@
       "name": "Gethricism",
       "regions": [
         "diarism",
-        "gethricism",
+        "gethricism2",
         "kethregion",
         "razmyrregion",
         "region",
@@ -65,6 +65,36 @@
         "login": "Flanz1"
       },
       "created": "2026-11-13T18:11:13Z"
+    },
+    {
+      "id": "nirydian-religions",
+      "name": "Nirydian Religions",
+      "regions": [
+        "javalim",
+        "tsurugism"
+      ],
+      "parent": "religion",
+      "createdBy": {
+        "id": 138310181,
+        "login": "LoopSimon"
+      },
+      "created": "2026-11-13T18:47:59Z"
+    },
+    {
+      "id": "vas-ira",
+      "name": "Vas Ira",
+      "regions": [
+        "bigronism",
+        "bihrasmanism",
+        "karaluk",
+        "noorism"
+      ],
+      "parent": "nirydian-religions",
+      "createdBy": {
+        "id": 138310181,
+        "login": "LoopSimon"
+      },
+      "created": "2026-11-13T18:48:10Z"
     }
   ]
 }

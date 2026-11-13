@@ -123,6 +123,14 @@
             "maxLength": 80
           }
         },
+        "partLabelHidden": {
+          "type": "array",
+          "maxItems": 1000,
+          "description": "One entry per polygon of the geometry, in order: true to hide that part's label in the embed and the editor's preview while keeping its text in partLabels, false (or a missing entry) to show it. Leave it out when no label is hidden. Must have one entry per part when present.",
+          "items": {
+            "type": "boolean"
+          }
+        },
         "partContested": {
           "type": "array",
           "maxItems": 1000,

@@ -204,6 +204,8 @@ button.tiny { padding: 1px 7px; font-size: 12px; }
 .combine-base { display: grid; gap: 4px; border: 1px solid var(--line); border-radius: 6px; }
 .combine-out p { margin: 2px 0; }
 .warn { color: #b9770e; }
+.ed-part-row.label-off input[type=text] { opacity: .55; text-decoration: line-through; }
+.ed-part-row .ed-labelbtn[aria-pressed=false] { opacity: .75; }
 .ed-part-row.locked .ed-lock { background: var(--accent); color: var(--card); border-color: var(--accent); }
 
 /* Editor: "Other regions" tool (button at the toolbar's right end, panel at the top right of the map) */
