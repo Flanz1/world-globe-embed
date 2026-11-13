@@ -153,6 +153,12 @@ console.log(`drag (${VERTS} vertices${parts.length > 1 ? ", 2 parts" : ""}): ${a
 await browser.close();
 server.close();
 let fail = false;
-if (BUDGET_TYPE && avg(typing) > BUDGET_TYPE) (console.log(`✗ typing over budget ${BUDGET_TYPE} ms`), (fail = true));
-if (BUDGET_DRAG && avg(drag) > BUDGET_DRAG) (console.log(`✗ drag over budget ${BUDGET_DRAG} ms`), (fail = true));
+if (BUDGET_TYPE && avg(typing) > BUDGET_TYPE) {
+  console.log(`✗ typing over budget ${BUDGET_TYPE} ms`);
+  fail = true;
+}
+if (BUDGET_DRAG && avg(drag) > BUDGET_DRAG) {
+  console.log(`✗ drag over budget ${BUDGET_DRAG} ms`);
+  fail = true;
+}
 process.exit(fail ? 1 : 0);
