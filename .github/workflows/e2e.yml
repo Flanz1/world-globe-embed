@@ -77,3 +77,5 @@ jobs:
         with:
           name: e2e-logs
           path: .e2e/
+          # .e2e is a dot-folder; without this the action skips it and the logs/screenshots are lost.
+          include-hidden-files: true
