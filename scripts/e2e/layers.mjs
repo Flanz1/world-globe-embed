@@ -151,6 +151,9 @@ const browser = await chromium.launch({
   args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--disable-features=IsolateOrigins,site-per-process"],
 });
 
+// The first embed load in a run is cold (tiles, shaders, software GL) and can take well over 30 s on a slow
+// runner; later loads are warm. A page that never gets there still fails, just after the longer wait.
+let embedWarm = false;
 async function openEmbed(url) {
   const ctx = await browser.newContext({ viewport: { width: 800, height: 480 }, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
@@ -161,7 +164,8 @@ async function openEmbed(url) {
   page.on("dialog", (d) => (dialogs.push(d.message()), d.dismiss()));
   await page.goto(`${HOST}/?src=${encodeURIComponent(url)}`);
   const frame = page.frames().find((f) => f.url().startsWith(url.slice(0, 21)));
-  await frame.waitForFunction(() => ["hires", "fallback"].includes(document.documentElement.dataset.state), null, { timeout: 30000 });
+  await frame.waitForFunction(() => ["hires", "fallback"].includes(document.documentElement.dataset.state), null, { timeout: embedWarm ? 30000 : 90000 });
+  embedWarm = true;
   await page.mouse.move(799, 479);
   await page.waitForTimeout(600);
   return { ctx, page, frame, errors, dialogs };
