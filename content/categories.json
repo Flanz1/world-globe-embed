@@ -71,6 +71,7 @@
       "name": "Nirydian Religions",
       "regions": [
         "javalim",
+        "lakalism",
         "tsurugism"
       ],
       "parent": "religion",
