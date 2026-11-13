@@ -80,7 +80,9 @@
     {
       "id": "vas-ira",
       "name": "Vas Ira",
-      "regions": [],
+      "regions": [
+        "noorism"
+      ],
       "parent": "nirydian-religions",
       "createdBy": {
         "id": 138310181,
