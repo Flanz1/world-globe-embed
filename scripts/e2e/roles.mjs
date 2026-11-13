@@ -384,12 +384,14 @@ await step(K, "folders nest: subfolders, dragging regions and folders, moving, d
   await page.setViewportSize({ width: 1280, height: 2600 }); // everything on screen, so a drag doesn't need to scroll
   const head = (id) => `.rfolder[data-category="${id}"] > .rfolder-head`;
   const drag = async (from, to) => {
-    await page.locator(from).scrollIntoViewIfNeeded();
-    const a = await page.locator(from).boundingBox();
+    // Let earlier saves finish (the list is redrawn when they do), then measure both ends in one go, so nothing is redrawn in between.
+    await waitFor(page, async () => !/saving/.test((await page.textContent("#status")) ?? ""));
+    const box = (sel) => page.evaluate((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return r && { x: r.x, y: r.y, width: r.width, height: r.height }; }, sel);
+    const a = await box(from);
+    const b = await box(to);
     await page.mouse.move(a.x + 20, a.y + 10);
     await page.mouse.down();
     await page.mouse.move(a.x + 30, a.y + 20, { steps: 3 });
-    const b = await page.locator(to).boundingBox();
     await page.mouse.move(b.x + 40, b.y + b.height / 2, { steps: 8 });
     await page.mouse.up();
   };
