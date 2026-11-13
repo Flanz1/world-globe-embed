@@ -26,6 +26,7 @@ import {
   shiftCategory,
   type CategoriesFile,
   type Category,
+  MAX_MOVED_PER_COMMIT,
 } from "../shared/categories.ts";
 import { h } from "./dom.ts";
 import { hasPendingSaves, optimistic } from "./optimistic.ts";
@@ -112,10 +113,13 @@ function save(message: string, edit: (c: CategoriesFile) => CategoriesFile): Pro
   });
 }
 
-/** Puts regions in a category (null = uncategorized). */
-export function moveRegions(ids: string[], categoryId: string | null): Promise<void> {
+/** Puts regions in a category (null = uncategorized). A big batch goes in several commits, as many as the admin API accepts at once. */
+export async function moveRegions(ids: string[], categoryId: string | null): Promise<void> {
   const name = current.categories.find((k) => k.id === categoryId)?.name;
-  return save(`Move ${ids.length === 1 ? `region ${ids[0]}` : `${ids.length} regions`} ${name ? `to category ${name}` : "out of its category"}`, (c) => assignRegions(c, ids, categoryId));
+  for (let i = 0; i < ids.length; i += MAX_MOVED_PER_COMMIT) {
+    const part = ids.slice(i, i + MAX_MOVED_PER_COMMIT);
+    await save(`Move ${part.length === 1 ? `region ${part[0]}` : `${part.length} regions`} ${name ? `to category ${name}` : "out of its category"}`, (c) => assignRegions(c, part, categoryId));
+  }
 }
 
 export function moveFolderTo(k: Category, parent: string | null): Promise<void> {

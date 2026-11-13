@@ -460,6 +460,21 @@ describe("admin API branch updates", () => {
     return { status: r.status, body: (await r.json()) as Record<string, unknown> };
   };
 
+  it("lists folders by tree hash and lets the browser keep blobs and trees, but nothing else", async () => {
+    const base = head()!;
+    const root = ((await raw(ANN, "GET", `/git/commits/${base}`)).body.tree as { sha: string }).sha;
+    const top = await raw(ANN, "GET", `/git/trees/${root}`);
+    expect(top.status, JSON.stringify(top.body)).toBe(200);
+    const content = (top.body.tree as { path: string; sha: string }[]).find((e) => e.path === "content")!;
+    expect(content).toBeTruthy();
+    // By hash only: a branch name or a recursive listing is refused.
+    expect((await raw(ANN, "GET", "/git/trees/main")).status).toBe(404);
+    const r = await call(`${API}/gh/repos/${REPO}/git/trees/${content.sha}`, { headers: { Authorization: `Bearer ${await session(ANN)}` } });
+    expect(r.headers.get("Cache-Control")).toMatch(/immutable/);
+    const live = await call(`${API}/gh/repos/${REPO}/git/ref/heads/main`, { headers: { Authorization: `Bearer ${await session(ANN)}` } });
+    expect(live.headers.get("Cache-Control")).toBe("no-store");
+  });
+
   it("refuses force pushes, other branches and commits that don't build on the head", async () => {
     const base = head()!;
     const tree = (await raw(ANN, "GET", `/git/commits/${base}`)).body.tree as { sha: string };

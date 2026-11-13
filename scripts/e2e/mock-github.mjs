@@ -60,7 +60,7 @@ export class MockGitHub {
     return sha;
   }
   putTree(files) {
-    const sha = `tree${this.trees.size.toString(16).padStart(36, "0")}`;
+    const sha = `ee${this.trees.size.toString(16).padStart(38, "0")}`;
     this.trees.set(sha, new Map([...files].map(([p, b]) => [p, Buffer.isBuffer(b) ? this.putBlob(b) : b])));
     return sha;
   }

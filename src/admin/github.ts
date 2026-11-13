@@ -136,8 +136,8 @@ export class GitHub {
 
   private async send<T>(path: string, init: RequestInit = {}, base = this.API): Promise<{ data: T; headers: Headers }> {
     const r = await fetch(`${base}${path}`, {
-      ...init,
       cache: "no-store",
+      ...init,
       headers: {
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
@@ -221,6 +221,32 @@ export class GitHub {
     const c = list[0];
     if (!c) return null;
     return { author: c.author?.login ?? c.commit.author?.name ?? "unknown", date: c.commit.author?.date ?? "" };
+  }
+
+  /**
+   * Every file in a folder of the branch with its blob SHA, listed through the git trees API: unlike the
+   * contents API it isn't cut off at 1,000 files, and one request per folder level is all it takes (no
+   * request per file). A missing folder is empty.
+   */
+  async listTree(path: string): Promise<{ name: string; path: string; sha: string; type: string }[]> {
+    const ref = await this.request<{ object: { sha: string } }>(`/repos/${this.repo}/git/ref/heads/${this.branch}`);
+    const commit = await this.request<{ tree: { sha: string } }>(`/repos/${this.repo}/git/commits/${ref.object.sha}`);
+    let sha = commit.tree.sha;
+    for (const part of path.split("/").filter(Boolean)) {
+      const t = await this.request<{ tree: { path: string; type: string; sha: string }[] }>(`/repos/${this.repo}/git/trees/${sha}`, { cache: "default" });
+      const next = t.tree.find((e) => e.path === part && e.type === "tree");
+      if (!next) return [];
+      sha = next.sha;
+    }
+    const t = await this.request<{ tree: { path: string; type: string; sha: string }[]; truncated?: boolean }>(`/repos/${this.repo}/git/trees/${sha}`, { cache: "default" });
+    if (t.truncated) throw new GitHubError(422, `The folder ${path} is too big to list.`);
+    return t.tree.map((e) => ({ name: e.path, path: `${path.replace(/\/$/, "")}/${e.path}`, sha: e.sha, type: e.type === "blob" ? "file" : "dir" }));
+  }
+
+  /** A file's text by blob SHA. A blob never changes, so the browser caches it and the next listing only fetches new ones. */
+  async readBlob(sha: string): Promise<string> {
+    const b = await this.request<{ content: string; encoding: string }>(`/repos/${this.repo}/git/blobs/${sha}`, { cache: "default" });
+    return b.encoding === "base64" ? base64ToUtf8(b.content) : b.content;
   }
 
   async listDir(path: string): Promise<{ name: string; path: string; type: string }[]> {

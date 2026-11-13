@@ -12,7 +12,7 @@
  *
  * `handle` takes the upstream fetch as an argument so tests can point it at an in-memory GitHub.
  */
-import { diffCategories, type CategoriesFile } from "../../src/shared/categories.ts";
+import { diffCategories, MAX_MOVED_PER_COMMIT, type CategoriesFile } from "../../src/shared/categories.ts";
 import { ACCESS_PATH, PERMISSIONS, checkChange, pathKind, permissionsOf, regionOwner, type AccessFile, type Actor, type FileDiff, type Permission } from "../../src/shared/access.ts";
 import { appJwt, nonce, sign, verify } from "./crypto.ts";
 import { validateAccess, validateCategories, validateRegion, type ValidateFn } from "./generated/validators.js";
@@ -51,7 +51,7 @@ const SESSION_HOURS = 12;
 const MAX_BLOB_REQUEST = 16 * 1024 * 1024;
 const MAX_CHANGED_FILES = 400;
 /** Region and access files whose text a single commit may make the API read (each is a subrequest). */
-const MAX_READ_FILES = 24;
+const MAX_READ_FILES = MAX_MOVED_PER_COMMIT;
 const WAITING_DAYS = 30;
 
 export interface Session {
@@ -473,7 +473,7 @@ async function proxy(req: Request, env: Env, up: Upstream, path: string, url: UR
     throw new HttpError(404, `The admin API only works on ${env.REPO}.`);
   const rest = path.slice(base.length);
   const actor = await listedActor(req, env, up);
-  const pass = async (r: Response) => new Response(r.body, { status: r.status, headers: { "Content-Type": r.headers.get("Content-Type") ?? "application/json", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
+  const pass = async (r: Response, cache = "no-store") => new Response(r.body, { status: r.status, headers: { "Content-Type": r.headers.get("Content-Type") ?? "application/json", "Cache-Control": r.ok ? cache : "no-store", "X-Content-Type-Options": "nosniff" } });
   const q = (keys: string[]) => {
     const out = new URLSearchParams();
     for (const k of keys) {
@@ -493,7 +493,10 @@ async function proxy(req: Request, env: Env, up: Upstream, path: string, url: UR
     if ((m = /^\/contents\/([A-Za-z0-9._/-]{1,300})$/.exec(rest)) && !m[1].includes("..")) return pass(await gh(env, up, `${base}/contents/${m[1]}${q(["ref"])}`));
     if (/^\/git\/ref\/heads\/[A-Za-z0-9._/-]{1,200}$/.test(rest) && !rest.includes("..")) return pass(await gh(env, up, `${base}${rest}`));
     // A file over 1 MB (a region with tens of thousands of vertices) comes back from /contents without its content: the admin page reads its blob instead.
-    if (/^\/git\/blobs\/[0-9a-f]{40}$/.test(rest)) return pass(await gh(env, up, `${base}${rest}`));
+    // A blob (or tree) is named by its hash, so the browser may keep it: reloading the Regions tab then only fetches what changed.
+    if (/^\/git\/blobs\/[0-9a-f]{40}$/.test(rest)) return pass(await gh(env, up, `${base}${rest}`), "private, max-age=31536000, immutable");
+    // A folder listing with no size cap, unlike /contents (which stops at 1,000 files). Only by hash: the admin page walks down from the branch's commit.
+    if (/^\/git\/trees\/[0-9a-f]{40}$/.test(rest)) return pass(await gh(env, up, `${base}${rest}`), "private, max-age=31536000, immutable");
     if (/^\/git\/commits\/[0-9a-f]{40}$/.test(rest)) return pass(await gh(env, up, `${base}${rest}`));
     if (rest === "/commits") return pass(await gh(env, up, `${base}/commits${q(["path", "sha", "per_page"])}`));
     if (rest === "/actions/runs") return pass(await gh(env, up, `${base}/actions/runs${q(["per_page", "branch"])}`));
