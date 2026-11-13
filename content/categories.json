@@ -15,7 +15,8 @@
       "id": "gethricism",
       "name": "Gethricism",
       "regions": [
-        "diarism"
+        "diarism",
+        "gethricism"
       ],
       "parent": "religion",
       "createdBy": {
