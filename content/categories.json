@@ -69,7 +69,9 @@
     {
       "id": "nirydian-religions",
       "name": "Nirydian Religions",
-      "regions": [],
+      "regions": [
+        "tsurugism"
+      ],
       "parent": "religion",
       "createdBy": {
         "id": 138310181,
