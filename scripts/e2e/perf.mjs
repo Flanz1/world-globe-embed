@@ -42,9 +42,9 @@ const region = {
 const REAL = process.env.REAL;
 const dir = REAL ? path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..") : await makeFixture({ quiet: true });
 const RID = REAL ?? "perf-test";
-const GRAB = REAL ? JSON.parse(readFileSync(path.join(dir, `content/regions/${REAL}.json`), "utf8")).geometry.coordinates.flat(2)[0] : ring[0];
+const GRAB = REAL ? JSON.parse(readFileSync(path.join(dir, `content/regions/${REAL}.json`), "utf8")).geometry.coordinates.flat(JSON.parse(readFileSync(path.join(dir, `content/regions/${REAL}.json`), "utf8")).geometry.type === "Polygon" ? 1 : 2)[0] : ring[0];
 if (!REAL) writeFileSync(path.join(dir, "content/regions/perf-test.json"), JSON.stringify(region));
-execFileSync("npm", process.env.PROFILE ? ["run", "build", "--", "--minify", "false"] : ["run", "build"], { cwd: dir, env: { ...process.env, VITE_CONTENT_BRANCH: BRANCH }, stdio: "pipe" });
+execFileSync(...(process.env.PROFILE ? ["sh", ["-c", "npx vite build --minify false && npx tsx scripts/generate-pages.ts"]] : ["npm", ["run", "build"]]), { cwd: dir, env: { ...process.env, VITE_CONTENT_BRANCH: BRANCH }, stdio: "pipe" });
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".webp": "image/webp", ".json": "application/json", ".txt": "text/plain" };
 const DIST = path.join(dir, "dist");
 const server = createServer(async (req, res) => {
@@ -60,10 +60,15 @@ const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, d
 await ctx.route("https://api.github.com/**", (r) => mock.handle(r));
 await useAdminApi(ctx, mock, { branch: BRANCH });
 const page = await ctx.newPage();
+page.on("crash", () => console.log("PAGE CRASHED"));
+page.on("pageerror", (e) => console.log("pageerror", String(e).slice(0, 200)));
+const tOpen = Date.now();
 await page.goto(`http://localhost:${port(4173)}/admin/#regions`);
 await page.waitForSelector(`#regions .rcard[data-region="${RID}"]`, { timeout: 20000 });
-await page.locator(`[data-region="${RID}"] [data-action="edit"]`).click();
-await page.waitForSelector("dialog.editor[open]");
+await page.locator(`[data-region="${RID}"] [data-action="edit"]`).click({ timeout: 120000 });
+await page.waitForSelector("dialog.editor[open]", { state: "attached", timeout: 240000 });
+await page.waitForFunction(() => !!document.querySelector("dialog.editor")?.wgeEditor, null, { timeout: 240000 });
+console.log(`editor ready after ${((Date.now() - tOpen) / 1000).toFixed(1)} s`);
 await page.waitForTimeout(2500);
 const call = (fn, ...args) => page.evaluate(([fn, args]) => document.querySelector("dialog.editor").wgeEditor[fn](...args), [fn, args]);
 
