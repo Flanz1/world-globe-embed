@@ -6,7 +6,7 @@ import { loadContent } from "../scripts/lib/content.ts";
 import { contentPaths } from "../scripts/lib/paths.ts";
 import type { MapMeta } from "../src/shared/types.ts";
 import type { RegionFeature } from "../src/shared/region.ts";
-import { copyId, normalizePartContested, normalizePartLocked, normalizePartLabels, normalizePartLegend, regionLabelPoints, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
+import { copyId, legendRows, migrateZoneColours, normalizePartContested, normalizePartLocked, normalizePartLabels, normalizePartLegend, regionLabelPoints, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
 import { MAX_VERTICES } from "../src/shared/geo.ts";
 import { ZOOM_MAX, ZOOM_MIN } from "../src/shared/params.ts";
 
@@ -161,7 +161,7 @@ describe("region validation", () => {
 describe("region helpers", () => {
   it("parseRegionData accepts good data and rejects anything off", () => {
     const d = { id: "a", slot: "s", name: "A", color: "#abc", fillOpacity: 0.3, label: true, geometry: good().geometry };
-    expect(parseRegionData(d)).toEqual({ ...d, legendTitle: "", legend: [], parts: [-1], labels: [""], contested: [-1] });
+    expect(parseRegionData(d)).toEqual({ ...d, colorLabel: "", legendTitle: "", legend: [], parts: [-1], labels: [""] });
     expect(parseRegionData({ ...d, color: "#abc;x" })).toBeNull();
     expect(parseRegionData({ ...d, id: "../x" })).toBeNull();
     expect(parseRegionData({ ...d, fillOpacity: Number.NaN })).toBeNull();
@@ -273,23 +273,39 @@ describe("region colours and legend", () => {
     // A chain: 2 → 1 → 0. Part 1 is a zone of 0, so 2 can't be a zone of 1.
     expect(normalizePartContested([-1, 0, 1], 3)).toEqual([-1, 0, -1]);
     expect(normalizePartContested(undefined, 2)).toEqual([-1, -1]);
-    expect(regionData({ ...multi(), properties: { ...multi().properties, partContested: [-1, 0, -1] } }).contested).toEqual([-1, 0, -1]);
   });
 
-  it("parseRegionData keeps contested zones and ignores cross-region clash data from older builds", () => {
+  it("older regions' contested zones load as plain parts, a zone without its own colour taking its parent's", () => {
+    // Part 1 (legend 1) is a zone of part 2 (legend 0); part 0 (own colour) a zone of part 2 too.
+    const f = multi();
+    f.properties.partLegend = [-1, 1, 0];
+    f.properties.partContested = [2, 2, -1];
+    expect(regionData(f).parts).toEqual([0, 1, 0]);
+    expect("contested" in regionData(f)).toBe(false);
+    expect(migrateZoneColours([-1, -1, 1], [-1, 0, 9])).toEqual([-1, -1, 1]);
+    expect(migrateZoneColours([1, -1], [-1, 0])).toEqual([1, 1]);
+    expect(migrateZoneColours([1, -1], undefined)).toEqual([1, -1]);
+  });
+
+  it("parseRegionData ignores contested zones and cross-region clash data from older builds", () => {
     const d = regionData(multi());
     const ok = parseRegionData({ ...d, contested: [-1, 0, 0], clash: [[[[0, 0], [5, 0], [5, 5]]]] })!;
-    expect(ok.contested).toEqual([-1, 0, 0]);
+    expect("contested" in ok).toBe(false);
     expect("clash" in ok).toBe(false);
-    // Malformed old clash data doesn't stop the region loading either.
     expect(parseRegionData({ ...d, clash: "x" })).not.toBeNull();
-    // Older data without contested zones still loads.
-    const older: Record<string, unknown> = { ...d };
-    delete older.contested;
-    expect(parseRegionData(older)!.contested).toEqual([-1, -1, -1]);
-    // Bad contested entries become normal parts.
-    expect(parseRegionData({ ...d, contested: [5, "x", -1] })!.contested).toEqual([-1, -1, -1]);
-    expect(parseRegionData({ ...d, contested: [-1, 0] })!.contested).toEqual([-1, -1, -1]);
+    expect(parseRegionData({ ...d, contested: [5, "x", -1] })).not.toBeNull();
+  });
+
+  it("the legend lists every colour with a label, the region's own colour first once it has one", () => {
+    const d = regionData(multi());
+    expect(d.colorLabel).toBe("");
+    expect(legendRows(d).map((e) => e.label)).toEqual(["North", "<b>South</b>"]);
+    const named = regionData({ ...multi(), properties: { ...multi().properties, colorLabel: "Heartland" } });
+    expect(legendRows(named)).toEqual([{ label: "Heartland", color: "#c0392b" }, { label: "North", color: "#2e86c1" }, { label: "<b>South</b>", color: "#28b463" }]);
+    expect(legendRows({ ...named, legend: [{ label: " ", color: "#000000" }] }).map((e) => e.label)).toEqual(["Heartland"]);
+    expect(parseRegionData({ ...named })!.colorLabel).toBe("Heartland");
+    expect(parseRegionData({ ...named, colorLabel: 5 })).toBeNull();
+    expect(parseRegionData({ ...named, colorLabel: "x".repeat(61) })).toBeNull();
   });
 
   it("regionData and regionLayers group the parts by colour, region colour first", () => {

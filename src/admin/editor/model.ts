@@ -32,6 +32,8 @@ export type Parts = Ring[][];
 
 export interface RegionProps {
   color: string;
+  /** Legend label of the region's own colour ("" until it's given one: then it isn't in the legend). */
+  colorLabel: string;
   fillOpacity: number;
   label: boolean;
   description: string;
@@ -47,7 +49,10 @@ export interface EditorState {
   styles: number[];
   /** Per part: the label the embed shows on it ("" for none). */
   labels: string[];
-  /** Per part: -1 for a normal part, or the (normal) part this contested zone extends. */
+  /**
+   * Per part: always -1 now. Contested zones were replaced by layers (part order); older regions'
+   * zones load as plain parts. Kept so the part-reshaping helpers keep one shape.
+   */
   contested: number[];
   /** Per part: true when it's locked (can't be moved as a whole; its vertices still edit). */
   locked: boolean[];
@@ -601,6 +606,40 @@ export function moveLegendEntry(s: EditorState, k: number, d: number): EditorSta
   next.props.legend.splice(j, 0, e);
   next.styles = next.styles.map((v) => (v === k ? j : v === j ? k : v));
   return next;
+}
+
+/**
+ * Moves part `p` so it ends up at index `to` (parts in between shift by one), with its colour, label
+ * and lock. Part order is layer order: a later part is drawn on top where parts overlap.
+ */
+export function reorderPart(s: EditorState, p: number, to: number): EditorState {
+  const n = s.parts.length;
+  if (p < 0 || p >= n || to < 0 || to >= n || p === to) return s;
+  const order = [...Array(n).keys()];
+  order.splice(p, 1);
+  order.splice(to, 0, p);
+  const inv: number[] = [];
+  order.forEach((old, i) => (inv[old] = i));
+  const next = cloneState(s);
+  next.parts = order.map((i) => next.parts[i]);
+  next.styles = order.map((i) => s.styles[i] ?? OWN_COLOUR);
+  next.labels = order.map((i) => s.labels[i] ?? "");
+  next.contested = order.map((i) => ((s.contested[i] ?? -1) >= 0 ? inv[s.contested[i]] : -1));
+  next.locked = order.map((i) => s.locked[i] ?? true);
+  return next;
+}
+
+/**
+ * Where "Bring forward" (dir 1) or "Send backward" (dir -1) puts part p: just past the nearest part it
+ * overlaps in that direction (so the move always changes what's on top), else one place along; -1 when
+ * it's already the top (or bottom) layer. `overlaps` are pairs [i, j] of parts that overlap.
+ */
+export function layerTarget(n: number, overlaps: readonly (readonly [number, number])[], p: number, dir: 1 | -1): number {
+  if (p < 0 || p >= n || (dir > 0 ? p >= n - 1 : p <= 0)) return -1;
+  const other = overlaps.flatMap(([i, j]) => (i === p ? [j] : j === p ? [i] : []));
+  const ahead = other.filter((q) => (dir > 0 ? q > p : q < p));
+  if (!ahead.length) return p + dir;
+  return dir > 0 ? Math.min(...ahead) : Math.max(...ahead);
 }
 
 /** Colours offered for a new legend entry, in order, skipping ones already in use. */

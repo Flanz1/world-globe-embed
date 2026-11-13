@@ -1,5 +1,5 @@
 /**
- * The editor's "Other regions" tool: a button in the top right of the map that opens a panel to choose
+ * The editor's "Other regions" tool: a button at the right end of the toolbar that opens a panel (top right of the map) to choose
  * which other regions are drawn as outlines (and used as snap targets). All are hidden until the user
  * turns them on. The panel searches, filters by category and creator, and sorts like the Regions tab
  * (the logic lives in ../region-filter.ts). Which regions are on is remembered in this browser.
@@ -42,8 +42,10 @@ function saveEnabled(ids: Set<string>): void {
 }
 
 export interface OverlayFilter {
-  /** Wrapper to put in the top right of the map: the button, and the panel when open. */
-  el: HTMLElement;
+  /** The toggle button, for the toolbar. */
+  button: HTMLButtonElement;
+  /** The panel, for the top right of the map (shown while open). */
+  panel: HTMLElement;
   /** Is the neighbour at this index drawn? */
   visible: (index: number) => boolean;
   /** Closes the panel. */
@@ -161,5 +163,5 @@ export function createOverlayFilter(o: { items: OverlayItem[]; categories: Overl
     if (e.key === "Escape") toggle(false);
   });
   renderButton();
-  return { el: h("div", { className: "ed-ov" }, button, panel), visible: (i) => !!byIndex.get(i) && on(byIndex.get(i)!), close: () => toggle(false) };
+  return { button, panel, visible: (i) => !!byIndex.get(i) && on(byIndex.get(i)!), close: () => toggle(false) };
 }

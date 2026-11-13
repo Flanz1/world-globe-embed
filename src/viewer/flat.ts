@@ -8,9 +8,9 @@
  */
 import { clamp, clampPadding } from "../shared/params.ts";
 import { geometryBounds, globeToImage, polygonsOf, type Position } from "../shared/geo.ts";
-import { FLAT_K_MAX, flatFit, flatMinK, regionLabelPoints, type FlatView, type RegionData } from "../shared/region.ts";
+import { FLAT_K_MAX, flatFit, flatMinK, legendRows, regionLabelPoints, type FlatView, type RegionData } from "../shared/region.ts";
 import { paintSpec, type PaintSpec } from "../shared/raster.ts";
-import { hasContestedMarks, regionPaintSpec } from "../shared/region-paint.ts";
+import { regionPaintSpec } from "../shared/region-paint.ts";
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
 import { TILE_BUDGET, TileCache, levelFor, tileRect, tilesAt, tileUrl } from "../shared/tiles.ts";
 import type { FlatStartContext, PreviewMessage } from "./contract.ts";
@@ -53,7 +53,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   let img: Img | null = null;
   let imgW = 0;
   let reg: RegionData | null = null;
-  /** How to paint the region (colours, contested zones, overlaps), worked out once per region rather than per frame. */
+  /** How to paint the region (colours, overlapping layers, borders), worked out once per region rather than per frame. */
   let spec: PaintSpec | null = null;
   let labelAt: Position[] = [];
   let gridOn = cfg.grid;
@@ -387,7 +387,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     const setRegion = (r: RegionData) => {
       reg = r;
       spec = regionPaintSpec(r);
-      regionKey?.set(R.key ? r.legend : [], r.legendTitle, R.key && hasContestedMarks(spec));
+      regionKey?.set(R.key ? legendRows(r) : [], r.legendTitle);
       const pts = (R.label ?? r.label) ? regionLabelPoints(r) : [];
       labelAt = pts.map((p) => p.at);
       labels?.set(pts.map((p) => p.text));

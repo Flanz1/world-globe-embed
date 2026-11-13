@@ -7,7 +7,7 @@ import { stringifyCompact } from "../shared/json.ts";
 import { baseKey, combineRegions, combinedId, regionBases, type RegionBase } from "../shared/combine.ts";
 import { checkGeometry, geometryBounds, polygonsOf, vertexCount } from "../shared/geo.ts";
 import { paintSpec } from "../shared/raster.ts";
-import { REGION_COLOR, REGION_ID, copyId, flatFit, normalizePartContested, normalizePartLegend, regionData, type RegionFeature } from "../shared/region.ts";
+import { REGION_COLOR, REGION_ID, copyId, flatFit, migrateZoneColours, normalizePartLegend, regionData, type RegionFeature } from "../shared/region.ts";
 import { placements, type Category } from "../shared/categories.ts";
 import { paintSpecOf, regionClashes } from "../shared/region-paint.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
@@ -138,8 +138,7 @@ function thumbnail(f: RegionFeature, map: MapMeta | undefined): HTMLCanvasElemen
       {
         color: safeColor(p.color),
         legend,
-        parts: normalizePartLegend(Array.isArray(p.partLegend) ? p.partLegend : undefined, n, legend.length),
-        contested: normalizePartContested(Array.isArray(p.partContested) ? p.partContested : undefined, n),
+        parts: migrateZoneColours(normalizePartLegend(Array.isArray(p.partLegend) ? p.partLegend : undefined, n, legend.length), Array.isArray(p.partContested) ? p.partContested : undefined),
         geometry: f.geometry,
       },
       regionClashes(polygonsOf(f.geometry)),
@@ -417,8 +416,8 @@ function duplicate(e: RegionEntry): void {
 }
 
 /**
- * "Combine regions": pick two or more regions; their areas, labels, colours, legends and contested
- * zones are copied into one new region, opened in the editor unsaved. The originals stay as they are.
+ * "Combine regions": pick two or more regions; their areas, labels, colours and legends are
+ * copied into one new region, opened in the editor unsaved. The originals stay as they are.
  */
 export function openCombine(): void {
   const usable = entries.filter((e) => e.feature && !e.problem).sort((a, b) => a.id.localeCompare(b.id));
@@ -511,7 +510,7 @@ export function openCombine(): void {
   });
 
   m.body.append(
-    h("p", { className: "small", textContent: "Tick the regions to combine. Their areas, labels, colours, legends and contested zones are copied into one new region, which opens in the editor for you to check and save. The first region you tick sets the main colour." }),
+    h("p", { className: "small", textContent: "Tick the regions to combine. Their areas, labels, colours and legends are copied into one new region, which opens in the editor for you to check and save. The first region you tick sets the main colour." }),
     list,
     h("label", {}, "New region id ", idIn),
     baseBox,

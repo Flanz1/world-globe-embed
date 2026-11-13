@@ -152,10 +152,10 @@ await step(A, "everything is hidden by default", async () => {
 
 await step(A, "the panel lists, filters and sorts", async () => {
   await page.click(".ed-ov-btn");
-  check(A, "the button opens the panel (top right)", await panelOpen());
+  check(A, "the button (right end of the toolbar) opens the panel", await panelOpen());
   const box = await page.$eval(".ed-ov-btn", (b) => b.getBoundingClientRect().toJSON());
   const wrap = await page.$eval(".ed-canvas-wrap", (b) => b.getBoundingClientRect().toJSON());
-  check(A, "…in the top right corner of the map", wrap.right - box.right < 30 && box.top - wrap.top < 30, JSON.stringify([box.right, wrap.right, box.top, wrap.top]));
+  check(A, "…above the top right corner of the map", wrap.right - box.right < 30 && box.top - wrap.top < 30, JSON.stringify([box.right, wrap.right, box.top, wrap.top]));
   check(A, "it lists the other regions by ID", JSON.stringify(await rows()) === JSON.stringify(["ov-alpha", "ov-beta", "ov-gamma"]), JSON.stringify(await rows()));
   check(A, "every one is off", (await page.$$eval(".ed-ov-row input:checked", (l) => l.length)) === 0);
   await page.fill('.ed-ov-panel input[type="search"]', "gam");

@@ -160,23 +160,27 @@ dialog.editor[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr
 .ed-colours { display: grid; gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
 .ed-colours > legend { padding: 0 4px; font-size: 13px; }
 .ed-colours > button { justify-self: start; }
-.ed-key, .ed-parts { display: grid; gap: 6px; }
-.ed-key-row { display: grid; grid-template-columns: auto 1fr auto auto auto auto; gap: 4px; align-items: center; }
-.ed-key-row input[type=text] { min-width: 0; }
-.ed-key-default { grid-template-columns: auto 1fr; }
 .ed-fill { display: flex; align-items: center; gap: 8px; }
-.ed-key-row button { padding: 2px 7px; }
-.ed-part-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 45%); gap: 4px 8px; align-items: center; padding: 2px 4px; border-radius: 6px; }
-.ed-part-row .ed-of { grid-column: 2 / 4; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; align-items: center; margin: 0; }
-.ed-part-row .ed-part-acts { grid-column: 2 / 4; display: flex; gap: 4px; }
-.ed-part-row.zone { margin-left: 18px; border-left: 2px dashed rgba(255, 255, 255, .25); }
+/* Colour folders: one per colour, each holding its parts' rows. Shift/Ctrl+click picks rows, so no text selection there (inputs still select). */
+.ed-folders { display: grid; gap: 8px; user-select: none; -webkit-user-select: none; }
+.ed-folders input[type=text] { user-select: text; -webkit-user-select: text; }
+.ed-folder { display: grid; gap: 4px; border: 1px solid var(--line); border-radius: 8px; padding: 4px; }
+.ed-folder.folded { padding-bottom: 4px; }
+.ed-folder-head { display: flex; gap: 4px; align-items: center; }
+.ed-folder-head input[type=text] { flex: 1 1 auto; min-width: 0; width: 0; font-weight: 600; }
+.ed-folder-head .ed-count { white-space: nowrap; }
+.ed-folder-head button { padding: 2px 7px; }
+.ed-fold { width: 26px; padding: 2px 0 !important; }
+.ed-folder-body { display: grid; gap: 4px; padding-left: 14px; border-left: 2px solid var(--line); margin-left: 12px; }
+.ed-folder-body[hidden] { display: none; }
+.ed-empty { margin: 2px 0; }
+.ed-part-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 40%); gap: 4px 8px; align-items: center; padding: 3px 4px; border-radius: 6px; cursor: pointer; }
+.ed-part-row .ed-part-acts { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 4px; }
 .ed-part-row.pick { background: rgba(255, 212, 0, .08); box-shadow: inset 0 0 0 1px rgba(255, 212, 0, .35); }
 .ed-part-row.sel { background: rgba(255, 212, 0, .12); box-shadow: inset 0 0 0 1px rgba(255, 212, 0, .55); }
-.ed-badge.zone { border-style: dashed; }
 button.tiny { padding: 1px 7px; font-size: 12px; }
 .ed-clashes { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 2px; }
 .ed-clashes .muted { list-style: none; margin-left: -18px; }
-.zone-pick-list { display: grid; gap: 6px; }
 .ed-part-row input[type=text] { min-width: 0; }
 .ed-part-row:hover, .ed-part-row.hot { background: rgba(255, 255, 255, .08); }
 .ed-part-row.hot .ed-badge { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -197,11 +201,11 @@ button.tiny { padding: 1px 7px; font-size: 12px; }
 .warn { color: #b9770e; }
 .ed-part-row.locked .ed-lock { background: var(--accent); color: var(--card); border-color: var(--accent); }
 
-/* Editor: "Other regions" tool (top right of the map) */
-.ed-ov { position: absolute; right: 8px; top: 8px; display: grid; gap: 6px; justify-items: end; max-width: calc(100% - 16px); }
-.ed-ov-btn { background: var(--card); box-shadow: 0 2px 8px rgba(0, 0, 0, .3); }
+/* Editor: "Other regions" tool (button at the toolbar's right end, panel at the top right of the map) */
+.ed-toolbar-end { margin-left: auto; display: flex; }
 .ed-ov-btn.active { background: var(--accent); color: var(--card); }
-.ed-ov-panel { display: grid; gap: 6px; width: min(340px, 100%); max-height: min(70vh, 520px); grid-template-rows: auto auto auto auto auto minmax(0, 1fr); padding: 10px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
+.ed-ov-btn.active { background: var(--accent); color: var(--card); }
+.ed-ov-panel { position: absolute; right: 8px; top: 8px; z-index: 3; display: grid; gap: 6px; width: min(340px, calc(100% - 16px)); max-height: min(70vh, 520px); grid-template-rows: auto auto auto auto auto minmax(0, 1fr); padding: 10px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
 .ed-ov-panel[hidden] { display: none; }
 .ed-ov-panel .row { display: flex; flex-wrap: wrap; gap: 6px; }
 .ed-ov-panel select { flex: 1 1 90px; min-width: 0; }

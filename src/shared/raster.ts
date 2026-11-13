@@ -110,29 +110,26 @@ function insetStroke(ctx: Ctx, lw: number, trace: () => void, interior: () => vo
   ctx.restore();
 }
 
-/* ── Contested zones and overlaps ── */
+/* ── Layered parts ── */
 
-/** One part as the painter needs it: its polygon (outer ring then holes), colour, and whether it's a contested zone. */
+/** One part as the painter needs it: its polygon (outer ring then holes) and colour. */
 export interface PaintPart {
   rings: Position[][];
   color: string;
-  contested: boolean;
   /** Per ring: edges shared with another part, left out of this part's coloured outline (see borders.ts). */
   hide?: Set<number>[];
 }
 
 /**
- * Everything needed to draw a region. `plain` regions (no contested zones, no overlaps) are drawn by
- * paintLayers from `layers`, exactly as before; the rest by the parts, partners and hatches.
+ * Everything needed to draw a region. `plain` regions (no overlapping parts, no shared or province
+ * borders) are drawn by paintLayers from `layers`, exactly as before; the rest part by part, in order.
  */
 export interface PaintSpec {
   plain: boolean;
   layers: { color: string; geometry: RegionGeometry }[];
   parts: PaintPart[];
-  /** Per part: the polygons it overlaps. Their overlaps are hatched. */
-  partners: Position[][][][];
-  /** Overlap areas (inside both a and b) to hatch, in `color`. */
-  hatches: { a: Position[][]; b: Position[][]; color: string }[];
+  /** Per part: the later parts that overlap it. They are layers on top: the part is hidden under them. */
+  front: number[][];
   /** National borders (lines parts of different legend colours share) and province borders (lines drawn inside the region), as open polylines. */
   borders?: { national: Position[][]; provincial: Position[][] };
 }
@@ -144,46 +141,6 @@ export const NATIONAL_W = 1;
 export const CASING_W = 1.8;
 export const PROVINCIAL_W = 1.2;
 export const PROVINCIAL_GAP = 2.5;
-
-/** The hatch's opacity on top of the fill. */
-const HATCH_ALPHA = 0.55;
-
-type AnyCanvas = HTMLCanvasElement | OffscreenCanvas;
-const patterns = new WeakMap<object, Map<string, CanvasPattern | null>>();
-
-/** A diagonal hatch tile in `color`, its spacing scaled by the line width; cached per canvas. */
-function hatchPattern(ctx: Ctx, color: string, lw: number): CanvasPattern | null {
-  const key = `${color}|${Math.round(lw * 4)}`;
-  let m = patterns.get(ctx.canvas);
-  if (!m) patterns.set(ctx.canvas, (m = new Map()));
-  if (m.has(key)) return m.get(key)!;
-  const s = Math.max(4, Math.round(lw * 4));
-  let tile: AnyCanvas;
-  if (typeof OffscreenCanvas !== "undefined") tile = new OffscreenCanvas(s, s);
-  else {
-    tile = document.createElement("canvas");
-    tile.width = tile.height = s;
-  }
-  const t = tile.getContext("2d") as Ctx | null;
-  let pat: CanvasPattern | null = null;
-  if (t) {
-    t.strokeStyle = color;
-    t.lineWidth = Math.max(1, lw * 0.45);
-    t.lineCap = "square";
-    t.beginPath();
-    // One diagonal plus the two corner pieces, so the tile repeats seamlessly.
-    t.moveTo(0, s);
-    t.lineTo(s, 0);
-    t.moveTo(-s / 2, s / 2);
-    t.lineTo(s / 2, -s / 2);
-    t.moveTo(s / 2, s * 1.5);
-    t.lineTo(s * 1.5, s / 2);
-    t.stroke();
-    pat = ctx.createPattern(tile as CanvasImageSource, "repeat");
-  }
-  m.set(key, pat);
-  return pat;
-}
 
 function tracePoly(ctx: Ctx, rings: Position[][], x: (lon: number) => number, y: (lat: number) => number, offsets: number[], hide?: Set<number>[]): void {
   // Holes in the outer ring's copy, so a clip or fill with evenodd cuts them out at every offset.
@@ -199,6 +156,19 @@ function tracePoly(ctx: Ctx, rings: Position[][], x: (lon: number) => number, y:
     if (skip?.size) traceRingEdges(ctx, u, skip, x, y, offsets);
     else traceRing(ctx, u, x, y, offsets);
   });
+}
+
+/** Clips to outside each of the parts in `front` (the layers above one part), so it shows only where they don't cover it. */
+function clipOutside(ctx: Ctx, spec: PaintSpec, front: readonly number[], x: (lon: number) => number, y: (lat: number) => number, offsets: number[], area: { w: number; h: number }): void {
+  for (const j of front) {
+    const q = spec.parts[j];
+    if (!q) continue;
+    ctx.beginPath();
+    // A rectangle well past the canvas, plus the part: with evenodd that's everywhere but the part (its holes included).
+    ctx.rect(-area.w * 2, -area.h * 2, area.w * 5, area.h * 5);
+    tracePoly(ctx, q.rings, x, y, offsets);
+    ctx.clip("evenodd");
+  }
 }
 
 /** Like traceRing for an outline, leaving out the edges in `skip` (edge i runs from vertex i to i + 1). */
@@ -223,16 +193,16 @@ function traceRingEdges(ctx: Ctx, ring: Position[], skip: Set<number>, x: (lon: 
   }
 }
 
-/** Draws the borders (see PaintSpec.borders) at line width `lw`. Province borders show only inside the (non-contested) parts. */
-function paintBorders(ctx: Ctx, spec: PaintSpec, x: (lon: number) => number, y: (lat: number) => number, offsets: number[], lw: number): void {
+/** Draws the borders (see PaintSpec.borders) at line width `lw`. Province borders show only inside the parts (where a part is on top). */
+function paintBorders(ctx: Ctx, spec: PaintSpec, x: (lon: number) => number, y: (lat: number) => number, offsets: number[], lw: number, area: { w: number; h: number }): void {
   const b = spec.borders!;
   ctx.save();
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   if (b.provincial.length) {
-    for (const p of spec.parts) {
-      if (p.contested) continue;
+    spec.parts.forEach((p, i) => {
       ctx.save();
+      clipOutside(ctx, spec, spec.front[i] ?? [], x, y, offsets, area);
       ctx.beginPath();
       tracePoly(ctx, p.rings, x, y, offsets);
       ctx.clip("evenodd");
@@ -243,7 +213,7 @@ function paintBorders(ctx: Ctx, spec: PaintSpec, x: (lon: number) => number, y: 
       ctx.strokeStyle = BORDER_INK;
       ctx.stroke();
       ctx.restore();
-    }
+    });
   }
   if (b.national.length) {
     ctx.beginPath();
@@ -259,9 +229,9 @@ function paintBorders(ctx: Ctx, spec: PaintSpec, x: (lon: number) => number, y: 
 }
 
 /**
- * Draws a region from a PaintSpec. Plain regions go through paintLayers unchanged. Otherwise: fills
- * (normal parts, then contested zones at half opacity with a hatch), hatches over the overlaps, then
- * solid outlines in each part's colour.
+ * Draws a region from a PaintSpec. Plain regions go through paintLayers unchanged. Otherwise each part,
+ * first to last (bottom layer to top), is filled and outlined in its colour, except where a later part
+ * overlapping it covers it; then the borders.
  */
 export function paintSpec(
   ctx: Ctx,
@@ -275,7 +245,6 @@ export function paintSpec(
   if (spec.plain) return paintLayers(ctx, spec.layers, x, y, offsets, s, area);
   const lw = s.lineWidth;
   const fo = Math.max(0, Math.min(1, s.fillOpacity));
-  const order = [...spec.parts.keys()].sort((a, b) => Number(spec.parts[a].contested) - Number(spec.parts[b].contested) || a - b);
   ctx.save();
   if (s.dim) {
     ctx.fillStyle = "rgba(0,0,0,0.5)";
@@ -286,52 +255,28 @@ export function paintSpec(
   }
   ctx.lineJoin = "round";
   ctx.lineWidth = lw;
-  // Fills.
-  for (const i of order) {
-    const p = spec.parts[i];
+  spec.parts.forEach((p, i) => {
+    const front = spec.front[i] ?? [];
+    if (front.length) {
+      ctx.save();
+      clipOutside(ctx, spec, front, x, y, offsets, area);
+    }
     ctx.beginPath();
     tracePoly(ctx, p.rings, x, y, offsets);
-    ctx.globalAlpha = p.contested ? fo / 2 : fo;
+    ctx.globalAlpha = fo;
     ctx.fillStyle = p.color;
     ctx.fill("evenodd");
-    if (p.contested) {
-      const pat = hatchPattern(ctx, p.color, lw);
-      if (pat) {
-        ctx.globalAlpha = HATCH_ALPHA;
-        ctx.fillStyle = pat;
-        ctx.fill("evenodd");
-      }
-    }
-  }
-  // Hatch where parts overlap.
-  ctx.globalAlpha = HATCH_ALPHA;
-  for (const hz of spec.hatches) {
-    const pat = hatchPattern(ctx, hz.color, lw);
-    if (!pat) continue;
-    ctx.save();
-    ctx.beginPath();
-    tracePoly(ctx, hz.a, x, y, offsets);
-    ctx.clip("evenodd");
-    ctx.beginPath();
-    tracePoly(ctx, hz.b, x, y, offsets);
-    ctx.clip("evenodd");
-    ctx.fillStyle = pat;
-    ctx.fillRect(-area.w, -area.h, area.w * 3, area.h * 3);
-    ctx.restore();
-  }
-  ctx.globalAlpha = 1;
-  // Borders.
-  for (const i of order) {
-    const p = spec.parts[i];
+    ctx.globalAlpha = 1;
     ctx.strokeStyle = p.color;
-    // Every border is a thin solid line (contested zones and overlaps are told apart by their fill and hatch).
+    // Every border is a thin solid line, inset so touching parts keep both their lines.
     insetStroke(
       ctx,
       lw,
       () => tracePoly(ctx, p.rings, x, y, offsets, p.hide),
       () => tracePoly(ctx, p.rings, x, y, offsets),
     );
-  }
-  if (spec.borders) paintBorders(ctx, spec, x, y, offsets, lw);
+    if (front.length) ctx.restore();
+  });
+  if (spec.borders) paintBorders(ctx, spec, x, y, offsets, lw, area);
   ctx.restore();
 }

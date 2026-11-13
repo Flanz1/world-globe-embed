@@ -55,7 +55,7 @@ describe("regionBorders", () => {
 });
 
 describe("paint spec", () => {
-  const base = { color: "#c0392b", legend: [{ label: "Breza", color: "#c0392b" }, { label: "Selbia", color: "#2e86c1" }], contested: [-1, -1, -1] };
+  const base = { color: "#c0392b", legend: [{ label: "Breza", color: "#c0392b" }, { label: "Selbia", color: "#2e86c1" }] };
   const geometry = { type: "MultiPolygon" as const, coordinates: [[box(0, 0, 10, 10)], [box(10, 0, 20, 10)], [box(20, 0, 30, 10)]] };
   it("a national border (different colours) makes the spec non-plain and hides the shared edges", () => {
     const spec = regionPaintSpec({ ...base, parts: [0, 0, 1], geometry, nationalBorders: true });
@@ -65,13 +65,9 @@ describe("paint spec", () => {
   });
   it("province borders are carried through", () => {
     const apart = { type: "MultiPolygon" as const, coordinates: [[box(0, 0, 10, 10)]] };
-    const spec = regionPaintSpec({ ...base, parts: [0], contested: [-1], geometry: apart, provinceBorders: [[[5, 0], [5, 10]]] });
+    const spec = regionPaintSpec({ ...base, parts: [0], geometry: apart, provinceBorders: [[[5, 0], [5, 10]]] });
     expect(spec.plain).toBe(false);
     expect(spec.borders?.provincial).toHaveLength(1);
-  });
-  it("shared lines alone don't add a Contested legend row", async () => {
-    const { hasContestedMarks } = await import("../src/shared/region-paint.ts");
-    expect(hasContestedMarks(regionPaintSpec({ ...base, parts: [0, 0, 1], geometry, nationalBorders: true }))).toBe(false);
   });
   it("a region without shared lines stays plain", () => {
     const apart = { type: "MultiPolygon" as const, coordinates: [[box(0, 0, 10, 10)], [box(11, 0, 20, 10)], [box(21, 0, 30, 10)]] };
@@ -85,9 +81,10 @@ describe("paint spec", () => {
     expect(spec.borders).toBeUndefined();
     expect(spec.parts.every((p) => !p.hide)).toBe(true);
   });
-  it("contested zones keep their own border", () => {
-    const spec = regionPaintSpec({ ...base, parts: [0, 0, 1], contested: [-1, 0, -1], geometry, nationalBorders: true });
-    expect(spec.borders).toBeUndefined();
-    expect(spec.parts.every((p) => !p.hide)).toBe(true);
+  it("overlapping parts are layers: each part lists the later parts that cover it", () => {
+    const over = { type: "MultiPolygon" as const, coordinates: [[box(0, 0, 10, 10)], [box(5, 0, 15, 10)], [box(8, 2, 12, 8)], [box(30, 0, 40, 10)]] };
+    const spec = regionPaintSpec({ ...base, legend: [], parts: [-1, -1, -1, -1], geometry: over });
+    expect(spec.plain).toBe(false);
+    expect(spec.front).toEqual([[1, 2], [2], [], []]);
   });
 });

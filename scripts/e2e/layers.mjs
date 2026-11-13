@@ -1,19 +1,22 @@
 /**
- * Browser checks for contested zones, overlaps and moving parts, in headless Chromium.
+ * Browser checks for layered parts and colour folders, in headless Chromium.
  *
- *   npm run e2e:contested
+ *   npm run e2e:layers
  *
  * 1. Builds the e2e fixture (scripts/e2e/fixture.mjs) plus a few overlapping regions, with the admin
- *    page pointed at the branch test/contested.
- * 2. Embeds (globe and flat, cross-origin iframe, padded and shifted slot): dashed borders, hatching,
- *    the "Contested" legend row, key=0, and other regions on the slot never marking each other.
- * 3. Pixel identity: a region without zones or overlaps renders exactly like a build of origin/main
- *    (skipped with a note if origin/main can't be checked out).
- * 4. Editor against the mocked GitHub API: contested zones (polygon, freehand, picker, Parts list),
- *    live dashes on overlap, plain drag / Ctrl+drag / Alt+click / arrow keys, undo/redo, one-commit save,
- *    deleting whole parts behind a warning.
+ *    page pointed at the branch test/layers.
+ * 2. Embeds (globe and flat, cross-origin iframe, padded and shifted slot): where parts overlap the
+ *    later part covers the earlier one; the legend lists every labelled colour (the region's own colour
+ *    first once it's renamed); an old contested zone draws as a plain part; other regions on the slot
+ *    never mark each other.
+ * 3. Pixel identity: a region without overlaps renders exactly like a build of origin/main (skipped
+ *    with a note if origin/main can't be checked out).
+ * 4. Editor against the mocked GitHub API: colour folders (rename the default colour, fold, move parts,
+ *    "+ Part"), Shift/Ctrl+click picking rows without selecting text, the "Other regions" button in the
+ *    toolbar, Forward / Back and ] / [ (live on the map), plain drag / Ctrl+drag / Alt+click / arrow keys,
+ *    undo/redo, one-commit save, deleting whole parts behind a warning.
  *
- * Screenshots and report.json go to .e2e/contested/. Exits non-zero if any check fails.
+ * Screenshots and report.json go to .e2e/layers/. Exits non-zero if any check fails.
  */
 import { createServer } from "node:http";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
@@ -34,8 +37,8 @@ const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 const sharp = require("sharp");
 
-const OUT = path.resolve(".e2e/contested");
-const BRANCH = "test/contested";
+const OUT = path.resolve(".e2e/layers");
+const BRANCH = "test/layers";
 const SITE = `http://localhost:${port(4173)}`;
 const MAIN_SITE = `http://localhost:${port(4175)}`;
 const HOST = `http://127.0.0.1:${port(4181)}`;
@@ -65,11 +68,10 @@ const feature = (id, geometry, props) => ({
   properties: { slot: SLOT.slug, map: MAP.id, color: "#ff3b30", fillOpacity: 0.25, label: true, updated: "2026-11-09T12:00:00Z", ...props },
   geometry,
 });
-/** P, its contested zone Z (overlapping P), and Q overlapping P: everything the embed draws dashed. */
-const CT = {
+/** P (bottom layer, the region's own colour) and Q on top of it (a legend colour). */
+const LY = {
   P: [20, -20, 40, -5],
-  Z: [36, -18, 46, -8],
-  Q: [10, -15, 24, -10],
+  Q: [30, -15, 46, -8],
 };
 const NEIGHBOUR = [44, -14, 54, -4];
 /** The region the editor checks edit: A (big), B (small), and a hostile neighbour overlapping A. */
@@ -77,7 +79,15 @@ const ED = { A: [100, -56, 115, -36], B: [121, -50, 127, -44] };
 const HOSTILE = '"><script>alert(1)</script>';
 const HOSTILE_N = "<img src=x onerror=alert(4)>";
 const extra = [
-  feature("contested-test", { type: "MultiPolygon", coordinates: [[box(...CT.P)], [box(...CT.Z)], [box(...CT.Q)]] }, { partContested: [-1, 0, -1], partLabels: ["Heartland", "Claimed March", ""] }),
+  feature("layers-test", { type: "MultiPolygon", coordinates: [[box(...LY.P)], [box(...LY.Q)]] }, {
+    colorLabel: "Heartland",
+    legendTitle: "Realm",
+    legend: [{ label: "March", color: "#2979ff" }],
+    partLegend: [-1, 0],
+    partLabels: ["Heartland", "Claimed March"],
+  }),
+  // Saved before layers: Z was a contested zone of P. It loads as a plain part in P's colour.
+  feature("legacy-zone", { type: "MultiPolygon", coordinates: [[box(...LY.P)], [box(...LY.Q)]] }, { partContested: [-1, 0] }),
   feature("contested-neighbour", { type: "Polygon", coordinates: [box(...NEIGHBOUR)] }, { color: "#2979ff" }),
   feature("editor-test", { type: "MultiPolygon", coordinates: [[box(...ED.A)], [box(...ED.B)]] }, { color: "#00e5ff", partLabels: [HOSTILE, ""] }),
   feature("hostile-overlap", { type: "Polygon", coordinates: [box(108, -38, 112, -33)] }, { color: "#ffffff", partLabels: [HOSTILE_N] }),
@@ -199,85 +209,84 @@ const diffCount = (a, b, rect) => {
 };
 
 /* ═════════════ 1. Embeds ═════════════ */
-const ctGeom = extra[0].geometry;
+const lyGeom = extra[0].geometry;
 const flatMap = () => {
   // Same framing as the flat viewer: flatFit of the region's bounds, in an 800 × 480 stage.
   const aspect = MAP.w / MAP.h;
-  const v = flatFit(geometryBounds(ctGeom), aspect, 800, 480);
+  const v = flatFit(geometryBounds(lyGeom), aspect, 800, 480);
   const ky = 2 / aspect;
   return (lon, lat) => [(lon - v.cx) * v.k + 400, (v.cy - lat) * v.k * ky + 240];
 };
+const absent = (p) => p.on < 0.15;
 
 for (const view of want("embed") ? ["flat", "globe"] : []) {
   const G = `embed ${view}`;
-  const q = (extraQ = "") => `${SITE}/v/${SLOT.slug}/?region=contested-test${view === "flat" ? "&view=flat" : ""}${extraQ}`;
-  await step(G, "contested zone, overlaps, legend", async () => {
-    const e = await openEmbed(q());
+  const q = (region, extraQ = "") => `${SITE}/v/${SLOT.slug}/?region=${region}${view === "flat" ? "&view=flat" : ""}${extraQ}`;
+  await step(G, "layers and legend", async () => {
+    const e = await openEmbed(q("layers-test"));
     check(G, "loads without errors", e.errors.length === 0, e.errors.join(" | ") || "no errors");
     const key = await e.frame.evaluate(() => {
       const k = document.querySelector(".rkey");
-      return k && { visible: k.checkVisibility(), rows: [...k.querySelectorAll("li")].map((li) => ({ text: li.textContent, dashed: getComputedStyle(li.querySelector("i")).borderStyle })) };
+      return k && { visible: k.checkVisibility(), head: k.querySelector(".rkey-head").textContent, rows: [...k.querySelectorAll("li")].map((li) => [li.textContent, getComputedStyle(li.querySelector("i")).backgroundColor]) };
     });
-    check(G, "legend has a 'Contested' row with a hatched swatch", key?.visible && key.rows.length === 1 && key.rows[0].text === "Contested" && key.rows[0].dashed === "solid", JSON.stringify(key));
+    check(
+      G,
+      "legend lists the renamed default colour first, then the other colours; no Contested row",
+      key?.visible && key.head === "Realm" && JSON.stringify(key.rows) === JSON.stringify([["Heartland", "rgb(255, 59, 48)"], ["March", "rgb(41, 121, 255)"]]),
+      JSON.stringify(key),
+    );
     const shot = await canvasShot(e);
     await writeFile(path.join(OUT, `embed-${view}.png`), shot);
     if (view === "flat") {
       const img = await raw(shot);
       const at = flatMap();
-      // Q's top edge (lat -10): solid west of P (lon 10…20), dashed inside P (lon 20…24).
-      const solid = lineProfile(img, at(11, -10), at(19, -10), "#ff3b30", 160);
-      const dashed = lineProfile(img, at(20.6, -10), at(23.6, -10), "#ff3b30");
-      check(G, "a normal border is solid outside the parts it overlaps", isSolid(solid), fmt(solid));
-      check(G, "…and inside them too (no dashes)", isSolid(dashed), fmt(dashed));
-      // The contested zone Z: dashed all round, also outside P (its east edge, lon 46).
-      const zEast = lineProfile(img, at(46, -9.5), at(46, -16.5), "#ff3b30", 160);
-      check(G, "a contested zone's border is solid all round", isSolid(zEast), fmt(zEast));
-      // P's east edge (lon 40) runs inside Z between lat -18 and -8: dashed there; solid above -8.
-      const pIn = lineProfile(img, at(40, -9), at(40, -17), "#ff3b30", 120);
-      const pOut = lineProfile(img, at(40, -7.6), at(40, -5.6), "#ff3b30", 120);
-      check(G, "a part's border inside its own contested zone is solid", pIn.on > 0.8 && pIn.flips <= 4, fmt(pIn));
-      check(G, "…and solid where it leaves the zone", pOut.on > 0.85, fmt(pOut));
-      // Hatch: inside Z (outside P) there are pixels of the zone colour that a plain fill wouldn't have.
-      const [hx0, hy0] = at(41, -9);
-      const [hx1, hy1] = at(45, -12);
-      let lines = 0;
-      for (let y = Math.round(hy0); y < Math.round(hy1); y++)
-        for (let x = Math.round(hx0); x < Math.round(hx1); x++) {
-          const k = (y * img.info.width + x) * img.info.channels;
-          if (img.data[k] > 160 && img.data[k + 2] < 120) lines++;
-        }
-      check(G, "contested zone is hatched", lines > 15, `${lines} hatch pixels`);
+      // P's east edge (lon 40) runs under Q between lat -15 and -8: covered there, solid below Q.
+      const pUnder = lineProfile(img, at(40, -9), at(40, -14), "#ff3b30", 120);
+      const pOut = lineProfile(img, at(40, -16), at(40, -19.5), "#ff3b30", 120);
+      check(G, "the lower part's border is hidden under the part on top", absent(pUnder), fmt(pUnder));
+      check(G, "…and solid where nothing covers it", isSolid(pOut), fmt(pOut));
+      // Q's south edge (lat -15) between lon 31 and 39 lies inside P: Q is on top, so it's drawn.
+      const qIn = lineProfile(img, at(31, -15), at(39, -15), "#2979ff");
+      check(G, "the upper part's border shows over the lower part", isSolid(qIn), fmt(qIn));
     }
     await e.page.screenshot({ path: path.join(OUT, `embed-${view}-page.png`) });
     await e.ctx.close();
 
-    const k0 = await openEmbed(q("&key=0"));
-    check(G, "key=0 hides the legend, Contested row included", !(await k0.frame.evaluate(() => document.querySelector(".rkey")?.checkVisibility() ?? false)));
+    const k0 = await openEmbed(q("layers-test", "&key=0"));
+    check(G, "key=0 hides the legend", !(await k0.frame.evaluate(() => document.querySelector(".rkey")?.checkVisibility() ?? false)));
     await k0.ctx.close();
   });
 
+  await step(G, "an old contested zone is a plain part", async () => {
+    const data = await (await fetch(`${SITE}/regions/legacy-zone.json`)).json();
+    check(G, "regions/legacy-zone.json has no contested field", data.contested === undefined && data.clash === undefined, JSON.stringify(Object.keys(data)));
+    const e = await openEmbed(q("legacy-zone"));
+    const rows = await e.frame.evaluate(() => [...document.querySelectorAll(".rkey li")].map((li) => li.textContent));
+    check(G, "no legend rows (no Contested row)", rows.length === 0, JSON.stringify(rows));
+    if (view === "flat") {
+      const shot = await canvasShot(e);
+      await writeFile(path.join(OUT, "embed-flat-legacy.png"), shot);
+      const img = await raw(shot);
+      const at = flatMap();
+      // The zone (second part, so on top) is drawn in its parent's colour, solid.
+      const zEast = lineProfile(img, at(46, -9.5), at(46, -14.5), "#ff3b30", 120);
+      check(G, "the former zone is drawn in its parent's colour with a solid border", isSolid(zEast), fmt(zEast));
+    }
+    check(G, "no errors", e.errors.length === 0, e.errors.join(" | "));
+    await e.ctx.close();
+  });
+
   await step(G, "other regions on the slot never mark this one", async () => {
-    // contested-neighbour overlaps contested-test, but each region is its own map: no clash data, no marks.
-    const data = await (await fetch(`${SITE}/regions/contested-test.json`)).json();
-    check(G, "regions/contested-test.json carries nothing about the neighbour", data.clash === undefined && !JSON.stringify(data).includes("2979ff"), JSON.stringify(data.clash));
-    const nd = await (await fetch(`${SITE}/regions/contested-neighbour.json`)).json();
-    check(G, "regions/contested-neighbour.json carries nothing about contested-test", nd.clash === undefined, JSON.stringify(nd.clash));
-    // Old embed codes may still carry clash=0: it's ignored, and the picture is the same either way.
-    const on = await openEmbed(q());
-    const off = await openEmbed(q("&clash=0"));
+    const data = await (await fetch(`${SITE}/regions/layers-test.json`)).json();
+    check(G, "regions/layers-test.json carries nothing about the neighbour", data.clash === undefined && !JSON.stringify(data).includes("#2979ff\"}]") === !JSON.stringify(data).includes("March"), JSON.stringify(data.clash));
+    const on = await openEmbed(q("layers-test"));
+    const off = await openEmbed(q("layers-test", "&clash=0"));
     const a = await raw(await canvasShot(on));
     const b = await raw(await canvasShot(off));
     const d = diffCount(a, b, { x0: 0, y0: 0, x1: a.info.width, y1: a.info.height });
-    check(G, "nothing changes with an old clash=0 param (no cross-region marks to turn off)", d === 0, `${d} px differ`);
-    check(G, "no errors", on.errors.length === 0 && off.errors.length === 0, [...on.errors, ...off.errors].join(" | "));
+    check(G, "nothing changes with an old clash=0 param", d === 0, `${d} px differ`);
     await on.ctx.close();
     await off.ctx.close();
-    // The neighbour's own embed is a plain region: no "Contested" row, no hatching.
-    const n = await openEmbed(`${SITE}/v/${SLOT.slug}/?region=contested-neighbour${view === "flat" ? "&view=flat" : ""}`);
-    const nk = await n.frame.evaluate(() => [...document.querySelectorAll(".rkey li")].map((li) => li.textContent));
-    check(G, "the other region shows no contested marks of its own (no legend rows)", nk.length === 0, JSON.stringify(nk));
-    await writeFile(path.join(OUT, `embed-${view}-neighbour.png`), await canvasShot(n));
-    await n.ctx.close();
   });
 }
 
@@ -364,6 +373,14 @@ const partBox = (s, p) => {
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 };
 const moved = (a, b) => a.map((v, i) => +(b[i] - v).toFixed(4));
+/** Unselects by clicking empty map, so the selection outline doesn't cover the borders. */
+const unselect = async () => {
+  const [x, y] = await ed.xy(136, -28);
+  await page.mouse.click(x, y);
+  await page.waitForTimeout(80);
+};
+const folders = () =>
+  page.evaluate(() => [...document.querySelectorAll("dialog.editor .ed-folder")].map((f) => [f.dataset.key, [...f.querySelectorAll(".ed-part-row")].map((r) => Number(r.dataset.row))]));
 
 if (want("editor")) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
@@ -375,6 +392,8 @@ if (want("editor")) {
   page.on("dialog", (d) => (dialogs.push(d.message()), d.dismiss()));
   let start = null;
   let final = null;
+  const A_COL = "#00e5ff";
+  let B_COL = "";
 
   await step(A, "open the editor", async () => {
     await page.goto(`${SITE}/admin/#regions`);
@@ -385,118 +404,116 @@ if (want("editor")) {
     await ed.setView(115, -45, K);
     await page.waitForTimeout(200);
     start = await ed.state();
-    check(A, "opens with two normal parts", start.parts.length === 2 && JSON.stringify(start.contested) === "[-1,-1]", JSON.stringify(start.contested));
+    check(A, "opens with two parts", start.parts.length === 2 && JSON.stringify(start.contested) === "[-1,-1]", JSON.stringify(start.contested));
     const list = await page.evaluate(() => [...document.querySelectorAll("dialog.editor .ed-clashes li")].map((li) => li.textContent));
     const imgs = await page.evaluate(() => document.querySelectorAll("dialog.editor img").length);
-    // Part 1 lies under the (hostile-named) neighbour, a different map: not an overlap.
     check(A, "another region overlapping a part isn't listed as an overlap", list.length === 1 && list[0] === "No overlaps." && imgs === 0 && dialogs.length === 0, JSON.stringify(list));
-  });
-
-  await step(A, "contested zones", async () => {
-    // Polygon tool, then select part 1 and add a zone to it.
-    await page.click('dialog.editor [data-tool="polygon"]');
-    await page.click('dialog.editor [data-tool="select"]');
-    let [x, y] = await ed.xy(108, -45);
-    await page.mouse.click(x, y);
-    check(A, "click inside a part selects it", (await ed.sel()) === 0, String(await ed.sel()));
-    await page.click('dialog.editor [data-act="add-contested"]');
-    for (const [lon, lat] of [[95, -40], [103, -40], [103, -32], [95, -32]]) {
-      [x, y] = await ed.xy(lon, lat);
-      await page.mouse.click(x, y);
-    }
-    [x, y] = await ed.xy(95, -40);
-    await page.mouse.click(x, y);
-    let s = await ed.state();
-    check(A, "add a contested zone to the selected part with the polygon tool", s.parts.length === 3 && JSON.stringify(s.contested) === "[-1,-1,0]" && s.labels[2] === "", JSON.stringify(s.contested));
-    // Freehand: select part 2 (B), add a zone by dragging.
-    await page.keyboard.press("f");
-    await page.keyboard.press("v");
-    [x, y] = await ed.xy(124, -47);
-    await page.mouse.click(x, y);
-    await page.click('dialog.editor [data-act="add-contested"]');
-    const ring = [];
-    for (let i = 0; i <= 24; i++) {
-      const t = (i / 24) * Math.PI * 2;
-      ring.push(await ed.xy(133 + Math.cos(t) * 3, -47 + Math.sin(t) * 3));
-    }
-    await page.mouse.move(...ring[0]);
-    await page.mouse.down();
-    for (const p of ring.slice(1)) await page.mouse.move(...p);
-    await page.mouse.up();
-    await page.waitForTimeout(100);
-    s = await ed.state();
-    check(A, "add a contested zone with freehand", s.parts.length === 4 && JSON.stringify(s.contested) === "[-1,-1,0,1]", JSON.stringify(s.contested));
-    // With nothing selected: the "Extends which part?" picker.
+    check(A, "no 'Contested of' or 'Add contested zone' left", (await page.locator('dialog.editor [data-contested-of], dialog.editor [data-act="add-contested"], dialog.editor input[name="zones-follow"]').count()) === 0);
+    // "Other regions" sits at the right end of the toolbar.
+    const pos = await page.evaluate(() => {
+      const b = document.querySelector("dialog.editor .ed-ov-btn");
+      const bar = document.querySelector("dialog.editor .ed-toolbar");
+      return { inBar: bar.contains(b), b: b.getBoundingClientRect().toJSON(), bar: bar.getBoundingClientRect().toJSON(), help: document.querySelector('dialog.editor [data-act="help"]').getBoundingClientRect().toJSON() };
+    });
+    check(A, "'Other regions' is in the toolbar, at its right end", pos.inBar && pos.bar.right - pos.b.right < 20 && pos.b.left > pos.help.right, JSON.stringify([pos.b.left, pos.b.right, pos.bar.right, pos.help.right]));
+    await page.click("dialog.editor .ed-ov-btn");
+    const panel = await page.evaluate(() => {
+      const p = document.querySelector("dialog.editor .ed-ov-panel");
+      return { open: !p.hidden, inMap: document.querySelector("dialog.editor .ed-canvas-wrap").contains(p) };
+    });
+    check(A, "it opens its panel over the top right of the map", panel.open && panel.inMap, JSON.stringify(panel));
+    await page.screenshot({ path: path.join(OUT, "editor-other-regions.png") });
     await page.keyboard.press("Escape");
-    check(A, "Esc clears the selected part", (await ed.sel()) === -1);
-    await page.click('dialog.editor [data-act="add-contested"]');
-    const pick = await page.evaluate(() => [...document.querySelectorAll("dialog.zone-pick [data-pick-part]")].map((b) => b.textContent));
-    check(A, "'Extends which part?' lists the normal parts, labels as plain text", JSON.stringify(pick) === JSON.stringify([`Part 1 (${HOSTILE})`, "Part 2"]) && dialogs.length === 0, JSON.stringify(pick));
-    await page.click("dialog.zone-pick .pv-head button");
-    // Parts list: zones are indented under their parent, with "Contested of" dropdowns.
-    const rows = await page.evaluate(() => [...document.querySelectorAll("dialog.editor .ed-part-row")].map((r) => `${r.dataset.row}${r.classList.contains("zone") ? "z" : ""}`));
-    check(A, "Parts list: zones indented under their parent", JSON.stringify(rows) === '["0","2z","1","3z"]', JSON.stringify(rows));
-    const opts = await page.evaluate(() => [...document.querySelectorAll('dialog.editor select[data-contested-of="0"] option')].map((o) => [o.textContent, o.disabled]));
-    check(A, "a part with zones can't become one (options disabled), hostile label stays text", JSON.stringify(opts) === JSON.stringify([["— (normal part)", false], ["Part 2", true]]), JSON.stringify(opts));
-    const opts2 = await page.evaluate(() => [...document.querySelectorAll('dialog.editor select[data-contested-of="3"] option')].map((o) => o.textContent));
-    check(A, "'Contested of' offers the normal parts except itself", JSON.stringify(opts2) === JSON.stringify(["— (normal part)", `Part 1 (${HOSTILE})`, "Part 2"]), JSON.stringify(opts2));
-    await page.selectOption('dialog.editor select[data-contested-of="3"]', "-1");
-    s = await ed.state();
-    check(A, "turn a zone into a normal part via the Parts list", JSON.stringify(s.contested) === "[-1,-1,0,-1]", JSON.stringify(s.contested));
-    await page.selectOption('dialog.editor select[data-contested-of="3"]', "1");
-    s = await ed.state();
-    check(A, "…and back", JSON.stringify(s.contested) === "[-1,-1,0,1]", JSON.stringify(s.contested));
-    await page.screenshot({ path: path.join(OUT, "editor-parts-list.png"), clip: await page.locator("dialog.editor .ed-colours").boundingBox() });
   });
 
-  await step(A, "moving parts and live dashes", async () => {
-    // Every part starts locked: a drag inside one leaves it where it is, until it's unlocked.
-    const locked0 = await ed.state();
-    const [lx, ly] = await ed.xy(124, -47);
-    await mdrag(lx, ly, -2 * K, 0);
-    check(A, "parts start locked: dragging inside one doesn't move it", locked0.locked.every((l) => l === true) && JSON.stringify((await ed.state()).parts) === JSON.stringify(locked0.parts), JSON.stringify(locked0.locked));
+  await step(A, "colour folders", async () => {
+    check(A, "one folder (Default colour) holding both parts", JSON.stringify(await folders()) === JSON.stringify([["-1", [0, 1]]]), JSON.stringify(await folders()));
+    await page.click('dialog.editor [data-act="key-add"]');
+    await page.keyboard.type("March");
+    await page.selectOption('dialog.editor select[data-part="1"]', "0");
+    let s = await ed.state();
+    B_COL = s.props.legend[0].color;
+    check(A, "Add colour makes a folder; moving part 2 into it", JSON.stringify(await folders()) === JSON.stringify([["-1", [0]], ["0", [1]]]) && s.props.legend[0].label === "March" && JSON.stringify(s.styles) === "[-1,0]", JSON.stringify([await folders(), s.styles]));
+    // The default colour is renamed like any other colour.
+    await page.fill('dialog.editor input[name="color-label"]', "Heartland");
+    s = await ed.state();
+    const opts = await page.evaluate(() => [...document.querySelectorAll('dialog.editor select[data-part="1"] option')].map((o) => o.textContent));
+    check(A, "the default colour can be renamed; part colour menus follow", s.props.colorLabel === "Heartland" && JSON.stringify(opts) === '["Heartland","March"]', JSON.stringify([s.props.colorLabel, opts]));
+    // Fold and unfold.
+    await page.click('dialog.editor .ed-folder[data-key="-1"] [data-act="fold"]');
+    const hidden = await page.evaluate(() => {
+      const f = document.querySelector('dialog.editor .ed-folder[data-key="-1"]');
+      return { rowVisible: f.querySelector(".ed-part-row")?.checkVisibility() ?? false, exp: f.querySelector('[data-act="fold"]').getAttribute("aria-expanded") };
+    });
+    check(A, "a folder folds its parts away", !hidden.rowVisible && hidden.exp === "false", JSON.stringify(hidden));
+    await page.screenshot({ path: path.join(OUT, "editor-folded.png"), clip: await page.locator("dialog.editor .ed-colours").boundingBox() });
+    await page.click('dialog.editor .ed-folder[data-key="-1"] [data-act="fold"]');
+    check(A, "…and unfolds again", await page.locator('dialog.editor .ed-part-row[data-row="0"]').isVisible());
+    // Shift+click and Ctrl+click on rows pick parts, with no text selection across the panel.
+    await page.click('dialog.editor .ed-part-row[data-row="0"] .ed-badge');
+    await page.click('dialog.editor .ed-part-row[data-row="1"] .ed-badge', { modifiers: ["Shift"] });
+    let picked = await page.evaluate(() => ({ text: getSelection().toString(), picks: [...document.querySelectorAll("dialog.editor .ed-part-row.pick")].map((r) => r.dataset.row) }));
+    check(A, "Shift+click on a row picks a second part", /2 parts picked/.test(await ed.msg()) && JSON.stringify(picked.picks) === '["0","1"]', `${await ed.msg()} ${JSON.stringify(picked.picks)}`);
+    check(A, "…without selecting any text", picked.text === "", JSON.stringify(picked.text));
+    await page.click('dialog.editor .ed-part-row[data-row="1"] .ed-badge', { modifiers: ["Control"] });
+    picked = await page.evaluate(() => ({ text: getSelection().toString(), picks: [...document.querySelectorAll("dialog.editor .ed-part-row.pick")].map((r) => r.dataset.row) }));
+    check(A, "Ctrl+click takes it out again, still no text selected", JSON.stringify(picked.picks) !== '["0","1"]' && picked.text === "", JSON.stringify(picked));
+    // (One Esc per user action: Chrome closes a dialog on a second Esc without a click in between.)
+    await page.keyboard.press("Escape");
+    await page.screenshot({ path: path.join(OUT, "editor-folders.png"), clip: await page.locator("dialog.editor .ed-colours").boundingBox() });
+  });
+
+  await step(A, "layers: Forward and Back", async () => {
     await unlockAll();
-    const before = await ed.state();
-    const frameBefore = await page.locator("dialog.editor iframe.ed-globe").screenshot();
-    // Plain drag inside B moves just B (its zone stays: "Move contested zones with their part" is off).
+    // Drag B onto A's east edge: B (part 2) is the upper layer.
     let [x, y] = await ed.xy(124, -47);
     await mdrag(x, y, -8 * K, 0);
     let s = await ed.state();
-    check(A, "plain drag moves only that part", JSON.stringify(moved(partBox(before, 1), partBox(s, 1))) === "[-8,0,-8,0]" && [0, 2, 3].every((p) => JSON.stringify(s.parts[p]) === JSON.stringify(before.parts[p])), JSON.stringify(moved(partBox(before, 1), partBox(s, 1))));
     const cl = await ed.clashes();
     check(A, "the overlap is detected live", cl.internal.some(([i, j]) => i === 0 && j === 1), JSON.stringify(cl));
-    await page.keyboard.press("Escape"); // unselect, so the selection outline doesn't cover the borders
+    const listed = await page.evaluate(() => [...document.querySelectorAll("dialog.editor .ed-clashes li")].map((li) => li.textContent));
+    check(A, "Overlaps says which part covers which", listed.length === 1 && listed[0].startsWith("Part 2 covers part 1"), JSON.stringify(listed));
+    await unselect();
     let img = await canvasImg();
-    // A's east edge (lon 115) runs inside B (now 113…119) between lat -50 and -44.
-    const aIn = await edgeProfile(img, [115, -45], [115, -49], "#00e5ff");
-    const aOut = await edgeProfile(img, [115, -38], [115, -42], "#00e5ff");
-    check(A, "editor: border solid inside the other part", isSolid(aIn), fmt(aIn));
-    check(A, "editor: and solid outside it", isSolid(aOut), fmt(aOut));
-    await page.screenshot({ path: path.join(OUT, "editor-overlap.png") });
-    await page.waitForTimeout(500);
-    const frameAfter = await page.locator("dialog.editor iframe.ed-globe").screenshot();
-    const fa = await raw(frameBefore);
-    const fb = await raw(frameAfter);
-    const changed = diffCount(fa, fb, { x0: 0, y0: 0, x1: fa.info.width, y1: fa.info.height });
-    check(A, "the preview globe follows live", changed > 50, `${changed} px changed`);
-    // Further in: B lies wholly inside A, so its whole outline is dashed.
-    [x, y] = await ed.xy(116, -47);
-    await mdrag(x, y, -8 * K, 0);
+    const [bw] = partBox(s, 1);
+    let aUnder = await edgeProfile(img, [115, -45], [115, -48.5], A_COL);
+    let bOver = await edgeProfile(img, [bw, -45], [bw, -48.5], B_COL);
+    check(A, "editor: the lower part's border is hidden under the upper part", absent(aUnder), fmt(aUnder));
+    check(A, "editor: the upper part's border shows", isSolid(bOver), fmt(bOver));
+    await page.screenshot({ path: path.join(OUT, "editor-layers-b-on-top.png") });
+    // Back on part 2: it goes under part 1 (and becomes part 1).
+    await page.click('dialog.editor .ed-part-row[data-row="1"] [data-act="part-backward"]');
     s = await ed.state();
-    await page.keyboard.press("Escape");
+    check(A, "Back sends part 2 under part 1: they swap numbers, colours and labels go along", JSON.stringify(s.styles) === "[0,-1]" && JSON.stringify(s.labels) === JSON.stringify(["", HOSTILE]) && JSON.stringify(partBox(s, 1)) === JSON.stringify(ED.A), JSON.stringify([s.styles, s.labels]));
+    check(A, "…says so, and the moved part stays selected", /Part 2 is now part 1, under part 2/.test(await ed.msg()) && (await ed.sel()) === 0, `${await ed.msg()} / ${await ed.sel()}`);
+    check(A, "…and its row moved with it (folders by colour, numbers renewed)", JSON.stringify(await folders()) === JSON.stringify([["-1", [1]], ["0", [0]]]), JSON.stringify(await folders()));
+    await unselect();
     img = await canvasImg();
-    const [w, so, e, n] = partBox(s, 1);
-    const sides = [
-      await edgeProfile(img, [w + 1, so], [e - 1, so], "#00e5ff"),
-      await edgeProfile(img, [e, so + 1], [e, n - 1], "#00e5ff"),
-      await edgeProfile(img, [e - 1, n], [w + 1, n], "#00e5ff"),
-      await edgeProfile(img, [w, n - 1], [w, so + 1], "#00e5ff"),
-    ];
-    check(A, "a part inside another has its whole outline solid", sides.every(isSolid), sides.map(fmt).join(" | "));
-    await page.screenshot({ path: path.join(OUT, "editor-inside.png") });
+    aUnder = await edgeProfile(img, [115, -45], [115, -48.5], A_COL);
+    bOver = await edgeProfile(img, [bw, -45], [bw, -48.5], B_COL);
+    // (A vertex handle sits on this edge, hence a short gap.)
+    check(A, "editor: now A's border shows over B…", aUnder.on > 0.8, fmt(aUnder));
+    check(A, "…and B's is hidden under A", absent(bOver), fmt(bOver));
+    await page.screenshot({ path: path.join(OUT, "editor-layers-a-on-top.png") });
+    await page.waitForTimeout(500);
+    // ] brings the selected part forward again.
+    await page.click('dialog.editor .ed-part-row[data-row="0"] [data-act="part-select"]');
+    await page.focus("dialog.editor canvas.ed-canvas");
+    await page.keyboard.press("]");
+    s = await ed.state();
+    check(A, "] brings the selected part forward", JSON.stringify(s.styles) === "[-1,0]" && (await ed.sel()) === 1, JSON.stringify(s.styles));
+    check(A, "Forward is off for the top layer, Back for the bottom", (await page.isDisabled('dialog.editor .ed-part-row[data-row="1"] [data-act="part-forward"]')) && (await page.isDisabled('dialog.editor .ed-part-row[data-row="0"] [data-act="part-backward"]')));
+    await page.keyboard.press("[");
+    await page.keyboard.press("]");
+    check(A, "[ then ] ends where it started", JSON.stringify((await ed.state()).styles) === "[-1,0]");
+    await page.screenshot({ path: path.join(OUT, "editor-overlap.png") });
+  });
 
-    // Alt+click cycles through the parts under the pointer.
-    [x, y] = await ed.xy((w + e) / 2, (so + n) / 2);
+  await step(A, "moving parts", async () => {
+    const s0 = await ed.state();
+    const [w, so, e, n] = partBox(s0, 1);
+    // Alt+click cycles through the parts under the pointer (top first).
+    let [x, y] = await ed.xy(114, -47);
     await page.mouse.click(x, y);
     const top = await ed.sel();
     await page.keyboard.down("Alt");
@@ -507,43 +524,47 @@ if (want("editor")) {
     await page.mouse.click(x, y);
     const back = await ed.sel();
     await page.keyboard.up("Alt");
-    check(A, "click picks the topmost part; Alt+click cycles", top === 1 && next === 0 && back === 1, `${top} → ${next} → ${back}`);
+    check(A, "click picks the top layer; Alt+click cycles", top === 1 && next === 0 && back === 1, `${top} → ${next} → ${back}`);
     check(A, "status line says which of the parts here", /Part 1 \(2 of 2 here, Alt\+click for the next\)/.test(hint), hint);
-
     // Arrow keys nudge the selected part.
-    const s0 = await ed.state();
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("Shift+ArrowUp");
     const s1 = await ed.state();
-    check(A, "arrow keys nudge the selected part only", JSON.stringify(moved(partBox(s0, 1), partBox(s1, 1))) === JSON.stringify([r4(1 / K), r4(10 / KY), r4(1 / K), r4(10 / KY)]) && JSON.stringify(s1.parts[0]) === JSON.stringify(s0.parts[0]), JSON.stringify(moved(partBox(s0, 1), partBox(s1, 1))));
-
+    check(A, "arrow keys nudge the selected part only", JSON.stringify(moved([w, so, e, n], partBox(s1, 1))) === JSON.stringify([r4(1 / K), r4(10 / KY), r4(1 / K), r4(10 / KY)]) && JSON.stringify(s1.parts[0]) === JSON.stringify(s0.parts[0]), JSON.stringify(moved([w, so, e, n], partBox(s1, 1))));
     // Ctrl+drag moves the whole region.
     [x, y] = await ed.xy(102, -52);
     await mdrag(x, y, 2 * K, 0, ["Control"]);
     const s2 = await ed.state();
-    check(A, "Ctrl+drag moves the whole region", [0, 1, 2, 3].every((p) => JSON.stringify(moved(partBox(s1, p), partBox(s2, p))) === "[2,0,2,0]"), [0, 1, 2, 3].map((p) => JSON.stringify(moved(partBox(s1, p), partBox(s2, p)))).join(" "));
+    check(A, "Ctrl+drag moves the whole region", [0, 1].every((p) => JSON.stringify(moved(partBox(s1, p), partBox(s2, p))) === "[2,0,2,0]"), [0, 1].map((p) => JSON.stringify(moved(partBox(s1, p), partBox(s2, p)))).join(" "));
+  });
 
-    // With "Move contested zones with their part" on, a part takes its zones along.
-    await page.check('dialog.editor input[name="zones-follow"]');
-    [x, y] = await ed.xy(104, -52);
-    await mdrag(x, y, 0, -KY);
-    const s3 = await ed.state();
-    check(A, "with the checkbox on, a part's zones move with it", JSON.stringify(moved(partBox(s2, 0), partBox(s3, 0))) === "[0,1,0,1]" && JSON.stringify(moved(partBox(s2, 2), partBox(s3, 2))) === "[0,1,0,1]" && JSON.stringify(s3.parts[1]) === JSON.stringify(s2.parts[1]), JSON.stringify(moved(partBox(s2, 2), partBox(s3, 2))));
-    await page.uncheck('dialog.editor input[name="zones-follow"]');
-    final = s3;
+  await step(A, "+ Part draws a part in that colour", async () => {
+    await page.keyboard.press("p");
+    await page.click('dialog.editor .ed-folder[data-key="0"] [data-act="folder-add-part"]');
+    for (const [lon, lat] of [[95, -40], [99, -40], [99, -32], [95, -32]]) {
+      const [x, y] = await ed.xy(lon, lat);
+      await page.mouse.click(x, y);
+    }
+    const [x, y] = await ed.xy(95, -40);
+    await page.mouse.click(x, y);
+    const s = await ed.state();
+    check(A, "the new part goes into that colour's folder", s.parts.length === 3 && s.styles[2] === 0 && JSON.stringify(await folders()) === JSON.stringify([["-1", [0]], ["0", [1, 2]]]), `${JSON.stringify(s.styles)} ${await ed.msg()}`);
+    check(A, "…and says where it went", /added to March/.test(await ed.msg()), await ed.msg());
+    await page.keyboard.press("v");
+    final = s;
   });
 
   await step(A, "undo/redo and save", async () => {
     await page.click("dialog.editor canvas.ed-canvas", { position: { x: 3, y: 3 }, button: "middle" });
     let undos = 0;
-    while (!(await page.isDisabled('dialog.editor [data-act="undo"]')) && undos < 60) {
+    while (!(await page.isDisabled('dialog.editor [data-act="undo"]')) && undos < 80) {
       await page.keyboard.press("Control+z");
       undos++;
     }
     let s = await ed.state();
     check(A, "undo all of it back to the start", JSON.stringify(s) === JSON.stringify(start), `${undos} steps`);
     let redos = 0;
-    while (!(await page.isDisabled('dialog.editor [data-act="redo"]')) && redos < 60) {
+    while (!(await page.isDisabled('dialog.editor [data-act="redo"]')) && redos < 80) {
       await page.keyboard.press("Control+Shift+z");
       redos++;
     }
@@ -557,43 +578,32 @@ if (want("editor")) {
     const c = mock.log.slice(n0);
     check(A, "save is exactly one commit to content/regions/editor-test.json on the branch", c.length === 1 && c[0].branch === BRANCH && JSON.stringify(c[0].changes) === JSON.stringify([{ path: "content/regions/editor-test.json", deleted: false }]), JSON.stringify(c));
     const f = JSON.parse(mock.read(BRANCH, "content/regions/editor-test.json"));
-    check(A, "saved with the right partContested", JSON.stringify(f.properties.partContested) === "[-1,-1,0,1]", JSON.stringify(f.properties.partContested));
+    const p = f.properties;
+    check(
+      A,
+      "saved with the renamed default colour, the folders and the layer order; no partContested",
+      p.colorLabel === "Heartland" && JSON.stringify(p.legend) === JSON.stringify([{ label: "March", color: B_COL }]) && JSON.stringify(p.partLegend) === "[-1,0,0]" && p.partLabels[0] === HOSTILE && !("partContested" in p),
+      JSON.stringify(p),
+    );
     check(A, "main untouched", mock.refs.get("main") === mainAtStart);
     await page.screenshot({ path: path.join(OUT, "editor-saved.png") });
   });
+
   await step(A, "delete a whole part (always asks first)", async () => {
     const warn = "dialog.small-dlg.danger[open]";
     const s0 = await ed.state();
-    // Parts list button, cancelled: nothing changes.
-    await page.click('dialog.editor .ed-part-row[data-row="3"] [data-act="part-delete"]');
+    await page.click('dialog.editor .ed-part-row[data-row="2"] [data-act="part-delete"]');
     await page.waitForSelector(warn);
     const text = await page.textContent(`${warn} .dlg-body`);
-    check(A, "Delete in the Parts list shows a warning first", /This deletes Part 4 with all \d+ of its vertices/.test(text) && /undo/i.test(text), text);
+    check(A, "Delete in a folder row shows a warning first", /This deletes Part 3 with all \d+ of its vertices/.test(text) && /undo/i.test(text), text);
     await page.click(`${warn} button:has-text("Keep it")`);
     await page.waitForTimeout(150);
     check(A, "'Keep it' leaves the region as it was", JSON.stringify(await ed.state()) === JSON.stringify(s0));
-    // Confirmed: part 4 (a zone of part 2) goes, the rest keep their colours, labels and zones.
-    await page.click('dialog.editor .ed-part-row[data-row="3"] [data-act="part-delete"]');
+    await page.click('dialog.editor .ed-part-row[data-row="2"] [data-act="part-delete"]');
     await page.click(`${warn} button:has-text("Delete part")`);
     await page.waitForTimeout(150);
     const s1 = await ed.state();
-    check(A, "'Delete part' removes the whole part", s1.parts.length === 3 && JSON.stringify(s1.parts) === JSON.stringify(s0.parts.slice(0, 3)) && JSON.stringify(s1.contested) === "[-1,-1,0]" && JSON.stringify(s1.labels) === JSON.stringify(s0.labels.slice(0, 3)), JSON.stringify(s1.contested));
-    // Right-click inside part 1 (which has a zone): menu → warning names the zone → confirm.
-    await page.click('dialog.editor .ed-part-row[data-row="0"] [data-act="part-select"]');
-    const b = partBox(s1, 0);
-    const [x, y] = await ed.xy((b[0] + b[2]) / 2, (b[1] + b[3]) / 2);
-    await page.mouse.click(x, y, { button: "right" });
-    const item = await page.textContent("dialog.editor .ed-menu:not([hidden]) button");
-    check(A, "right-click inside a part offers 'Delete part 1…'", item === "Delete part 1…", item);
-    await page.click("dialog.editor .ed-menu button");
-    await page.waitForSelector(warn);
-    await page.screenshot({ path: path.join(OUT, "editor-delete-warning.png") });
-    const text2 = await page.textContent(`${warn} .dlg-body`);
-    check(A, "the warning says its contested zone becomes a normal part", /contested zone stays and becomes a normal part/.test(text2), text2);
-    await page.click(`${warn} button:has-text("Delete part")`);
-    await page.waitForTimeout(150);
-    const s2 = await ed.state();
-    check(A, "deleting a parent keeps its zone as a normal part", s2.parts.length === 2 && JSON.stringify(s2.contested) === "[-1,-1]" && JSON.stringify(s2.parts) === JSON.stringify(s1.parts.slice(1)), JSON.stringify(s2.contested));
+    check(A, "'Delete part' removes the whole part", s1.parts.length === 2 && JSON.stringify(s1.parts) === JSON.stringify(s0.parts.slice(0, 2)) && JSON.stringify(s1.styles) === "[-1,0]", JSON.stringify(s1.styles));
     // Delete key on a selected part also asks; Esc keeps it.
     await page.click('dialog.editor .ed-part-row[data-row="0"] [data-act="part-select"]');
     await page.focus("dialog.editor canvas.ed-canvas");
@@ -601,11 +611,9 @@ if (want("editor")) {
     await page.waitForSelector(warn);
     await page.keyboard.press("Escape");
     await page.waitForTimeout(150);
-    check(A, "Delete key on a selected part asks, Esc keeps it", JSON.stringify(await ed.state()) === JSON.stringify(s2) && (await page.locator(warn).count()) === 0);
-    // Undo brings both parts back.
+    check(A, "Delete key on a selected part asks, Esc keeps it", JSON.stringify(await ed.state()) === JSON.stringify(s1) && (await page.locator(warn).count()) === 0);
     await page.keyboard.press("Control+z");
-    await page.keyboard.press("Control+z");
-    check(A, "undo brings deleted parts back", JSON.stringify(await ed.state()) === JSON.stringify(s0));
+    check(A, "undo brings the deleted part back", JSON.stringify(await ed.state()) === JSON.stringify(s0));
   });
   check(A, "no errors or dialogs in the admin page", editorErrors.length === 0 && dialogs.length === 0, [...editorErrors, ...dialogs].join(" | ") || "none");
   await ctx.close();

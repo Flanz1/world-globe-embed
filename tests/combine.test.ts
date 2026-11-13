@@ -59,7 +59,7 @@ describe("combineRegions", () => {
     [square(20, 20), square(22, 20)],
   );
 
-  it("copies every part with its label, colour and contested zone, leaving the originals alone", () => {
+  it("copies every part with its label and colour (older contested zones become plain parts), leaving the originals alone", () => {
     const before = JSON.stringify([vael, keth]);
     const r = combineRegions([vael, keth], { id: "vael-keth", base });
     expect(r.errors).toEqual([]);
@@ -78,8 +78,7 @@ describe("combineRegions", () => {
       { label: "keth", color: "#5881ad" },
     ]);
     expect(f.properties.partLegend).toEqual([-1, 0, -1, 1, 1]);
-    // keth's zone pointed at its part 0, which is now part 3.
-    expect(f.properties.partContested).toEqual([-1, -1, 0, -1, 3]);
+    expect(f.properties.partContested).toBeUndefined();
     expect(f.properties.legendTitle).toBe("Holdings");
     expect(f.properties.description).toBe("Old kingdom");
     expect(f.properties.label).toBe(true);
