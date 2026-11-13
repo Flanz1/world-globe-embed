@@ -81,7 +81,7 @@
         },
         "legend": {
           "type": "array",
-          "maxItems": 16,
+          "maxItems": 96,
           "description": "Extra colours for the region's parts, each with a plain-text label. The embed lists every colour with a non-empty label as a legend (key=0 hides it).",
           "items": {
             "type": "object",
