@@ -174,38 +174,79 @@ async function gitBlobSha(text: string): Promise<string> {
 
 class Conflict extends Error {}
 
-export const SHORTCUTS: [string, string][] = [
-  ["V / P / F", "Select, polygon and freehand tools"],
-  ["Click (polygon)", "Add a point; double-click, Enter or click the first point to close (a split line: double-click or Enter)"],
-  ["Backspace or right-click (drawing)", "Remove the last point (repeat to go back to the start)"],
-  ["Esc", "Cancel the outline being drawn, or clear the selection"],
-  ["Drag a vertex", "Move it, with any vertices attached to it (other parts' vertices on the same spot); it snaps to vertices and lines of other parts and regions"],
-  ["Ctrl+drag a vertex", "Move just that vertex, without snapping (pulls it off a shared border)"],
-  ["Drag a midpoint", "Insert a vertex there (on a shared border, on both sides)"],
-  ["S", "Snapping on or off; hold Ctrl to place one point freely"],
-  ["O", "Coast snapping on or off: points also snap to the map's coastline (when no part or region is in reach); click two points on the coast to follow it"],
-  ["Click two points on one border (polygon)", "Fills in that border's vertices in between; Tab takes the other way round. Clicking the first point to close follows the border too"],
-  ["Freehand along a border", "The stroke follows that border's vertices exactly"],
-  ["Click a line", "Select every vertex of that outline or hole (Shift adds); Delete then removes it"],
-  ["Alt+click / right-click", "Delete a vertex"],
-  ["Shift+click, box drag", "Select several vertices"],
-  ["Delete / Backspace", "Delete the selected vertices, else the selected part (asks first)"],
-  ["Right-click inside a part", "Delete that whole part (asks first)"],
-  ["Click inside a part", "Select that part (or click its badge or its row in the Parts list)"],
-  ["Alt+click inside", "Select the next part under the pointer, where parts overlap"],
-  ["Drag inside a part", "Move that part; Ctrl+drag (Cmd on macOS) moves the whole region"],
-  ["Shift+click a part", "Pick several parts (also Shift+click Select in the Parts list); Esc clears the picks"],
-  ["C", "Combine the picked parts into one, filling small gaps (with one part selected: it and the parts touching it; click parts to add or remove them, Enter to apply)"],
-  ["E", "Extend the selected part: draw a shape that touches it and it's added to the part"],
-  ["] / [", "Bring the selected part forward / send it backward: past the next part it overlaps (it's drawn on top of the parts below it)"],
-  ["L", "Lock or unlock the selected part (a locked part can't be moved; its vertices and midpoints still edit)"],
-  ["Arrow keys", "Nudge the selected vertices, else the selected part, else the whole region, 1 px; Shift for 10 px"],
-  ["Ctrl+Z", "Undo"],
-  ["Ctrl+Shift+Z / Ctrl+Y", "Redo"],
-  ["Wheel / pinch", "Zoom around the cursor"],
-  ["Space+drag / middle drag", "Pan (the map wraps round)"],
-  ["G", "Toggle the grid"],
-  ["?", "This list"],
+/** Keyboard and mouse shortcuts, grouped for the "?" dialog: short key to action rows. */
+export const SHORTCUT_GROUPS: { title: string; rows: [string, string][] }[] = [
+  {
+    title: "Tools",
+    rows: [
+      ["V", "Select tool"],
+      ["P", "Polygon tool"],
+      ["F", "Freehand tool"],
+      ["S", "Snapping on or off (hold Ctrl to place one point freely)"],
+      ["O", "Coast snapping on or off"],
+      ["G", "Show or hide the grid"],
+      ["?", "This list"],
+    ],
+  },
+  {
+    title: "Drawing",
+    rows: [
+      ["Click", "Add a point (polygon)"],
+      ["Double-click / Enter", "Finish the outline"],
+      ["Click the lit-up first point", "Close the outline (freehand closes on release)"],
+      ["Backspace / right-click", "Remove the last point (repeat to go back to the start)"],
+      ["Tab", "Follow a border the other way round"],
+      ["Esc", "Cancel the outline, or clear the selection"],
+    ],
+  },
+  {
+    title: "Vertices",
+    rows: [
+      ["Drag", "Move a vertex"],
+      ["Ctrl+drag", "Move one vertex, without snapping"],
+      ["Drag a midpoint", "Insert a vertex"],
+      ["Shift+click / box drag", "Select several vertices"],
+      ["Click a line", "Select the whole outline (Shift adds)"],
+      ["Alt+click / right-click", "Delete a vertex (select tool)"],
+      ["Delete / Backspace", "Delete the selected vertices, else the selected part"],
+      ["Arrow keys", "Nudge 1 px (Shift: 10 px)"],
+    ],
+  },
+  {
+    title: "Parts",
+    rows: [
+      ["Click inside", "Select that part"],
+      ["Alt+click inside", "Select the next part underneath"],
+      ["Drag inside", "Move the part (Ctrl/Cmd+drag: the whole region)"],
+      ["Shift+click", "Pick several parts"],
+      ["Right-click inside", "Delete the part"],
+      ["C", "Combine the picked parts"],
+      ["E", "Extend the selected part"],
+      ["]  /  [", "Bring forward / send backward"],
+      ["L", "Lock or unlock the part"],
+    ],
+  },
+  {
+    title: "View and history",
+    rows: [
+      ["Wheel / pinch", "Zoom"],
+      ["Space+drag / middle drag", "Pan"],
+      ["Ctrl+Z", "Undo"],
+      ["Ctrl+Shift+Z / Ctrl+Y", "Redo"],
+    ],
+  },
+];
+
+/** The longer explanations, shown under the key lists. */
+export const SHORTCUT_NOTES: [string, string][] = [
+  ["Snapping", "A dragged or drawn point snaps to vertices and lines of other parts and regions. Dragging a vertex also moves any vertices attached to it (other parts' vertices on the same spot); Ctrl+drag pulls just that one off a shared border. Dragging a midpoint on a shared border inserts a vertex on both sides."],
+  ["Coast snapping", "With O on, points also snap to the map's coastline (when no part or region is in reach). Click two points on the coast to follow it."],
+  ["Following a border", "Click two points on one border and the vertices in between are filled in; Tab takes the other way round, and clicking the first point to close follows the border too. A freehand stroke along a border follows its vertices exactly."],
+  ["Combining", "C combines the picked parts into one and fills small gaps. With one part selected it combines that part and the parts touching it; click parts to add or remove them, then Enter to apply."],
+  ["Extending", "E on a selected part: draw a shape that touches it, and it is added to the part."],
+  ["Layers", "Where parts overlap, the part drawn last is on top. ] and [ move the selected part past the next part it overlaps."],
+  ["Locking", "A locked part can't be moved; its vertices and midpoints can still be edited."],
+  ["Deleting", "Deleting a part always asks first."],
 ];
 
 export function openEditor(o: EditorOptions): void {
@@ -1254,14 +1295,6 @@ export function openEditor(o: EditorOptions): void {
   }
 
   let lastArea = -1;
-  // Drawing tips (the long how-to line above the map) are off by default; the "?" dialog turns them on.
-  let tipsOn = ((): boolean => {
-    try {
-      return localStorage.getItem("ed-tips") === "on";
-    } catch {
-      return false;
-    }
-  })();
   function updateStatus(): void {
     const n = countVertices(parts());
     const parts_ = parts().length;
@@ -1272,9 +1305,7 @@ export function openEditor(o: EditorOptions): void {
     if (tool === "polygon" && drawing && pendingTail()?.traced) line += ` · follows the border${traceFlip ? " the other way" : ""} (Tab: ${traceFlip ? "back" : "other way"})`;
     if (cursor) {
       const lon = ((((cursor[0] + 180) % 360) + 360) % 360) - 180;
-      const gl = imageToGlobe([lon, cursor[1]], frame);
       line += ` · lon ${round(lon, 3)}, lat ${round(cursor[1], 3)}`;
-      if (tipsOn) line += ` (stored) · globe lon ${round(gl[0], 2)}, lat ${round(gl[1], 2)}`;
     }
     status.textContent = line;
     undoBtn.disabled = !hist.canUndo;
@@ -1735,29 +1766,6 @@ export function openEditor(o: EditorOptions): void {
     closeCombine(true);
     changed();
   }
-  function drawHint(t: DrawTarget): string {
-    const zone = "";
-    if (t === "border")
-      return drawTool === "freehand"
-        ? "Drag a province border across the region; only the stretch inside it shows. It snaps to outlines and other borders. Press P for the polygon tool."
-        : "Click points along the province border; double-click or Enter to finish. Points snap to outlines and other borders; click two points on one outline to follow it.";
-    if (t === "split")
-      return drawTool === "freehand"
-        ? "Drag a line right across a part, from outside it to outside it; let go to split it. Press P for the polygon tool."
-        : "Click points along a line right across a part, starting and ending outside it. Double-click or Enter to split.";
-    if (t === "extend") {
-      const which = extendTarget >= 0 ? `part ${extendTarget + 1}` : "the part you start in";
-      return drawTool === "freehand"
-        ? `Drag a shape that starts inside or touches ${which}; let go to add it. Press P for the polygon tool.`
-        : `Click points around the land to add to ${which}, touching it. Double-click, Enter or click the first point to add it.`;
-    }
-    if (t === "cut")
-      return drawTool === "freehand"
-        ? "Drag around the area to cut away; let go to cut. Inside a part it makes a hole, right across a part it splits it."
-        : "Click points around the area to cut away. Double-click, Enter or click the first point to cut.";
-    if (drawTool === "freehand") return `${zone}Drag on the map to draw the outline; let go to close it. Along a border, the stroke follows it. Press P for the polygon tool.`;
-    return `${zone}Click to add points. Double-click, Enter or click the lit-up first point to close. Click two points on one border to follow it (Tab: the other way round).`;
-  }
   function startDraw(t: DrawTarget): void {
     closeCombine(true);
     if ((t === "cut" || t === "split" || t === "border") && !parts().length) return setMsg(`Draw a part first, then ${t === "border" ? "draw province borders in it" : `${t} it`}.`, "error");
@@ -1766,7 +1774,7 @@ export function openEditor(o: EditorOptions): void {
     drawing = null;
     tool = drawTool;
     canvas.style.cursor = "crosshair";
-    setMsg(tipsOn ? drawHint(t) : "");
+    setMsg("");
     changed();
   }
 
@@ -3086,20 +3094,13 @@ export function openEditor(o: EditorOptions): void {
 
   function showHelp(): void {
     const m = modal("Keyboard shortcuts", "help-dlg");
-    const cb = h("input", { type: "checkbox", checked: tipsOn, id: "tips-toggle" }) as HTMLInputElement;
-    cb.addEventListener("change", () => {
-      tipsOn = cb.checked;
-      try {
-        localStorage.setItem("ed-tips", tipsOn ? "on" : "off");
-      } catch {
-        /* ignore */
-      }
-      if (!tipsOn) setMsg("");
-      else if (target) setMsg(drawHint(target));
-      updateStatus();
-    });
-    m.body.append(h("label", { className: "muted small" }, cb, " Show drawing tips above the map"));
-    m.body.append(h("dl", { className: "shortcuts" }, ...SHORTCUTS.flatMap(([k, v]) => [h("dt", {}, h("kbd", { textContent: k })), h("dd", { textContent: v })])));
+    for (const g of SHORTCUT_GROUPS)
+      m.body.append(
+        h("section", { className: "sc-group" }, h("h3", { textContent: g.title }), h("dl", { className: "shortcuts" }, ...g.rows.flatMap(([k, v]) => [h("dt", {}, h("kbd", { textContent: k })), h("dd", { textContent: v })]))),
+      );
+    m.body.append(
+      h("section", { className: "sc-group" }, h("h3", { textContent: "How it works" }), h("dl", { className: "sc-notes" }, ...SHORTCUT_NOTES.flatMap(([k, v]) => [h("dt", { textContent: k }), h("dd", { textContent: v })]))),
+    );
   }
 
   function embed(): void {
@@ -3411,7 +3412,6 @@ export function openEditor(o: EditorOptions): void {
     touched = true;
   }
   setTool(parts().length ? "select" : "freehand");
-  if (!parts().length && tipsOn) setMsg(drawHint("part"));
   syncPanel();
   canvas.focus();
   // Test hook: lets the browser tests read the editor's state; exposes nothing the page doesn't already have.
