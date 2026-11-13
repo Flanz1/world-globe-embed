@@ -164,6 +164,8 @@ await step(A, "open the editor", async () => {
   await page.locator('[data-region="coast-test"] [data-action="edit"]').click();
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForFunction(() => document.querySelector("dialog.editor").wgeEditor.coastLines() > 0, null, { timeout: 10000 });
+  // The toolbar (the button's pressed state) updates on the editor's next frame after the coast arrives.
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const btn = page.locator('dialog.editor button[data-act="coast"]');
   check(A, "the Coast button shows once the coast is loaded, pressed", (await btn.isVisible()) && (await btn.getAttribute("aria-pressed")) === "true");
   // Only the island's shore: the river, the lake and the lettering in the sea aren't coast.
