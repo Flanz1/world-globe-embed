@@ -12,7 +12,7 @@
 import * as clip from "polygon-clipping";
 import { checkGeometry, openRing, signedArea, toStoredGeometry, type Position, type Ring } from "../../shared/geo.ts";
 import { OWN_COLOUR } from "../../shared/region.ts";
-import { cloneState, type EditorState, type Parts } from "./model.ts";
+import { cloneState, OCCUPIED, type EditorState, type Parts } from "./model.ts";
 
 type Seg = [Position, Position];
 
@@ -328,9 +328,10 @@ function assemble(s: EditorState, list: number[], rings: Ring[], parent: number,
   // Editing several regions together: the combined part stays with the region of the part that keeps its place.
   if (s.owners) next.owners = kept.map((q) => s.owners![q] ?? "");
   next.contested = kept.map((q) => {
-    if (q === into) return parent < 0 ? -1 : (index[parent] ?? -1);
+    // An occupied area (OCCUPIED) stays one; combined with others, the result is one if any of them was.
+    if (q === into) return parent >= 0 ? (index[parent] ?? -1) : list.some((r) => s.contested[r] === OCCUPIED) ? OCCUPIED : -1;
     const k = s.contested[q] ?? -1;
-    return k < 0 ? -1 : (index[k] ?? -1);
+    return k < 0 ? k : (index[k] ?? -1);
   });
   const n = index[into];
   const bad = checkGeometry(toStoredGeometry([next.parts[n]]));

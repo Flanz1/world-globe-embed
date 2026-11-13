@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { OWN_COLOUR, type RegionFeature } from "../src/shared/region.ts";
-import { addPart, cutParts, reorderPart, stateOf, type EditorState } from "../src/admin/editor/model.ts";
+import { addPart, cutParts, OCCUPIED, reorderPart, stateOf, toStyledGeometry, type EditorState } from "../src/admin/editor/model.ts";
 import { combineParts } from "../src/admin/editor/merge.ts";
 import { liveState, ownEntry, previewLegend, removeLiveEntry, splitLive, type LiveSource } from "../src/admin/editor/live.ts";
 
@@ -101,6 +101,20 @@ describe("splitLive", () => {
     expect(split(s2, src(a, c)).gamma.state.styles[0]).toBe(OWN_COLOUR);
   });
 
+  it("keeps contested (occupied) areas through liveState and the save split", () => {
+    const occ = region("delta", "#00aa00", [box(0, 20, 10, 30), box(5, 25, 8, 28)], { partOccupied: [false, true] });
+    const legacy = region("epsilon", "#aa00aa", [box(20, 20, 30, 30), box(22, 22, 25, 25)], { partContested: [-1, 0] });
+    const sources = src(b, occ, legacy);
+    const s = liveState(sources);
+    expect(s.contested).toEqual([-1, -1, OCCUPIED, -1, OCCUPIED]);
+    const out = split(s, sources);
+    expect(out.delta.state.contested).toEqual([-1, OCCUPIED]);
+    expect(out.epsilon.state.contested).toEqual([-1, OCCUPIED]);
+    expect(out.beta.state.contested).toEqual([-1]);
+    // What a save writes for each region.
+    const st = out.delta.state;
+    expect(toStyledGeometry(st.parts, st.styles, st.labels, st.contested, st.locked, st.labelHidden).partOccupied).toEqual([false, true]);
+  });
   it("refuses a region left with no parts", () => {
     const sources = src(a, b);
     const s = liveState(sources);

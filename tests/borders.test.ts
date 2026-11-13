@@ -96,3 +96,39 @@ describe("paint spec", () => {
     expect(hasContestedMarks(regionPaintSpec({ ...base, parts: [0, 1], geometry: apart }))).toBe(false);
   });
 });
+
+describe("contested cells", () => {
+  const sq = (w: number, s: number, e: number, n: number): Ring[] => [box(w, s, e, n)];
+  it("three overlapping colours: every pair and the triple, each with all its colours in part order", () => {
+    // A, B, C overlap in one spot; D (same colour as A) only touches A.
+    const over = { type: "MultiPolygon" as const, coordinates: [sq(0, 0, 10, 10), sq(5, 0, 15, 10), sq(3, 5, 12, 15), sq(-5, 0, 2, 3)] };
+    const legend = [{ label: "B", color: "#00ff00" }, { label: "C", color: "#0000ff" }];
+    const spec = regionPaintSpec({ color: "#ff0000", legend, parts: [-1, 0, 1, -1], geometry: over });
+    const cells = spec.cells.map((c) => [c.parts.join(""), c.colors.join(" "), c.outside.join("")]);
+    expect(cells).toEqual([
+      ["01", "#ff0000 #00ff00", "23"],
+      ["012", "#ff0000 #00ff00 #0000ff", "3"],
+      ["02", "#ff0000 #0000ff", "13"],
+      ["12", "#00ff00 #0000ff", "0"],
+    ]);
+    // A and D are one colour: they just overlap, nothing contested between them.
+    expect(spec.overlaps[0]).toEqual([1, 2, 3]);
+    expect(hasContestedMarks(spec)).toBe(true);
+  });
+  it("an occupied area is striped like any overlap (it only keeps the borders under it)", () => {
+    // Orange home part, green part beside it, an orange occupied area reaching into the green.
+    const over = { type: "MultiPolygon" as const, coordinates: [sq(0, 0, 10, 10), sq(10, 0, 20, 10), sq(8, 2, 16, 8)] };
+    const legend = [{ label: "Green", color: "#00ff00" }];
+    const spec = regionPaintSpec({ color: "#ff8800", legend, parts: [-1, 0, -1], occupied: [false, false, true], geometry: over });
+    expect(spec.cells).toEqual([{ parts: [1, 2], outside: [0], colors: ["#00ff00", "#ff8800"] }]);
+    expect(spec.overlaps).toEqual([[2], [2], [0, 1]]);
+    expect(spec.parts[2].occupied).toBe(true);
+    expect(spec.plain).toBe(false);
+  });
+  it("an occupied area over nothing of another colour isn't contested", () => {
+    const one = { type: "MultiPolygon" as const, coordinates: [sq(0, 0, 10, 10)] };
+    const spec = regionPaintSpec({ color: "#ff0000", legend: [], parts: [-1], occupied: [true], geometry: one });
+    expect(spec.cells).toEqual([]);
+    expect(hasContestedMarks(spec)).toBe(false);
+  });
+});

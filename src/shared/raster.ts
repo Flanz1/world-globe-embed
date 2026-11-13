@@ -112,10 +112,11 @@ function insetStroke(ctx: Ctx, lw: number, trace: () => void, interior: () => vo
 
 /* ── Layered parts ── */
 
-/** One part as the painter needs it: its polygon (outer ring then holes) and colour. */
+/** One part as the painter needs it: its polygon (outer ring then holes), colour, and whether it's an occupied area (it leaves the borders under it as they are). */
 export interface PaintPart {
   rings: Position[][];
   color: string;
+  occupied?: boolean;
   /** Per ring: edges shared with another part, left out of this part's coloured outline (see borders.ts). */
   hide?: Set<number>[];
 }
@@ -128,11 +129,17 @@ export interface PaintSpec {
   plain: boolean;
   layers: { color: string; geometry: RegionGeometry }[];
   parts: PaintPart[];
-  /**
-   * Per part: the later parts that overlap it. They are layers on top: where they overlap, the overlap is
-   * contested, filled in the upper part's colour (the main one) and hatched in this part's (the secondary).
-   */
+  /** Per part: the later parts that overlap it (province borders are drawn once, in the topmost part). */
   front: number[][];
+  /** Per part: every part that overlaps it. */
+  overlaps: number[][];
+  /**
+   * Contested land: each area covered by exactly `parts` (overlapping each other, of two or more colours),
+   * which `outside` (the other parts overlapping them) don't cover. Filled with equal stripes of `colors`,
+   * and the parts' borders through it dashed in those colours, except that an occupied area leaves the
+   * borders of the parts under it as they are (see paintSpec).
+   */
+  cells: { parts: number[]; colors: string[]; outside: number[] }[];
   /** National borders (lines parts of different legend colours share) and province borders (lines drawn inside the region), as open polylines. */
   borders?: { national: Position[][]; provincial: Position[][] };
 }
@@ -146,19 +153,26 @@ export const PROVINCIAL_W = 0.6;
 export const PROVINCIAL_DASH = 5;
 export const PROVINCIAL_GAP = 2.5;
 
-/** The contested hatch's opacity on top of the fill. */
-const HATCH_ALPHA = 0.55;
+/** Contested stripes: their opacity, and their width in line widths (every colour's stripe is the same width). */
+const STRIPE_ALPHA = 0.5;
+const STRIPE_W = 2.5;
+/** Contested borders: each colour's dash, in line widths. */
+const CONTESTED_DASH = 4;
 
 type AnyCanvas = HTMLCanvasElement | OffscreenCanvas;
 const patterns = new WeakMap<object, Map<string, CanvasPattern | null>>();
 
-/** A diagonal hatch tile in `color`, its spacing scaled by the line width; cached per canvas. */
-function hatchPattern(ctx: Ctx, color: string, lw: number): CanvasPattern | null {
-  const key = `${color}|${Math.round(lw * 4)}`;
+/**
+ * Diagonal stripes cycling through `colors` ("" for a transparent stripe), each `w` px wide (along x) and
+ * `colors` repeated over and over; cached per canvas.
+ */
+function stripePattern(ctx: Ctx, colors: readonly string[], w: number): CanvasPattern | null {
+  const key = `${colors.join(",")}|${w}`;
   let m = patterns.get(ctx.canvas);
   if (!m) patterns.set(ctx.canvas, (m = new Map()));
   if (m.has(key)) return m.get(key)!;
-  const s = Math.max(4, Math.round(lw * 4));
+  const n = colors.length;
+  const s = w * n;
   let tile: AnyCanvas;
   if (typeof OffscreenCanvas !== "undefined") tile = new OffscreenCanvas(s, s);
   else {
@@ -168,23 +182,27 @@ function hatchPattern(ctx: Ctx, color: string, lw: number): CanvasPattern | null
   const t = tile.getContext("2d") as Ctx | null;
   let pat: CanvasPattern | null = null;
   if (t) {
-    t.strokeStyle = color;
-    t.lineWidth = Math.max(1, lw * 0.45);
-    t.lineCap = "square";
-    t.beginPath();
-    // One diagonal plus the two corner pieces, so the tile repeats seamlessly.
-    t.moveTo(0, s);
-    t.lineTo(s, 0);
-    t.moveTo(-s / 2, s / 2);
-    t.lineTo(s / 2, -s / 2);
-    t.moveTo(s / 2, s * 1.5);
-    t.lineTo(s * 1.5, s / 2);
-    t.stroke();
+    // The band where x + y runs from c to c + w, for each colour, over two periods so the tile wraps seamlessly.
+    for (let j = 0; j < 2; j++)
+      colors.forEach((c, k) => {
+        if (!c) return;
+        const c0 = j * s + k * w;
+        t.beginPath();
+        t.moveTo(c0, 0);
+        t.lineTo(c0 + w, 0);
+        t.lineTo(c0 + w - s, s);
+        t.lineTo(c0 - s, s);
+        t.closePath();
+        t.fillStyle = c;
+        t.fill();
+      });
     pat = ctx.createPattern(tile as CanvasImageSource, "repeat");
   }
   m.set(key, pat);
   return pat;
 }
+/** Equal contested stripes of every colour. */
+const contestedStripes = (ctx: Ctx, colors: readonly string[], lw: number) => stripePattern(ctx, colors, Math.max(2, Math.round(lw * STRIPE_W)));
 
 function tracePoly(ctx: Ctx, rings: Position[][], x: (lon: number) => number, y: (lat: number) => number, offsets: number[], hide?: Set<number>[]): void {
   // Holes in the outer ring's copy, so a clip or fill with evenodd cuts them out at every offset.
@@ -274,10 +292,11 @@ function paintBorders(ctx: Ctx, spec: PaintSpec, x: (lon: number) => number, y: 
 }
 
 /**
- * Draws a region from a PaintSpec. Plain regions go through paintLayers unchanged. Otherwise each part,
- * first to last (bottom layer to top), is filled and outlined in its colour, except where a later part
- * overlapping it covers it; a part's overlaps with the parts under it are hatched in their colours
- * (contested: the upper colour is the main one, the lower the secondary); then the borders.
+ * Draws a region from a PaintSpec. Plain regions go through paintLayers unchanged. Otherwise each part is
+ * filled and outlined in its colour where no part of another colour overlaps it; contested land (parts of
+ * several colours overlapping) gets equal stripes of all of them and borders dashed in all of them;
+ * an occupied area does the same, but leaves the borders of the parts under it solid, as they were;
+ * then the national and province borders.
  */
 export function paintSpec(
   ctx: Ctx,
@@ -301,44 +320,69 @@ export function paintSpec(
   }
   ctx.lineJoin = "round";
   ctx.lineWidth = lw;
-  spec.parts.forEach((p, i) => {
-    const front = spec.front[i] ?? [];
-    if (front.length) {
-      ctx.save();
-      clipOutside(ctx, spec, front, x, y, offsets, area);
+  const clipCell = (cell: PaintSpec["cells"][number]) => {
+    for (const j of cell.parts) {
+      ctx.beginPath();
+      tracePoly(ctx, spec.parts[j].rings, x, y, offsets);
+      ctx.clip("evenodd");
     }
+    clipOutside(ctx, spec, cell.outside, x, y, offsets, area);
+  };
+  // Fills: each part where no part of another colour overlaps it (and, within one colour, only once).
+  spec.parts.forEach((p, i) => {
+    const out = (spec.overlaps[i] ?? []).filter((j) => j > i || spec.parts[j]?.color !== p.color);
+    ctx.save();
+    clipOutside(ctx, spec, out, x, y, offsets, area);
     ctx.beginPath();
     tracePoly(ctx, p.rings, x, y, offsets);
     ctx.globalAlpha = fo;
     ctx.fillStyle = p.color;
     ctx.fill("evenodd");
-    // Contested: where this part covers earlier ones, hatch the overlap in each covered part's colour.
-    spec.front.forEach((f, j) => {
-      if (j >= i || !f.includes(i) || spec.parts[j].color === p.color) return;
-      const pat = hatchPattern(ctx, spec.parts[j].color, lw);
-      if (!pat) return;
-      ctx.save();
-      ctx.beginPath();
-      tracePoly(ctx, spec.parts[j].rings, x, y, offsets);
-      ctx.clip("evenodd");
-      ctx.beginPath();
-      tracePoly(ctx, p.rings, x, y, offsets);
-      ctx.globalAlpha = HATCH_ALPHA;
-      ctx.fillStyle = pat;
-      ctx.fill("evenodd");
-      ctx.restore();
-    });
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = p.color;
-    // Every border is a thin solid line, inset so touching parts keep both their lines.
-    insetStroke(
-      ctx,
-      lw,
-      () => tracePoly(ctx, p.rings, x, y, offsets, p.hide),
-      () => tracePoly(ctx, p.rings, x, y, offsets),
-    );
-    if (front.length) ctx.restore();
+    ctx.restore();
   });
+  // Contested land: equal stripes of every colour there.
+  for (const cell of spec.cells) {
+    const pat = contestedStripes(ctx, cell.colors, lw);
+    if (!pat) continue;
+    ctx.save();
+    clipCell(cell);
+    ctx.globalAlpha = Math.max(fo, STRIPE_ALPHA);
+    ctx.fillStyle = pat;
+    ctx.fillRect(-area.w, -area.h, area.w * 3, area.h * 3);
+    ctx.restore();
+  }
+  // Borders: a thin solid line in the part's colour, inset so touching parts keep both their lines…
+  const outline = (p: PaintPart) => () => tracePoly(ctx, p.rings, x, y, offsets, p.hide);
+  const interior = (p: PaintPart) => () => tracePoly(ctx, p.rings, x, y, offsets);
+  // (An occupied area doesn't change the borders under it: they stay solid through it.)
+  spec.parts.forEach((p, i) => {
+    ctx.save();
+    clipOutside(ctx, spec, (spec.overlaps[i] ?? []).filter((j) => p.occupied || !spec.parts[j]?.occupied), x, y, offsets, area);
+    ctx.strokeStyle = p.color;
+    insetStroke(ctx, lw, outline(p), interior(p));
+    ctx.restore();
+  });
+  // …and where it runs through contested land, equal dashes of every colour there (each colour starting where the last one stops).
+  const dash = CONTESTED_DASH * lw;
+  ctx.globalAlpha = 1;
+  for (const cell of spec.cells) {
+    ctx.save();
+    clipCell(cell);
+    // A normal part's border is dashed only in the colours of the normal parts here (occupied areas leave it be).
+    const normal = [...new Set(cell.parts.filter((i) => !spec.parts[i].occupied).map((i) => spec.parts[i].color))];
+    for (const i of cell.parts) {
+      const colors = spec.parts[i].occupied ? cell.colors : normal.length >= 2 ? normal : [];
+      const n = colors.length;
+      colors.forEach((c, k) => {
+        ctx.setLineDash([dash, dash * (n - 1)]);
+        ctx.lineDashOffset = ((n - k) % n) * dash;
+        ctx.strokeStyle = c;
+        insetStroke(ctx, lw, outline(spec.parts[i]), interior(spec.parts[i]));
+      });
+    }
+    ctx.restore();
+  }
+  ctx.setLineDash([]);
   if (spec.borders) paintBorders(ctx, spec, x, y, offsets, lw, area);
   ctx.restore();
 }

@@ -39,7 +39,6 @@ import {
   flatMinK,
   checkParts,
   DEFAULT_COLOUR_NAME,
-  normalizePartContested,
   normalizePartLabels,
   normalizePartLegend,
   normalizePartLabelHidden,
@@ -91,6 +90,9 @@ import {
   setLabelHidden,
   setLabelsHidden,
   setLocked,
+  setOccupied,
+  isOccupied,
+  OCCUPIED,
   ringProblem,
   trimStrokeOvershoot,
   simplifyParts,
@@ -418,7 +420,7 @@ export function openEditor(o: EditorOptions): void {
       toolBtn("polygon", "Polygon", "P"),
       toolBtn("freehand", "Freehand", "F"),
       h("span", { className: "sep" }),
-      btn("Add part", "Draw another polygon (an island or exclave), in the default colour; a colour's + Part draws one in that colour", () => ((newPartStyle = OWN_COLOUR), startDraw("part")), "add-part"),
+      btn("Add part", "Draw another polygon (an island or exclave), in the default colour; a colour's + Part draws one in that colour", () => ((newPartStyle = OWN_COLOUR), (newPartOccupied = false), startDraw("part")), "add-part"),
       btn("Cut", "Draw a shape to cut away: inside a part it makes a hole, across a part's edge it bites it, right across it splits it into separate parts", () => startDraw("cut"), "cut-hole"),
       btn("Split", "Draw a line right across a part to split it into separate parts", () => startDraw("split"), "split"),
       btn("Combine…", "Combine the parts you picked (click one, Shift+click the others) into one part, filling small gaps (C)", () => openCombine(), "combine"),
@@ -475,7 +477,11 @@ export function openEditor(o: EditorOptions): void {
           "fieldset",
           { className: "ed-overlaps" },
           h("legend", { textContent: "Overlaps" }),
-          h("p", { className: "muted small", textContent: "Where parts of different colours overlap, the overlap is contested: the upper layer's colour is the main one and the lower one's is hatched over it, in the embed too. Forward / Back decide which is on top." }),
+          h("p", {
+            className: "muted small",
+            textContent:
+              "Where parts of different colours overlap, the overlap is contested: equal stripes of every colour, with the borders through it dashed in each. A contested area (a colour's + Contested, or a part's Contested button) is an occupied area: striped and dash-bordered the same way, but the borders of the parts under it stay solid, as they were.",
+          }),
           clashList,
         ),
         stats,
@@ -653,6 +659,8 @@ export function openEditor(o: EditorOptions): void {
   let target: DrawTarget = "part";
   /** The colour (legend index, or OWN_COLOUR) a part drawn with Add part goes into: set by a folder's "+ Part". */
   let newPartStyle = OWN_COLOUR;
+  /** Whether the part being drawn becomes a contested (occupied) area ("Add contested area"). */
+  let newPartOccupied = false;
   /** The selected part (-1 for none): click inside it, its badge or its row. Separate from the vertex selection. */
   let selPart = -1;
   /** Parts picked together with Shift+click (in the order picked; the first keeps its place when combined), and the history version they were picked at. */
@@ -748,7 +756,7 @@ export function openEditor(o: EditorOptions): void {
         parts: next,
         styles: normalizePartLegend(styles, next.length, hist.state.props.legend.length),
         labels: normalizePartLabels(labels, next.length),
-        contested: normalizePartContested(contested, next.length),
+        contested: Array.from({ length: next.length }, (_, i) => ((contested[i] ?? -1) === -1 ? -1 : OCCUPIED)),
         locked: normalizePartLocked(locked, next.length),
         labelHidden: normalizePartLabelHidden(labelHidden, next.length),
       },
@@ -852,10 +860,11 @@ export function openEditor(o: EditorOptions): void {
       clashes = { internal: findClashes(preps) };
     }
     const st = hist.state;
+    const occupied = ps.map((_, p) => isOccupied(st, p));
     // Editing several regions together: each region is its own map, so only its own parts overlap (as in the embed).
     const own = st.owners;
     if (own) clashes = { internal: clashes.internal.filter(([i, j]) => own[i] === own[j]) };
-    const spec = paintSpecOf({ color: st.props.color, legend: st.props.legend, parts: st.styles, geometry: asGeometry(ps), ...(st.lines?.length ? { provinceBorders: st.lines } : {}), ...(st.props.nationalBorders ? { nationalBorders: true } : {}) }, clashes);
+    const spec = paintSpecOf({ color: st.props.color, legend: st.props.legend, parts: st.styles, ...(occupied.some(Boolean) ? { occupied } : {}), geometry: asGeometry(ps), ...(st.lines?.length ? { provinceBorders: st.lines } : {}), ...(st.props.nationalBorders ? { nationalBorders: true } : {}) }, clashes);
     clashCache = { version: hist.version, preps, clashes, spec };
     return clashCache;
   }
@@ -876,9 +885,21 @@ export function openEditor(o: EditorOptions): void {
     const rows: HTMLElement[] = [];
     for (const [i, j] of cs.clashes.internal) {
       const [lo, hi] = i < j ? [i, j] : [j, i];
-      // The upper layer's colour is the main one in the overlap, the lower one's is hatched over it.
       const contested = partColour(hi) !== partColour(lo);
-      rows.push(h("li", { dataset: { clash: `${i}:${j}` } }, contested ? `${cap(partName(hi))} over ${partName(lo)}: contested, ${partName(hi)}'s colour is the main one` : `${cap(partName(hi))} covers ${partName(lo)} (same colour)`));
+      const [oh, ol] = [isOccupied(hist.state, hi), isOccupied(hist.state, lo)];
+      rows.push(
+        h(
+          "li",
+          { dataset: { clash: `${i}:${j}` } },
+          oh !== ol
+            ? `${cap(partName(oh ? hi : lo))} occupies part of ${partName(oh ? lo : hi)}`
+            : oh
+              ? `${cap(partName(lo))} and ${partName(hi)} overlap (both occupied areas)`
+              : !contested
+                ? `${cap(partName(lo))} and ${partName(hi)} overlap (same colour)`
+                : `${cap(partName(lo))} and ${partName(hi)}: contested, striped in both colours`,
+        ),
+      );
     }
     if (!rows.length) rows.push(h("li", { className: "muted", textContent: "No overlaps." }));
     clashList.replaceChildren(...rows);
@@ -1345,11 +1366,12 @@ export function openEditor(o: EditorOptions): void {
     legendTitle: hist.state.props.legendTitle.slice(0, LEGEND_TITLE_MAX),
     ...(hist.state.props.nationalBorders ? { nationalBorders: true } : {}),
     legend: previewStyles().legend,
-    ...(({ geometry, partLegend, partLabels, partLabelHidden }) => ({
+    ...(({ geometry, partLegend, partLabels, partLabelHidden, partOccupied }) => ({
       geometry,
       parts: partLegend,
       labels: partLabels.map((t) => t.slice(0, PART_LABEL_MAX)),
       ...(partLabelHidden.some(Boolean) ? { labelHidden: partLabelHidden } : {}),
+      ...(partOccupied.some(Boolean) ? { occupied: partOccupied } : {}),
     }))(
       toStyledGeometry(parts(), previewStyles().styles, hist.state.labels, hist.state.contested, hist.state.locked, hist.state.labelHidden),
     ),
@@ -1443,6 +1465,13 @@ export function openEditor(o: EditorOptions): void {
     selPart = to;
     const where = wasOver ? `, ${dir > 0 ? "on top of" : "under"} ${partName(other)}` : "";
     setMsg(`Part ${p + 1} is now part ${to + 1}${where}.`, "ok");
+    changed();
+  }
+  function togglePartOccupied(p: number): void {
+    if (p < 0 || p >= parts().length) return;
+    const on = !isOccupied(hist.state, p);
+    hist.apply(on ? "Make contested area" : "Make normal part", setOccupied(hist.state, p, on));
+    setMsg(on ? `Part ${p + 1} is now a contested (occupied) area: the borders under it stay as they were.` : `Part ${p + 1} is a normal part again: overlaps with other colours are striped in every colour.`, "ok");
     changed();
   }
   /** Editing together: moves part p (or every picked part, when it's one of them) to region `to`. Its colour stays. */
@@ -1568,6 +1597,7 @@ export function openEditor(o: EditorOptions): void {
       tiny("Centre", `Show part ${p + 1} on the map and the globe`, "part-centre", () => centrePart(p)),
       Object.assign(tiny("Forward", `Bring part ${p + 1} forward: on top of the next part it overlaps (])`, "part-forward", () => moveLayer(p, 1)), { disabled: p >= n - 1 }),
       Object.assign(tiny("Back", `Send part ${p + 1} backward: under the next part it overlaps ([)`, "part-backward", () => moveLayer(p, -1)), { disabled: p <= 0 }),
+      tiny("Contested", "", "part-occupied", () => togglePartOccupied(p)),
       tiny("Label", "", "part-label", () => togglePartLabel(p), " ed-labelbtn"),
       tiny("Lock", "", "part-lock", () => togglePartLock(p), " ed-lock"),
       tiny("Delete", `Delete part ${p + 1} (asks first)`, "part-delete", () => void askDeletePart(p), " danger"),
@@ -1645,6 +1675,21 @@ export function openEditor(o: EditorOptions): void {
         startDraw("part");
         newPartStyle = k;
         newPartOwner = live && !own ? (s.props.legend[k]?.src ?? null) : null;
+        newPartOccupied = false;
+      },
+    });
+    const addOcc = h("button", {
+      type: "button",
+      className: "ghost tiny",
+      textContent: "+ Contested",
+      title: "Draw a contested (occupied) area in this colour: striped and dash-bordered in its colour and the colours under it, which keep their own borders",
+      dataset: { act: "folder-add-occupied" },
+      onclick: () => {
+        startDraw("part");
+        newPartStyle = k;
+        newPartOccupied = true;
+        newPartOwner = live && !own ? (s.props.legend[k]?.src ?? null) : null;
+        setMsg(`Contested area in ${entryName(k)}: draw its outline (Enter or a double-click finishes it).`);
       },
     });
     const labelsBtn = h("button", {
@@ -1655,7 +1700,7 @@ export function openEditor(o: EditorOptions): void {
       dataset: { act: "folder-labels" },
       onclick: () => toggleFolderLabels(members),
     });
-    const head = h("div", { className: "ed-folder-head" }, fold, colour, name, count, labelsBtn, add);
+    const head = h("div", { className: "ed-folder-head" }, fold, colour, name, count, labelsBtn, add, addOcc);
     if (live) {
       const e = own ? null : s.props.legend[k];
       const from = own ? live[0].id : e?.src;
@@ -1727,6 +1772,16 @@ export function openEditor(o: EditorOptions): void {
       }
       const locked = s.locked[p] !== false;
       row.classList.toggle("locked", locked);
+      const occ = isOccupied(s, p);
+      row.classList.toggle("occupied", occ);
+      const occBtn = row.querySelector<HTMLButtonElement>("button[data-act=part-occupied]");
+      if (occBtn) {
+        occBtn.textContent = occ ? "✓ Contested" : "Contested";
+        occBtn.title = occ
+          ? `Part ${p + 1} is a contested (occupied) area: the borders of the parts under it stay as they were. Click to make it a normal part.`
+          : `Make part ${p + 1} a contested (occupied) area: striped and dash-bordered where it lies over other colours, while the borders of the parts under it stay as they were.`;
+        occBtn.setAttribute("aria-pressed", String(occ));
+      }
       const lock = row.querySelector<HTMLButtonElement>("button[data-act=part-lock]");
       if (lock) {
         lock.textContent = locked ? "🔒 Locked" : "Lock";
@@ -1800,18 +1855,19 @@ export function openEditor(o: EditorOptions): void {
     // Editing together: the default colour of a new part is its own region's colour.
     if (live && style === OWN_COLOUR && ownEntry(hist.state, owner) >= 0) style = ownEntry(hist.state, owner);
     const s0 = hist.state;
+    const occ = newPartOccupied;
     setParts(
-      parts().length ? "Add part" : "Draw outline",
+      occ ? "Add contested area" : parts().length ? "Add part" : "Draw outline",
       addPart(parts(), ring),
       undefined,
       [...s0.styles, style],
       [...s0.labels, ""],
-      [...s0.contested, -1],
+      [...s0.contested, occ ? OCCUPIED : -1],
       s0.locked,
       s0.labelHidden,
       s0.owners && [...s0.owners, owner],
     );
-    setMsg(`Part ${parts().length} added to ${entryName(style)}${live ? ` in ${owner}` : ""}. Drag vertices to refine it.`, "ok");
+    setMsg(`${occ ? "Contested area" : "Part"} ${parts().length} added to ${entryName(style)}${live ? ` in ${owner}` : ""}. Drag vertices to refine it.`, "ok");
     selPart = parts().length - 1;
     endDraw();
     return true;
@@ -1819,6 +1875,7 @@ export function openEditor(o: EditorOptions): void {
   function endDraw(): void {
     target = "part";
     newPartStyle = OWN_COLOUR;
+    newPartOccupied = false;
     newPartOwner = null;
     extendTarget = -1;
     drawing = null;
@@ -3122,7 +3179,7 @@ export function openEditor(o: EditorOptions): void {
    * why it can't be saved.
    */
   function featureOf(s: EditorState, fid: string): RegionFeature | string {
-    const { geometry, partLegend, partLabels, partLabelHidden, partLocked } = toStyledGeometry(s.parts, s.styles, s.labels, s.contested, s.locked, s.labelHidden);
+    const { geometry, partLegend, partLabels, partLabelHidden, partOccupied, partLocked } = toStyledGeometry(s.parts, s.styles, s.labels, s.contested, s.locked, s.labelHidden);
     const provinceLines = storedLines(s.lines ?? []);
     const errs = [
       ...checkGeometry(geometry),
@@ -3147,6 +3204,7 @@ export function openEditor(o: EditorOptions): void {
           ? { legend: props.legend.map((e) => ({ label: e.label.trim().slice(0, LEGEND_LABEL_MAX), color: e.color })), partLegend }
           : {}),
         ...(partLabels.some((t) => t.trim()) ? { partLabels: partLabels.map((t) => t.trim().slice(0, PART_LABEL_MAX)) } : {}),
+        ...(partOccupied.some(Boolean) ? { partOccupied } : {}),
         ...(partLabelHidden.some(Boolean) && partLabels.some((t) => t.trim()) ? { partLabelHidden } : {}),
         ...(partLocked.some((l) => !l) ? { partLocked } : {}),
         ...(provinceLines.length ? { provinceBorders: provinceLines } : {}),

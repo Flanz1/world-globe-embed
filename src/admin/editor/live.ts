@@ -11,7 +11,7 @@
  */
 import { LEGEND_LABEL_MAX, LEGEND_MAX, OWN_COLOUR } from "../../shared/region.ts";
 import { MAX_MOVED_PER_COMMIT } from "../../shared/categories.ts";
-import { cloneState, type EditorLegendEntry, type EditorState } from "./model.ts";
+import { cloneState, OCCUPIED, type EditorLegendEntry, type EditorState } from "./model.ts";
 
 /** Most regions edited together: one save writes at most this many region files (the admin API's limit). */
 export const MAX_LIVE = MAX_MOVED_PER_COMMIT;
@@ -54,7 +54,7 @@ export function liveState(sources: readonly LiveSource[]): EditorState {
       out.styles.push(k === OWN_COLOUR ? own : base + k);
       out.labels.push(s.labels[p] ?? "");
       out.labelHidden.push(s.labelHidden?.[p] === true);
-      out.contested.push(-1);
+      out.contested.push((s.contested?.[p] ?? -1) === -1 ? -1 : OCCUPIED);
       out.locked.push(s.locked?.[p] !== false);
       out.owners!.push(src.id);
     });
@@ -147,7 +147,7 @@ export function splitLive(s: EditorState, sources: readonly LiveSource[]): LiveS
       styles: ps.map((p) => styleOf(s.styles[p] ?? OWN_COLOUR)),
       labels: ps.map((p) => s.labels[p] ?? ""),
       labelHidden: ps.map((p) => s.labelHidden?.[p] === true),
-      contested: ps.map(() => -1),
+      contested: ps.map((p) => ((s.contested?.[p] ?? -1) === -1 ? -1 : OCCUPIED)),
       locked: ps.map((p) => s.locked?.[p] !== false),
       lines: (orig.lines ?? []).map((l) => l.map(([x, y]) => [x, y] as [number, number])),
       props: { ...props, legend },

@@ -134,11 +134,19 @@
         "partContested": {
           "type": "array",
           "maxItems": 1000,
-          "description": "LEGACY, no longer written. One entry per polygon: -1, or k to mark the part as a \"contested zone\" of part k. Contested zones were replaced by layers: parts are drawn in order, and where parts overlap the later part covers the earlier one. When a region with this field loads, a zone whose partLegend entry is -1 takes part k's colour; nothing else changes, and the editor drops the field at the next save.",
+          "description": "LEGACY, no longer written (see partOccupied). One entry per polygon: -1, or k to mark the part as a \"contested zone\" of part k. When a region with this field loads, a zone whose partLegend entry is -1 takes part k's colour and counts as an occupied part (partOccupied); the editor writes partOccupied instead at the next save.",
           "items": {
             "type": "integer",
             "minimum": -1,
             "maximum": 999
+          }
+        },
+        "partOccupied": {
+          "type": "array",
+          "maxItems": 1000,
+          "description": "One entry per polygon of the geometry, in order: true for a contested (occupied) area. Like any overlap of different colours it's drawn as equal stripes of every colour there, with its own border dashed in those colours, but the borders of the parts under it stay solid, as they were. Leave it out when no part is one.",
+          "items": {
+            "type": "boolean"
           }
         },
         "partLocked": {

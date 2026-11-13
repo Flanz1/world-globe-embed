@@ -37,6 +37,7 @@ import {
   normalizePartLabels,
   normalizePartLegend,
   normalizePartLocked,
+  normalizePartOccupied,
   type LegendEntry,
   type RegionFeature,
 } from "../../shared/region.ts";
@@ -76,8 +77,9 @@ export interface EditorState {
   /** Per part: the label the embed shows on it ("" for none). */
   labels: string[];
   /**
-   * Per part: always -1 now. Contested zones were replaced by layers (part order); older regions'
-   * zones load as plain parts. Kept so the part-reshaping helpers keep one shape.
+   * Per part: -1 for a normal part, OCCUPIED (-2) for a contested (occupied) area. (A value of 0 or more
+   * was an old contested zone's parent; older regions load those as occupied areas, so it isn't used.)
+   * Every part-reshaping helper carries it along with the parts.
    */
   contested: number[];
   /** Per part: true when its label is switched off in the embed (the text is kept). Missing entries: shown. */
@@ -92,6 +94,17 @@ export interface EditorState {
    */
   owners?: string[];
   props: RegionProps;
+}
+
+/** `contested` value for a contested (occupied) area: saved as partOccupied. */
+export const OCCUPIED = -2;
+export const isOccupied = (s: Pick<EditorState, "contested">, p: number): boolean => (s.contested[p] ?? -1) !== -1;
+
+/** Marks part p as an occupied area or a normal part again. */
+export function setOccupied(s: EditorState, p: number, on: boolean): EditorState {
+  const next = cloneState(s);
+  next.contested[p] = on ? OCCUPIED : -1;
+  return next;
 }
 
 /** A vertex: part, ring (0 = outer) and index in the open ring. */
@@ -133,7 +146,8 @@ export function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"
     styles: migrateZoneColours(normalizePartLegend(fp?.partLegend, parts.length, legend.length), fp?.partContested),
     labels: normalizePartLabels(fp?.partLabels ?? legacy, parts.length),
     labelHidden: normalizePartLabelHidden(fp?.partLabelHidden, parts.length),
-    contested: new Array<number>(parts.length).fill(-1),
+    // Contested zones (older regions) count as occupied areas.
+    contested: normalizePartOccupied(fp?.partOccupied, fp?.partContested, parts.length).map((o) => (o ? OCCUPIED : -1)),
     locked: normalizePartLocked(fp?.partLocked, parts.length),
     lines: (fp?.provinceBorders ?? []).filter((l) => l.length >= 2).map((l) => unwrapRing(l.map(([x, y]) => [x, y] as Position))),
     props: {
@@ -459,7 +473,7 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
   }
   let orphaned = 0;
   const contested = parentOld.map((k) => {
-    if (k < 0) return -1;
+    if (k < 0) return k;
     if (index[k] >= 0) return index[k];
     orphaned++;
     return -1;
@@ -577,7 +591,7 @@ export function remapContested(contested: readonly number[], kept: readonly numb
   let orphaned = 0;
   const out = kept.map((old) => {
     const k = contested[old] ?? -1;
-    if (k < 0) return -1;
+    if (k < 0) return k;
     const n = at.get(k);
     if (n === undefined) {
       orphaned++;
@@ -666,7 +680,7 @@ export function toStyledGeometry(
   contested: number[] = [],
   locked: boolean[] = [],
   labelHidden: boolean[] = [],
-): { geometry: RegionGeometry; partLegend: number[]; partLabels: string[]; partLabelHidden: boolean[]; partContested: number[]; partLocked: boolean[] } {
+): { geometry: RegionGeometry; partLegend: number[]; partLabels: string[]; partLabelHidden: boolean[]; partContested: number[]; partOccupied: boolean[]; partLocked: boolean[] } {
   const keep: Parts = [];
   const kept: number[] = [];
   const partLegend: number[] = [];
@@ -683,7 +697,8 @@ export function toStyledGeometry(
       partLabelHidden.push(labelHidden[p] === true);
     }
   });
-  return { geometry: toStoredGeometry(keep), partLegend, partLabels, partLabelHidden, partContested: remapContested(contested, kept).contested, partLocked };
+  const partContested = remapContested(contested, kept).contested;
+  return { geometry: toStoredGeometry(keep), partLegend, partLabels, partLabelHidden, partContested, partOccupied: partContested.map((k) => k !== -1), partLocked };
 }
 
 /** Removes legend entry `k`: its parts go back to the region's colour, later indices shift down. */
@@ -722,7 +737,7 @@ export function reorderPart(s: EditorState, p: number, to: number): EditorState 
   next.styles = order.map((i) => s.styles[i] ?? OWN_COLOUR);
   next.labels = order.map((i) => s.labels[i] ?? "");
   next.labelHidden = order.map((i) => s.labelHidden?.[i] === true);
-  next.contested = order.map((i) => ((s.contested[i] ?? -1) >= 0 ? inv[s.contested[i]] : -1));
+  next.contested = order.map((i) => ((s.contested[i] ?? -1) >= 0 ? inv[s.contested[i]] : (s.contested[i] ?? -1)));
   next.locked = order.map((i) => s.locked[i] ?? true);
   if (s.owners) next.owners = order.map((i) => s.owners![i] ?? "");
   return next;
