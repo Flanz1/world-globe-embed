@@ -786,7 +786,7 @@ await step(A, "editor speed at 2,000 vertices", async () => {
   const busyPerMove = busy / 60;
   const jsPerMove = (busy - native) / 60;
   const n = (await ed.state()).parts[0][0].length;
-  check(A, "2,000-vertex drag: globe preview kept up (≥10 updates, at most one per frame)", updates >= 10 && updates <= 61, `${n} vertices; ${updates} preview updates in 60 moves; ${(withPreview / 60).toFixed(0)} ms per move with the WebGL preview (software rendering)`);
+  check(A, "2,000-vertex drag: globe preview kept up (≥5 updates, at most one per frame; a drag sends at most one every 250 ms)", updates >= 5 && updates <= 61, `${n} vertices; ${updates} preview updates in 60 moves; ${(withPreview / 60).toFixed(0)} ms per move with the WebGL preview (software rendering)`);
   check(A, "2,000-vertex drag: editor's script work per move fits in a 60 Hz frame", jsPerMove < 16.7, `${jsPerMove.toFixed(1)} ms of script per move (pointer handler, crossing check, redraw of 2,000 vertices and handles); ${busyPerMove.toFixed(1)} ms including the browser's own drawing, which runs in software here; ${(alone / 60).toFixed(0)} ms wall time per move, mostly the test driver`);
   await page.click("dialog.editor .pv-head button.ghost");
   await page.waitForTimeout(300);
