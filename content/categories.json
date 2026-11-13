@@ -19,7 +19,8 @@
         "gethricism",
         "kethregion",
         "razmyrregion",
-        "region"
+        "region",
+        "trinicism"
       ],
       "parent": "religion",
       "createdBy": {
