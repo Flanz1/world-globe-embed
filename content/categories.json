@@ -56,7 +56,9 @@
     {
       "id": "ilrakhan",
       "name": "Ilrakhan",
-      "regions": [],
+      "regions": [
+        "vihr"
+      ],
       "parent": "country",
       "createdBy": {
         "id": 45669787,
