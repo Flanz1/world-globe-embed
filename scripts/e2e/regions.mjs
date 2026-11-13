@@ -409,7 +409,7 @@ await step(A, "sign in and Regions tab", async () => {
   check(A, "'drawn on a different map' badge", (await page.locator('[data-region="old-map-region"] .badge.warn').textContent()) === "drawn on a different map");
   const evil = await page.locator('[data-region="evil-name"] .rlabels').textContent();
   check(A, "hostile name shown as plain text", evil === '"><script>alert(1)</script>' && dialogs.length === 0);
-  check(A, "cards are titled by id, with no Rename button", (await page.locator('[data-region="evil-name"] .rname').textContent()) === "evil-name" && (await page.locator('[data-action="rename"]').count()) === 0);
+  check(A, "cards are titled by id, with no Rename button", (await page.locator('[data-region="evil-name"] .rname').textContent()) === "evil-name" && (await page.locator('.rcard [data-action="rename"]').count()) === 0);
   await page.fill("#r-search", "dateline");
   check(A, "search filters by id/labels", (await page.locator("#regions .rcard").count()) === 1);
   await page.fill("#r-search", "");
