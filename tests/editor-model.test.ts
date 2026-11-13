@@ -22,6 +22,8 @@ import {
   pointSegmentDistance,
   removeLegendEntry,
   reorderPart,
+  setLabelHidden,
+  setLabelsHidden,
   layerTarget,
   ringRefs,
   setLocked,
@@ -38,7 +40,7 @@ import { MAX_VERTICES, checkGeometry, pointInRing, type Position } from "../src/
 
 const square = (x: number, y: number, s = 10): Position[] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]];
 const props = { color: "#c0392b", fillOpacity: 0.35, label: true, description: "", legendTitle: "", colorLabel: "", legend: [] };
-const st = (parts: Parts): EditorState => ({ parts, styles: parts.map(() => -1), labels: parts.map(() => ""), contested: parts.map(() => -1), locked: parts.map(() => false), props: { ...props, legend: [] } });
+const st = (parts: Parts): EditorState => ({ parts, styles: parts.map(() => -1), labels: parts.map(() => ""), contested: parts.map(() => -1), locked: parts.map(() => false), labelHidden: parts.map(() => false), props: { ...props, legend: [] } });
 
 describe("editor model", () => {
   it("round-trips stored geometry, unwrapping across the antimeridian", () => {
@@ -146,6 +148,7 @@ describe("editor model: part colours and legend", () => {
     labels: ["North", "", "South"],
     contested: [-1, -1, -1],
     locked: [false, false, false],
+    labelHidden: [false, false, false],
     props: { ...props, legend: [{ label: "A", color: "#111111" }, { label: "B", color: "#222222" }] },
   });
 
@@ -224,6 +227,7 @@ describe("editor model: contested zones", () => {
     labels: ["A", "", "B", ""],
     contested: [-1, 0, -1, 2],
     locked: [false, false, false, false],
+    labelHidden: [false, false, false, false],
     props: { ...props, legend: [] },
   });
 
@@ -312,6 +316,7 @@ describe("editor model: locked parts", () => {
     labels: ["Heartland", "", ""],
     contested: [-1, 0, -1],
     locked,
+    labelHidden: locked.map(() => false),
     props: { ...props, legend: [] },
   });
 
@@ -439,5 +444,18 @@ describe("selecting a ring by its line", () => {
     expect(layerTarget(4, over, 1, -1)).toBe(0);
     expect(layerTarget(4, over, 3, 1)).toBe(-1);
     expect(layerTarget(4, over, 0, -1)).toBe(-1);
+  });
+
+  it("label switches follow their part through reorder and storing; the text is kept", () => {
+    const s0: EditorState = { ...st([[square(0, 0)], [square(5, 0)], [square(20, 0)]]), labels: ["a", "b", "c"] };
+    const off = setLabelsHidden(setLabelHidden(s0, 0, true), [2], true);
+    expect(off.labelHidden).toEqual([true, false, true]);
+    expect(s0.labelHidden).toEqual([false, false, false]);
+    expect(off.labels).toEqual(["a", "b", "c"]);
+    expect(reorderPart(off, 0, 2).labelHidden).toEqual([false, true, true]);
+    expect(setLabelHidden(off, 9, true)).toEqual(off);
+    const stored = toStyledGeometry(off.parts, off.styles, off.labels, off.contested, off.locked, off.labelHidden);
+    expect(stored.partLabelHidden).toEqual([true, false, true]);
+    expect(stored.partLabels).toEqual(["a", "b", "c"]);
   });
 });

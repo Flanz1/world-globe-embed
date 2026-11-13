@@ -60,6 +60,8 @@ export interface RegionProperties {
   partLegend?: number[];
   /** One label per part (polygon), in order; "" for a part without one. */
   partLabels?: string[];
+  /** One entry per part, in order: true to hide that part's label (its text stays in partLabels). Missing: none hidden. */
+  partLabelHidden?: boolean[];
   /**
    * Legacy (no longer written): one entry per part, -1 for a normal part or k for a "contested zone" of
    * part k. Contested zones were replaced by layers (part order: later parts are drawn on top). On load
@@ -116,6 +118,8 @@ export interface RegionData {
   parts: number[];
   /** Per polygon: its label ("" for none). All empty means: show `name` once, at the region's middle. */
   labels: string[];
+  /** Per polygon: true when its label is switched off (the text is kept). Missing: none is. */
+  labelHidden?: boolean[];
   /** The parts, in drawing order: where parts overlap, a later part covers an earlier one. */
   geometry: RegionGeometry;
   /** Province borders (open lines), drawn dotted where they lie inside the region's parts. Missing: none. */
@@ -152,6 +156,7 @@ export function regionData(f: RegionFeature): RegionData {
     legend: (p.legend ?? []).map((e) => ({ label: e.label, color: e.color })),
     parts: migrateZoneColours(normalizePartLegend(p.partLegend, n, p.legend?.length ?? 0), p.partContested),
     labels: normalizePartLabels(p.partLabels, n),
+    ...(p.partLabelHidden?.some((h) => h === true) ? { labelHidden: normalizePartLabelHidden(p.partLabelHidden, n) } : {}),
     geometry: f.geometry,
     ...(p.provinceBorders?.length ? { provinceBorders: p.provinceBorders.map((l) => l.map(([x, y]) => [x, y] as Position)) } : {}),
     ...(p.nationalBorders === true ? { nationalBorders: true } : {}),
@@ -198,6 +203,11 @@ export function migrateZoneColours(partLegend: readonly number[], partContested:
 /** The embed's legend rows: every colour with a label (the region's own colour first), in order. */
 export function legendRows(r: Pick<RegionData, "color" | "colorLabel" | "legend">): LegendEntry[] {
   return [{ label: r.colorLabel, color: r.color }, ...r.legend].filter((e) => e.label.trim());
+}
+
+/** partLabelHidden padded or cut to `n` parts. Shown is the default: only an explicit `true` hides a label. */
+export function normalizePartLabelHidden(v: readonly unknown[] | undefined, n: number): boolean[] {
+  return Array.from({ length: n }, (_, i) => v?.[i] === true);
 }
 
 /** partLocked padded or cut to `n` parts. Locked is the default: only an explicit `false` unlocks a part. */
@@ -259,6 +269,8 @@ export function checkLegend(p: RegionProperties, g: RegionGeometry, where: strin
       if (k !== OWN_COLOUR && (k < 0 || k >= n)) errors.push(`${where}: "partLegend" entry ${i} is ${k}, but the legend has ${n} entr${n === 1 ? "y" : "ies"} (use -1 for the region's own colour)`);
     });
   }
+  if (p.partLabelHidden && p.partLabelHidden.length !== parts)
+    errors.push(`${where}: "partLabelHidden" has ${p.partLabelHidden.length} entr${p.partLabelHidden.length === 1 ? "y" : "ies"} but the geometry has ${parts} part${parts === 1 ? "" : "s"}; it needs one per part (false to show the label)`);
   if (p.partLabels && p.partLabels.length !== parts)
     errors.push(`${where}: "partLabels" has ${p.partLabels.length} entr${p.partLabels.length === 1 ? "y" : "ies"} but the geometry has ${parts} part${parts === 1 ? "" : "s"}; it needs one per part ("" for no label)`);
   return errors;
@@ -268,10 +280,10 @@ export function checkLegend(p: RegionProperties, g: RegionGeometry, where: strin
  * Where the embed puts text: one label per part that has one (at a point inside that part), or, for a
  * region without part labels, its name once at the middle of the region. Map-image frame.
  */
-export function regionLabelPoints(r: Pick<RegionData, "name" | "labels" | "geometry">): { text: string; at: Position }[] {
+export function regionLabelPoints(r: Pick<RegionData, "name" | "labels" | "geometry"> & { labelHidden?: boolean[] }): { text: string; at: Position }[] {
   if (r.labels.some((t) => t.trim())) {
     const at = partAnchors(r.geometry);
-    return r.labels.flatMap((t, i) => (t.trim() && at[i] ? [{ text: t, at: at[i]! }] : []));
+    return r.labels.flatMap((t, i) => (t.trim() && at[i] && r.labelHidden?.[i] !== true ? [{ text: t, at: at[i]! }] : []));
   }
   return r.name.trim() ? [{ text: r.name, at: sphericalCentroid(r.geometry) }] : [];
 }
@@ -347,7 +359,7 @@ export function parseGeometry(v: unknown): RegionGeometry | null {
  */
 export function parseRegionData(v: unknown): RegionData | null {
   if (!isObj(v)) return null;
-  const { id, slot, name, color, colorLabel, fillOpacity, label, geometry, legend, legendTitle, parts, labels, provinceBorders, nationalBorders } = v;
+  const { id, slot, name, color, colorLabel, fillOpacity, label, geometry, legend, legendTitle, parts, labels, provinceBorders, nationalBorders, labelHidden } = v;
   if (typeof id !== "string" || !REGION_ID.test(id)) return null;
   if (typeof slot !== "string" || !REGION_ID.test(slot)) return null;
   if (typeof name !== "string" || name.length > NAME_MAX) return null;
@@ -376,6 +388,9 @@ export function parseRegionData(v: unknown): RegionData | null {
     if (!Array.isArray(labels) || labels.length !== n) return null;
     if (!labels.every((t) => typeof t === "string" && t.length <= PART_LABEL_MAX)) return null;
   }
+  if (labelHidden !== undefined) {
+    if (!Array.isArray(labelHidden) || labelHidden.length !== n || !labelHidden.every((b) => typeof b === "boolean")) return null;
+  }
   return {
     id,
     slot,
@@ -388,6 +403,7 @@ export function parseRegionData(v: unknown): RegionData | null {
     legend: lg,
     parts: parts ? [...(parts as number[])] : new Array<number>(n).fill(OWN_COLOUR),
     labels: labels ? [...(labels as string[])] : new Array<string>(n).fill(""),
+    ...(labelHidden && (labelHidden as boolean[]).some(Boolean) ? { labelHidden: [...(labelHidden as boolean[])] } : {}),
     // Fields from older builds are ignored: `contested` (zones, now plain layers) and `clash` (overlaps
     // with other regions: regions are separate maps and never mark each other).
     geometry: g,

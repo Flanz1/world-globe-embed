@@ -97,6 +97,7 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
 
   const polygons: Position[][][] = [];
   const labels: string[] = [];
+  const hidden: boolean[] = [];
   const styles: number[] = [];
 
   for (const [si, f] of sources.entries()) {
@@ -119,6 +120,7 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
     for (let i = 0; i < n; i++) {
       polygons.push(polys[i]);
       labels.push(partLabels[i]);
+      hidden.push(p.partLabelHidden?.[i] === true);
       styles.push(partLegend[i] === OWN_COLOUR ? ownIndex : map[partLegend[i]]);
     }
   }
@@ -160,6 +162,7 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
       ...(sources.some((f) => f.properties.nationalBorders === true) ? { nationalBorders: true } : {}),
       ...(legend.length ? { legend, partLegend: styles } : {}),
       partLabels: labels,
+      ...(hidden.some(Boolean) ? { partLabelHidden: hidden } : {}),
     },
     geometry,
   };

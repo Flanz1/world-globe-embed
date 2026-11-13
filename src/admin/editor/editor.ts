@@ -45,6 +45,7 @@ import {
   normalizePartContested,
   normalizePartLabels,
   normalizePartLegend,
+  normalizePartLabelHidden,
   normalizePartLocked,
   PART_LABEL_MAX,
   PROVINCE_BORDER_MAX,
@@ -89,6 +90,8 @@ import {
   reorderPart,
   layerTarget,
   ringRefs,
+  setLabelHidden,
+  setLabelsHidden,
   setLocked,
   ringProblem,
   simplifyParts,
@@ -170,6 +173,7 @@ function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"): Edit
     // Contested zones (older regions) are plain parts now: a zone without its own colour keeps its parent's.
     styles: migrateZoneColours(normalizePartLegend(fp?.partLegend, parts.length, legend.length), fp?.partContested),
     labels: normalizePartLabels(fp?.partLabels ?? legacy, parts.length),
+    labelHidden: normalizePartLabelHidden(fp?.partLabelHidden, parts.length),
     contested: new Array<number>(parts.length).fill(-1),
     locked: normalizePartLocked(fp?.partLocked, parts.length),
     lines: (fp?.provinceBorders ?? []).filter((l) => l.length >= 2).map((l) => unwrapRing(l.map(([x, y]) => [x, y] as Position))),
@@ -679,6 +683,7 @@ export function openEditor(o: EditorOptions): void {
     labels = hist.state.labels,
     contested = hist.state.contested,
     locked = hist.state.locked,
+    labelHidden = hist.state.labelHidden,
   ) =>
     hist.apply(
       label,
@@ -689,6 +694,7 @@ export function openEditor(o: EditorOptions): void {
         labels: normalizePartLabels(labels, next.length),
         contested: normalizePartContested(contested, next.length),
         locked: normalizePartLocked(locked, next.length),
+        labelHidden: normalizePartLabelHidden(labelHidden, next.length),
       },
       merge,
     );
@@ -1273,8 +1279,13 @@ export function openEditor(o: EditorOptions): void {
     legendTitle: hist.state.props.legendTitle.slice(0, LEGEND_TITLE_MAX),
     ...(hist.state.props.nationalBorders ? { nationalBorders: true } : {}),
     legend: hist.state.props.legend.map((e) => ({ label: e.label.slice(0, LEGEND_LABEL_MAX), color: e.color })),
-    ...(({ geometry, partLegend, partLabels }) => ({ geometry, parts: partLegend, labels: partLabels.map((t) => t.slice(0, PART_LABEL_MAX)) }))(
-      toStyledGeometry(parts(), hist.state.styles, hist.state.labels, hist.state.contested),
+    ...(({ geometry, partLegend, partLabels, partLabelHidden }) => ({
+      geometry,
+      parts: partLegend,
+      labels: partLabels.map((t) => t.slice(0, PART_LABEL_MAX)),
+      ...(partLabelHidden.some(Boolean) ? { labelHidden: partLabelHidden } : {}),
+    }))(
+      toStyledGeometry(parts(), hist.state.styles, hist.state.labels, hist.state.contested, hist.state.locked, hist.state.labelHidden),
     ),
     ...(hist.state.lines?.length ? { provinceBorders: storedLines(hist.state.lines) } : {}),
   });
@@ -1375,6 +1386,23 @@ export function openEditor(o: EditorOptions): void {
     setMsg(on ? `Part ${p + 1} is locked: it won't move, but its vertices and midpoints still edit.` : `Part ${p + 1} is unlocked.`, "ok");
     changed();
   }
+  /** Switches part p's label off or on in the embed (the text stays). */
+  function togglePartLabel(p: number): void {
+    if (p < 0 || p >= parts().length) return;
+    const hide = hist.state.labelHidden[p] !== true;
+    hist.apply(hide ? "Hide part label" : "Show part label", setLabelHidden(hist.state, p, hide));
+    setMsg(hide ? `Part ${p + 1}'s label is hidden in the embed.` : `Part ${p + 1}'s label is shown in the embed.`, "ok");
+    changed();
+  }
+  /** Switches the labels of every part in one colour folder off, or on when they are all off. */
+  function toggleFolderLabels(members: number[]): void {
+    const withText = members.filter((p) => hist.state.labels[p]?.trim());
+    if (!withText.length) return;
+    const hide = withText.some((p) => hist.state.labelHidden[p] !== true);
+    hist.apply(hide ? "Hide labels" : "Show labels", setLabelsHidden(hist.state, members, hide));
+    setMsg(hide ? "Labels of this colour are hidden in the embed." : "Labels of this colour are shown in the embed.", "ok");
+    changed();
+  }
   /** Pans the flat map to part p and turns the globe preview to it. */
   function centrePart(p: number): void {
     const rings = parts()[p];
@@ -1454,6 +1482,7 @@ export function openEditor(o: EditorOptions): void {
       tiny("Centre", `Show part ${p + 1} on the map and the globe`, "part-centre", () => centrePart(p)),
       Object.assign(tiny("Forward", `Bring part ${p + 1} forward: on top of the next part it overlaps (])`, "part-forward", () => moveLayer(p, 1)), { disabled: p >= n - 1 }),
       Object.assign(tiny("Back", `Send part ${p + 1} backward: under the next part it overlaps ([)`, "part-backward", () => moveLayer(p, -1)), { disabled: p <= 0 }),
+      tiny("Label", "", "part-label", () => togglePartLabel(p), " ed-labelbtn"),
       tiny("Lock", "", "part-lock", () => togglePartLock(p), " ed-lock"),
       tiny("Delete", `Delete part ${p + 1} (asks first)`, "part-delete", () => void askDeletePart(p), " danger"),
     );
@@ -1522,7 +1551,15 @@ export function openEditor(o: EditorOptions): void {
         newPartStyle = k;
       },
     });
-    const head = h("div", { className: "ed-folder-head" }, fold, colour, name, count, add);
+    const labelsBtn = h("button", {
+      type: "button",
+      className: "ghost tiny",
+      textContent: "Labels",
+      title: "Show or hide the labels of every part in this colour",
+      dataset: { act: "folder-labels" },
+      onclick: () => toggleFolderLabels(members),
+    });
+    const head = h("div", { className: "ed-folder-head" }, fold, colour, name, count, labelsBtn, add);
     if (!own)
       head.append(
         Object.assign(btn("↑", "Move this colour up", () => moveFolder(k, -1), "key-up"), { disabled: k === 0 }),
@@ -1550,6 +1587,16 @@ export function openEditor(o: EditorOptions): void {
       if (el.type === "color") el.value = e.color;
       else el.value = e.label;
     });
+    folders.querySelectorAll<HTMLElement>(".ed-folder").forEach((fo) => {
+      const b = fo.querySelector<HTMLButtonElement>("button[data-act=folder-labels]");
+      if (!b) return;
+      const members = s.parts.flatMap((_, p) => ((s.styles[p] ?? OWN_COLOUR) === Number(fo.dataset.key) ? [p] : []));
+      const withText = members.filter((p) => s.labels[p]?.trim());
+      const allOff = withText.length > 0 && withText.every((p) => s.labelHidden[p] === true);
+      b.disabled = !withText.length;
+      b.textContent = allOff ? "Labels off" : "Labels on";
+      b.setAttribute("aria-pressed", String(!allOff));
+    });
     const picks = pickedNow();
     folders.querySelectorAll<HTMLDivElement>(".ed-part-row").forEach((row) => {
       const p = Number(row.dataset.row);
@@ -1569,6 +1616,14 @@ export function openEditor(o: EditorOptions): void {
       row.classList.toggle("sel", p === selPart);
       row.classList.toggle("pick", picks.includes(p));
       row.querySelector("button[data-act=part-select]")?.setAttribute("aria-pressed", String(p === selPart));
+      const lblOff = s.labelHidden[p] === true;
+      row.classList.toggle("label-off", lblOff);
+      const lblBtn = row.querySelector<HTMLButtonElement>("button[data-act=part-label]");
+      if (lblBtn) {
+        lblBtn.textContent = lblOff ? "Label off" : "Label on";
+        lblBtn.title = lblOff ? `Show part ${p + 1}'s label in the embed again` : `Hide part ${p + 1}'s label in the embed (the text is kept)`;
+        lblBtn.setAttribute("aria-pressed", String(!lblOff));
+      }
       const locked = s.locked[p] !== false;
       row.classList.toggle("locked", locked);
       const lock = row.querySelector<HTMLButtonElement>("button[data-act=part-lock]");
@@ -2178,6 +2233,7 @@ export function openEditor(o: EditorOptions): void {
       res.kept.map((p) => hist.state.labels[p] ?? ""),
       zones.contested,
       res.kept.map((p) => hist.state.locked[p] ?? true),
+      res.kept.map((p) => hist.state.labelHidden[p] === true),
     );
     selection.clear();
     if (res.removedParts) selPart = selPart >= 0 ? res.kept.indexOf(selPart) : -1;
@@ -2222,6 +2278,7 @@ export function openEditor(o: EditorOptions): void {
       res.kept.map((k) => s.labels[k] ?? ""),
       remapped.contested,
       res.kept.map((k) => s.locked[k] ?? true),
+      res.kept.map((k) => s.labelHidden[k] === true),
     );
     if (keptLines.length !== (s.lines ?? []).length) hist.apply(`Delete part ${p + 1}`, { ...hist.state, lines: keptLines }, `del-lines:${p}`);
     selection.clear();
@@ -2965,7 +3022,7 @@ export function openEditor(o: EditorOptions): void {
       if (o.takenIds.has(id)) return setMsg(`The id "${id}" is taken. Choose another one.`, "error"), idIn.focus();
     }
     if (!s.parts.length) return setMsg("Draw the region first.", "error");
-    const { geometry, partLegend, partLabels, partLocked } = toStyledGeometry(s.parts, s.styles, s.labels, s.contested, s.locked);
+    const { geometry, partLegend, partLabels, partLabelHidden, partLocked } = toStyledGeometry(s.parts, s.styles, s.labels, s.contested, s.locked, s.labelHidden);
     const provinceLines = storedLines(s.lines ?? []);
     const errs = [
       ...checkGeometry(geometry),
@@ -2990,6 +3047,7 @@ export function openEditor(o: EditorOptions): void {
           ? { legend: props.legend.map((e) => ({ label: e.label.trim().slice(0, LEGEND_LABEL_MAX), color: e.color })), partLegend }
           : {}),
         ...(partLabels.some((t) => t.trim()) ? { partLabels: partLabels.map((t) => t.trim().slice(0, PART_LABEL_MAX)) } : {}),
+        ...(partLabelHidden.some(Boolean) && partLabels.some((t) => t.trim()) ? { partLabelHidden } : {}),
         ...(partLocked.some((l) => !l) ? { partLocked } : {}),
         ...(provinceLines.length ? { provinceBorders: provinceLines } : {}),
         ...(props.nationalBorders ? { nationalBorders: true } : {}),
