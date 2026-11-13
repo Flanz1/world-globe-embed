@@ -11,6 +11,7 @@ const st = (parts: Parts, extra: Partial<EditorState> = {}): EditorState => ({
   labels: parts.map(() => ""),
   contested: parts.map(() => -1),
   locked: parts.map(() => false),
+  labelHidden: parts.map(() => false),
   props: { ...props, legend: [...props.legend] },
   ...extra,
 });

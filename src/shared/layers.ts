@@ -35,6 +35,7 @@ export function reorderFeature(f: RegionFeature, order: readonly number[]): Regi
       ...rest,
       ...(legend && p.legend?.length ? { partLegend: pick(legend)! } : {}),
       ...(p.partLabels ? { partLabels: pick(p.partLabels)! } : {}),
+      ...(p.partLabelHidden ? { partLabelHidden: pick(p.partLabelHidden)! } : {}),
       ...(p.partLocked ? { partLocked: pick(p.partLocked)! } : {}),
     },
     geometry: { type: "MultiPolygon", coordinates: order.map((i) => polys[i]) },
