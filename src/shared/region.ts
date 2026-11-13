@@ -23,7 +23,7 @@ export const DEFAULT_FILL_OPACITY = 0.35;
 export const NAME_MAX = 80;
 export const DESCRIPTION_MAX = 500;
 /** Most legend entries per region, and the longest legend label. */
-export const LEGEND_MAX = 16;
+export const LEGEND_MAX = 96;
 export const LEGEND_LABEL_MAX = 60;
 export const LEGEND_TITLE_MAX = 40;
 /** What the region's own colour is called until it's given a label of its own. */

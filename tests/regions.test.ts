@@ -6,7 +6,7 @@ import { loadContent } from "../scripts/lib/content.ts";
 import { contentPaths } from "../scripts/lib/paths.ts";
 import type { MapMeta } from "../src/shared/types.ts";
 import type { RegionFeature } from "../src/shared/region.ts";
-import { copyId, legendRows, migrateZoneColours, normalizePartContested, normalizePartLocked, normalizePartOccupied, normalizePartLabelHidden, normalizePartLabels, normalizePartLegend, regionLabelPoints, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
+import { LEGEND_MAX, copyId, legendRows, migrateZoneColours, normalizePartContested, normalizePartLocked, normalizePartOccupied, normalizePartLabelHidden, normalizePartLabels, normalizePartLegend, regionLabelPoints, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
 import { MAX_VERTICES } from "../src/shared/geo.ts";
 import { ZOOM_MAX, ZOOM_MIN } from "../src/shared/params.ts";
 
@@ -329,7 +329,8 @@ describe("region colours and legend", () => {
     expect(parseRegionData(wire)).toEqual(d);
     expect(parseRegionData({ ...wire, legend: [{ label: "x", color: "#zzz" }] })).toBeNull();
     expect(parseRegionData({ ...wire, legend: [{ label: "x".repeat(61), color: "#abc" }] })).toBeNull();
-    expect(parseRegionData({ ...wire, legend: Array.from({ length: 17 }, () => ({ label: "x", color: "#abc" })) })).toBeNull();
+    expect(parseRegionData({ ...wire, legend: Array.from({ length: LEGEND_MAX + 1 }, () => ({ label: "x", color: "#abc" })) })).toBeNull();
+    expect(parseRegionData({ ...wire, legend: Array.from({ length: LEGEND_MAX }, () => ({ label: "x", color: "#abc" })) })).not.toBeNull();
     expect(parseRegionData({ ...wire, parts: [0, 1] })).toBeNull();
     expect(parseRegionData({ ...wire, parts: [0, 1, 2] })).toBeNull();
     expect(parseRegionData({ ...wire, legendTitle: 5 })).toBeNull();
