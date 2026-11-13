@@ -14,7 +14,7 @@ import { initRegions, loadRegions, renderRegions } from "./regions.ts";
 import { PART_BYTES, prepareImage } from "./upload-image.ts";
 import { can, refusal, setMe } from "./session.ts";
 import { initUsers, loadUsers } from "./users.ts";
-import { setChecks } from "./status.ts";
+import { setChecks, type Check } from "./status.ts";
 
 declare const __REPO__: string;
 /** The admin API (worker/). Set with VITE_ADMIN_API at build time; empty means it isn't set up yet. */
@@ -208,7 +208,10 @@ function renderSlots(): void {
 }
 
 /** Will a commit from here deploy? Derived from the target branch and the latest workflow runs. */
+let saveCheck: Check | null = null;
+let lastRuns: WorkflowRun[] = [];
 function renderChecks(runs: WorkflowRun[]): void {
+  lastRuns = runs;
   const deploys = !gh || gh.branch === gh.defaultBranch;
   const busy = runs.some((r) => r.status !== "completed");
   const failed = runs.find((r) => r.conclusion === "failure");
@@ -221,6 +224,7 @@ function renderChecks(runs: WorkflowRun[]): void {
       : busy
         ? { id: "workflow", label: "A deploy is running", state: "pending" }
         : { id: "workflow", label: "No failing workflows", state: "ok" },
+    ...(saveCheck ? [saveCheck] : []),
   ]);
 }
 
@@ -553,7 +557,7 @@ if (framed) {
   $("#signin-github").addEventListener("click", signInWithGitHub);
   wireUpload();
   wireNewSlot();
-  initOptimistic({ setStatus, committed: afterCommit, reload: loadAll });
+  initOptimistic({ setCheck: (c) => { saveCheck = c; renderChecks(lastRuns); }, setStatus, committed: afterCommit, reload: loadAll });
   initRegions({ gh: () => gh!, maps: () => maps, slots: () => slots, act, afterCommit });
   initUsers({ gh: () => gh!, act });
   wireTabs();

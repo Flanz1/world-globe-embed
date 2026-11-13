@@ -5,7 +5,17 @@
  * reason is shown. Saves run one after another, so quick successive changes don't race each other.
  */
 
+/** One line for the status sidebar's Checks list (null removes it). Shape matches status.ts's Check. */
+export interface SaveCheck {
+  id: string;
+  label: string;
+  state: "ok" | "warn" | "error" | "pending";
+  detail?: string;
+}
+
 export interface OptimisticHooks {
+  /** Shows how the latest change fared in the sidebar's Checks list. */
+  setCheck: (c: SaveCheck | null) => void;
   setStatus: (text: string, kind?: "muted" | "error" | "ok") => void;
   /** After a save: status, run polling and (when `reload`) a reload from the server. */
   committed: (sha: string, reload: boolean) => Promise<void>;
@@ -40,12 +50,14 @@ export function optimistic<S>(c: OptimisticChange<S>): Promise<void> {
   const problem = c.check?.();
   if (problem) {
     hooks.setStatus(problem, "error");
+    hooks.setCheck({ id: "save", label: "Change refused before saving", state: "error", detail: problem });
     return Promise.resolve();
   }
   const before = c.apply();
   c.render();
   pending++;
   hooks.setStatus(`${c.label}… saving`);
+  hooks.setCheck({ id: "save", label: pending > 1 ? `Saving ${pending} changes in the background` : "Passed the save rules, saving in the background", state: "pending", detail: c.label });
   const run = async () => {
     try {
       const sha = await c.commit();
@@ -54,6 +66,7 @@ export function optimistic<S>(c: OptimisticChange<S>): Promise<void> {
       if (pending === 0) {
         await hooks.committed(sha, true);
         stale = false;
+        hooks.setCheck({ id: "save", label: "Last change saved", state: "ok", detail: c.label });
       } else await hooks.committed(sha, false);
     } catch (e) {
       pending--;
@@ -63,6 +76,7 @@ export function optimistic<S>(c: OptimisticChange<S>): Promise<void> {
         c.render();
       } else stale = true; // later changes are built on this one: put it all right from the server below
       hooks.setStatus(`${msg} The change was undone.`, "error");
+      hooks.setCheck({ id: "save", label: "Last save failed, change undone", state: "error", detail: (e as Error).message });
       if (pending === 0) {
         stale = false;
         await hooks.reload().catch(() => {});
