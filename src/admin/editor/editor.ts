@@ -328,7 +328,9 @@ export function openEditor(o: EditorOptions): void {
 
   /* ── DOM ── */
   const canvas = h("canvas", { className: "ed-canvas", tabIndex: 0, ariaLabel: "Flat map: draw and edit the region here" });
-  const g = canvas.getContext("2d")!;
+  const mainCtx = canvas.getContext("2d")!;
+  /** The context the draw helpers use: the canvas, or the cached background layer while that is being painted. */
+  let g = mainCtx;
   const status = h("div", { className: "ed-status", ariaLive: "off" });
   const msg = h("p", { className: "ed-msg", role: "status", ariaLive: "polite" });
   const frameEl = h("iframe", { className: "ed-globe", title: "Globe preview of the region" });
@@ -600,6 +602,7 @@ export function openEditor(o: EditorOptions): void {
   let tileBusy = false;
   let tilesOff = false;
   let tileTop = -1;
+  let tileVersion = 0;
   function drawTiles(offs: number[]): void {
     if (tileTop < 0) return;
     const { w, h: hh } = size();
@@ -652,6 +655,7 @@ export function openEditor(o: EditorOptions): void {
     void im.decode().then(
       () => {
         tileCache.set(tileKey(l, c, r), { img: im, level: l, c, r }, keep);
+        tileVersion++;
         tileBusy = false;
         draw(); // the render calls maybeTiles again for the next one
       },
@@ -913,6 +917,7 @@ export function openEditor(o: EditorOptions): void {
     clashList.replaceChildren(...rows);
   }
 
+  let bg: { key: string; img: HTMLImageElement | null; canvas: HTMLCanvasElement } | null = null;
   function render(): void {
     raf = 0;
     syncLayerBar();
@@ -922,30 +927,49 @@ export function openEditor(o: EditorOptions): void {
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(hh * dpr);
     }
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    g.fillStyle = "#14120f";
-    g.fillRect(0, 0, w, hh);
     const offs = offsets();
-    if (img) {
-      g.imageSmoothingQuality = "high";
-      for (const off of offs) g.drawImage(img, sx(-180 + off), sy(90), 360 * view.k, 180 * view.k * ky);
-      maybeTiles();
-      drawTiles(offs);
-    }
-    if (gridOn) drawGrid(offs);
-    if (coastActive()) drawCoast(offs);
-    // Neighbours on the same slot: thin grey outlines to trace against.
+    // Everything under the region (map, tiles, grid, coast, neighbour outlines) only changes with the view, so it's
+    // painted once into an offscreen layer and copied each frame: dragging a vertex repaints just the region.
     const shownNb = neighbours.filter((_, i) => overlays.visible(i));
-    if (shownNb.length) {
-      g.save();
-      g.lineWidth = 1;
-      g.strokeStyle = "rgba(220,220,220,.75)";
-      g.setLineDash([]);
-      g.beginPath();
-      for (const n of shownNb) traceGeometry(g, n.geometry, sx, sy, offs);
-      g.stroke();
-      g.restore();
+    const bgKey = `${canvas.width}x${canvas.height}|${view.cx},${view.cy},${view.k}|${tileVersion}|${imgW}|${gridOn}|${coastActive()}|${neighbours.map((_, i) => (overlays.visible(i) ? 1 : 0)).join("")}`;
+    if (!bg || bg.key !== bgKey || bg.img !== img) {
+      const layer = bg?.canvas ?? document.createElement("canvas");
+      if (layer.width !== canvas.width || layer.height !== canvas.height) {
+        layer.width = canvas.width;
+        layer.height = canvas.height;
+      }
+      g = layer.getContext("2d")!;
+      try {
+        g.setTransform(dpr, 0, 0, dpr, 0, 0);
+        g.fillStyle = "#14120f";
+        g.fillRect(0, 0, w, hh);
+        if (img) {
+          g.imageSmoothingQuality = "high";
+          for (const off of offs) g.drawImage(img, sx(-180 + off), sy(90), 360 * view.k, 180 * view.k * ky);
+          maybeTiles();
+          drawTiles(offs);
+        }
+        if (gridOn) drawGrid(offs);
+        if (coastActive()) drawCoast(offs);
+        // Neighbours on the same slot: thin grey outlines to trace against.
+        if (shownNb.length) {
+          g.save();
+          g.lineWidth = 1;
+          g.strokeStyle = "rgba(220,220,220,.75)";
+          g.setLineDash([]);
+          g.beginPath();
+          for (const n of shownNb) traceGeometry(g, n.geometry, sx, sy, offs);
+          g.stroke();
+          g.restore();
+        }
+      } finally {
+        g = mainCtx;
+      }
+      bg = { key: bgKey, img, canvas: layer };
     }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.drawImage(bg.canvas, 0, 0);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const p = simplifyPreview ?? parts();
     const s = hist.state.props;
     const cs = clashState();
