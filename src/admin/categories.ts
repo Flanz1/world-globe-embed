@@ -1,6 +1,6 @@
 /**
- * Region categories on the admin page: the state (content/categories.json), who may change what, and the
- * dialogs to add, rename, reorder and delete categories and to move regions between them. Every change is
+ * Region folders (categories) on the admin page: the state (content/categories.json), who may change what, and the
+ * dialogs to add, rename, reorder, move and delete folders and to move regions between them. Every change is
  * one commit made on a fresh copy of the file, so two people saving at once don't overwrite each other.
  * The admin API enforces the same rules (src/shared/access.ts): "Create regions" is enough to add categories
  * and manage your own, "Edit others' regions" covers everyone's.
@@ -9,6 +9,11 @@ import {
   CATEGORIES_PATH,
   CATEGORY_NAME_MAX,
   addCategory,
+  childrenOf,
+  moveCategory,
+  moveTargets,
+  pathName,
+  parentOf,
   assignRegions,
   cleanName,
   emptyCategories,
@@ -113,6 +118,11 @@ export function moveRegions(ids: string[], categoryId: string | null): Promise<v
   return save(`Move ${ids.length === 1 ? `region ${ids[0]}` : `${ids.length} regions`} ${name ? `to category ${name}` : "out of its category"}`, (c) => assignRegions(c, ids, categoryId));
 }
 
+export function moveFolderTo(k: Category, parent: string | null): Promise<void> {
+  const to = parent ? pathName(current, parent) : "the top level";
+  return save(`Move category ${k.name} to ${to}`, (c) => moveCategory(c, k.id, parent));
+}
+
 export const placementOf = (regionId: string): string | null => placements(current).get(regionId) ?? null;
 
 export function shift(k: Category, by: -1 | 1): Promise<void> {
@@ -122,15 +132,15 @@ export function shift(k: Category, by: -1 | 1): Promise<void> {
 /* ── Dialogs ── */
 
 /** Asks for a name; `except` is the category being renamed. */
-function askName(title: string, ok: string, initial: string, except: string | undefined, then: (name: string) => void): void {
+function askName(title: string, ok: string, initial: string, except: string | undefined, parent: string | null, then: (name: string) => void): void {
   const m = modal(title);
-  const input = h("input", { type: "text", value: initial, maxLength: CATEGORY_NAME_MAX, autocomplete: "off", ariaLabel: "Category name", dataset: { field: "category-name" } });
+  const input = h("input", { type: "text", value: initial, maxLength: CATEGORY_NAME_MAX, autocomplete: "off", ariaLabel: "Folder name", dataset: { field: "category-name" } });
   const err = h("p", { className: "error small", ariaLive: "polite" });
   const go = h("button", { type: "submit", textContent: ok, dataset: { action: "confirm-category" } });
   const form = h("form", { className: "dlg-body" }, h("label", {}, "Name ", input), err);
   form.addEventListener("submit", (e) => {
     e.preventDefault();
-    const problem = nameProblem(current, input.value, except);
+    const problem = nameProblem(current, input.value, except, parent);
     if (problem) {
       err.textContent = problem;
       return;
@@ -148,19 +158,52 @@ function askName(title: string, ok: string, initial: string, except: string | un
   input.select();
 }
 
-export function newCategory(): void {
+/** A new folder, at the top level or inside `parent`. */
+export function newCategory(parent: string | null = null): void {
   if (!canAddCategory()) return;
-  askName("New category", "Add category", "", undefined, (name) => void save(`Add category ${name}`, (c) => addCategory(c, name, account(), stamp()).file));
+  const where = parent ? ` in ${pathName(current, parent)}` : "";
+  askName(parent ? "New subfolder" : "New folder", "Add folder", "", undefined, parent, (name) => void save(`Add category ${name}${where}`, (c) => addCategory(c, name, account(), stamp(), parent).file));
 }
 
 export function rename(k: Category): void {
   if (!canEditCategory(k)) return;
-  askName("Rename category", "Rename", k.name, k.id, (name) => void save(`Rename category ${k.name} to ${name}`, (c) => renameCategory(c, k.id, name)));
+  askName("Rename folder", "Rename", k.name, k.id, parentOf(current, k.id), (name) => void save(`Rename category ${k.name} to ${name}`, (c) => renameCategory(c, k.id, name)));
+}
+
+/** Asks where to move a folder: the top level or another folder (not itself or what's in it). */
+export function moveFolder(k: Category): void {
+  if (!canEditCategory(k)) return;
+  const m = modal(`Move folder "${k.name}"`);
+  const here = parentOf(current, k.id) ?? "";
+  const sel = h(
+    "select",
+    { ariaLabel: "Move into", dataset: { field: "folder-parent" } },
+    h("option", { value: "", textContent: "Top level", selected: !here }),
+    ...moveTargets(current, k.id).map((t) => h("option", { value: t.id, textContent: pathName(current, t.id), selected: t.id === here })),
+  );
+  const err = h("p", { className: "error small", ariaLive: "polite" });
+  const go = h("button", { type: "button", textContent: "Move", dataset: { action: "confirm-move-folder" } });
+  go.addEventListener("click", () => {
+    const to = sel.value || null;
+    if ((to ?? "") === here) return m.close();
+    const clash = nameProblem(current, k.name, k.id, to);
+    if (clash) {
+      err.textContent = clash;
+      return;
+    }
+    m.close();
+    void moveFolderTo(k, to);
+  });
+  m.body.append(h("div", { className: "dlg-body" }, h("label", {}, "Move into ", sel), err));
+  m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), go);
 }
 
 export async function remove(k: Category): Promise<void> {
   if (!canEditCategory(k)) return;
   const n = k.regions.filter((r) => deps.regionIds().has(r)).length;
-  const text = n ? `"${k.name}" will be deleted. Its ${n === 1 ? "region isn't" : `${n} regions aren't`} deleted: ${n === 1 ? "it goes" : "they go"} back to Uncategorized.` : `"${k.name}" will be deleted.`;
-  if (await confirmBox("Delete category?", text, "Delete category", "Cancel", true)) void save(`Delete category ${k.name}`, (c) => removeCategory(c, k.id));
+  const sub = childrenOf(current, k.id).length;
+  const parts = [`"${k.name}" will be deleted.`];
+  if (n) parts.push(`Its ${n === 1 ? "region isn't" : `${n} regions aren't`} deleted: ${n === 1 ? "it goes" : "they go"} back to Uncategorized.`);
+  if (sub) parts.push(`The ${sub === 1 ? "folder" : `${sub} folders`} inside ${sub === 1 ? "it moves" : "move"} up a level.`);
+  if (await confirmBox("Delete folder?", parts.join(" "), "Delete folder", "Cancel", true)) void save(`Delete category ${k.name}`, (c) => removeCategory(c, k.id));
 }

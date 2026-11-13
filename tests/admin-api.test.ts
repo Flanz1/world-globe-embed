@@ -402,12 +402,30 @@ describe("admin API categories", () => {
     expect(await tryCommit(await client(ANN), [write([cat("other", ANN, ["simon-land"])])])).toMatch(/can't move "simon-land"/);
   });
 
+  it("moving a folder into another needs the right to edit that folder; nesting must be valid", async () => {
+    const inside = (c: ReturnType<typeof cat>, parent: string) => ({ ...c, parent });
+    seed([cat("mine", ANN), cat("theirs", SIMON)]);
+    const ann = await client(ANN);
+    // A new subfolder, and her own folder into someone else's.
+    expect(await tryCommit(ann, [write([cat("mine", ANN), cat("theirs", SIMON), inside(cat("sub", ANN), "theirs")])])).toBeNull();
+    expect(await tryCommit(ann, [write([inside(cat("mine", ANN), "theirs"), cat("theirs", SIMON), inside(cat("sub", ANN), "theirs")])])).toBeNull();
+    // Someone else's folder is theirs to move.
+    expect(await tryCommit(ann, [write([inside(cat("mine", ANN), "theirs"), inside(cat("theirs", SIMON), "mine"), inside(cat("sub", ANN), "theirs")])])).toMatch(/inside itself|can't move the category "theirs"/);
+    seed([cat("mine", ANN), cat("theirs", SIMON)]);
+    expect(await tryCommit(ann, [write([cat("mine", ANN), inside(cat("theirs", SIMON), "mine")])])).toMatch(/can't move the category "theirs": LoopSimon created it/);
+    // Deleting a folder moves what's in it up without needing rights over those.
+    seed([cat("mine", ANN), inside(cat("theirs", SIMON), "mine")]);
+    expect(await tryCommit(ann, [write([cat("theirs", SIMON)])])).toBeNull();
+    // Bad trees.
+    expect(await tryCommit(ann, [write([inside(cat("a", ANN), "nope")])])).toMatch(/parent must be/);
+  });
+
   it("lets anyone who can create regions reorder, and checks the file's shape", async () => {
     seed([cat("a", ANN), cat("b", SIMON), cat("c", BO)]);
     const ann = await client(ANN);
     expect(await tryCommit(ann, [write([cat("b", SIMON), cat("c", BO), cat("a", ANN)])])).toBeNull();
     expect(await tryCommit(ann, [write([cat("a", ANN, ["ann-land"]), cat("a", ANN)])])).toMatch(/used twice/);
-    expect(await tryCommit(ann, [write([cat("a", ANN, [], "x"), cat("b", ANN, [], "X")])])).toMatch(/two categories called/);
+    expect(await tryCommit(ann, [write([cat("a", ANN, [], "x"), cat("b", ANN, [], "X")])])).toMatch(/two folders called/);
     expect(await tryCommit(ann, [write([cat("a", ANN, ["ann-land"]), cat("b", ANN, ["ann-land"])])])).toMatch(/in two categories/);
     expect(await tryCommit(ann, [write([{ ...cat("a", ANN), name: "" }])])).toMatch(/schema|name/);
     expect(await tryCommit(ann, [put(CATS, "{not json")])).toMatch(/isn't valid JSON/);

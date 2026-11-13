@@ -88,6 +88,10 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .55); }
 .rfolder-head .actions { display: flex; gap: 6px; }
 .rfolder-head .actions button { padding: 3px 10px; font-size: 13px; }
 .rfolder-body { display: grid; gap: 10px; margin-top: 8px; }
+.rfolder-body > .rfolder { margin-left: 14px; }
+.rfolder-head[draggable="true"] { cursor: grab; }
+.rcard[draggable="true"] { cursor: grab; }
+.rfolder-head.drop { outline: 2px dashed var(--accent, #8a6d1e); outline-offset: 2px; background: color-mix(in srgb, var(--accent, #8a6d1e) 10%, transparent); border-radius: 6px; }
 .rfolder-body[hidden] { display: none; }
 .rcat { display: flex; align-items: center; gap: 6px; }
 .rcat select { width: auto; flex: 0 1 260px; }

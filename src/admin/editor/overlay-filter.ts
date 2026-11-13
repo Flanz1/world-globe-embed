@@ -18,7 +18,10 @@ export type OverlayMeta = Filterable & { categoryId: string | null };
 
 export interface OverlayCategory {
   id: string;
+  /** The folder's name with the folders it sits in ("Kingdoms › Free Cities"). */
   name: string;
+  /** The folder and everything inside it: choosing it lists regions in any of these. */
+  within?: string[];
 }
 
 export const OVERLAY_PREF = "wge.editor.overlays";
@@ -61,7 +64,7 @@ export function createOverlayFilter(o: { items: OverlayItem[]; categories: Overl
   const button = h("button", { type: "button", className: "ghost ed-ov-btn", title: "Choose which other regions are shown on the map (all hidden until you turn them on)", ariaExpanded: "false" });
   button.dataset.act = "overlays";
   const search = h("input", { type: "search", placeholder: "Search id, label or creator", ariaLabel: "Search other regions", name: "ov-search" });
-  const cat = h("select", { ariaLabel: "Category", name: "ov-category" });
+  const cat = h("select", { ariaLabel: "Folder", name: "ov-category" });
   const who = h("select", { ariaLabel: "Creator", name: "ov-creator" });
   const sort = h(
     "select",
@@ -74,7 +77,7 @@ export function createOverlayFilter(o: { items: OverlayItem[]; categories: Overl
   const list = h("div", { className: "ed-ov-list" });
   const info = h("p", { className: "muted small ed-ov-info", ariaLive: "polite" });
 
-  cat.append(h("option", { value: "", textContent: "All categories" }));
+  cat.append(h("option", { value: "", textContent: "All folders" }));
   for (const k of o.categories) cat.append(h("option", { value: k.id, textContent: k.name }));
   if (o.categories.length) cat.append(h("option", { value: UNCATEGORIZED, textContent: "Uncategorized" }));
   cat.hidden = !o.categories.length;
@@ -88,7 +91,7 @@ export function createOverlayFilter(o: { items: OverlayItem[]; categories: Overl
     return o.items
       .filter((i) => matchesQuery(q, i))
       .filter((i) => wid == null || i.creatorId === wid)
-      .filter((i) => !cat.value || (cat.value === UNCATEGORIZED ? i.categoryId === null : i.categoryId === cat.value))
+      .filter((i) => !cat.value || (cat.value === UNCATEGORIZED ? i.categoryId === null : (o.categories.find((k) => k.id === cat.value)?.within ?? [cat.value]).includes(i.categoryId ?? "")))
       .sort((a, b) => compareBy(sort.value, a, b));
   }
 

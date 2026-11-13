@@ -18,6 +18,7 @@
         "properties": {
           "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$", "description": "Permanent identifier (a slug made from the name when the category was created)." },
           "name": { "type": "string", "minLength": 1, "maxLength": 60, "description": "What the folder is called; can be renamed." },
+          "parent": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$", "description": "The id of the folder this one sits in. Absent at the top level." },
           "createdBy": {
             "type": "object",
             "required": ["id", "login"],

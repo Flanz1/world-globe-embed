@@ -13,6 +13,13 @@ import {
   renameCategory,
   serializeCategories,
   shiftCategory,
+  childrenOf,
+  depthOf,
+  moveCategory,
+  moveTargets,
+  pathName,
+  withDescendants,
+  MAX_DEPTH,
   type CategoriesFile,
 } from "../src/shared/categories.ts";
 
@@ -53,7 +60,7 @@ describe("categories", () => {
 
   it("describes a change", () => {
     const next = assignRegions(renameCategory(shiftCategory(start, "seas", -1), "seas", "Oceans"), ["a"], "seas");
-    expect(diffCategories(start, next)).toEqual({ added: [], removed: [], renamed: ["seas"], reordered: true, moved: ["a"] });
+    expect(diffCategories(start, next)).toEqual({ added: [], removed: [], renamed: ["seas"], reordered: true, moved: ["a"], reparented: [] });
     expect(diffCategories(null, start)).toMatchObject({ added: ["kingdoms", "seas"], moved: ["a", "b", "c"] });
     expect(diffCategories(start, removeCategory(start, "seas"))).toMatchObject({ removed: ["seas"], moved: ["c"], reordered: false });
   });
@@ -61,21 +68,85 @@ describe("categories", () => {
   it("reports problems with a file", () => {
     expect(checkCategories(start)).toEqual([]);
     expect(checkCategories({ categories: [start.categories[0], start.categories[0]] }).join()).toMatch(/used twice/);
-    expect(checkCategories({ categories: [{ id: "x", name: "A", regions: ["r"] }, { id: "y", name: "a", regions: [] }] }).join()).toMatch(/two categories called/);
+    expect(checkCategories({ categories: [{ id: "x", name: "A", regions: ["r"] }, { id: "y", name: "a", regions: [] }] }).join()).toMatch(/two folders called/);
     expect(checkCategories({ categories: [{ id: "x", name: "A", regions: ["r"] }, { id: "y", name: "B", regions: ["r"] }] }).join()).toMatch(/in two categories/);
     expect(checkCategories({ categories: [{ id: "X!", name: "", regions: [] }] })).toHaveLength(2);
     expect(checkCategories(null)).toHaveLength(1);
   });
 
   it("checks names", () => {
-    expect(nameProblem(start, " ")).toMatch(/Give the category a name/);
+    expect(nameProblem(start, " ")).toMatch(/Give the folder a name/);
     expect(nameProblem(start, "x".repeat(61))).toMatch(/60 characters/);
-    expect(nameProblem(start, "seas")).toMatch(/already a category/);
+    expect(nameProblem(start, "seas")).toMatch(/already a folder/);
     expect(nameProblem(start, "seas", "seas")).toBeNull(); // renaming to its own name (or just its case) is fine
     expect(nameProblem(start, "Rivers")).toBeNull();
   });
 
   it("writes the file with its schema pointer", () => {
     expect(serializeCategories(start)).toMatch(/^\{\n {2}"\$schema": "\.\.\/schema\/categories\.schema\.json"/);
+  });
+
+  describe("nesting", () => {
+    const nested: CategoriesFile = {
+      categories: [
+        { id: "kingdoms", name: "Kingdoms", regions: ["a"] },
+        { id: "cities", name: "Cities", regions: ["b"], parent: "kingdoms" },
+        { id: "ports", name: "Ports", regions: [], parent: "cities" },
+        { id: "seas", name: "Seas", regions: ["c"] },
+      ],
+    };
+
+    it("reads the tree", () => {
+      expect(childrenOf(nested, null).map((k) => k.id)).toEqual(["kingdoms", "seas"]);
+      expect(childrenOf(nested, "kingdoms").map((k) => k.id)).toEqual(["cities"]);
+      expect(depthOf(nested, "ports")).toBe(2);
+      expect([...withDescendants(nested, "kingdoms")].sort()).toEqual(["cities", "kingdoms", "ports"]);
+      expect(pathName(nested, "ports")).toBe("Kingdoms › Cities › Ports");
+      expect(checkCategories(nested)).toEqual([]);
+    });
+
+    it("adds a subfolder and lets siblings in different folders share a name", () => {
+      const { file, id } = addCategory(nested, "Cities", ME, "2026-11-13T10:00:00Z", "seas");
+      expect(file.categories.find((k) => k.id === id)).toMatchObject({ name: "Cities", parent: "seas" });
+      expect(nameProblem(nested, "Cities", undefined, "seas")).toBeNull();
+      expect(nameProblem(nested, "cities", undefined, "kingdoms")).toMatch(/already a folder/);
+      expect(checkCategories(file)).toEqual([]);
+    });
+
+    it("moves a folder with what's in it, and refuses loops and going too deep", () => {
+      const moved = moveCategory(nested, "cities", "seas");
+      expect(childrenOf(moved, "seas").map((k) => k.id)).toEqual(["cities"]);
+      expect(pathName(moved, "ports")).toBe("Seas › Cities › Ports");
+      expect(moveCategory(moved, "cities", null).categories.find((k) => k.id === "cities")!.parent).toBeUndefined();
+      expect(moveCategory(nested, "kingdoms", "ports")).toEqual(nested); // into its own descendant
+      expect(moveCategory(nested, "kingdoms", "kingdoms")).toEqual(nested);
+      expect(moveTargets(nested, "kingdoms").map((k) => k.id)).toEqual(["seas"]);
+      let deep = nested;
+      for (let i = 0; i < MAX_DEPTH + 2; i++) {
+        const parent = deep.categories[deep.categories.length - 1].id;
+        deep = addCategory(deep, `Deep ${i}`, ME, "2026-11-13T10:00:00Z", parent).file;
+      }
+      expect(checkCategories(deep).join()).toMatch(/levels deep/);
+    });
+
+    it("deleting a folder moves the ones inside it up a level", () => {
+      const gone = removeCategory(nested, "cities");
+      expect(gone.categories.find((k) => k.id === "ports")!.parent).toBe("kingdoms");
+      expect(removeCategory(nested, "kingdoms").categories.find((k) => k.id === "cities")!.parent).toBeUndefined();
+    });
+
+    it("↑ and ↓ move a folder among its siblings only", () => {
+      expect(childrenOf(shiftCategory(nested, "seas", -1), null).map((k) => k.id)).toEqual(["seas", "kingdoms"]);
+      expect(shiftCategory(nested, "cities", 1)).toEqual(nested); // the only one in Kingdoms
+    });
+
+    it("reports a changed parent", () => {
+      expect(diffCategories(nested, moveCategory(nested, "cities", null))).toMatchObject({ reparented: ["cities"], added: [], removed: [] });
+    });
+
+    it("rejects a parent that doesn't exist or loops", () => {
+      expect(checkCategories({ categories: [{ id: "x", name: "X", regions: [], parent: "nope" }] }).join()).toMatch(/parent must be/);
+      expect(checkCategories({ categories: [{ id: "x", name: "X", regions: [], parent: "y" }, { id: "y", name: "Y", regions: [], parent: "x" }] }).join()).toMatch(/inside itself/);
+    });
   });
 });

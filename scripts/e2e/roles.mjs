@@ -336,7 +336,7 @@ await step(K, "the owner adds, renames, reorders, fills and deletes categories",
   await page.click("#r-new-category");
   await page.fill('dialog [data-field="category-name"]', "seas");
   await page.click('dialog [data-action="confirm-category"]');
-  check(K, "a duplicate name is refused", /already a category/.test((await page.textContent("dialog .error")) ?? ""));
+  check(K, "a duplicate name is refused", /already a folder/.test((await page.textContent("dialog .error")) ?? ""));
   await page.click("dialog.small-dlg .pv-head button");
   // Move a region into Kingdoms with its Category menu.
   await commits(page, () => page.selectOption('[data-region="provinces"] [data-action="category"]', "kingdoms"));
@@ -365,9 +365,61 @@ await step(K, "the owner adds, renames, reorders, fills and deletes categories",
   // Delete a category that has a region: the region isn't deleted.
   await commits(page, async () => {
     await page.click('.rfolder[data-category="kingdoms"] .rfolder-head [data-action="delete"]');
-    await page.click('dialog button:has-text("Delete category")');
+    await page.click('dialog button:has-text("Delete folder")');
   });
   check(K, "deleting a category keeps its regions, now uncategorized", cats().length === 1 && !!regionOn("provinces") && (await inFolder(page, "~uncategorized")).includes("provinces"));
+  check(K, "no page errors", errors.length === 0, errors.join(" | ") || "none");
+  await ctx.close();
+});
+
+await step(K, "folders nest: subfolders, dragging regions and folders, moving, deleting", async () => {
+  mock.externalWrite(
+    "main",
+    "content/categories.json",
+    JSON.stringify({ categories: [{ id: "kingdoms", name: "Kingdoms", regions: [], createdBy: { id: 45669787, login: "Flanz1" } }, { id: "seas", name: "Seas", regions: [], createdBy: { id: 45669787, login: "Flanz1" } }] }, null, 2) + "\n",
+  );
+  const { ctx, page, errors } = await open("Flanz1");
+  await page.goto(`${ADMIN}#regions`);
+  await page.waitForSelector("#regions .rfolder", { timeout: 15000 });
+  await page.setViewportSize({ width: 1280, height: 2600 }); // everything on screen, so a drag doesn't need to scroll
+  const head = (id) => `.rfolder[data-category="${id}"] > .rfolder-head`;
+  const drag = async (from, to) => {
+    // Let earlier saves finish (the list is redrawn when they do), then measure both ends in one go, so nothing is redrawn in between.
+    await waitFor(page, async () => !/saving/.test((await page.textContent("#status")) ?? ""));
+    const box = (sel) => page.evaluate((s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return r && { x: r.x, y: r.y, width: r.width, height: r.height }; }, sel);
+    const a = await box(from);
+    const b = await box(to);
+    await page.mouse.move(a.x + 20, a.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(a.x + 30, a.y + 20, { steps: 3 });
+    await page.mouse.move(b.x + 40, b.y + b.height / 2, { steps: 8 });
+    await page.mouse.up();
+  };
+  const parents = () => Object.fromEntries(cats().map((k) => [k.id, k.parent ?? null]));
+  const direct = (id) => page.locator(`.rfolder[data-category="${id}"] > .rfolder-body > .rcard`).evaluateAll((els) => els.map((e) => e.dataset.region));
+  await commits(page, async () => {
+    await page.click(`${head("kingdoms")} [data-action="subfolder"]`);
+    await page.fill('dialog [data-field="category-name"]', "Cities");
+    await page.click('dialog [data-action="confirm-category"]');
+  });
+  check(K, "a subfolder is saved with its parent and drawn inside it", parents().cities === "kingdoms" && (await page.locator('.rfolder[data-category="kingdoms"] > .rfolder-body > .rfolder[data-category="cities"]').count()) === 1, JSON.stringify(parents()));
+  await commits(page, () => drag('.rcard[data-region="provinces"]', head("cities")));
+  check(K, "dragging a region onto a folder moves it there", (await direct("cities")).join() === "provinces" && JSON.stringify(cats().find((k) => k.id === "cities").regions) === '["provinces"]', (await direct("cities")).join());
+  await commits(page, () => drag(head("seas"), head("kingdoms")));
+  check(K, "dragging a folder onto another nests it", parents().seas === "kingdoms", JSON.stringify(parents()));
+  check(K, "…and the folder it was dropped on stays at the top", parents().kingdoms === null);
+  await page.screenshot({ path: path.join(OUT, "folders-nested.png"), fullPage: true });
+  await commits(page, async () => {
+    await page.click(`${head("seas")} [data-action="move"]`);
+    await page.selectOption('dialog [data-field="folder-parent"]', "");
+    await page.click('dialog [data-action="confirm-move-folder"]');
+  });
+  check(K, "Move puts a folder back at the top level", parents().seas === null, JSON.stringify(parents()));
+  await commits(page, async () => {
+    await page.click(`${head("kingdoms")} [data-action="delete"]`);
+    await page.click('dialog button:has-text("Delete folder")');
+  });
+  check(K, "deleting a folder moves the folders inside it up, with their regions", parents().cities === null && !!regionOn("provinces") && (await direct("cities")).join() === "provinces", JSON.stringify(parents()));
   check(K, "no page errors", errors.length === 0, errors.join(" | ") || "none");
   await ctx.close();
 });
@@ -418,7 +470,7 @@ await step(K, "contributors and editors follow the region rules", async () => {
   await ann.page.waitForSelector("#regions .rfolder", { timeout: 15000 });
   check(K, "a contributor can add a category", !(await disabled(ann.page, "#r-new-category")));
   check(K, "…but not rename or delete other people's", (await disabled(ann.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]')) && (await disabled(ann.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="delete"]')));
-  check(K, "…with the reason on hover", /created this category/.test((await ann.page.getAttribute('.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]', "title")) ?? ""));
+  check(K, "…with the reason on hover", /created this folder/.test((await ann.page.getAttribute('.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]', "title")) ?? ""));
   check(K, "can move her own region, not someone else's", !(await disabled(ann.page, '[data-region="landmark-disc"] [data-action="category"]')) && (await disabled(ann.page, '[data-region="provinces"] [data-action="category"]')));
   await commits(ann.page, () => ann.page.selectOption('[data-region="landmark-disc"] [data-action="category"]', "kingdoms"));
   check(K, "her region goes into the owner's folder", (await inFolder(ann.page, "kingdoms")).includes("landmark-disc"), (await inFolder(ann.page, "kingdoms")).join());

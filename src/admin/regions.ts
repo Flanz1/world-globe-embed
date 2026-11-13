@@ -8,10 +8,10 @@ import { baseKey, combineRegions, combinedId, regionBases, type RegionBase } fro
 import { checkGeometry, geometryBounds, polygonsOf, vertexCount } from "../shared/geo.ts";
 import { paintSpec } from "../shared/raster.ts";
 import { REGION_COLOR, REGION_ID, copyId, flatFit, migrateZoneColours, normalizePartLegend, regionData, type RegionFeature } from "../shared/region.ts";
-import { placements, type Category } from "../shared/categories.ts";
+import { childrenOf, moveTargets, pathName, placements, withDescendants, type Category } from "../shared/categories.ts";
 import { paintSpecOf, regionClashes } from "../shared/region-paint.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
-import { categories, canAddCategory, canEditCategory, creatorOf, initCategories, loadCategories, moveRegions, newCategory, remove as removeCategory, rename as renameCategory, shift as shiftCategory } from "./categories.ts";
+import { categories, canAddCategory, canEditCategory, creatorOf, initCategories, loadCategories, moveFolder, moveFolderTo, moveRegions, newCategory, remove as removeCategory, rename as renameCategory, shift as shiftCategory } from "./categories.ts";
 import { $, h } from "./dom.ts";
 import { hasPendingSaves, optimistic } from "./optimistic.ts";
 import { openEditor, type EditorOptions } from "./editor/editor.ts";
@@ -182,7 +182,7 @@ function card(e: RegionEntry): HTMLElement {
   const noCreate = can("regions") ? "" : "You don't have permission to create regions.";
   return h(
     "div",
-    { className: "rcard", dataset: { region: e.id } },
+    { className: "rcard", dataset: { region: e.id }, draggable: canEdit(f) && !!categories().categories.length, title: "" },
     thumbnail(f, map),
     h(
       "div",
@@ -213,7 +213,7 @@ function card(e: RegionEntry): HTMLElement {
   );
 }
 
-/** "Category" dropdown on a card: only shown once categories exist. Moving needs the right to edit the region. */
+/** "Folder" dropdown on a card: only shown once folders exist. Moving needs the right to edit the region. */
 function categorySelect(e: RegionEntry, f: RegionFeature): HTMLElement | null {
   const cats = categories().categories;
   if (!cats.length) return null;
@@ -221,12 +221,12 @@ function categorySelect(e: RegionEntry, f: RegionFeature): HTMLElement | null {
   const ok = canEdit(f);
   const sel = h(
     "select",
-    { ariaLabel: `Category of ${e.id}`, disabled: !ok, title: ok ? "" : "You can't edit this region, so you can't move it to another category.", dataset: { action: "category" } },
+    { ariaLabel: `Folder of ${e.id}`, disabled: !ok, title: ok ? "" : "You can't edit this region, so you can't move it to another folder.", dataset: { action: "category" } },
     h("option", { value: "", textContent: "Uncategorized", selected: !now || !cats.some((k) => k.id === now) }),
-    ...cats.map((k) => h("option", { value: k.id, textContent: k.name, selected: k.id === now })),
+    ...cats.map((k) => h("option", { value: k.id, textContent: pathName(categories(), k.id), selected: k.id === now })),
   );
   sel.addEventListener("change", () => void moveRegions([e.id], sel.value || null));
-  return h("label", { className: "small rcat" }, "Category ", sel);
+  return h("label", { className: "small rcat" }, "Folder ", sel);
 }
 
 const COLLAPSED_KEY = "globe-admin-collapsed-folders";
@@ -260,37 +260,93 @@ function setFolderOpen(el: HTMLElement, open: boolean): void {
   el.querySelector<HTMLElement>(".rfolder-body")!.hidden = !open;
 }
 
-/** One folder: a header (open/close, name, count, and the buttons for whoever may change it) over its region cards. */
-function folder(id: string, title: string, members: RegionEntry[], k: Category | null, pos: { first: boolean; last: boolean }, forceOpen: boolean): HTMLElement {
+/** What is being dragged: a region card or a folder header. (dataTransfer can't be read while dragging over, so it's kept here.) */
+let dragging: { kind: "region" | "folder"; id: string } | null = null;
+
+/** Whether the thing being dragged may be dropped on folder `target` (null = out to the top level / Uncategorized). */
+function canDrop(target: string | null): boolean {
+  if (!dragging) return false;
+  const cats = categories();
+  if (dragging.kind === "region") return (placements(cats).get(dragging.id) ?? null) !== target;
+  const k = cats.categories.find((x) => x.id === dragging!.id);
+  if (!k || !canEditCategory(k)) return false;
+  if (target === null) return (k.parent ?? null) !== null;
+  return withDescendants(cats, k.id).has(target) ? false : (k.parent ?? null) !== target && moveTargetIds(k.id).has(target);
+}
+const moveTargetIds = (id: string): Set<string> => new Set(moveTargets(categories(), id).map((k) => k.id));
+
+function dropOn(target: string | null): void {
+  const d = dragging;
+  const ok = canDrop(target);
+  dragging = null;
+  if (!d || !ok) return;
+  if (d.kind === "region") void moveRegions([d.id], target);
+  else {
+    const k = categories().categories.find((x) => x.id === d.id);
+    if (k) void moveFolderTo(k, target);
+  }
+}
+
+/** Makes `el` a drop target for regions and folders. */
+function dropTarget(el: HTMLElement, target: string | null): void {
+  el.addEventListener("dragover", (ev) => {
+    if (!canDrop(target)) return;
+    ev.preventDefault();
+    el.classList.add("drop");
+  });
+  el.addEventListener("dragleave", (ev) => {
+    if (!el.contains(ev.relatedTarget as Node | null)) el.classList.remove("drop");
+  });
+  el.addEventListener("drop", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    el.classList.remove("drop");
+    dropOn(target);
+  });
+}
+
+/** A subtree of folders: a header (open/close, name, count, and the buttons for whoever may change it) over its region cards and the folders inside it. */
+function folder(id: string, title: string, members: RegionEntry[], k: Category | null, pos: { first: boolean; last: boolean }, forceOpen: boolean, inner: HTMLElement[] = [], total = members.length): HTMLElement {
   const el = h("section", { className: "rfolder", dataset: { category: id } });
   const edit = !!k && canEditCategory(k);
   const small = (text: string, action: string, onclick: () => void, why = "", cls = "ghost") =>
     h("button", { type: "button", className: cls, textContent: text, onclick, disabled: !!why, title: why, dataset: { action } });
-  el.append(
+  const noEdit = k && !edit ? `${creatorOf(k)} created this folder, and you can't edit other people's.` : "";
+  const head = h(
+    "div",
+    { className: "rfolder-head", draggable: edit },
     h(
-      "div",
-      { className: "rfolder-head" },
-      h(
-        "button",
-        { type: "button", className: "rfolder-toggle ghost", onclick: () => toggleFolder(id, el), ariaExpanded: "true", title: "Open or close this folder" },
-        h("span", { className: "rfolder-arrow", ariaHidden: "true", textContent: "▾" }),
-        h("strong", { className: "rfolder-name", textContent: title }),
-        h("span", { className: "badge", textContent: String(members.length), title: `${members.length} region${members.length === 1 ? "" : "s"}` }),
-        k?.createdBy ? h("span", { className: "muted small", textContent: ` by ${creatorOf(k)}` }) : null,
-      ),
-      k
-        ? h(
-            "div",
-            { className: "actions" },
-            small("↑", "up", () => void shiftCategory(k, -1), pos.first ? "Already first" : can_reorder() ? "" : "You don't have permission to reorder categories."),
-            small("↓", "down", () => void shiftCategory(k, 1), pos.last ? "Already last" : can_reorder() ? "" : "You don't have permission to reorder categories."),
-            small("Rename", "rename", () => renameCategory(k), edit ? "" : `${creatorOf(k)} created this category, and you can't edit other people's.`),
-            small("Delete", "delete", () => void removeCategory(k), edit ? "" : `${creatorOf(k)} created this category, and you can't edit other people's.`, "ghost danger"),
-          )
-        : null,
+      "button",
+      { type: "button", className: "rfolder-toggle ghost", onclick: () => toggleFolder(id, el), ariaExpanded: "true", title: "Open or close this folder" },
+      h("span", { className: "rfolder-arrow", ariaHidden: "true", textContent: "▾" }),
+      h("strong", { className: "rfolder-name", textContent: title }),
+      h("span", { className: "badge", textContent: String(total), title: `${total} region${total === 1 ? "" : "s"}` }),
+      k?.createdBy ? h("span", { className: "muted small", textContent: ` by ${creatorOf(k)}` }) : null,
     ),
-    h("div", { className: "rfolder-body" }, ...(members.length ? members.map(card) : [h("p", { className: "muted small", textContent: "No regions in this category yet. Use a region's Category menu to move it here." })])),
+    k
+      ? h(
+          "div",
+          { className: "actions" },
+          small("+ Subfolder", "subfolder", () => newCategory(k.id), canAddCategory() ? "" : "You don't have permission to create folders.", "ghost"),
+          small("↑", "up", () => void shiftCategory(k, -1), pos.first ? "Already first" : can_reorder() ? "" : "You don't have permission to reorder folders."),
+          small("↓", "down", () => void shiftCategory(k, 1), pos.last ? "Already last" : can_reorder() ? "" : "You don't have permission to reorder folders."),
+          small("Move", "move", () => moveFolder(k), noEdit),
+          small("Rename", "rename", () => renameCategory(k), noEdit),
+          small("Delete", "delete", () => void removeCategory(k), noEdit, "ghost danger"),
+        )
+      : null,
   );
+  if (k) {
+    head.addEventListener("dragstart", (ev) => {
+      ev.stopPropagation();
+      dragging = { kind: "folder", id: k.id };
+      ev.dataTransfer?.setData("text/plain", `folder:${k.id}`);
+    });
+    head.addEventListener("dragend", () => void (dragging = null));
+  }
+  dropTarget(head, k ? id : null);
+  const empty = !members.length && !inner.length;
+  el.append(head, h("div", { className: "rfolder-body" }, ...members.map(card), ...inner, ...(empty ? [h("p", { className: "muted small", textContent: k ? "This folder is empty. Drag a region here, or use a region's Folder menu." : "" })] : [])));
   setFolderOpen(el, forceOpen || !collapsed.has(id));
   return el;
 }
@@ -348,21 +404,29 @@ export function renderRegions(): void {
   const cats = categories().categories;
   $<HTMLButtonElement>("#r-new-category").hidden = !entries.length;
   $<HTMLButtonElement>("#r-new-category").disabled = !canAddCategory();
-  $<HTMLButtonElement>("#r-new-category").title = canAddCategory() ? "" : "You don't have permission to create categories.";
+  $<HTMLButtonElement>("#r-new-category").title = canAddCategory() ? "Add a folder to sort regions into" : "You don't have permission to create folders.";
   const filtering = !!(q || slot || whoId != null);
   let out: HTMLElement[];
   if (entries.length && !shown.length) out = [h("p", { className: "muted", textContent: "No regions match." })];
   else if (!cats.length) out = shown.map(card);
   else {
-    // Folders in their saved order, then whatever isn't in one. Regions whose folder is gone count as uncategorized.
+    // Folders in their saved order (each with the folders inside it), then whatever isn't in one. Regions whose folder is gone count as uncategorized.
     const home = placements(categories());
     const known = new Set(cats.map((k) => k.id));
-    const inFolder = (e: RegionEntry, id: string) => home.get(e.id) === id;
-    out = cats
-      .map((k, i) => ({ k, i, members: shown.filter((e) => inFolder(e, k.id)) }))
-      // While searching or filtering, folders with nothing to show stay out of the way.
-      .filter(({ members }) => !filtering || members.length)
-      .map(({ k, i, members }) => folder(k.id, k.name, members, k, { first: i === 0, last: i === cats.length - 1 }, filtering));
+    const tree = (parent: string | null): { el: HTMLElement; total: number }[] => {
+      const sibs = childrenOf(categories(), parent);
+      return sibs
+        .map((k, i) => {
+          const members = shown.filter((e) => home.get(e.id) === k.id);
+          const kids = tree(k.id);
+          const total = members.length + kids.reduce((n, x) => n + x.total, 0);
+          return { k, i, members, kids, total };
+        })
+        // While searching or filtering, folders with nothing to show stay out of the way.
+        .filter(({ total }) => !filtering || total)
+        .map(({ k, i, members, kids, total }) => ({ el: folder(k.id, k.name, members, k, { first: i === 0, last: i === sibs.length - 1 }, filtering, kids.map((x) => x.el), total), total }));
+    };
+    out = tree(null).map((x) => x.el);
     const rest = shown.filter((e) => !known.has(home.get(e.id) ?? ""));
     if (rest.length) out.push(folder(UNCATEGORIZED, "Uncategorized", rest, null, { first: true, last: true }, filtering));
   }
@@ -400,7 +464,7 @@ function overlayMeta(): EditorOptions["neighbourMeta"] {
   const home = placements(categories());
   const meta = new Map<string, OverlayMeta>();
   for (const e of entries) if (e.feature) meta.set(e.id, { ...filterable(e), categoryId: home.get(e.id) ?? null });
-  return { meta, categories: categories().categories.map((k) => ({ id: k.id, name: k.name })), meId: currentUser()?.id };
+  return { meta, categories: categories().categories.map((k) => ({ id: k.id, name: pathName(categories(), k.id), within: [...withDescendants(categories(), k.id)] })), meId: currentUser()?.id };
 }
 
 function edit(e: RegionEntry): void {
@@ -596,7 +660,16 @@ export function initRegions(d: RegionsDeps): void {
   ui.sort().addEventListener("change", renderRegions);
   ui.creator().addEventListener("change", renderRegions);
   $("#r-combine").addEventListener("click", openCombine);
-  $("#r-new-category").addEventListener("click", newCategory);
+  $("#r-new-category").addEventListener("click", () => newCategory());
+  // Region cards can be dragged onto a folder (one listener for all cards: the list is rebuilt on every change).
+  const list = $("#regions");
+  list.addEventListener("dragstart", (ev) => {
+    const card = (ev.target as HTMLElement).closest<HTMLElement>(".rcard[draggable='true']");
+    if (!card || !card.dataset.region) return;
+    dragging = { kind: "region", id: card.dataset.region };
+    ev.dataTransfer?.setData("text/plain", `region:${card.dataset.region}`);
+  });
+  list.addEventListener("dragend", () => void (dragging = null));
   initCategories({ gh: d.gh, render: renderRegions, regionOwner: (id) => { const e = entries.find((x) => x.id === id); return e ? (e.feature ? ownerOf(e.feature) : OWNER_ID) : null; }, regionIds: () => new Set(entries.map((e) => e.id)) });
   for (const b of document.querySelectorAll<HTMLButtonElement>(".r-new")) b.addEventListener("click", () => newRegion($<HTMLSelectElement>("#r-new-slot").value));
 }
