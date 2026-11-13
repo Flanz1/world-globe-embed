@@ -15,7 +15,7 @@ custom_domain = true
 REPO = "Flanz1/world-globe-embed"
 BRANCH = "main"
 OWNER_ID = "45669787"
-ADMIN_URLS = "https://editor.garmeley.com/admin/,https://flanz1.github.io/world-globe-embed/admin/"
+ADMIN_URLS = "https://editor.garmeley.com/admin/"
 # APP_ID and APP_CLIENT_ID come from the workflow (repository variables), so they aren't hard-coded here.
 
 # People who signed in but aren't on the admin list yet (the Users tab's "Asked for access").

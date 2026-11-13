@@ -3,6 +3,12 @@ name: Process maps
 # Runs when someone drops an image into content/incoming/ (web UI upload or the admin page).
 # Validates it, makes 1024/2048/4096 WebPs (plus 8192 for sources at least 8192 wide) + LQIP + metadata, deletes the original,
 # commits the result back to main and then deploys the site.
+#
+# Two jobs, so the uploaded image is never decoded while a write token is around:
+#  - process: npm ci + sharp on the upload, with a read-only token and no stored git credentials.
+#    It hands the changed files over as an artifact.
+#  - push: no npm, no image decoding. Mints the App token (contents: write only), applies the
+#    files and pushes. A bug in an image decoder can't reach a token that can push to main.
 on:
   push:
     branches: [main]
@@ -15,33 +21,24 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   process:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
-      committed: ${{ steps.commit.outputs.committed }}
-      # When the site's GitHub App is set up, the commit is pushed as the App (the one actor allowed
-      # to push to main); its pushes start the Deploy workflow by themselves.
-      app: ${{ steps.app.outputs.token != '' }}
+      changed: ${{ steps.collect.outputs.changed }}
     steps:
-      - name: Token for the GitHub App
-        id: app
-        if: vars.APP_ID != ''
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ vars.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: main
           # Enough history for "git log" to find who uploaded each file.
           fetch-depth: 50
-          token: ${{ steps.app.outputs.token || github.token }}
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
@@ -51,9 +48,72 @@ jobs:
       - name: Process uploaded images
         run: npm run process-maps
 
+      - name: Collect the changed files
+        id: collect
+        run: |
+          git add -A content/ public/maps/
+          mkdir -p "$RUNNER_TEMP/processed"
+          out="$RUNNER_TEMP/processed"
+          git diff --cached --name-only --no-renames -z --diff-filter=AM > "$out/written.lst"
+          git diff --cached --name-only --no-renames -z --diff-filter=D > "$out/deleted.lst"
+          if [ ! -s "$out/written.lst" ] && [ ! -s "$out/deleted.lst" ]; then
+            echo "Nothing to commit."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          tar -cf "$out/written.tar" --null -T "$out/written.lst"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.collect.outputs.changed == 'true'
+        with:
+          name: processed-maps
+          path: ${{ runner.temp }}/processed/
+          retention-days: 1
+
+  push:
+    needs: process
+    if: needs.process.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    # The App key lives here (see docs/admin-access.md: an environment limited to main).
+    environment: production
+    permissions:
+      contents: write
+    outputs:
+      committed: ${{ steps.commit.outputs.committed }}
+      # When the site's GitHub App is set up, the commit is pushed as the App (the one actor allowed
+      # to push to main); its pushes start the Deploy workflow by themselves.
+      app: ${{ steps.app.outputs.token != '' }}
+    steps:
+      - name: Token for the GitHub App
+        id: app
+        if: vars.APP_ID != ''
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+          token: ${{ steps.app.outputs.token || github.token }}
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: processed-maps
+          path: ${{ runner.temp }}/processed
+
       - name: Commit processed maps
         id: commit
         run: |
+          in="$RUNNER_TEMP/processed"
+          # Only map output and the incoming folder may change; refuse anything else.
+          ok() { case "$1" in content/maps/*|content/incoming/*|public/maps/*) case "$1" in *..*) return 1;; esac; return 0;; *) return 1;; esac; }
+          while IFS= read -r -d '' f; do ok "$f" || { echo "::error::Unexpected path from processing: $f"; exit 1; }; done < "$in/written.lst"
+          while IFS= read -r -d '' f; do ok "$f" || { echo "::error::Unexpected path from processing: $f"; exit 1; }; done < "$in/deleted.lst"
+          if [ -s "$in/written.lst" ]; then tar -xf "$in/written.tar" --no-same-owner --no-overwrite-dir; fi
+          while IFS= read -r -d '' f; do git rm -q --ignore-unmatch -- "$f"; done < "$in/deleted.lst"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A content/ public/maps/
@@ -63,10 +123,10 @@ jobs:
             exit 0
           fi
           maps=$(git diff --cached --name-only -- content/maps | sed -E 's#content/maps/(.*)\.json#\1#' | paste -sd, - | sed 's/,/, /g')
-          git commit -m "Process uploaded maps: ${maps} [bot]"
+          git commit -q -m "Process uploaded maps: ${maps} [bot]"
           # Someone may have pushed meanwhile: rebase onto the latest main and retry.
           for attempt in 1 2 3 4 5; do
-            if git pull --rebase origin main && git push origin HEAD:main; then
+            if git pull -q --rebase origin main && git push origin HEAD:main; then
               echo "committed=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
@@ -78,8 +138,8 @@ jobs:
   # Pushes made with the workflow token don't trigger other workflows, so deploy from here.
   # (The App's pushes do, so there's nothing to do here then.)
   deploy:
-    needs: process
-    if: needs.process.outputs.committed == 'true' && needs.process.outputs.app != 'true'
+    needs: push
+    if: needs.push.outputs.committed == 'true' && needs.push.outputs.app != 'true'
     uses: ./.github/workflows/deploy.yml
     with:
       ref: main
