@@ -1,4 +1,15 @@
 {
   "$schema": "../schema/categories.schema.json",
-  "categories": []
+  "categories": [
+    {
+      "id": "gethricism",
+      "name": "gethricism",
+      "regions": [],
+      "createdBy": {
+        "id": 45669787,
+        "login": "Flanz1"
+      },
+      "created": "2026-11-13T15:19:10Z"
+    }
+  ]
 }
