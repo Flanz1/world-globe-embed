@@ -76,6 +76,17 @@
         "login": "LoopSimon"
       },
       "created": "2026-11-13T18:47:59Z"
+    },
+    {
+      "id": "vas-ira",
+      "name": "Vas Ira",
+      "regions": [],
+      "parent": "nirydian-religions",
+      "createdBy": {
+        "id": 138310181,
+        "login": "LoopSimon"
+      },
+      "created": "2026-11-13T18:48:10Z"
     }
   ]
 }
