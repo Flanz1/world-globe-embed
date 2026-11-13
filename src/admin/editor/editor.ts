@@ -30,18 +30,15 @@ import { findClashes, prepare, type Prepared } from "../../shared/clash.ts";
 import { paintSpec, traceGeometry, traceRing } from "../../shared/raster.ts";
 import { paintSpecOf, partColours, type Clashes } from "../../shared/region-paint.ts";
 import {
-  DEFAULT_FILL_OPACITY,
   LEGEND_LABEL_MAX,
   LEGEND_MAX,
   LEGEND_TITLE_MAX,
   OWN_COLOUR,
-  REGION_COLOR,
   REGION_ID,
   flatFit,
   flatMinK,
   checkParts,
   DEFAULT_COLOUR_NAME,
-  migrateZoneColours,
   normalizePartContested,
   normalizePartLabels,
   normalizePartLegend,
@@ -67,11 +64,13 @@ import { alertBox, confirmBox, modal, openEmbedDialog, previewUrl, sendRegion } 
 import { regionPath, serialize, stamp } from "../regions.ts";
 import { account } from "../session.ts";
 import { combineKind, combineParts, extendPart, type MergeResult } from "./merge.ts";
+import { MAX_LIVE, liveState, ownEntry, previewLegend, removeLiveEntry, splitLive, type LiveSource } from "./live.ts";
 import {
   History,
   addPart,
   cutParts,
   splitParts,
+  stateOf,
   countVertices,
   deleteParts,
   deleteVertices,
@@ -82,7 +81,6 @@ import {
   nextLegendColour,
   partAt,
   partsAt,
-  partsFromGeometry,
   planMove,
   pointSegmentDistance,
   remapContested,
@@ -94,6 +92,7 @@ import {
   setLabelsHidden,
   setLocked,
   ringProblem,
+  trimStrokeOvershoot,
   simplifyParts,
   smoothParts,
   toGeometry,
@@ -126,6 +125,20 @@ export interface EditorOptions {
   neighbourMeta?: { meta: Map<string, OverlayMeta>; categories: OverlayCategory[]; meId: number | undefined };
   takenIds: Set<string>;
   afterCommit: (sha: string) => Promise<void>;
+  /**
+   * Edit several saved regions together (live.ts): every region's parts load into this editor, and
+   * saving writes each changed region back to its own file, in one commit. `feature` is the first one.
+   */
+  live?: {
+    /** The regions in the view, first one first; `current` = unsaved changes to start from (else as saved). */
+    sources: { id: string; feature: RegionFeature; sha: string; current?: EditorState }[];
+    /** Regions that may be added to the view: on this slot and editable by the user (the ones in the view too). */
+    pool: () => { id: string; feature: RegionFeature; sha: string }[];
+    /** The other regions (outlines and snap targets) when `ids` are the ones being edited. */
+    neighboursFor: (ids: Set<string>) => RegionFeature[];
+    /** Where the map was looking (kept when regions are added or taken out). */
+    view?: { cx: number; cy: number; k: number };
+  };
 }
 
 type Tool = "select" | "polygon" | "freehand";
@@ -134,6 +147,10 @@ type DrawTarget = "part" | "cut" | "split" | "extend" | "border";
 
 const HANDLE = 5;
 const HIT = 8;
+/** Screen-pixel radius around a polygon's first point inside which a click closes the outline (the point lights up). */
+const CLOSE_R = 14;
+/** A freehand stroke smaller than this on screen (px) is a slip, not an outline. */
+const MIN_STROKE = 12;
 const EDGE_HIT = 6;
 const SNAP_PX = 10;
 const SNAP_COLOUR = "#4dd0e1";
@@ -155,40 +172,7 @@ async function gitBlobSha(text: string): Promise<string> {
   return [...d].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-const expandHex = (c: string) => (/^#[0-9a-f]{3}$/i.test(c) ? `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}` : c).toLowerCase();
-
 class Conflict extends Error {}
-
-/** Editor state for a saved region (or the empty state for a new one). */
-function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"): EditorState {
-  const fp = f?.properties;
-  const legend = (fp?.legend ?? [])
-    .slice(0, LEGEND_MAX)
-    .map((e) => ({ label: String(e.label ?? "").slice(0, LEGEND_LABEL_MAX), color: REGION_COLOR.test(e.color) ? expandHex(e.color) : "#7f8c8d" }));
-  const parts = f ? partsFromGeometry(f.geometry) : [];
-  // Older regions have one name instead of part labels: it becomes the first part's label.
-  const legacy = !fp?.partLabels && fp?.name && (fp.label ?? true) ? [fp.name] : undefined;
-  return {
-    parts,
-    // Contested zones (older regions) are plain parts now: a zone without its own colour keeps its parent's.
-    styles: migrateZoneColours(normalizePartLegend(fp?.partLegend, parts.length, legend.length), fp?.partContested),
-    labels: normalizePartLabels(fp?.partLabels ?? legacy, parts.length),
-    labelHidden: normalizePartLabelHidden(fp?.partLabelHidden, parts.length),
-    contested: new Array<number>(parts.length).fill(-1),
-    locked: normalizePartLocked(fp?.partLocked, parts.length),
-    lines: (fp?.provinceBorders ?? []).filter((l) => l.length >= 2).map((l) => unwrapRing(l.map(([x, y]) => [x, y] as Position))),
-    props: {
-      color: fp && REGION_COLOR.test(fp.color) ? expandHex(fp.color) : fallbackColour,
-      colorLabel: String(fp?.colorLabel ?? "").slice(0, LEGEND_LABEL_MAX),
-      fillOpacity: fp?.fillOpacity ?? DEFAULT_FILL_OPACITY,
-      label: fp?.label ?? true,
-      description: fp?.description ?? "",
-      legendTitle: (fp?.legendTitle ?? "").slice(0, LEGEND_TITLE_MAX),
-      legend,
-      nationalBorders: fp?.nationalBorders === true,
-    },
-  };
-}
 
 /** Keyboard and mouse shortcuts, grouped for the "?" dialog: short key to action rows. */
 export const SHORTCUT_GROUPS: { title: string; rows: [string, string][] }[] = [
@@ -316,11 +300,20 @@ export function openEditor(o: EditorOptions): void {
     },
   });
 
-  const hist = new History(stateOf(o.feature));
+  /** Editing several regions together: each one as saved, and its file's blob SHA (to notice changes on GitHub). */
+  const live = o.live?.sources.length ? o.live.sources.map((x) => ({ id: x.id, sha: x.sha, feature: x.feature })) : null;
+  const liveSources: LiveSource[] = live ? live.map((x) => ({ id: x.id, state: stateOf(x.feature) })) : [];
+  const legendCap = live ? 1000 : LEGEND_MAX;
+  /** Vertex limit for the editor's parts: per region, so editing together the save checks each region instead. */
+  const vertexCap = live ? MAX_VERTICES * live.length : MAX_VERTICES;
+  /** Live: the region new parts go to (the "New parts go to" menu); a colour folder's + Part uses the folder's region. */
+  let newOwner = live ? live[0].id : "";
+  let newPartOwner: string | null = null;
+  const hist = new History(live ? liveState(o.live!.sources.map((x, i) => (x.current ? { id: x.id, state: x.current } : liveSources[i]))) : stateOf(o.feature));
   let id = o.feature?.id ?? uniqueId("region", o.takenIds);
   let sha = o.sha;
   let isNew = o.isNew;
-  let saved = isNew ? "" : JSON.stringify(hist.state);
+  let saved = isNew ? "" : JSON.stringify(live ? liveState(liveSources) : hist.state);
   const dirty = () => JSON.stringify(hist.state) !== saved;
 
   /* ── DOM ── */
@@ -490,6 +483,26 @@ export function openEditor(o: EditorOptions): void {
     ),
   );
   document.body.append(dlg);
+  if (live) {
+    // Editing together: settings that belong to one region stay as each region has them, so they're not shown.
+    for (const el of [idIn, opacityIn, labelIn, borderIn, descIn, keyTitleIn]) (el.closest("label") as HTMLElement).hidden = true;
+    for (const act of ["province-border", "embed"]) (dlg.querySelector(`button[data-act="${act}"]`) as HTMLElement).hidden = true;
+    const ownerIn = h(
+      "select",
+      { name: "new-owner", ariaLabel: "Region new parts go to" },
+      ...live.map((x) => h("option", { value: x.id, textContent: x.id })),
+    );
+    ownerIn.addEventListener("change", () => (newOwner = ownerIn.value));
+    idIn.closest("label")!.after(
+      h(
+        "p",
+        { className: "muted small ed-live-note" },
+        `Editing ${live.length} regions together: ${live.map((x) => x.id).join(", ")}. Each part belongs to one of them (its Region menu in the Parts list), and Save writes every region that changed, in one commit. Each region keeps its own fill, description, legend title and province borders.`,
+      ),
+      h("label", {}, "New parts go to", ownerIn),
+      h("div", { className: "row" }, btn("Regions…", "Add regions to this view or take them out", () => openLiveRegions(), "live-regions")),
+    );
+  }
 
   /* ── View ── */
   let view = { cx: 0, cy: 0, k: 1 };
@@ -725,11 +738,13 @@ export function openEditor(o: EditorOptions): void {
     contested = hist.state.contested,
     locked = hist.state.locked,
     labelHidden = hist.state.labelHidden,
+    owners = hist.state.owners,
   ) =>
     hist.apply(
       label,
       {
         ...hist.state,
+        ...(owners ? { owners: Array.from({ length: next.length }, (_, p) => owners[p] || newOwner) } : {}),
         parts: next,
         styles: normalizePartLegend(styles, next.length, hist.state.props.legend.length),
         labels: normalizePartLabels(labels, next.length),
@@ -837,6 +852,9 @@ export function openEditor(o: EditorOptions): void {
       clashes = { internal: findClashes(preps) };
     }
     const st = hist.state;
+    // Editing several regions together: each region is its own map, so only its own parts overlap (as in the embed).
+    const own = st.owners;
+    if (own) clashes = { internal: clashes.internal.filter(([i, j]) => own[i] === own[j]) };
     const spec = paintSpecOf({ color: st.props.color, legend: st.props.legend, parts: st.styles, geometry: asGeometry(ps), ...(st.lines?.length ? { provinceBorders: st.lines } : {}), ...(st.props.nationalBorders ? { nationalBorders: true } : {}) }, clashes);
     clashCache = { version: hist.version, preps, clashes, spec };
     return clashCache;
@@ -1017,6 +1035,20 @@ export function openEditor(o: EditorOptions): void {
         }
       }
       g.fillStyle = "#fff";
+      if (drawing && cursor && tool === "polygon" && closesAt(sx(cursor[0]), sy(cursor[1]))) {
+        // The next click closes the outline: light the first point up.
+        g.save();
+        g.strokeStyle = SNAP_COLOUR;
+        g.fillStyle = SNAP_COLOUR;
+        g.lineWidth = 3;
+        g.beginPath();
+        g.arc(sx(pts[0][0]), sy(pts[0][1]), CLOSE_R, 0, Math.PI * 2);
+        g.globalAlpha = 0.25;
+        g.fill();
+        g.globalAlpha = 1;
+        g.stroke();
+        g.restore();
+      }
       for (const [i, pt] of pts.entries()) {
         g.beginPath();
         g.arc(sx(pt[0]), sy(pt[1]), i === 0 ? 6 : 3.5, 0, Math.PI * 2);
@@ -1286,8 +1318,8 @@ export function openEditor(o: EditorOptions): void {
     if (!hist.dragging || lastArea < 0) lastArea = parts_ ? areaPercent(mapGeometry(toGeometry(parts()), (p) => imageToGlobe(p, frame))) : 0;
     const area = lastArea;
     stats.textContent = `${n.toLocaleString()} vertices in ${parts_} part${parts_ === 1 ? "" : "s"} · about ${area < 0.01 ? area.toFixed(4) : area.toFixed(2)}% of the globe's surface`;
-    stats.classList.toggle("error", n >= WARN_VERTICES);
-    if (n >= WARN_VERTICES) stats.textContent += ` · close to the ${MAX_VERTICES.toLocaleString()}-vertex limit`;
+    stats.classList.toggle("error", !live && n >= WARN_VERTICES);
+    if (!live && n >= WARN_VERTICES) stats.textContent += ` · close to the ${MAX_VERTICES.toLocaleString()}-vertex limit`;
   }
 
   /* ── Live globe preview ── */
@@ -1299,6 +1331,9 @@ export function openEditor(o: EditorOptions): void {
       .filter((l) => l.length >= 2 && (n += l.length) <= PROVINCE_BORDER_MAX)
       .map((l) => l.map(([x, y]) => [round(wrapLon(x)), round(y)] as Position));
   };
+  /** The legend and part colours the globe preview gets: editing together, squeezed to what one region may show. */
+  const previewStyles = () =>
+    live ? previewLegend(hist.state) : { legend: hist.state.props.legend.map((e) => ({ label: e.label.slice(0, LEGEND_LABEL_MAX), color: e.color })), styles: hist.state.styles };
   const regionNow = (): RegionData => ({
     id: previewId(),
     slot: slotName,
@@ -1309,14 +1344,14 @@ export function openEditor(o: EditorOptions): void {
     label: hist.state.props.label,
     legendTitle: hist.state.props.legendTitle.slice(0, LEGEND_TITLE_MAX),
     ...(hist.state.props.nationalBorders ? { nationalBorders: true } : {}),
-    legend: hist.state.props.legend.map((e) => ({ label: e.label.slice(0, LEGEND_LABEL_MAX), color: e.color })),
+    legend: previewStyles().legend,
     ...(({ geometry, partLegend, partLabels, partLabelHidden }) => ({
       geometry,
       parts: partLegend,
       labels: partLabels.map((t) => t.slice(0, PART_LABEL_MAX)),
       ...(partLabelHidden.some(Boolean) ? { labelHidden: partLabelHidden } : {}),
     }))(
-      toStyledGeometry(parts(), hist.state.styles, hist.state.labels, hist.state.contested, hist.state.locked, hist.state.labelHidden),
+      toStyledGeometry(parts(), previewStyles().styles, hist.state.labels, hist.state.contested, hist.state.locked, hist.state.labelHidden),
     ),
     ...(hist.state.lines?.length ? { provinceBorders: storedLines(hist.state.lines) } : {}),
   });
@@ -1351,7 +1386,7 @@ export function openEditor(o: EditorOptions): void {
     if (document.activeElement !== colorLabelIn) colorLabelIn.value = s.colorLabel;
     syncColours();
     idIn.disabled = !isNew;
-    title.textContent = `${isNew ? "New region" : "Edit region"}: ${id || "(no id yet)"}`;
+    title.textContent = live ? `Edit together: ${live.map((x) => x.id).join(", ")}` : `${isNew ? "New region" : "Edit region"}: ${id || "(no id yet)"}`;
   }
   const setProp = <K extends keyof EditorState["props"]>(k: K, v: EditorState["props"][K], label: string) =>
     hist.apply(label, { ...hist.state, props: { ...hist.state.props, [k]: v } }, `prop:${k}`);
@@ -1380,7 +1415,7 @@ export function openEditor(o: EditorOptions): void {
   }
   function addLegendEntry(): void {
     const l = hist.state.props.legend;
-    if (l.length >= LEGEND_MAX) return setMsg(`A legend can have at most ${LEGEND_MAX} colours.`, "error");
+    if (l.length >= legendCap) return setMsg(`A legend can have at most ${LEGEND_MAX} colours.`, "error");
     setLegend("Add legend colour", [...l.map((e) => ({ ...e })), { label: "", color: nextLegendColour([hist.state.props.color, ...l.map((e) => e.color)]) }]);
     folders.querySelector<HTMLInputElement>(`.ed-folder[data-key="${l.length}"] input[type=text]`)?.focus();
   }
@@ -1408,6 +1443,26 @@ export function openEditor(o: EditorOptions): void {
     selPart = to;
     const where = wasOver ? `, ${dir > 0 ? "on top of" : "under"} ${partName(other)}` : "";
     setMsg(`Part ${p + 1} is now part ${to + 1}${where}.`, "ok");
+    changed();
+  }
+  /** Editing together: moves part p (or every picked part, when it's one of them) to region `to`. Its colour stays. */
+  function setPartOwner(p: number, to: string): void {
+    if (!hist.state.owners || !live?.some((x) => x.id === to)) return;
+    const ps = pickedNow().includes(p) ? pickedNow() : [p];
+    const owners = [...hist.state.owners];
+    const styles = [...hist.state.styles];
+    for (const q of ps) {
+      // A part in its old region's own colour takes its new region's own colour.
+      const from = owners[q];
+      const k = styles[q];
+      if (from !== to && (k === OWN_COLOUR ? live[0].id === from : hist.state.props.legend[k]?.src === from && hist.state.props.legend[k]?.own)) {
+        const own = ownEntry(hist.state, to);
+        styles[q] = own >= 0 ? own : OWN_COLOUR;
+      }
+      owners[q] = to;
+    }
+    hist.apply("Move part to region", { ...hist.state, owners, styles });
+    setMsg(`${ps.length > 1 ? `${ps.length} parts` : `Part ${p + 1}`} now belong${ps.length > 1 ? "" : "s"} to ${to}.`, "ok");
     changed();
   }
   function togglePartLock(p: number): void {
@@ -1467,8 +1522,8 @@ export function openEditor(o: EditorOptions): void {
     folded.clear();
     for (const v of shifted) if (v !== k) folded.add(v);
     const n = hist.state.styles.filter((v) => v === k).length;
-    hist.apply("Remove colour", removeLegendEntry(hist.state, k));
-    setMsg(n ? `Colour removed; its ${n === 1 ? "part goes" : `${n} parts go`} to ${entryName(OWN_COLOUR)}.` : "Colour removed.", "ok");
+    hist.apply("Remove colour", live ? removeLiveEntry(hist.state, k) : removeLegendEntry(hist.state, k));
+    setMsg(n ? `Colour removed; its ${n === 1 ? "part goes" : `${n} parts go`} to ${live ? "their region's own colour" : entryName(OWN_COLOUR)}.` : "Colour removed.", "ok");
     changed();
   }
   /** Clicks on a part row (not on its inputs): select that part; Shift or Ctrl/Cmd+click picks several. */
@@ -1517,7 +1572,16 @@ export function openEditor(o: EditorOptions): void {
       tiny("Lock", "", "part-lock", () => togglePartLock(p), " ed-lock"),
       tiny("Delete", `Delete part ${p + 1} (asks first)`, "part-delete", () => void askDeletePart(p), " danger"),
     );
-    const row = h("div", { className: "ed-part-row", dataset: { row: String(p) } }, sw, lbl, sel, acts);
+    // Editing together: which region the part belongs to (and is saved to). Changing it moves the part.
+    const ownerSel = live
+      ? h(
+          "select",
+          { ariaLabel: `Region of part ${p + 1}`, title: "The region this part belongs to; pick another to move the part there", dataset: { partOwner: String(p) } },
+          ...live.map((x) => h("option", { value: x.id, textContent: x.id, selected: s.owners?.[p] === x.id })),
+        )
+      : null;
+    ownerSel?.addEventListener("change", () => setPartOwner(p, ownerSel.value));
+    const row = h("div", { className: "ed-part-row", dataset: { row: String(p) } }, sw, lbl, sel, ownerSel, acts);
     // Shift/Ctrl+click picks parts: don't let the browser start a text selection across the rows.
     row.addEventListener("mousedown", (ev) => {
       if ((ev.shiftKey || ev.ctrlKey || ev.metaKey) && !(ev.target instanceof HTMLInputElement || ev.target instanceof HTMLSelectElement)) ev.preventDefault();
@@ -1580,6 +1644,7 @@ export function openEditor(o: EditorOptions): void {
       onclick: () => {
         startDraw("part");
         newPartStyle = k;
+        newPartOwner = live && !own ? (s.props.legend[k]?.src ?? null) : null;
       },
     });
     const labelsBtn = h("button", {
@@ -1591,6 +1656,11 @@ export function openEditor(o: EditorOptions): void {
       onclick: () => toggleFolderLabels(members),
     });
     const head = h("div", { className: "ed-folder-head" }, fold, colour, name, count, labelsBtn, add);
+    if (live) {
+      const e = own ? null : s.props.legend[k];
+      const from = own ? live[0].id : e?.src;
+      head.append(h("span", { className: "badge ed-src", textContent: from ?? "new", title: from ? (own || e?.own ? `${from}'s own colour` : `A colour of ${from}`) : "Added here: saved into the legend of each region whose parts use it" }));
+    }
     if (!own)
       head.append(
         Object.assign(btn("↑", "Move this colour up", () => moveFolder(k, -1), "key-up"), { disabled: k === 0 }),
@@ -1605,7 +1675,7 @@ export function openEditor(o: EditorOptions): void {
   let colourSig = "";
   function syncColours(): void {
     const s = hist.state;
-    const sig = JSON.stringify([s.props.legend.length, s.styles, s.parts.map((r) => [r[0]?.length ?? 0, r.length]), [...folded]]);
+    const sig = JSON.stringify([s.props.legend.length, s.styles, s.parts.map((r) => [r[0]?.length ?? 0, r.length]), [...folded], s.owners ?? null]);
     if (sig !== colourSig) {
       colourSig = sig;
       const keys = [OWN_COLOUR, ...s.props.legend.map((_, i) => i)];
@@ -1664,7 +1734,7 @@ export function openEditor(o: EditorOptions): void {
         lock.setAttribute("aria-pressed", String(locked));
       }
     });
-    addKeyBtn.disabled = s.props.legend.length >= LEGEND_MAX;
+    addKeyBtn.disabled = s.props.legend.length >= legendCap;
   }
 
   /** After any state change: redraw, update the panel and the globe. */
@@ -1719,15 +1789,29 @@ export function openEditor(o: EditorOptions): void {
       setMsg(prob.message, "error");
       return false;
     }
-    if (countVertices(parts()) + ring.length > MAX_VERTICES) {
+    if (countVertices(parts()) + ring.length > vertexCap) {
       setMsg(`That would go over the ${MAX_VERTICES.toLocaleString()}-vertex limit.`, "error");
       return false;
     }
     if (target === "cut") return applyCut(cutParts(hist.state, [ring]), "Cut");
     if (target === "extend") return finishExtend(ring);
-    const style = newPartStyle >= 0 && newPartStyle < hist.state.props.legend.length ? newPartStyle : OWN_COLOUR;
-    setParts(parts().length ? "Add part" : "Draw outline", addPart(parts(), ring), undefined, [...hist.state.styles, style], [...hist.state.labels, ""], [...hist.state.contested, -1]);
-    setMsg(`Part ${parts().length} added to ${entryName(style)}. Drag vertices to refine it.`, "ok");
+    const owner = newPartOwner ?? newOwner;
+    let style = newPartStyle >= 0 && newPartStyle < hist.state.props.legend.length ? newPartStyle : OWN_COLOUR;
+    // Editing together: the default colour of a new part is its own region's colour.
+    if (live && style === OWN_COLOUR && ownEntry(hist.state, owner) >= 0) style = ownEntry(hist.state, owner);
+    const s0 = hist.state;
+    setParts(
+      parts().length ? "Add part" : "Draw outline",
+      addPart(parts(), ring),
+      undefined,
+      [...s0.styles, style],
+      [...s0.labels, ""],
+      [...s0.contested, -1],
+      s0.locked,
+      s0.labelHidden,
+      s0.owners && [...s0.owners, owner],
+    );
+    setMsg(`Part ${parts().length} added to ${entryName(style)}${live ? ` in ${owner}` : ""}. Drag vertices to refine it.`, "ok");
     selPart = parts().length - 1;
     endDraw();
     return true;
@@ -1735,6 +1819,7 @@ export function openEditor(o: EditorOptions): void {
   function endDraw(): void {
     target = "part";
     newPartStyle = OWN_COLOUR;
+    newPartOwner = null;
     extendTarget = -1;
     drawing = null;
     tool = "select";
@@ -1751,7 +1836,7 @@ export function openEditor(o: EditorOptions): void {
       );
       return false;
     }
-    if (countVertices(res.state.parts) > MAX_VERTICES) {
+    if (countVertices(res.state.parts) > vertexCap) {
       setMsg(`That would go over the ${MAX_VERTICES.toLocaleString()}-vertex limit.`, "error");
       return false;
     }
@@ -1980,7 +2065,7 @@ export function openEditor(o: EditorOptions): void {
     if (!combine) return;
     const res = typeof combine.res === "string" ? combine.res : tryMerge(() => combineParts(hist.state, combine!.set, combineGap(), ky));
     if (typeof res === "string") return setMsg(res, "error");
-    if (countVertices(res.state.parts) > MAX_VERTICES) return setMsg(`That would go over the ${MAX_VERTICES.toLocaleString()}-vertex limit.`, "error");
+    if (countVertices(res.state.parts) > vertexCap) return setMsg(`That would go over the ${MAX_VERTICES.toLocaleString()}-vertex limit.`, "error");
     const prob = res.problem ?? ringProblem([res.state.parts[res.into]])?.message.toLowerCase();
     if (prob) return setMsg(`Can't combine: ${prob}`, "error");
     const n = combine.set.length;
@@ -2034,7 +2119,7 @@ export function openEditor(o: EditorOptions): void {
       setMsg(res, "error");
       return false;
     }
-    if (countVertices(res.state.parts) > MAX_VERTICES) {
+    if (countVertices(res.state.parts) > vertexCap) {
       setMsg(`That would go over the ${MAX_VERTICES.toLocaleString()}-vertex limit.`, "error");
       return false;
     }
@@ -2211,7 +2296,7 @@ export function openEditor(o: EditorOptions): void {
     return tr.map((t) => ({ pos: t.pos, ring: next.ring, at: t.at, kind: "vertex" as const }));
   }
   /** Whether a click at screen (x, y) would close the outline on its first point. */
-  const closesAt = (x: number, y: number) => !!drawing && !lineTarget() && drawing.length >= 3 && Math.hypot(sx(drawing[0][0]) - x, sy(drawing[0][1]) - y) <= HIT;
+  const closesAt = (x: number, y: number) => !!drawing && !lineTarget() && drawing.length >= 3 && Math.hypot(sx(drawing[0][0]) - x, sy(drawing[0][1]) - y) <= CLOSE_R;
   /** What the polygon tool would add on the next click (for the preview), and whether it follows a border. */
   function pendingTail(): { pts: Position[]; traced: boolean } | null {
     if (!drawing || !cursor || tool !== "polygon") return null;
@@ -2242,6 +2327,7 @@ export function openEditor(o: EditorOptions): void {
       zones.contested,
       res.kept.map((p) => hist.state.locked[p] ?? true),
       res.kept.map((p) => hist.state.labelHidden[p] === true),
+      hist.state.owners && res.kept.map((p) => hist.state.owners![p]),
     );
     selection.clear();
     if (res.removedParts) selPart = selPart >= 0 ? res.kept.indexOf(selPart) : -1;
@@ -2287,6 +2373,7 @@ export function openEditor(o: EditorOptions): void {
       remapped.contested,
       res.kept.map((k) => s.locked[k] ?? true),
       res.kept.map((k) => s.labelHidden[k] === true),
+      s.owners && res.kept.map((k) => s.owners![k]),
     );
     if (keptLines.length !== (s.lines ?? []).length) hist.apply(`Delete part ${p + 1}`, { ...hist.state, lines: keptLines }, `del-lines:${p}`);
     selection.clear();
@@ -2783,7 +2870,14 @@ export function openEditor(o: EditorOptions): void {
         return;
       }
       if (d.pts.length < 3) return draw();
-      if (!finishRing(follow ? traced(true) : simple(d.pts))) draw();
+      const xs = d.pts.map((q) => sx(q[0]));
+      const ys = d.pts.map((q) => sy(q[1]));
+      if (Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) < MIN_STROKE) {
+        setMsg("That stroke was too short to be an outline, so nothing was drawn.", "error");
+        return draw();
+      }
+      // A stroke that overshoots its start and crosses itself there is trimmed back to the loop; it closes only here, on release.
+      if (!finishRing(trimStrokeOvershoot(follow ? traced(true) : simple(d.pts), ky))) draw();
       return;
     }
     if (d.kind === "lvertex") {
@@ -2851,8 +2945,20 @@ export function openEditor(o: EditorOptions): void {
   function hideMenu(): void {
     ctxMenu.hidden = true;
   }
+  /** Backspace or right-click while drawing: take back the last point (repeatable, back to nothing). */
+  function undoDrawPoint(): void {
+    if (!drawing) return;
+    drawing.pop();
+    drawSnaps.length = drawing.length;
+    if (!drawing.length) drawing = null;
+    draw();
+  }
   canvas.addEventListener("contextmenu", (e) => {
-    e.preventDefault();
+    e.preventDefault(); // the browser menu never opens on the map
+    if (drawing) {
+      hideMenu();
+      return undoDrawPoint();
+    }
     if (tool !== "select") return;
     const { x, y } = local(e);
     const v = hitVertex(x, y);
@@ -2911,10 +3017,7 @@ export function openEditor(o: EditorOptions): void {
     }
     if (e.key === "Backspace" && drawing) {
       e.preventDefault();
-      drawing.pop();
-      drawSnaps.length = drawing.length;
-      if (!drawing.length) drawing = null;
-      return draw();
+      return undoDrawPoint();
     }
     if (e.key === "Tab" && drawing && tool === "polygon" && !mod) {
       // Trace the other way round the border the next click follows.
@@ -3014,27 +3117,23 @@ export function openEditor(o: EditorOptions): void {
     if (fresh || !creator) creator = { created: stamp(), createdBy: account() };
     return creator;
   }
-  let saving = false;
-  async function save(): Promise<void> {
-    if (saving) return;
-    const s = hist.state;
-    if (isNew) {
-      if (!REGION_ID.test(id)) return setMsg("The id must be lowercase letters, digits and dashes.", "error"), idIn.focus();
-      if (o.takenIds.has(id)) return setMsg(`The id "${id}" is taken. Choose another one.`, "error"), idIn.focus();
-    }
-    if (!s.parts.length) return setMsg("Draw the region first.", "error");
+  /**
+   * The file for state `s` saved as region `fid`, without who saved it when (the caller adds that), or
+   * why it can't be saved.
+   */
+  function featureOf(s: EditorState, fid: string): RegionFeature | string {
     const { geometry, partLegend, partLabels, partLabelHidden, partLocked } = toStyledGeometry(s.parts, s.styles, s.labels, s.contested, s.locked, s.labelHidden);
     const provinceLines = storedLines(s.lines ?? []);
     const errs = [
       ...checkGeometry(geometry),
       ...checkParts({ slot: slotName, map: slot.map, color: s.props.color, ...(provinceLines.length ? { provinceBorders: provinceLines } : {}) }, geometry, "Province borders"),
     ];
-    if (errs.length) return setMsg(errs[0], "error");
+    if (errs.length) return errs[0];
     const props = s.props;
-    const feature: RegionFeature = {
+    return {
       $schema: "../../schema/region.schema.json",
       type: "Feature",
-      id,
+      id: fid,
       properties: {
         slot: slotName,
         map: slot.map,
@@ -3052,12 +3151,23 @@ export function openEditor(o: EditorOptions): void {
         ...(partLocked.some((l) => !l) ? { partLocked } : {}),
         ...(provinceLines.length ? { provinceBorders: provinceLines } : {}),
         ...(props.nationalBorders ? { nationalBorders: true } : {}),
-        updated: stamp(),
-        ...creatorFields(isNew),
-        updatedBy: account(),
       },
       geometry,
     };
+  }
+  let saving = false;
+  async function save(): Promise<void> {
+    if (saving) return;
+    if (live) return saveLive();
+    const s = hist.state;
+    if (isNew) {
+      if (!REGION_ID.test(id)) return setMsg("The id must be lowercase letters, digits and dashes.", "error"), idIn.focus();
+      if (o.takenIds.has(id)) return setMsg(`The id "${id}" is taken. Choose another one.`, "error"), idIn.focus();
+    }
+    if (!s.parts.length) return setMsg("Draw the region first.", "error");
+    const built = featureOf(s, id);
+    if (typeof built === "string") return setMsg(built, "error");
+    const feature: RegionFeature = { ...built, properties: { ...built.properties, updated: stamp(), ...creatorFields(isNew), updatedBy: account() } };
     const path = regionPath(id);
     const text = serialize(feature);
     saving = true;
@@ -3083,6 +3193,160 @@ export function openEditor(o: EditorOptions): void {
       saving = false;
       saveBtn.disabled = false;
     }
+  }
+
+  /* ── Editing several regions together ── */
+  /** Each region's file as the editor would write it (without the save stamps), to save only the regions that changed. */
+  const coreText = (sp: { id: string; state: EditorState }): string => {
+    const f = featureOf(sp.state, sp.id);
+    return typeof f === "string" ? `!${f}` : serialize(f);
+  };
+  /** Live: what each region's file is as saved (in editor form), by id. */
+  const baseline = new Map<string, string>(live ? splitLive(liveState(liveSources), liveSources).map((x) => [x.id, coreText(x)]) : []);
+  const liveChanged = () => splitLive(hist.state, liveSources).filter((x) => coreText(x) !== baseline.get(x.id));
+
+  async function saveLive(): Promise<void> {
+    if (!live) return;
+    const changedNow = liveChanged();
+    if (!changedNow.length) return setMsg("Nothing to save: no region changed.", "ok");
+    const bad = changedNow.find((x) => x.problem);
+    if (bad) return setMsg(bad.problem!, "error");
+    const files: { src: (typeof live)[number]; feature: RegionFeature; text: string; core: string }[] = [];
+    for (const x of changedNow) {
+      const src = live.find((y) => y.id === x.id)!;
+      const built = featureOf(x.state, x.id);
+      if (typeof built === "string") return setMsg(`${x.id}: ${built}`, "error");
+      const sp = src.feature.properties;
+      const feature: RegionFeature = {
+        ...built,
+        properties: {
+          ...built.properties,
+          updated: stamp(),
+          ...(sp.created ? { created: sp.created } : {}),
+          ...(sp.createdBy ? { createdBy: sp.createdBy } : {}),
+          updatedBy: account(),
+        },
+      };
+      files.push({ src, feature, text: serialize(feature), core: serialize(built) });
+    }
+    const ids = files.map((f) => f.src.id);
+    saving = true;
+    saveBtn.disabled = true;
+    setMsg(`Saving ${ids.join(", ")}…`);
+    try {
+      const commitSha = await o.gh.commit(`Save region${ids.length > 1 ? "s" : ""} ${ids.join(", ")}`, async () => {
+        const stale: string[] = [];
+        await Promise.all(
+          files.map(async (f) => {
+            if ((await o.gh.fileSha(regionPath(f.src.id))) !== f.src.sha) stale.push(f.src.id);
+          }),
+        );
+        if (stale.length) throw new Conflict(stale.sort().join(", "));
+        return files.map((f) => ({ path: regionPath(f.src.id), content: f.text }));
+      });
+      for (const f of files) {
+        f.src.sha = await gitBlobSha(f.text);
+        f.src.feature = f.feature;
+        baseline.set(f.src.id, f.core);
+      }
+      saved = JSON.stringify(hist.state);
+      setMsg(`Saved ${ids.join(", ")} in commit ${commitSha.slice(0, 7)} to ${o.gh.branch}.`, "ok");
+      syncPanel();
+      void o.afterCommit(commitSha);
+    } catch (e) {
+      if (e instanceof Conflict) void liveConflict(e.message);
+      else setMsg((e as Error).message, "error");
+    } finally {
+      saving = false;
+      saveBtn.disabled = false;
+    }
+  }
+
+  /** Opens the editor again on another set of regions, keeping unsaved changes of the ones that stay. */
+  function reopen(sources: NonNullable<EditorOptions["live"]>["sources"]): void {
+    if (!o.live) return;
+    close();
+    const ids = new Set(sources.map((x) => x.id));
+    openEditor({ ...o, feature: sources[0].feature, sha: sources[0].sha, neighbours: o.live.neighboursFor(ids), live: { ...o.live, sources, view: { ...view } } });
+  }
+
+  async function liveConflict(which: string): Promise<void> {
+    const reload = await confirmBox(
+      "Changed on GitHub",
+      `Someone changed ${which} on GitHub since you opened it. Reload every region from GitHub (your unsaved changes here are lost), or keep editing without saving over their change.`,
+      "Reload from GitHub",
+      "Keep editing",
+    );
+    if (!reload || !live) return setMsg("Not saved. The version on GitHub is newer.", "error");
+    try {
+      const fresh = await Promise.all(
+        live.map(async (x) => {
+          const f = await o.gh.readFile(regionPath(x.id)).catch(() => null);
+          return f ? { id: x.id, sha: f.sha, feature: JSON.parse(f.text) as RegionFeature } : null;
+        }),
+      );
+      const kept = fresh.filter((x): x is NonNullable<typeof x> => !!x);
+      if (!kept.length) return close();
+      reopen(kept);
+    } catch (e) {
+      setMsg((e as Error).message, "error");
+    }
+  }
+
+  /** "Regions…": add regions to this view or take them out. */
+  function openLiveRegions(): void {
+    if (!live || !o.live) return;
+    const pool = o.live.pool();
+    const inView = new Set(live.map((x) => x.id));
+    const changedIds = new Set(liveChanged().map((x) => x.id));
+    const m = modal("Regions in this view", "combine-dlg");
+    const boxes = new Map<string, HTMLInputElement>();
+    const out = h("p", { className: "small", role: "status", ariaLive: "polite" });
+    const go = h("button", { type: "button", textContent: "Apply", dataset: { action: "live-apply" } });
+    const order = [...live.map((x) => x.id), ...pool.map((x) => x.id).filter((x) => !inView.has(x)).sort()];
+    const list = h(
+      "div",
+      { className: "combine-list" },
+      ...order.map((rid) => {
+        const box = h("input", { type: "checkbox", value: rid, checked: inView.has(rid) });
+        boxes.set(rid, box);
+        box.addEventListener("change", update);
+        return h("label", { className: "check" }, box, h("span", { textContent: rid }), changedIds.has(rid) ? h("span", { className: "badge warn", textContent: "unsaved changes" }) : null);
+      }),
+    );
+    function picked(): string[] {
+      return order.filter((rid) => boxes.get(rid)!.checked);
+    }
+    function update(): void {
+      const ids = picked();
+      const dropped = live!.map((x) => x.id).filter((rid) => !ids.includes(rid) && changedIds.has(rid));
+      go.disabled = !ids.length || ids.length > MAX_LIVE;
+      out.className = dropped.length || go.disabled ? "warn small" : "muted small";
+      out.textContent = !ids.length
+        ? "Keep at least one region."
+        : ids.length > MAX_LIVE
+          ? `At most ${MAX_LIVE} regions can be edited together (one save writes at most ${MAX_LIVE}).`
+          : dropped.length
+            ? `Taking out ${dropped.join(", ")} discards ${dropped.length > 1 ? "their" : "its"} unsaved changes. Save first to keep them.`
+            : "Unsaved changes of the regions that stay are kept. Undo history starts again.";
+    }
+    go.addEventListener("click", () => {
+      const ids = picked();
+      if (!ids.length || ids.length > MAX_LIVE) return;
+      // Unsaved changes of the regions that stay come along: the editor reopens from each one's current state.
+      const now = new Map(splitLive(hist.state, liveSources).map((x) => [x.id, x]));
+      const sources = ids.map((rid) => {
+        const had = live!.find((x) => x.id === rid);
+        if (had) return { id: rid, sha: had.sha, feature: had.feature, ...(changedIds.has(rid) ? { current: now.get(rid)!.state } : {}) };
+        const p = pool.find((x) => x.id === rid)!;
+        return { id: rid, sha: p.sha, feature: p.feature };
+      });
+      m.close();
+      reopen(sources);
+    });
+    m.body.append(h("p", { className: "small", textContent: "Tick the regions to edit together. Only regions on this slot that you may edit are listed." }), list, out);
+    m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), go);
+    update();
   }
 
   async function conflict(gone: boolean): Promise<void> {
@@ -3143,6 +3407,10 @@ export function openEditor(o: EditorOptions): void {
   dlg.showModal();
   measure();
   fitView();
+  if (o.live?.view) {
+    view = { ...o.live.view };
+    touched = true;
+  }
   setTool(parts().length ? "select" : "freehand");
   syncPanel();
   canvas.focus();

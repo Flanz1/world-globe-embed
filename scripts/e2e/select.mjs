@@ -16,7 +16,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ALL = ["layers", "regions", "snap", "merge", "coast", "cut", "locks", "ring-select", "tiles", "tiers", "view", "upload", "roles"];
+export const ALL = ["layers", "regions", "snap", "merge", "coast", "cut", "locks", "ring-select", "tiles", "tiers", "view", "upload", "roles", "live"];
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const ADMIN = ["src/admin/main.ts"];
@@ -32,6 +32,7 @@ const EDITOR_CUT = ["src/admin/regions.ts", "src/admin/session.ts", "src/admin/c
 export const SUITE_ROOTS = {
   regions: [...ADMIN, ...VIEWER],
   roles: [...ADMIN, ...WORKER],
+  live: ADMIN,
   upload: ["src/admin/upload-image.ts", "src/admin/images.ts"],
   cut: EDITOR,
   merge: EDITOR,

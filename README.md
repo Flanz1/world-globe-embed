@@ -56,7 +56,7 @@ A region is an outline (a kingdom, a province, a battlefield) drawn on a slot's 
 |---|---|
 | `V` / `P` / `F` | Select, polygon and freehand tools |
 | Click (polygon) | Add a point; double-click, `Enter` or click the first point to close (a split line: double-click or `Enter`) |
-| `Backspace` while drawing | Remove the last point |
+| `Backspace` or right-click while drawing | Remove the last point |
 | `Esc` | Cancel the outline being drawn, or clear the selection (vertices first, then the selected part) |
 | Drag a vertex | Move it, with any vertices attached to it; it snaps to vertices and lines of other parts and regions |
 | `Ctrl`+drag a vertex | Move just that vertex, without snapping (pulls it off a shared border) |
@@ -96,6 +96,8 @@ A region is an outline (a kingdom, a province, a battlefield) drawn on a slot's 
 **Overlaps.** The editor lists the overlaps between this region's parts live under **Overlaps** in the side panel (for example "Part 2 over part 1: contested, part 2's colour is the main one"). Parts that only touch along a shared edge or at a vertex (snapped) don't count, nor does a part sitting in another's hole. Only a region's own parts are compared: each region is its own map (a kingdom's borders, a religion's spread), so other regions on the same slot never cover or mark it, even where they overlap. They're still drawn as grey outlines in the editor to trace against and snap to. To have two regions share layers, combine them into one region.
 
 Regions are identified by their id; there is no separate name. Regions saved before part labels existed show their old name once, in the middle of the region, until you open and save them: the editor then moves that name into part 1's label. **Duplicate** opens an unsaved copy with a new id. **Delete** asks you to type the region's id; embeds of a deleted region fall back to the plain globe with a small "Region not found" note.
+
+**Combine regions** (Regions tab) offers two things for the regions you tick. **Combine** copies their parts, labels and colours into one new region and leaves the originals alone. **Edit together** opens the regions themselves in one editor: every part keeps track of the region it belongs to (its **Region** menu in the Parts list moves it to another one), new parts go to the region picked under **New parts go to** (a colour folder's **+ Part** uses that colour's region), and **Save** writes every region that changed back to its own file, in one commit. Each region keeps its own fill, description, legend title, label setting and province borders (those aren't shown while editing together); its own colour and legend colours are folders tagged with its id, and a part that ends up in another region's colour gets that colour added to its own region's legend. Overlaps are only worked out within each region, as in the embed. **Regions…** in the editor adds regions to the view or takes them out (a region's unsaved changes are kept while it stays; taking it out discards them). Only regions on one slot that you may edit can be edited together, at most 24 at once. Regions combined earlier are ordinary regions and don't change.
 
 ### How regions are stored
 

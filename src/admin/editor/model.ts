@@ -16,6 +16,7 @@ import {
   openRing,
   pointInRing,
   polygonsOf,
+  segmentsIntersect,
   signedArea,
   simplifyRing,
   toStoredGeometry,
@@ -24,11 +25,36 @@ import {
   type RegionGeometry,
   type Ring,
 } from "../../shared/geo.ts";
-import { OWN_COLOUR, type LegendEntry } from "../../shared/region.ts";
+import {
+  DEFAULT_FILL_OPACITY,
+  LEGEND_LABEL_MAX,
+  LEGEND_MAX,
+  LEGEND_TITLE_MAX,
+  OWN_COLOUR,
+  REGION_COLOR,
+  migrateZoneColours,
+  normalizePartLabelHidden,
+  normalizePartLabels,
+  normalizePartLegend,
+  normalizePartLocked,
+  type LegendEntry,
+  type RegionFeature,
+} from "../../shared/region.ts";
 export { partAnchor } from "../../shared/geo.ts";
 
 /** parts[p][0] is part p's outer ring, parts[p][1..] its holes. */
 export type Parts = Ring[][];
+
+/**
+ * A colour folder in the editor. When several regions are edited together (live.ts), each entry
+ * remembers where it came from: `src` is the region's id, and either `srcIdx` (its legend index there)
+ * or `own` (that region's own colour). These tags never reach a saved file.
+ */
+export interface EditorLegendEntry extends LegendEntry {
+  src?: string;
+  srcIdx?: number;
+  own?: boolean;
+}
 
 export interface RegionProps {
   color: string;
@@ -38,7 +64,7 @@ export interface RegionProps {
   label: boolean;
   description: string;
   legendTitle: string;
-  legend: LegendEntry[];
+  legend: EditorLegendEntry[];
   /** Draw national borders where parts share a line (off unless asked). */
   nationalBorders?: boolean;
 }
@@ -60,6 +86,11 @@ export interface EditorState {
   locked: boolean[];
   /** Province borders: open lines drawn inside the region (unwrapped, like the rings). Not tied to any part. */
   lines?: Position[][];
+  /**
+   * Per part, only when several regions are edited together (live.ts): the id of the region the part
+   * belongs to (and is saved back to). Every helper that removes or reorders parts carries it along.
+   */
+  owners?: string[];
   props: RegionProps;
 }
 
@@ -80,9 +111,43 @@ export const cloneState = (s: EditorState): EditorState => ({
   labelHidden: [...(s.labelHidden ?? [])],
   contested: [...(s.contested ?? [])],
   locked: [...(s.locked ?? [])],
+  ...(s.owners ? { owners: [...s.owners] } : {}),
   lines: (s.lines ?? []).map((l) => l.map(([x, y]) => [x, y] as Position)),
   props: { ...s.props, legend: s.props.legend.map((e) => ({ ...e })) },
 });
+
+const expandHex = (c: string) => (/^#[0-9a-f]{3}$/i.test(c) ? `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}` : c).toLowerCase();
+
+/** Editor state for a saved region (or the empty state for a new one). */
+export function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"): EditorState {
+  const fp = f?.properties;
+  const legend = (fp?.legend ?? [])
+    .slice(0, LEGEND_MAX)
+    .map((e) => ({ label: String(e.label ?? "").slice(0, LEGEND_LABEL_MAX), color: REGION_COLOR.test(e.color) ? expandHex(e.color) : "#7f8c8d" }));
+  const parts = f ? partsFromGeometry(f.geometry) : [];
+  // Older regions have one name instead of part labels: it becomes the first part's label.
+  const legacy = !fp?.partLabels && fp?.name && (fp.label ?? true) ? [fp.name] : undefined;
+  return {
+    parts,
+    // Contested zones (older regions) are plain parts now: a zone without its own colour keeps its parent's.
+    styles: migrateZoneColours(normalizePartLegend(fp?.partLegend, parts.length, legend.length), fp?.partContested),
+    labels: normalizePartLabels(fp?.partLabels ?? legacy, parts.length),
+    labelHidden: normalizePartLabelHidden(fp?.partLabelHidden, parts.length),
+    contested: new Array<number>(parts.length).fill(-1),
+    locked: normalizePartLocked(fp?.partLocked, parts.length),
+    lines: (fp?.provinceBorders ?? []).filter((l) => l.length >= 2).map((l) => unwrapRing(l.map(([x, y]) => [x, y] as Position))),
+    props: {
+      color: fp && REGION_COLOR.test(fp.color) ? expandHex(fp.color) : fallbackColour,
+      colorLabel: String(fp?.colorLabel ?? "").slice(0, LEGEND_LABEL_MAX),
+      fillOpacity: fp?.fillOpacity ?? DEFAULT_FILL_OPACITY,
+      label: fp?.label ?? true,
+      description: fp?.description ?? "",
+      legendTitle: (fp?.legendTitle ?? "").slice(0, LEGEND_TITLE_MAX),
+      legend,
+      nationalBorders: fp?.nationalBorders === true,
+    },
+  };
+}
 
 export function countVertices(parts: Parts): number {
   let n = 0;
@@ -358,9 +423,10 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
   const labels: string[] = [];
   const labelHidden: boolean[] = [];
   const locked: boolean[] = [];
+  const owners: string[] = [];
   const parentOld: number[] = [];
   const index = s.parts.map(() => -1);
-  const extra: { rings: Ring[]; style: number; parent: number; lock: boolean; hide: boolean }[] = [];
+  const extra: { rings: Ring[]; style: number; parent: number; lock: boolean; hide: boolean; owner: string }[] = [];
   const cut: number[] = [];
   let removed = 0;
   s.parts.forEach((rings, p) => {
@@ -369,6 +435,7 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
     const parent = s.contested[p] ?? -1;
     const lock = s.locked?.[p] !== false;
     const hide = s.labelHidden?.[p] === true;
+    const owner = s.owners?.[p] ?? "";
     if (pc) cut.push(p);
     if (pc && !pc.length) return void removed++;
     index[p] = parts.length;
@@ -377,8 +444,9 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
     labels.push(s.labels[p] ?? "");
     labelHidden.push(hide);
     locked.push(lock);
+    owners.push(owner);
     parentOld.push(parent);
-    for (const more of pc?.slice(1) ?? []) extra.push({ rings: more, style, parent, lock, hide });
+    for (const more of pc?.slice(1) ?? []) extra.push({ rings: more, style, parent, lock, hide, owner });
   });
   for (const e of extra) {
     parts.push(e.rings);
@@ -386,6 +454,7 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
     labels.push("");
     labelHidden.push(e.hide);
     locked.push(e.lock);
+    owners.push(e.owner);
     parentOld.push(e.parent);
   }
   let orphaned = 0;
@@ -402,6 +471,7 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
   next.labelHidden = labelHidden;
   next.contested = contested;
   next.locked = locked;
+  if (s.owners) next.owners = owners;
   // Check the changed parts as they'd be stored (rounded): a cut can leave a hole touching the edge.
   const changedNew = [...cut.map((p) => index[p]).filter((i) => i >= 0), ...extra.map((_, i) => parts.length - extra.length + i)];
   const bad = changedNew.length ? checkGeometry(toStoredGeometry(changedNew.map((i) => parts[i]))) : [];
@@ -654,6 +724,7 @@ export function reorderPart(s: EditorState, p: number, to: number): EditorState 
   next.labelHidden = order.map((i) => s.labelHidden?.[i] === true);
   next.contested = order.map((i) => ((s.contested[i] ?? -1) >= 0 ? inv[s.contested[i]] : -1));
   next.locked = order.map((i) => s.locked[i] ?? true);
+  if (s.owners) next.owners = order.map((i) => s.owners![i] ?? "");
   return next;
 }
 
@@ -777,4 +848,45 @@ export class History {
     this.version++;
     return true;
   }
+}
+
+/**
+ * Tidies the end of a freehand stroke that overshot its start: when the last stretch crosses one of
+ * the first edges, the loop between the crossing and the end is kept and the little tails on either side
+ * are dropped, with the crossing itself as the new vertex. Only trims when the tails are short (at most
+ * a quarter of the stroke), so a deliberate figure-eight is still refused as self-crossing. `ky` scales
+ * latitude to the screen's aspect so "short" matches what was drawn.
+ */
+export function trimStrokeOvershoot(open: Position[], ky = 1): Position[] {
+  const n = open.length;
+  if (n < 4 || n > 3000) return open;
+  const len = (a: Position, b: Position) => Math.hypot(b[0] - a[0], (b[1] - a[1]) * ky);
+  const cum = [0];
+  for (let i = 1; i < n; i++) cum.push(cum[i - 1] + len(open[i - 1], open[i]));
+  const total = cum[n - 1];
+  let best: { j: number; i: number; x: Position } | null = null;
+  for (let j = 0; j < n - 3 && !best; j++) {
+    for (let i = n - 2; i > j + 1; i--) {
+      if (!segmentsIntersect(open[j], open[j + 1], open[i], open[i + 1])) continue;
+      const x = crossingPoint(open[j], open[j + 1], open[i], open[i + 1]);
+      if (!x) continue;
+      // What would be thrown away: the start up to the crossing, and the end past it.
+      const dropped = cum[j] + len(open[j], x) + (total - cum[i + 1]) + len(open[i + 1], x);
+      if (dropped <= total * 0.25) best = { j, i, x };
+      break;
+    }
+  }
+  if (!best) return open;
+  const out = [best.x, ...open.slice(best.j + 1, best.i + 1)];
+  return out.length >= 3 ? out : open;
+}
+
+/** Where segments ab and cd cross, or null when they are parallel. */
+function crossingPoint(a: Position, b: Position, c: Position, d: Position): Position | null {
+  const r: Position = [b[0] - a[0], b[1] - a[1]];
+  const q: Position = [d[0] - c[0], d[1] - c[1]];
+  const den = r[0] * q[1] - r[1] * q[0];
+  if (Math.abs(den) < 1e-12) return null;
+  const t = ((c[0] - a[0]) * q[1] - (c[1] - a[1]) * q[0]) / den;
+  return [a[0] + t * r[0], a[1] + t * r[1]];
 }

@@ -70,7 +70,9 @@
       "id": "nirydian-religions",
       "name": "Nirydian Religions",
       "regions": [
+        "faiginism",
         "javalim",
+        "lakalism",
         "tsurugism"
       ],
       "parent": "religion",
@@ -84,8 +86,12 @@
       "id": "vas-ira",
       "name": "Vas Ira",
       "regions": [
+        "bigronism",
         "bihrasmanism",
-        "noorism"
+        "iratism",
+        "karaluk",
+        "noorism",
+        "rayadan"
       ],
       "parent": "nirydian-religions",
       "createdBy": {

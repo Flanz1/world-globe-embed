@@ -325,6 +325,8 @@ function assemble(s: EditorState, list: number[], rings: Ring[], parent: number,
   // The merged part's label shows unless every part that fed it had its label switched off.
   next.labelHidden = kept.map((q) => (q === into ? list.every((r) => s.labelHidden?.[r] === true || !s.labels[r]?.trim()) && list.some((r) => s.labelHidden?.[r] === true) : s.labelHidden?.[q] === true));
   next.locked = kept.map((q) => (q === into ? list.some((r) => s.locked[r] !== false) : s.locked[q] !== false));
+  // Editing several regions together: the combined part stays with the region of the part that keeps its place.
+  if (s.owners) next.owners = kept.map((q) => s.owners![q] ?? "");
   next.contested = kept.map((q) => {
     if (q === into) return parent < 0 ? -1 : (index[parent] ?? -1);
     const k = s.contested[q] ?? -1;
