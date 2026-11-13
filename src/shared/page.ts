@@ -105,7 +105,31 @@ export interface PageInput {
   /** Preview page only: every map, picked with ?map=<id>. */
   maps?: Record<string, PreviewMap>;
   noindex?: boolean;
+  /**
+   * base64 SHA-256 of `bootJs` (see slotPageCsp). When set, the page carries a Content-Security-Policy
+   * that allows only that inline script and this site's own modules.
+   */
+  bootHash?: string;
 }
+
+/**
+ * The slot and preview pages' Content-Security-Policy. They share an origin with the admin page, which
+ * opens the preview in an iframe, so script that sneaks into an embed could act as the signed-in admin.
+ * Only the boot script (by hash) and this site's modules may run. Styles stay inline-able: the page sets
+ * its poster through a style attribute. (frame-ancestors can't be set from a <meta>; embeds must be
+ * frameable anyway.)
+ */
+export const slotPageCsp = (bootHash: string): string =>
+  [
+    "default-src 'none'",
+    `script-src 'sha256-${bootHash}' 'self'`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "connect-src 'self'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "object-src 'none'",
+  ].join("; ");
 
 const finite = (...v: number[]) => v.every((n) => typeof n === "number" && Number.isFinite(n));
 
@@ -132,6 +156,7 @@ export function renderSlotPage({
   regions,
   maps,
   noindex,
+  bootHash,
 }: PageInput): string {
   const k = diameterFraction(distanceForZoom(cfg.zoom)).toFixed(4);
   const title = escapeHtml(cfg.title);
@@ -159,7 +184,7 @@ export function renderSlotPage({
 <html lang="en" style="${escapeHtml(vars)}">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+${bootHash ? `<meta http-equiv="Content-Security-Policy" content="${slotPageCsp(bootHash)}">\n` : ""}<meta name="viewport" content="width=device-width,initial-scale=1">
 ${noindex ? '<meta name="robots" content="noindex">\n' : ""}<title>${title}</title>
 ${first ? `<link rel="preload" href="${escapeHtml(first.url)}" as="fetch" type="image/webp" crossorigin>\n` : ""}<style>${CRITICAL_CSS}</style>
 </head>

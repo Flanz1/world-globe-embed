@@ -40,6 +40,20 @@ describe("slot page generator", () => {
     expect(pages.map((p) => p.path)).toEqual(["v/inara/index.html", "v/plain/index.html", "v/padded/index.html"]);
   });
 
+  it("carries a CSP that allows only its own boot script (by hash) and the site's modules", async () => {
+    const { createHash } = await import("node:crypto");
+    const hash = createHash("sha256").update("/*boot*/").digest("base64");
+    for (const html of [pages[0].html, generatePreviewPage(content, "/*boot*/", "assets/globe-abc.js").html]) {
+      const csp = /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(html)?.[1] ?? "";
+      expect(csp).toContain(`script-src 'sha256-${hash}' 'self'`);
+      expect(csp).toContain("default-src 'none'");
+      expect(csp).toContain("object-src 'none'");
+      expect(csp).not.toMatch(/script-src[^;]*unsafe-inline/);
+      // The policy comes before anything it governs.
+      expect(html.indexOf("Content-Security-Policy")).toBeLessThan(html.indexOf("<script"));
+    }
+  });
+
   it("inlines config, LQIP, boot script and a preload for the 1024 texture, with relative URLs only", () => {
     const html = pages[0].html;
     expect(html).toContain('--lqip:url(&quot;data:image/webp;base64,AAAA&quot;)');
