@@ -56,7 +56,7 @@ A region is an outline (a kingdom, a province, a battlefield) drawn on a slot's 
 |---|---|
 | `V` / `P` / `F` | Select, polygon and freehand tools |
 | Click (polygon) | Add a point; double-click, `Enter` or click the first point to close (a split line: double-click or `Enter`) |
-| `Backspace` while drawing | Remove the last point |
+| `Backspace` or right-click while drawing | Remove the last point |
 | `Esc` | Cancel the outline being drawn, or clear the selection (vertices first, then the selected part) |
 | Drag a vertex | Move it, with any vertices attached to it; it snaps to vertices and lines of other parts and regions |
 | `Ctrl`+drag a vertex | Move just that vertex, without snapping (pulls it off a shared border) |
