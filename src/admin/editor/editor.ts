@@ -172,7 +172,7 @@ class Conflict extends Error {}
 export const SHORTCUTS: [string, string][] = [
   ["V / P / F", "Select, polygon and freehand tools"],
   ["Click (polygon)", "Add a point; double-click, Enter or click the first point to close (a split line: double-click or Enter)"],
-  ["Backspace (drawing)", "Remove the last point"],
+  ["Backspace or right-click (drawing)", "Remove the last point (repeat to go back to the start)"],
   ["Esc", "Cancel the outline being drawn, or clear the selection"],
   ["Drag a vertex", "Move it, with any vertices attached to it (other parts' vertices on the same spot); it snaps to vertices and lines of other parts and regions"],
   ["Ctrl+drag a vertex", "Move just that vertex, without snapping (pulls it off a shared border)"],
@@ -2911,8 +2911,20 @@ export function openEditor(o: EditorOptions): void {
   function hideMenu(): void {
     ctxMenu.hidden = true;
   }
+  /** Backspace or right-click while drawing: take back the last point (repeatable, back to nothing). */
+  function undoDrawPoint(): void {
+    if (!drawing) return;
+    drawing.pop();
+    drawSnaps.length = drawing.length;
+    if (!drawing.length) drawing = null;
+    draw();
+  }
   canvas.addEventListener("contextmenu", (e) => {
-    e.preventDefault();
+    e.preventDefault(); // the browser menu never opens on the map
+    if (drawing) {
+      hideMenu();
+      return undoDrawPoint();
+    }
     if (tool !== "select") return;
     const { x, y } = local(e);
     const v = hitVertex(x, y);
@@ -2971,10 +2983,7 @@ export function openEditor(o: EditorOptions): void {
     }
     if (e.key === "Backspace" && drawing) {
       e.preventDefault();
-      drawing.pop();
-      drawSnaps.length = drawing.length;
-      if (!drawing.length) drawing = null;
-      return draw();
+      return undoDrawPoint();
     }
     if (e.key === "Tab" && drawing && tool === "polygon" && !mod) {
       // Trace the other way round the border the next click follows.
