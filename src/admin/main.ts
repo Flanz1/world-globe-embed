@@ -14,6 +14,7 @@ import { initRegions, loadRegions, renderRegions } from "./regions.ts";
 import { PART_BYTES, prepareImage } from "./upload-image.ts";
 import { can, refusal, setMe } from "./session.ts";
 import { initUsers, loadUsers } from "./users.ts";
+import { setChecks } from "./status.ts";
 
 declare const __REPO__: string;
 /** The admin API (worker/). Set with VITE_ADMIN_API at build time; empty means it isn't set up yet. */
@@ -206,7 +207,25 @@ function renderSlots(): void {
   );
 }
 
+/** Will a commit from here deploy? Derived from the target branch and the latest workflow runs. */
+function renderChecks(runs: WorkflowRun[]): void {
+  const deploys = !gh || gh.branch === gh.defaultBranch;
+  const busy = runs.some((r) => r.status !== "completed");
+  const failed = runs.find((r) => r.conclusion === "failure");
+  setChecks([
+    deploys
+      ? { id: "branch", label: "Commits go to the live branch", state: "ok", detail: gh?.branch }
+      : { id: "branch", label: "Test branch: changes won't go live", state: "warn", detail: gh?.branch },
+    failed
+      ? { id: "workflow", label: "Last workflow failed", state: "error", detail: failed.name }
+      : busy
+        ? { id: "workflow", label: "A deploy is running", state: "pending" }
+        : { id: "workflow", label: "No failing workflows", state: "ok" },
+  ]);
+}
+
 function renderRuns(runs: WorkflowRun[]): void {
+  renderChecks(runs);
   $("#runs").replaceChildren(
     ...runs.map((r) => {
       const state = r.status === "completed" ? (r.conclusion ?? "done") : r.status.replace("_", " ");
