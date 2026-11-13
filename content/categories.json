@@ -17,7 +17,8 @@
       "regions": [
         "diarism",
         "gethricism",
-        "kethregion"
+        "kethregion",
+        "razmyrregion"
       ],
       "parent": "religion",
       "createdBy": {
