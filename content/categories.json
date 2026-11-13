@@ -70,7 +70,9 @@
       "id": "nirydian-religions",
       "name": "Nirydian Religions",
       "regions": [
+        "faiginism",
         "javalim",
+        "lakalism",
         "tsurugism"
       ],
       "parent": "religion",

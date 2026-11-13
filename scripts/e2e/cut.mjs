@@ -237,6 +237,53 @@ await step(E, "split across the antimeridian", async () => {
   check(E, "saved as two valid parts, longitudes within ±180", checkGeometry(f.geometry).length === 0 && polygonsOf(f.geometry).length === 2 && lons.every((x) => x >= -180 && x <= 180), JSON.stringify(f.geometry.coordinates).slice(0, 300));
 });
 
+await step(E, "closing a polygon or freehand outline is deliberate", async () => {
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  await openRegion("cut-test", 150, -20);
+  const n0 = (await ed.state()).parts.length;
+  const [x0, y0] = await ed.xy(147, -17);
+  const at = (dx, dy) => page.mouse.click(x0 + dx, y0 + dy);
+  // Polygon: three points, then a click 20 px from the first one: that's just another point, nothing closes.
+  await page.keyboard.press("p");
+  await at(0, 0);
+  await at(120, 0);
+  await at(120, 120);
+  await at(0, 20);
+  let s = await ed.state();
+  let d = await page.evaluate(() => document.querySelector("dialog.editor").wgeEditor.drawing());
+  check(E, "a click 20 px from the first point adds a point, it doesn't close", s.parts.length === n0 && d && d.length === 4, `${s.parts.length} parts, ${d && d.length} points`);
+  await page.keyboard.press("Backspace");
+  // 11 px away is inside the close radius (lit up): closes.
+  await page.mouse.move(x0 + 11, y0);
+  await page.waitForTimeout(100);
+  await at(11, 0);
+  s = await ed.state();
+  check(E, "a click within 14 px of the first point closes the outline", s.parts.length === n0 + 1, `${s.parts.length} parts; ${await ed.msg()}`);
+
+  // Freehand: a stroke that overshoots its start and crosses its first edge is trimmed and closes on release.
+  await page.keyboard.press("f");
+  const pts = [[0, 0], [150, 0], [150, 150], [0, 150], [0, 40], [60, -30]];
+  await page.mouse.move(x0 + 20, y0 + 200);
+  await page.mouse.move(x0 + 20 + pts[0][0], y0 + 200 + pts[0][1]);
+  await page.mouse.down();
+  for (let i = 1; i < pts.length; i++) for (let t = 1; t <= 8; t++) await page.mouse.move(x0 + 20 + pts[i - 1][0] + ((pts[i][0] - pts[i - 1][0]) * t) / 8, y0 + 200 + pts[i - 1][1] + ((pts[i][1] - pts[i - 1][1]) * t) / 8);
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  s = await ed.state();
+  check(E, "a freehand stroke that overshoots its start is trimmed and closes on release", s.parts.length === n0 + 2, `${s.parts.length} parts; ${await ed.msg()}`);
+
+  // A tiny slip of the mouse draws nothing.
+  await page.keyboard.press("f");
+  await page.mouse.move(x0 + 400, y0);
+  await page.mouse.down();
+  for (const [dx, dy] of [[3, 0], [5, 4], [2, 6], [0, 3]]) await page.mouse.move(x0 + 400 + dx, y0 + dy);
+  await page.mouse.up();
+  s = await ed.state();
+  check(E, "a tiny freehand stroke doesn't make a part", s.parts.length === n0 + 2, `${s.parts.length} parts`);
+  await page.keyboard.press("Escape");
+});
+
 check(E, "main untouched", mock.refs.get("main") === mainAtStart);
 check(E, "no errors or dialogs in the admin page", errors.length === 0 && dialogs.length === 0, [...errors, ...dialogs].join(" | ") || "none");
 
