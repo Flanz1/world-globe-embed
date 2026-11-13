@@ -250,3 +250,4 @@ button.tiny { padding: 1px 7px; font-size: 12px; }
 .ed-part-row select[data-part-owner] { grid-column: 2 / 4; }
 .ed-folder-head .ed-src { font-size: 11px; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-live-note { margin: 0; }
+.rcard .rlinked { margin: 2px 0; }

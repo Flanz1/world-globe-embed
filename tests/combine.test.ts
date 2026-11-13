@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
-import { combineRegions, combinedId, regionBases } from "../src/shared/combine.ts";
+import { combineRegions, combinedId, regionBases, resolveLinked } from "../src/shared/combine.ts";
 import { MAX_VERTICES, checkGeometry, polygonsOf } from "../src/shared/geo.ts";
 import { LEGEND_MAX, checkLegend, checkParts, regionData, type RegionFeature } from "../src/shared/region.ts";
 
@@ -159,5 +159,35 @@ describe("combinedId", () => {
     expect(combinedId([a, b], new Set())).toBe("vael-keth");
     expect(combinedId([a, b], new Set(["vael-keth"]))).toBe("vael-keth-2");
     expect(combinedId([a, b, a, b], new Set())).toBe("vael-combined");
+  });
+});
+
+describe("resolveLinked", () => {
+  const a = region("a", { partLabels: ["A"] }, [square(0, 0)]);
+  const b = region("b", { color: "#2e86c1", partLabels: ["B"] }, [square(10, 0)]);
+  const link = (linked: string[], polys = [square(50, 50)]) =>
+    region("ab", { linked, partLabels: ["stale"], createdBy: { id: 7, login: "maker" }, created: "2026-11-13T00:00:00Z" }, polys);
+  const lookup = (m: Record<string, RegionFeature>) => (id: string) => m[id];
+
+  it("rebuilds the region from its linked regions as they are now, keeping its id, links and maker", () => {
+    const r = resolveLinked(link(["a", "b"]), lookup({ a, b }));
+    expect(r.missing).toEqual([]);
+    expect(r.feature!.id).toBe("ab");
+    expect(polygonsOf(r.feature!.geometry)).toHaveLength(2);
+    expect(r.feature!.properties.partLabels).toEqual(["A", "B"]);
+    expect(r.feature!.properties).toMatchObject({ linked: ["a", "b"], createdBy: { id: 7, login: "maker" } });
+    expect(validate(r.feature)).toBe(true);
+    // A change in a linked region shows up.
+    const a2 = region("a", { partLabels: ["A changed"] }, [square(0, 0)]);
+    expect(resolveLinked(link(["a", "b"]), lookup({ a: a2, b })).feature!.properties.partLabels).toEqual(["A changed", "B"]);
+  });
+
+  it("skips missing, linked and other-slot regions; with none left the snapshot stands", () => {
+    const other = region("c", { slot: "elsewhere" }, [square(20, 0)]);
+    const chained = { ...link(["a"]), id: "d" };
+    const r = resolveLinked(link(["a", "gone", "c", "d"]), lookup({ a, c: other, d: chained }));
+    expect(r.missing).toEqual(["gone", "c", "d"]);
+    expect(polygonsOf(r.feature!.geometry)).toHaveLength(1);
+    expect(resolveLinked(link(["gone"]), lookup({})).feature).toBeNull();
   });
 });

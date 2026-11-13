@@ -63,6 +63,7 @@ import { alertBox, confirmBox, modal, openEmbedDialog, previewUrl, sendRegion } 
 import { regionPath, serialize, stamp } from "../regions.ts";
 import { account } from "../session.ts";
 import { combineKind, combineParts, extendPart, type MergeResult } from "./merge.ts";
+import { LINKED_MAX, combineRegions } from "../../shared/combine.ts";
 import { MAX_LIVE, liveState, ownEntry, previewLegend, removeLiveEntry, splitLive, type LiveSource } from "./live.ts";
 import {
   History,
@@ -140,6 +141,11 @@ export interface EditorOptions {
     neighboursFor: (ids: Set<string>) => RegionFeature[];
     /** Where the map was looking (kept when regions are added or taken out). */
     view?: { cx: number; cy: number; k: number };
+    /**
+     * A linked combined region made of these regions (shared/combine.ts resolveLinked): saving also writes
+     * its file (its link list and a snapshot). `sha` null: it's new, created by the first save.
+     */
+    link?: { id: string; sha: string | null; feature: RegionFeature };
   };
 }
 
@@ -304,6 +310,8 @@ export function openEditor(o: EditorOptions): void {
 
   /** Editing several regions together: each one as saved, and its file's blob SHA (to notice changes on GitHub). */
   const live = o.live?.sources.length ? o.live.sources.map((x) => ({ id: x.id, sha: x.sha, feature: x.feature })) : null;
+  const link = o.live?.link ? { ...o.live.link } : null;
+  const liveMax = link ? LINKED_MAX : MAX_LIVE;
   const liveSources: LiveSource[] = live ? live.map((x) => ({ id: x.id, state: stateOf(x.feature) })) : [];
   const legendCap = live ? 1000 : LEGEND_MAX;
   /** Vertex limit for the editor's parts: per region, so editing together the save checks each region instead. */
@@ -1408,7 +1416,10 @@ export function openEditor(o: EditorOptions): void {
     if (document.activeElement !== colorLabelIn) colorLabelIn.value = s.colorLabel;
     syncColours();
     idIn.disabled = !isNew;
-    title.textContent = live ? `Edit together: ${live.map((x) => x.id).join(", ")}` : `${isNew ? "New region" : "Edit region"}: ${id || "(no id yet)"}`;
+    title.textContent = live
+      ? link
+        ? `${link.sha ? "Edit" : "New"} linked region ${link.id}: ${live.map((x) => x.id).join(", ")}`
+        : `Edit together: ${live.map((x) => x.id).join(", ")}` : `${isNew ? "New region" : "Edit region"}: ${id || "(no id yet)"}`;
   }
   const setProp = <K extends keyof EditorState["props"]>(k: K, v: EditorState["props"][K], label: string) =>
     hist.apply(label, { ...hist.state, props: { ...hist.state.props, [k]: v } }, `prop:${k}`);
@@ -3266,7 +3277,6 @@ export function openEditor(o: EditorOptions): void {
   async function saveLive(): Promise<void> {
     if (!live) return;
     const changedNow = liveChanged();
-    if (!changedNow.length) return setMsg("Nothing to save: no region changed.", "ok");
     const bad = changedNow.find((x) => x.problem);
     if (bad) return setMsg(bad.problem!, "error");
     const files: { src: (typeof live)[number]; feature: RegionFeature; text: string; core: string }[] = [];
@@ -3287,7 +3297,29 @@ export function openEditor(o: EditorOptions): void {
       };
       files.push({ src, feature, text: serialize(feature), core: serialize(built) });
     }
-    const ids = files.map((f) => f.src.id);
+    // The linked region: rebuilt from the regions as they'll be saved, written when it changes (or is new).
+    let linkFile: { feature: RegionFeature; text: string } | null = null;
+    if (link) {
+      if (!link.sha && o.takenIds.has(link.id)) return setMsg(`The id "${link.id}" is taken. Close and pick another one.`, "error");
+      const now = live.map((x) => files.find((f) => f.src === x)?.feature ?? x.feature);
+      const r = combineRegions(now, { id: link.id, base: { slot: slotName, map: slot.map } }, 1);
+      if (!r.feature) return setMsg(`The linked region ${link.id} can't be made from these: ${r.errors[0]}`, "error");
+      const lp = link.feature.properties;
+      const made = link.sha && lp.createdBy ? { ...(lp.created ? { created: lp.created } : {}), createdBy: lp.createdBy } : { created: stamp(), createdBy: account() };
+      const core: RegionFeature = { ...r.feature, properties: { ...r.feature.properties, linked: live.map((x) => x.id), ...made } };
+      const strip = (f: RegionFeature) => {
+        const rest = { ...f.properties };
+        delete rest.updated;
+        delete rest.updatedBy;
+        return serialize({ ...f, properties: rest });
+      };
+      if (!link.sha || strip(core) !== strip(link.feature)) {
+        const feature: RegionFeature = { ...core, properties: { ...core.properties, updated: stamp(), updatedBy: account() } };
+        linkFile = { feature, text: serialize(feature) };
+      }
+    }
+    if (!files.length && !linkFile) return setMsg("Nothing to save: no region changed.", "ok");
+    const ids = [...files.map((f) => f.src.id), ...(linkFile && link ? [link.id] : [])];
     saving = true;
     saveBtn.disabled = true;
     setMsg(`Saving ${ids.join(", ")}…`);
@@ -3299,9 +3331,15 @@ export function openEditor(o: EditorOptions): void {
             if ((await o.gh.fileSha(regionPath(f.src.id))) !== f.src.sha) stale.push(f.src.id);
           }),
         );
+        if (linkFile && link && (await o.gh.fileSha(regionPath(link.id))) !== link.sha) stale.push(link.id);
         if (stale.length) throw new Conflict(stale.sort().join(", "));
-        return files.map((f) => ({ path: regionPath(f.src.id), content: f.text }));
+        return [...files.map((f) => ({ path: regionPath(f.src.id), content: f.text })), ...(linkFile && link ? [{ path: regionPath(link.id), content: linkFile.text }] : [])];
       });
+      if (linkFile && link) {
+        link.sha = await gitBlobSha(linkFile.text);
+        link.feature = linkFile.feature;
+        o.takenIds.add(link.id);
+      }
       for (const f of files) {
         f.src.sha = await gitBlobSha(f.text);
         f.src.feature = f.feature;
@@ -3325,7 +3363,7 @@ export function openEditor(o: EditorOptions): void {
     if (!o.live) return;
     close();
     const ids = new Set(sources.map((x) => x.id));
-    openEditor({ ...o, feature: sources[0].feature, sha: sources[0].sha, neighbours: o.live.neighboursFor(ids), live: { ...o.live, sources, view: { ...view } } });
+    openEditor({ ...o, feature: sources[0].feature, sha: sources[0].sha, neighbours: o.live.neighboursFor(ids), live: { ...o.live, sources, view: { ...view }, ...(link ? { link } : {}) } });
   }
 
   async function liveConflict(which: string): Promise<void> {
@@ -3378,19 +3416,19 @@ export function openEditor(o: EditorOptions): void {
     function update(): void {
       const ids = picked();
       const dropped = live!.map((x) => x.id).filter((rid) => !ids.includes(rid) && changedIds.has(rid));
-      go.disabled = !ids.length || ids.length > MAX_LIVE;
+      go.disabled = !ids.length || ids.length > liveMax;
       out.className = dropped.length || go.disabled ? "warn small" : "muted small";
       out.textContent = !ids.length
         ? "Keep at least one region."
-        : ids.length > MAX_LIVE
-          ? `At most ${MAX_LIVE} regions can be edited together (one save writes at most ${MAX_LIVE}).`
+        : ids.length > liveMax
+          ? `At most ${liveMax} regions can be ${link ? "linked" : "edited together"} (one save writes at most ${MAX_LIVE} files).`
           : dropped.length
             ? `Taking out ${dropped.join(", ")} discards ${dropped.length > 1 ? "their" : "its"} unsaved changes. Save first to keep them.`
             : "Unsaved changes of the regions that stay are kept. Undo history starts again.";
     }
     go.addEventListener("click", () => {
       const ids = picked();
-      if (!ids.length || ids.length > MAX_LIVE) return;
+      if (!ids.length || ids.length > liveMax) return;
       // Unsaved changes of the regions that stay come along: the editor reopens from each one's current state.
       const now = new Map(splitLive(hist.state, liveSources).map((x) => [x.id, x]));
       const sources = ids.map((rid) => {

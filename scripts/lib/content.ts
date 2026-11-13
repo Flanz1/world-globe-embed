@@ -8,6 +8,7 @@ import { checkGeometry } from "../../src/shared/geo.ts";
 import { checkLegend, checkParts, type RegionFeature } from "../../src/shared/region.ts";
 import { checkAccess } from "../../src/shared/access.ts";
 import { checkCategories, type CategoriesFile } from "../../src/shared/categories.ts";
+import { resolveLinked } from "../../src/shared/combine.ts";
 import { ROOT, contentPaths, type ContentPaths } from "./paths.ts";
 
 const readJson = (file: string): unknown => JSON.parse(readFileSync(file, "utf8"));
@@ -174,6 +175,16 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
     }
     if (!maps.has(map)) warnings.push(`${rel}: the map it was drawn on ("${map}") no longer exists.`);
     if (ok) regions.set(region.id, region);
+  }
+
+  // Linked combined regions are rebuilt from the regions they link, so every page and embed shows them as those regions are now.
+  for (const [id, region] of regions) {
+    if (!region.properties.linked) continue;
+    const r = resolveLinked(region, (x) => regions.get(x));
+    const rel = `content/regions/${id}.json`;
+    if (r.missing.length) warnings.push(`${rel}: linked region${r.missing.length > 1 ? "s" : ""} ${r.missing.join(", ")} ${r.missing.length > 1 ? "don't" : "doesn't"} exist (or can't be linked); the rest are combined.`);
+    if (r.errors.length) warnings.push(`${rel}: can't combine its linked regions (${r.errors[0]}); the saved snapshot is shown instead.`);
+    if (r.feature) regions.set(id, r.feature);
   }
 
   // Who may use the admin page (optional: without it only the repository owner can sign in).

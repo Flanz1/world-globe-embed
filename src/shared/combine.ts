@@ -75,10 +75,10 @@ function freeLabel(label: string, used: Set<string>): string {
  * legend entry where it differs from the base's), and legend entries, in order (later sources' parts are drawn on top). Legend labels
  * that clash (same text, different colour) get a " (2)" suffix; identical entries are shared.
  */
-export function combineRegions(sources: readonly RegionFeature[], target: { id: string; base: RegionBase }): CombineResult {
+export function combineRegions(sources: readonly RegionFeature[], target: { id: string; base: RegionBase }, minSources = 2): CombineResult {
   const errors: string[] = [];
   const notes: string[] = [];
-  if (sources.length < 2) return { feature: null, errors: ["Pick at least two regions to combine."], notes };
+  if (sources.length < minSources || !sources.length) return { feature: null, errors: ["Pick at least two regions to combine."], notes };
 
   const first = sources[0].properties;
   const colour = safeColour(first.color, "#c0392b");
@@ -172,4 +172,45 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
     geometry,
   };
   return { feature, errors, notes };
+}
+
+/** Most regions a linked combined region links (one save writes them and the linked region: at most 24 files). */
+export const LINKED_MAX = 23;
+
+export interface LinkedResult {
+  /** The linked region rebuilt from its regions as they are now, or null (then the stored snapshot stands). */
+  feature: RegionFeature | null;
+  /** Linked ids with no usable region (deleted, itself linked, or on another slot). */
+  missing: string[];
+  errors: string[];
+}
+
+/**
+ * A linked combined region (`properties.linked`) rebuilt from the regions it links, as they are now: their
+ * parts, labels and colours combined (combineRegions), under the linked region's own id, slot and map,
+ * keeping its link list and who made it. Linked regions aren't followed (no chains).
+ */
+export function resolveLinked(f: RegionFeature, lookup: (id: string) => RegionFeature | undefined): LinkedResult {
+  const ids = f.properties.linked ?? [];
+  const sources: RegionFeature[] = [];
+  const missing: string[] = [];
+  for (const id of ids) {
+    const s = id === f.id ? undefined : lookup(id);
+    if (s && !s.properties.linked && s.properties.slot === f.properties.slot) sources.push(s);
+    else missing.push(id);
+  }
+  if (!sources.length) return { feature: null, missing, errors: [] };
+  const r = combineRegions(sources, { id: f.id, base: { slot: f.properties.slot, map: f.properties.map } }, 1);
+  if (!r.feature) return { feature: null, missing, errors: r.errors };
+  const p = f.properties;
+  r.feature.properties = {
+    ...r.feature.properties,
+    linked: [...ids],
+    ...(p.created ? { created: p.created } : {}),
+    ...(p.createdBy ? { createdBy: p.createdBy } : {}),
+    ...(p.updated ? { updated: p.updated } : {}),
+    ...(p.updatedBy ? { updatedBy: p.updatedBy } : {}),
+  };
+  if (f.$schema) r.feature.$schema = f.$schema;
+  return { feature: r.feature, missing, errors: [] };
 }

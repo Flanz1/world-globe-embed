@@ -605,6 +605,8 @@ await step(A, "combine", async () => {
   check(A, "combine warns about different base maps and offers a choice", bases === 2 && /different maps/.test(warnText), `${bases} bases; ${warnText}`);
   await page.screenshot({ path: path.join(OUT, "combine-different-maps.png") });
   await page.uncheck('dialog.combine-dlg input[value="old-map-region"]');
+  // A copy (unlinked): linked combined regions are checked in live.mjs.
+  await page.uncheck('dialog.combine-dlg input[name="keep-linked"]');
   const id = await page.inputValue("dialog.combine-dlg input[type=text]");
   check(A, "combine suggests a free id", id === "test-kingdom-test-kingdom-copy", id);
   await go.click();

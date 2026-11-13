@@ -226,7 +226,55 @@ await step(E, "conflict", async () => {
   check(E, "reload brings the latest version and drops the unsaved edit", s.labels[1] === "B renamed" && s.owners.length === 3, JSON.stringify(s.labels));
 });
 
-check(E, "no region file was created or deleted", mock.log.every((c) => c.changes.every((ch) => ["content/regions/live-a.json", "content/regions/live-b.json", "content/regions/live-c.json"].includes(ch.path) && !ch.deleted)), JSON.stringify(mock.log.map((c) => c.changes)));
+await step(E, "linked combined region", async () => {
+  await page.click("dialog.editor .pv-head button.ghost");
+  await page.waitForTimeout(300);
+  await page.goto(`${SITE}/admin/#regions`);
+  await page.waitForSelector('#regions .rcard[data-region="live-a"]', { timeout: 15000 });
+  await page.click("#r-combine");
+  await page.waitForSelector("dialog.combine-dlg[open]");
+  await page.check('dialog.combine-dlg input[value="live-a"]');
+  await page.check('dialog.combine-dlg input[value="live-c"]');
+  check(E, "keep linked is on by default", await page.isChecked('dialog.combine-dlg input[name="keep-linked"]'));
+  await page.fill("dialog.combine-dlg input[type=text]", "live-link");
+  await page.click('dialog.combine-dlg [data-action="combine"]');
+  await page.waitForSelector("dialog.editor[open]");
+  await page.waitForTimeout(600);
+  check(E, "opens as a new linked region over its regions", /New linked region live-link: live-a, live-c/.test(await page.textContent("dialog.editor h2")), await page.textContent("dialog.editor h2"));
+  let c = await saveAndWait();
+  const link = read("live-link");
+  check(E, "saving creates just the linked region's file, listing its regions", c.length === 1 && JSON.stringify(changedPaths(c)) === JSON.stringify(["content/regions/live-link.json"]) && JSON.stringify(link?.properties.linked) === JSON.stringify(["live-a", "live-c"]) && parts(link.geometry) === parts(read("live-a").geometry) + parts(read("live-c").geometry), JSON.stringify(c) + (await ed.msg()));
+  await page.click("dialog.editor .pv-head button.ghost");
+  await page.waitForSelector('#regions .rcard[data-region="live-link"] .rlinked', { timeout: 15000 });
+  check(E, "its card says what it links", /live-a, live-c/.test(await page.textContent('#regions .rcard[data-region="live-link"] .rlinked')));
+
+  // Editing a linked region edits the regions it links.
+  await page.click('[data-region="live-link"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open]");
+  await page.waitForTimeout(600);
+  check(E, "Edit opens its regions together", /Edit linked region live-link: live-a, live-c/.test(await page.textContent("dialog.editor h2")));
+  check(E, "nothing to save when nothing changed", (await saveAndWait()).length === 0, await ed.msg());
+  const s = await ed.state();
+  const cPart = s.owners.indexOf("live-c");
+  await page.fill(`dialog.editor input[data-part-label="${cPart}"]`, "C from link");
+  c = await saveAndWait();
+  check(E, "a change in the linked region is saved into its region (and the snapshot)", c.length === 1 && JSON.stringify(changedPaths(c)) === JSON.stringify(["content/regions/live-c.json", "content/regions/live-link.json"]) && read("live-c").properties.partLabels[0] === "C from link" && read("live-link").properties.partLabels.includes("C from link"), JSON.stringify(c));
+  await page.click("dialog.editor .pv-head button.ghost");
+
+  // Editing one of its regions on its own changes the linked region.
+  await page.waitForSelector('#regions .rcard[data-region="live-a"]');
+  await page.click('[data-region="live-a"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open]");
+  await page.waitForTimeout(600);
+  await page.fill('dialog.editor input[data-part-label="0"]', "A from source");
+  c = await saveAndWait();
+  check(E, "saving a linked region's region on its own writes just that region", c.length === 1 && JSON.stringify(changedPaths(c)) === JSON.stringify(["content/regions/live-a.json"]), JSON.stringify(c));
+  await page.click("dialog.editor .pv-head button.ghost");
+  await page.waitForFunction(() => /A from source/.test(document.querySelector('#regions .rcard[data-region="live-link"] .rlabels')?.textContent ?? ""), null, { timeout: 15000 }).catch(() => {});
+  check(E, "the linked region's card shows the change", /A from source/.test((await page.textContent('#regions .rcard[data-region="live-link"] .rlabels')) ?? ""));
+});
+
+check(E, "no region file but the linked one was created or deleted", mock.log.every((c) => c.changes.every((ch) => ["content/regions/live-a.json", "content/regions/live-b.json", "content/regions/live-c.json", "content/regions/live-link.json"].includes(ch.path) && !ch.deleted)), JSON.stringify(mock.log.map((c) => c.changes)));
 check(E, "main untouched", mock.refs.get("main") === mainAtStart);
 check(E, "no errors or dialogs in the admin page", errors.length === 0 && dialogs.length === 0, [...errors, ...dialogs].join(" | ") || "none");
 
