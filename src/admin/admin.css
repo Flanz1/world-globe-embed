@@ -9,7 +9,7 @@
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, sans-serif; }
 header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 header h1 { font-size: 18px; margin: 0; margin-right: auto; }
-main { max-width: 1280px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+main { max-width: none; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
 #main { display: grid; gap: 16px; }
 #main[hidden], [hidden] { display: none !important; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
@@ -222,12 +222,18 @@ button.tiny { padding: 1px 7px; font-size: 12px; }
 .ed-ov-info { margin: 0; }
 
 /* ── Status sidebar (right) ── */
-.layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; align-items: start; }
+#signin, #waiting { width: 100%; max-width: 960px; margin: 0 auto; }
+/* Content stays centred on the page; the status sits in the free space to its right. */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 960px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.layout > .content { grid-column: 2; }
+.layout > .sidebar { grid-column: 3; justify-self: start; width: 100%; max-width: 300px; }
+/* Not enough room beside a centred column: content takes the left, status the right. */
+@media (max-width: 1560px) { .layout { grid-template-columns: minmax(0, 1fr) 280px; } .layout > .content { grid-column: 1; } .layout > .sidebar { grid-column: 2; max-width: none; } }
 .content { display: grid; gap: 16px; min-width: 0; }
-.sidebar { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; order: 2; }
+.sidebar { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
 .sidebar h3 { font-size: 13px; margin: 12px 0 4px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .sidebar #status { overflow-wrap: anywhere; margin: 0; }
 .sidebar .runs { overflow-wrap: anywhere; }
 .checks { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 4px; font-size: 13px; }
 .checks .warn { color: #b26a00; }
-@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .sidebar { position: static; max-height: none; order: -1; } }
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .layout > .content, .layout > .sidebar { grid-column: 1; } .sidebar { position: static; max-height: none; order: -1; } }
