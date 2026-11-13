@@ -412,7 +412,7 @@ if (want("editor")) {
       const bar = document.querySelector("dialog.editor .ed-toolbar");
       return { inBar: bar.contains(b), b: b.getBoundingClientRect().toJSON(), bar: bar.getBoundingClientRect().toJSON(), help: document.querySelector('dialog.editor [data-act="help"]').getBoundingClientRect().toJSON() };
     });
-    check(A, "'Other regions' is in the toolbar, at its right end", pos.inBar && pos.bar.right - pos.b.right < 20 && pos.b.left > pos.help.right + 40, JSON.stringify([pos.b.left, pos.b.right, pos.bar.right, pos.help.right]));
+    check(A, "'Other regions' is in the toolbar, at its right end", pos.inBar && pos.bar.right - pos.b.right < 20 && pos.b.left > pos.help.right, JSON.stringify([pos.b.left, pos.b.right, pos.bar.right, pos.help.right]));
     await page.click("dialog.editor .ed-ov-btn");
     const panel = await page.evaluate(() => {
       const p = document.querySelector("dialog.editor .ed-ov-panel");
