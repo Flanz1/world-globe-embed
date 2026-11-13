@@ -391,7 +391,7 @@ export function openEditor(o: EditorOptions): void {
       btn("Extend", "Draw a shape that touches the selected part to add it to that part (E)", () => startExtend(), "extend"),
       btn(
         "Province border",
-        "Draw a province border inside the region: a dotted line in the embed, shown only inside the parts. It doesn't change the parts. Click a border to select it; Delete removes it.",
+        "Draw a province border inside the region: a dashed line in the embed, shown only inside the parts. It doesn't change the parts. Click a border to select it; Delete removes it.",
         () => startDraw("border"),
         "province-border",
       ),
