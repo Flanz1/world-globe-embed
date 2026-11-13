@@ -502,6 +502,7 @@ function takeFragment(): { session?: string; error?: string } {
 function showSignIn(error = ""): void {
   $("#signin").hidden = false;
   $("#main").hidden = true;
+  $("#tabs").hidden = true;
   $("#signin-error").textContent = error;
   const ready = !!ADMIN_API;
   $<HTMLButtonElement>("#signin-github").disabled = !ready;
@@ -520,6 +521,7 @@ async function signIn(token: string): Promise<void> {
     $("#signin").hidden = true;
     $("#waiting").hidden = true;
     $("#main").hidden = false;
+    $("#tabs").hidden = false;
     showTab(tabFromHash());
     setStatus("Loading…");
     await loadAll();

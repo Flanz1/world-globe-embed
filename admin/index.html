@@ -11,6 +11,11 @@
 <body>
 <header>
   <h1>Globe maps</h1>
+  <div class="tabs" id="tabs" hidden role="tablist" aria-label="Admin sections">
+    <button type="button" role="tab" id="tab-btn-maps" aria-controls="tab-maps" aria-selected="true">Maps &amp; slots</button>
+    <button type="button" role="tab" id="tab-btn-regions" aria-controls="tab-regions" aria-selected="false">Regions</button>
+    <button type="button" role="tab" id="tab-btn-users" aria-controls="tab-users" aria-selected="false" hidden>Users</button>
+  </div>
   <span id="who" class="muted"></span>
   <span id="branch" class="branch" role="note" hidden></span>
   <button id="forget" type="button" class="ghost" hidden>Sign out</button>
@@ -34,12 +39,6 @@
   <div id="main" hidden>
     <div class="layout">
     <div class="content">
-    <div class="tabs" role="tablist" aria-label="Admin sections">
-      <button type="button" role="tab" id="tab-btn-maps" aria-controls="tab-maps" aria-selected="true">Maps &amp; slots</button>
-      <button type="button" role="tab" id="tab-btn-regions" aria-controls="tab-regions" aria-selected="false">Regions</button>
-      <button type="button" role="tab" id="tab-btn-users" aria-controls="tab-users" aria-selected="false" hidden>Users</button>
-    </div>
-
     <div id="tab-maps" role="tabpanel" aria-labelledby="tab-btn-maps" class="tabpanel">
     <section class="card">
       <h2>Slots</h2>
