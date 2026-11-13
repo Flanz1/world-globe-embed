@@ -20,7 +20,7 @@ The presets are shortcuts. **Contributor** gives Create regions. **Editor** give
 
 Every region records who created it (`createdBy`), when (`created`) and who saved it last (`updatedBy`).
 The API fills nothing in by itself. It checks those fields instead: a new region must name the person
-saving it as its creator, and only the owner can change a region's creator. Regions from before this
+saving it as its creator, and only the owner or an admin (anyone with Manage users) can change a region's creator, with the Transfer button on the region's card. Regions from before this
 change belong to the owner until `npm run region-owners` gives them the account that first committed them.
 
 ## Region categories

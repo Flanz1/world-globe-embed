@@ -420,6 +420,35 @@ await step(K, "contributors and editors follow the region rules", async () => {
   await bo.ctx.close();
 });
 
+/* ═════════════ 5. Transferring who created a region ═════════════ */
+const T = "transfer";
+await step(T, "only the owner and admins can hand a region over", async () => {
+  const ann = await open("carto-ann");
+  await ann.page.goto(`${ADMIN}#regions`);
+  await ann.page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  check(T, "a contributor has no Transfer button", (await ann.page.locator('[data-region="landmark-disc"] [data-action="transfer"]').count()) === 0);
+  const bo = await open("drafter-bo");
+  await bo.page.goto(`${ADMIN}#regions`);
+  await bo.page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  check(T, "an editor has no Transfer button", (await bo.page.locator('[data-region="landmark-disc"] [data-action="transfer"]').count()) === 0);
+  const r = await forceCommit(bo.page, { path: "content/regions/landmark-disc.json", content: JSON.stringify({ ...regionOn("landmark-disc"), properties: { ...regionOn("landmark-disc").properties, createdBy: { id: 5003, login: "drafter-bo" }, updatedBy: { id: 5003, login: "drafter-bo" } } }) + "\n" });
+  check(T, "API refuses an editor taking a region over", r.status === 403 && /owner or an admin/.test(r.body.message), `${r.status} ${r.body.message}`);
+  await ann.ctx.close();
+  await bo.ctx.close();
+  const { ctx, page } = await open("e2e-user");
+  await page.goto(`${ADMIN}#regions`);
+  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  const n = mock.log.length;
+  await page.click('[data-region="landmark-disc"] [data-action="transfer"]');
+  await page.waitForSelector("dialog[open] select");
+  await page.selectOption("dialog[open] select", { label: "drafter-bo" });
+  await page.click("dialog[open] .dlg-foot button:not(.ghost)");
+  await waitFor(page, async () => mock.log.length > n);
+  const t = regionOn("landmark-disc");
+  check(T, "an admin hands it to drafter-bo; only the creator changes", t.properties.createdBy?.login === "drafter-bo" && t.properties.updatedBy?.login === "e2e-user", `${t.properties.createdBy?.login} / ${t.properties.updatedBy?.login}`);
+  await ctx.close();
+});
+
 const O = "owner";
 await step(O, "owner sees everything; a removed person is locked out", async () => {
   const { ctx, page } = await open("Flanz1");
