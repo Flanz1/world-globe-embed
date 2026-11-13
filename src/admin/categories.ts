@@ -23,13 +23,17 @@ import {
   type Category,
 } from "../shared/categories.ts";
 import { h } from "./dom.ts";
+import { hasPendingSaves, optimistic } from "./optimistic.ts";
 import { GitHubError, type GitHub } from "./github.ts";
 import { confirmBox, modal } from "./region-dialogs.ts";
-import { OWNER_ID, account, can, currentUser } from "./session.ts";
+import { OWNER_ID, account, can, currentUser, refusal } from "./session.ts";
 
 export interface CategoriesDeps {
   gh: () => GitHub;
-  act: (label: string, fn: () => Promise<string>) => Promise<void>;
+  /** Redraws the Regions tab after the local state changed. */
+  render: () => void;
+  /** Who created a region (account id), or null when there's no such region. */
+  regionOwner: (id: string) => number | null;
   /** Ids of the regions that exist now (to tidy away ids of deleted ones). */
   regionIds: () => Set<string>;
 }
@@ -52,7 +56,8 @@ async function read(gh: GitHub): Promise<CategoriesFile> {
 }
 
 export async function loadCategories(): Promise<void> {
-  current = await read(deps.gh());
+  const fresh = await read(deps.gh());
+  if (!hasPendingSaves()) current = fresh;
 }
 
 /* ── Who may do what ── */
@@ -71,14 +76,35 @@ export const creatorOf = (k: Category) => k.createdBy?.login ?? "the owner";
 
 const stamp = () => new Date().toISOString().replace(/\.\d+Z$/, "Z");
 
+/**
+ * Applies the change on screen at once and commits it in the background (see optimistic.ts). The commit
+ * edits a fresh copy of the file, so changes someone else made meanwhile are kept.
+ */
 function save(message: string, edit: (c: CategoriesFile) => CategoriesFile): Promise<void> {
-  return deps.act(message + "…", () =>
-    deps.gh().commit(message, async () => {
-      const fresh = await read(deps.gh());
-      const next = pruneRegions(edit(fresh), deps.regionIds());
-      return [{ path: CATEGORIES_PATH, content: serializeCategories(next) }];
-    }),
-  );
+  let next = current;
+  return optimistic<CategoriesFile>({
+    label: message,
+    check: () => {
+      next = pruneRegions(edit(current), deps.regionIds());
+      // The same rules the admin API applies when it receives the commit.
+      const owners: Record<string, number | null> = {};
+      for (const k of [...current.categories, ...next.categories]) for (const id of k.regions) owners[id] = deps.regionOwner(id);
+      const why = refusal({ path: CATEGORIES_PATH, before: serializeCategories(current), after: serializeCategories(next), regionOwners: owners });
+      return why && `Can't ${message[0].toLowerCase()}${message.slice(1)}: ${why}`;
+    },
+    apply: () => {
+      const before = current;
+      current = next;
+      return before;
+    },
+    undo: (before) => void (current = before),
+    render: deps.render,
+    commit: () =>
+      deps.gh().commit(message, async () => {
+        const fresh = await read(deps.gh());
+        return [{ path: CATEGORIES_PATH, content: serializeCategories(pruneRegions(edit(fresh), deps.regionIds())) }];
+      }),
+  });
 }
 
 /** Puts regions in a category (null = uncategorized). */

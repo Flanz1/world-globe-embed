@@ -309,8 +309,8 @@ async function commits(page, fn) {
   const n = mock.log.length;
   await fn();
   await waitFor(page, async () => mock.log.length > n);
-  // The page stays busy until the list has been reloaded.
-  await waitFor(page, async () => (await page.locator("button[aria-busy=true]").count()) === 0);
+  // The page shows the change at once; wait until the save has landed and the list has been reloaded.
+  await waitFor(page, async () => !/saving/.test((await page.textContent("#status")) ?? ""));
   await page.waitForSelector("#regions .rcard", { timeout: 15000 });
 }
 async function addCategory(page, name) {
@@ -320,6 +320,9 @@ async function addCategory(page, name) {
     await page.click('dialog [data-action="confirm-category"]');
   });
 }
+
+// The real content has categories by now; this group starts from none.
+mock.externalWrite("main", "content/categories.json", '{"categories":[]}\n');
 
 await step(K, "the owner adds, renames, reorders, fills and deletes categories", async () => {
   const { ctx, page, errors } = await open("Flanz1");
@@ -368,6 +371,34 @@ await step(K, "the owner adds, renames, reorders, fills and deletes categories",
     await page.click('dialog button:has-text("Delete category")');
   });
   check(K, "deleting a category keeps its regions, now uncategorized", cats().length === 1 && !!regionOn("provinces") && (await inFolder(page, "~uncategorized")).includes("provinces"));
+  check(K, "no page errors", errors.length === 0, errors.join(" | ") || "none");
+  await ctx.close();
+});
+
+await step(K, "a category change shows at once, and is undone with the reason if the save fails", async () => {
+  mock.externalWrite("main", "content/categories.json", JSON.stringify({ categories: [{ id: "kingdoms", name: "Kingdoms", regions: [], createdBy: { id: 45669787, login: "Flanz1" } }] }, null, 2) + "\n");
+  const { ctx, page, errors } = await open("Flanz1");
+  await page.goto(`${ADMIN}#regions`);
+  await page.waitForSelector("#regions .rfolder", { timeout: 15000 });
+  // Hold the final step of every commit, then refuse it.
+  let release;
+  const held = new Promise((r) => (release = r));
+  await ctx.route(/\/git\/refs\/heads\//, async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    await held;
+    await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ message: "GitHub is having a bad day." }) });
+  });
+  const before = cats()[0].regions.join();
+  await page.selectOption('[data-region="provinces"] [data-action="category"]', "kingdoms");
+  await waitFor(page, async () => (await inFolder(page, "kingdoms")).includes("provinces"), 3000);
+  check(K, "the region is in its new folder while the save is still pending", (await inFolder(page, "kingdoms")).includes("provinces") && cats()[0].regions.join() === before, (await inFolder(page, "kingdoms")).join());
+  check(K, "the status says it's saving", /saving/.test((await page.textContent("#status")) ?? ""));
+  release();
+  await waitFor(page, async () => /undone/.test((await page.textContent("#status")) ?? ""));
+  const msg = (await page.textContent("#status")) ?? "";
+  check(K, "a failed save is undone with the reason", /GitHub is having a bad day/.test(msg) && /undone/.test(msg), msg);
+  await waitFor(page, async () => !(await inFolder(page, "kingdoms")).includes("provinces"));
+  check(K, "…and the region is back where it was", !(await inFolder(page, "kingdoms")).includes("provinces") && (await inFolder(page, "~uncategorized")).includes("provinces"));
   check(K, "no page errors", errors.length === 0, errors.join(" | ") || "none");
   await ctx.close();
 });

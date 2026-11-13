@@ -13,13 +13,14 @@ import { paintSpecOf, regionClashes } from "../shared/region-paint.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
 import { categories, canAddCategory, canEditCategory, creatorOf, initCategories, loadCategories, moveRegions, newCategory, remove as removeCategory, rename as renameCategory, shift as shiftCategory } from "./categories.ts";
 import { $, h } from "./dom.ts";
+import { hasPendingSaves, optimistic } from "./optimistic.ts";
 import { openEditor, type EditorOptions } from "./editor/editor.ts";
 import type { OverlayMeta } from "./editor/overlay-filter.ts";
 import type { FileCommit, GitHub } from "./github.ts";
 import { loadMapImage } from "./images.ts";
 import { compareBy, creatorChoices, creatorId, matchesQuery, type Filterable } from "./region-filter.ts";
 import { modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
-import { OWNER_ID, can, canDelete, canEdit, currentUser, ownerOf } from "./session.ts";
+import { OWNER_ID, can, canDelete, canEdit, currentUser, ownerOf, refusal } from "./session.ts";
 
 export interface RegionEntry {
   id: string;
@@ -55,7 +56,7 @@ export function regionEntries(): RegionEntry[] {
 export async function loadRegions(): Promise<void> {
   const gh = deps.gh();
   const files = (await gh.listDir("content/regions")).filter((f) => f.type === "file" && f.name.endsWith(".json"));
-  entries = await Promise.all(
+  const loaded = await Promise.all(
     files.map(async (f): Promise<RegionEntry> => {
       const id = f.name.slice(0, -5);
       try {
@@ -77,8 +78,11 @@ export async function loadRegions(): Promise<void> {
       }
     }),
   );
+  if (!hasPendingSaves()) entries = loaded;
   // Categories are optional: if the file can't be read, regions just show uncategorized.
   await loadCategories().catch(() => {});
+  // A change is still being saved: this read may predate it. The save reloads when it's done.
+  if (hasPendingSaves()) return;
   renderRegions();
   // Last commit (author and date) per file, filled in as they arrive.
   for (const e of entries) {
@@ -522,7 +526,18 @@ export function openCombine(): void {
 
 function del(e: RegionEntry): void {
   openDelete(e.id, () => {
-    void deps.act(`Deleting ${e.id}…`, () => deps.gh().commit(`Delete region ${e.id}`, async () => [{ path: e.path, content: "", delete: true }]));
+    void optimistic({
+      label: `Delete region ${e.id}`,
+      check: () => refusal({ path: e.path, before: e.feature ? serialize(e.feature) : "", after: null }),
+      apply: () => {
+        const before = entries;
+        entries = entries.filter((x) => x !== e);
+        return before;
+      },
+      undo: (before) => void (entries = before),
+      render: renderRegions,
+      commit: () => deps.gh().commit(`Delete region ${e.id}`, async () => [{ path: e.path, content: "", delete: true }]),
+    });
   });
 }
 
@@ -534,6 +549,6 @@ export function initRegions(d: RegionsDeps): void {
   ui.creator().addEventListener("change", renderRegions);
   $("#r-combine").addEventListener("click", openCombine);
   $("#r-new-category").addEventListener("click", newCategory);
-  initCategories({ gh: d.gh, act: d.act, regionIds: () => new Set(entries.map((e) => e.id)) });
+  initCategories({ gh: d.gh, render: renderRegions, regionOwner: (id) => { const e = entries.find((x) => x.id === id); return e ? (e.feature ? ownerOf(e.feature) : OWNER_ID) : null; }, regionIds: () => new Set(entries.map((e) => e.id)) });
   for (const b of document.querySelectorAll<HTMLButtonElement>(".r-new")) b.addEventListener("click", () => newRegion($<HTMLSelectElement>("#r-new-slot").value));
 }

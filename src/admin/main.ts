@@ -7,11 +7,12 @@
 import type { MapMeta, Slot, SlotsFile, ViewMode } from "../shared/types.ts";
 import { escapeHtml } from "../shared/page.ts";
 import { GitHub, GitHubError, NotListed, type FileChange, type WorkflowRun } from "./github.ts";
+import { hasPendingSaves, initOptimistic, optimistic } from "./optimistic.ts";
 import { openPreview } from "./preview.ts";
 import { $, SITE, h } from "./dom.ts";
 import { initRegions, loadRegions, renderRegions } from "./regions.ts";
 import { PART_BYTES, prepareImage } from "./upload-image.ts";
-import { can, setMe } from "./session.ts";
+import { can, refusal, setMe } from "./session.ts";
 import { initUsers, loadUsers } from "./users.ts";
 
 declare const __REPO__: string;
@@ -154,14 +155,26 @@ function renderSlots(): void {
       });
       save.addEventListener("click", () => {
         const target = select.value;
-        void act(`Switching ${slug} to ${target}…`, () =>
-          gh!.commit(`Show map "${target}" in slot "${slug}"`, async () => [
-            await slotsChange((s) => {
-              if (!s.slots[slug]) throw new Error(`Slot "${slug}" no longer exists.`);
-              s.slots[slug].map = target;
-            }),
-          ]),
-        );
+        const was = slot.map;
+        void optimistic({
+          label: `Show map "${target}" in slot "${slug}"`,
+          check: () => (maps.some((m) => m.id === target) ? refusal({ path: "content/slots.json", before: null, after: null }) : `The map "${target}" no longer exists.`),
+          apply: () => {
+            slots.slots[slug].map = target;
+            return was;
+          },
+          undo: (prev) => {
+            if (slots.slots[slug]) slots.slots[slug].map = prev;
+          },
+          render: renderSlots,
+          commit: () =>
+            gh!.commit(`Show map "${target}" in slot "${slug}"`, async () => [
+              await slotsChange((s) => {
+                if (!s.slots[slug]) throw new Error(`Slot "${slug}" no longer exists.`);
+                s.slots[slug].map = target;
+              }),
+            ]),
+        });
       });
       copy.addEventListener("click", () => {
         void navigator.clipboard.writeText(embedCode(slug, title, slot.view ?? "globe")).then(
@@ -217,7 +230,10 @@ async function loadAll(): Promise<void> {
   const files = (await gh!.listDir("content/maps")).filter((f) => f.type === "file" && f.name.endsWith(".json"));
   const texts = await Promise.all(files.map((f) => gh!.readText(f.path)));
   maps = texts.map((t) => JSON.parse(t) as MapMeta).sort((a, b) => b.date.localeCompare(a.date));
-  slots = JSON.parse(await gh!.readText("content/slots.json")) as SlotsFile;
+  const freshSlots = JSON.parse(await gh!.readText("content/slots.json")) as SlotsFile;
+  // A change is still being saved: this read may predate it, and the save reloads when it's done.
+  if (hasPendingSaves()) return;
+  slots = freshSlots;
   renderMaps();
   renderSlots();
   await loadRegions();
@@ -260,12 +276,12 @@ function pollRuns(): void {
 }
 
 /** After a commit: tell the user, watch the workflows, reload everything. */
-async function afterCommit(sha: string): Promise<void> {
+async function afterCommit(sha: string, reload = true): Promise<void> {
   setStatus(`Committed ${sha.slice(0, 7)} to ${gh!.branch}. Waiting for the workflow to publish it…`, "ok");
   if (gh!.branch !== gh!.defaultBranch) setStatus(`Committed ${sha.slice(0, 7)} to the test branch ${gh!.branch}. GitHub Pages only deploys ${gh!.defaultBranch}, so it won't go live from here.`, "ok");
   pollRuns();
   if (can("users")) void loadUsers();
-  await loadAll().catch((e) => setStatus((e as Error).message, "error"));
+  if (reload) await loadAll().catch((e) => setStatus((e as Error).message, "error"));
 }
 
 async function act(label: string, fn: () => Promise<string>): Promise<void> {
@@ -518,6 +534,7 @@ if (framed) {
   $("#signin-github").addEventListener("click", signInWithGitHub);
   wireUpload();
   wireNewSlot();
+  initOptimistic({ setStatus, committed: afterCommit, reload: loadAll });
   initRegions({ gh: () => gh!, maps: () => maps, slots: () => slots, act, afterCommit });
   initUsers({ gh: () => gh!, act });
   wireTabs();
