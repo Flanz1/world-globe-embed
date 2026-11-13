@@ -9,7 +9,7 @@
  * two clicks on it (Tab: the other way round); freehand along a border follows it; vertices on the
  * same spot move, get inserted and get deleted together, and Ctrl+drag pulls one free; a dragged
  * vertex snaps to another region's vertex. Embed: a national border (between parts of different
- * legend colours) is a solid dark line, a provincial one (same colour) dotted.
+ * legend colours) is a solid dark line, a provincial one (same colour) dashed.
  *
  * Exits non-zero if any check fails. Screenshots go to .e2e/snap/.
  */
@@ -338,7 +338,7 @@ await ctx.close();
 /* ═════════════ Embed ═════════════ */
 const raw = async (png) => sharp(png).raw().toBuffer({ resolveWithObject: true });
 /** Along a screen segment: fraction of pixels that are dark ink, and how often it switches on/off. */
-function inkProfile(img, a, b) {
+function inkProfile(img, a, b, dark = 150) {
   const { data, info } = img;
   const n = Math.max(2, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1])));
   let on = 0;
@@ -350,7 +350,7 @@ function inkProfile(img, a, b) {
     let hit = false;
     for (let d = -1; d <= 1 && !hit; d++) {
       const k = (y * info.width + x + d) * info.channels;
-      if (data[k] + data[k + 1] + data[k + 2] < 150) hit = true;
+      if (data[k] + data[k + 1] + data[k + 2] < dark) hit = true;
     }
     if (hit) on++;
     if (prev !== null && prev !== hit) flips++;
@@ -382,12 +382,12 @@ for (const view of ["flat", "globe"]) {
       const v = flatFit(geometryBounds({ type: "MultiPolygon", coordinates: BORDERS.map((r) => [r]) }), aspect, 800, 480);
       const at = (lon, lat) => [(lon - v.cx) * v.k + 400, (v.cy - lat) * v.k * ky + 240];
       const nat = inkProfile(img, at(30, -11), at(30, -19));
-      const prov = inkProfile(img, at(15, -11.2), at(15, -18.8));
+      const prov = inkProfile(img, at(15, -11.2), at(15, -18.8), 215); // a fine line: anti-aliased, lighter than the solid national one
       const none = inkProfile(img, at(20, -11), at(20, -19));
       const outer = inkProfile(img, at(11, -10), at(19, -10));
       check(G, "national border (different colours) is a solid dark line", nat.on > 0.9 && nat.flips <= 2, fmt(nat));
       check(G, "no line where two same-colour parts meet", none.on < 0.1, fmt(none));
-      check(G, "province border is dotted dark ink", prov.on > 0.03 && prov.on < 0.8 && prov.flips >= 6, fmt(prov));
+      check(G, "province border is dashed dark ink", prov.on > 0.03 && prov.on < 0.8 && prov.flips >= 6, fmt(prov));
       check(G, "outer borders stay in the part's colour", outer.on < 0.1, fmt(outer));
     }
     await c.close();
