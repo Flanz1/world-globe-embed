@@ -65,6 +65,17 @@
         "login": "Flanz1"
       },
       "created": "2026-11-13T18:11:13Z"
+    },
+    {
+      "id": "nirydian-religions",
+      "name": "Nirydian Religions",
+      "regions": [],
+      "parent": "religion",
+      "createdBy": {
+        "id": 138310181,
+        "login": "LoopSimon"
+      },
+      "created": "2026-11-13T18:47:59Z"
     }
   ]
 }
