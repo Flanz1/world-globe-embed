@@ -209,7 +209,7 @@ export const SHORTCUT_GROUPS: { title: string; rows: [string, string][] }[] = [
     rows: [
       ["Click", "Add a point (polygon)"],
       ["Double-click / Enter", "Finish the outline"],
-      ["Click first point", "Close the outline"],
+      ["Click the lit-up first point", "Close the outline (freehand closes on release)"],
       ["Backspace / right-click", "Remove the last point (repeat to go back to the start)"],
       ["Tab", "Follow a border the other way round"],
       ["Esc", "Cancel the outline, or clear the selection"],
