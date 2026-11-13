@@ -321,9 +321,6 @@ async function addCategory(page, name) {
   });
 }
 
-// The real content has categories by now; this group starts from none.
-mock.externalWrite("main", "content/categories.json", '{"categories":[]}\n');
-
 await step(K, "the owner adds, renames, reorders, fills and deletes categories", async () => {
   const { ctx, page, errors } = await open("Flanz1");
   await page.goto(`${ADMIN}#regions`);
