@@ -10,6 +10,17 @@
         "login": "Flanz1"
       },
       "created": "2026-11-13T17:43:43Z"
+    },
+    {
+      "id": "gethricism",
+      "name": "Gethricism",
+      "regions": [],
+      "parent": "religion",
+      "createdBy": {
+        "id": 45669787,
+        "login": "Flanz1"
+      },
+      "created": "2026-11-13T17:43:50Z"
     }
   ]
 }
