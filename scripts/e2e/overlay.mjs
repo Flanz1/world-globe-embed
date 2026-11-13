@@ -120,7 +120,7 @@ const panelOpen = () => page.$eval(".ed-ov-panel", (p) => !p.hidden);
 const btnText = () => page.$eval(".ed-ov-btn", (b) => b.textContent);
 /** Count of light-grey outline pixels on the canvas along the bottom edge of a neighbour. */
 async function outlinePixels(lon) {
-  await page.waitForTimeout(150);
+  await page.waitForTimeout(500);
   const [x, y] = await ed.xy(lon, -56);
   return page.evaluate(([x, y]) => {
     const c = document.querySelector("dialog.editor canvas.ed-canvas");
@@ -191,7 +191,7 @@ await step(A, "turning regions on and off", async () => {
   await page.keyboard.press("Control+z");
   await page.selectOption('select[name="ov-category"]', "north");
   await page.click('[data-act="overlays-show"]');
-  check(A, "Show listed turns on what the filters list", (await outlinePixels(127)) > 0 && (await outlinePixels(138)) === 0 && (await btnText()) === "Other regions (2)", await btnText());
+  check(A, "Show listed turns on what the filters list", (await outlinePixels(127)) > 0 && (await outlinePixels(138)) === 0 && (await btnText()) === "Other regions (2)", `${await btnText()} ${await outlinePixels(127)} ${await outlinePixels(138)}`);
   await page.click('[data-act="overlays-hide"]');
   check(A, "Hide listed turns them off again", (await outlinePixels(116)) === 0 && (await btnText()) === "Other regions", await btnText());
   await page.selectOption('select[name="ov-category"]', "");

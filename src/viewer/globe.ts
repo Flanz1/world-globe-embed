@@ -272,13 +272,21 @@ export async function start(ctx: StartContext): Promise<void> {
     if (want >= 6000 && !device.mobile) return Math.round(want); // 8192, or a tile level (see globe-tiles.ts)
     return want >= 3000 && (!device.mobile || want >= 4500) ? 4096 : 2048;
   }
+  /**
+   * Overlay canvas width. Desktop starts at 4096 (borders were visibly soft at 2048 on a normal screen) and
+   * goes to 8192 once zoomed in close, matching the 8192 map tier. Phones stay at 2048, 4096 when zoomed in.
+   */
+  function overlayWidth(): number {
+    const want = textureWant();
+    if (device.mobile) return want >= 4096 && maxTex >= 4096 ? 4096 : 2048;
+    if (want >= 6000 && texLimit >= 8192) return 8192;
+    return maxTex >= 4096 ? 4096 : 2048;
+  }
   let onZoom = (): void => {};
   function ensureOverlay(): NonNullable<typeof overlay> {
     if (overlay) return overlay;
-    // 4096 × 2048 when the map texture would be 4096 too (zoomed in, or a large dense screen), otherwise 2048 × 1024.
-    const big = textureWant() >= 4096 && maxTex >= 4096;
     const c = document.createElement("canvas");
-    c.width = big ? 4096 : 2048;
+    c.width = overlayWidth();
     c.height = c.width / 2;
     const tex = new CanvasTexture(c);
     tex.colorSpace = SRGBColorSpace;
@@ -722,6 +730,15 @@ export async function start(ctx: StartContext): Promise<void> {
   let zoomTimer = 0;
   onZoom = () => {
     clearTimeout(zoomTimer);
-    zoomTimer = window.setTimeout(() => void upgradeTexture(), 250);
+    zoomTimer = window.setTimeout(() => {
+      void upgradeTexture();
+      // A region overlay re-rasterised to match the zoom (never smaller than it already is, to avoid flapping).
+      if (overlay && reg && overlayWidth() > overlay.canvas.width) {
+        overlay.canvas.width = overlayWidth();
+        overlay.canvas.height = overlay.canvas.width / 2;
+        overlay.tex.dispose();
+        drawRegion();
+      }
+    }, 250);
   };
 }
