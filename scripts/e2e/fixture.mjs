@@ -127,6 +127,8 @@ export async function makeFixture({ quiet = false } = {}) {
       color: "#c33",
     }),
   );
+  // Same for categories: start with none, so the folder lists the checks expect aren't affected by the real ones.
+  writeFileSync(path.join(dir, "content/categories.json"), JSON.stringify({ categories: [] }, null, 2) + "\n");
   // On the other slot, drawn on a map that slot no longer shows: a warning in CI, a badge in the admin page.
   writeFileSync(
     path.join(regionsDir, "old-map-region.json"),
