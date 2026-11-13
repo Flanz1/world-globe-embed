@@ -4,9 +4,10 @@
  *   npm run e2e:merge
  *
  * Builds the e2e fixture (scripts/e2e/fixture.mjs) plus a region with parts that overlap, nearly touch
- * (a small gap), stand apart, and a contested zone, then drives the editor against the mocked GitHub API:
- * - Combine (C) picks the selected part and the parts touching it, fills the gap, keeps colour, label
- *   and the zone; clicking parts adds or removes them; parts that are apart are refused; one undo step.
+ * (a small gap), stand apart, and an old-style contested zone (now a plain part), then drives the editor
+ * against the mocked GitHub API:
+ * - Combine (C) picks the selected part and the parts touching it, fills the gap, keeps colour and
+ *   label; clicking parts adds or removes them; parts that are apart are refused; one undo step.
  * - Extend (E) adds a freehand or polygon shape to the selected part (a small gap is filled), refuses a
  *   shape that doesn't touch it, and takes the part the shape starts in when none is selected.
  * - Extending and combining across the antimeridian, saved as one commit with valid geometry.
@@ -46,12 +47,12 @@ async function step(group, name, fn) {
   }
 }
 
-/* ── Fixture: parts that overlap, nearly touch, stand apart, plus a contested zone ── */
+/* ── Fixture: parts that overlap, nearly touch, stand apart, plus an old-style contested zone ── */
 const box = (w, s, e, n) => [[w, s], [e, s], [e, n], [w, n], [w, s]];
 const M = {
   A: [100, -56, 112, -40], // part 1 "Breza", legend colour
   B: [112.3, -54, 122, -42], // part 2: 0.3° (6 px at the test zoom) east of A
-  Z: [120, -50, 126, -44], // part 3: contested zone of part 2
+  Z: [120, -50, 126, -44], // part 3: saved as a contested zone of part 2 (loads as a plain part)
   F: [140, -56, 150, -46], // part 4: far away
   O: [96, -48, 101, -38], // part 5: overlaps A
 };
@@ -177,7 +178,7 @@ await step(E, "combine and extend", async () => {
   await ed.setView(126, -50, 14);
   await page.waitForTimeout(150);
   let s = await ed.state();
-  check(E, "opens with five parts and a contested zone", s.parts.length === 5 && JSON.stringify(s.contested) === "[-1,-1,1,-1,-1]", JSON.stringify(s.contested));
+  check(E, "opens with five parts, the old contested zone a plain part", s.parts.length === 5 && JSON.stringify(s.contested) === "[-1,-1,-1,-1,-1]" && JSON.stringify(s.styles) === "[0,-1,-1,-1,-1]", JSON.stringify([s.styles, s.contested]));
 
   // 0. Pick parts with Shift+click: Combine works off the picks, not the touching parts.
   const shiftClick = async (lon, lat) => {
@@ -209,7 +210,7 @@ await step(E, "combine and extend", async () => {
   await page.keyboard.press("c");
   await page.waitForSelector("dialog.editor .ed-combine:not([hidden])");
   t = await info();
-  check(E, "Combine picks the selected part and the parts touching it, not the far one or the zone", /^Parts 1, 2, 5 → one part/.test(t), t);
+  check(E, "Combine picks the selected part and the parts touching it, not the far one or part 2's neighbour", /^Parts 1, 2, 5 → one part/.test(t), t);
   await page.mouse.move(2, 2);
   await page.screenshot({ path: path.join(OUT, "editor-combine-preview.png") });
 
@@ -218,10 +219,13 @@ await step(E, "combine and extend", async () => {
   t = await info();
   check(E, "adding a part that doesn't touch says so and disables Combine", /don't touch/.test(t) && (await page.isDisabled('dialog.editor [data-act="combine-apply"]')), t);
   await clickAt(145, -50);
-  // Clicking the contested zone (other kind) is refused.
+  // The old contested zone is a plain part now: it can be added (it overlaps part 2), and dropped again.
   await clickAt(125, -47);
   t = await info();
-  check(E, "the contested zone can't be mixed in", /^Parts 1, 2, 5 → one part/.test(t) && /same kind/.test(await ed.msg()), `${t} / ${await ed.msg()}`);
+  check(E, "the former contested zone can be combined like any part", /^Parts 1, 2, 5, 3 → one part|^Parts 1, 2, 3, 5 → one part/.test(t), t);
+  await clickAt(125, -47);
+  t = await info();
+  check(E, "…and clicked out again", /^Parts 1, 2, 5 → one part/.test(t), t);
 
   // 3. Gap slider at 0: the 6 px gap is no longer bridged.
   await page.fill('dialog.editor input[name="combine-gap"]', "0");
@@ -237,7 +241,7 @@ await step(E, "combine and extend", async () => {
   s = await ed.state();
   check(E, "Enter combines three parts into one", s.parts.length === 3, `${s.parts.length} parts; ${await ed.msg()}`);
   check(E, "the gap between them is filled", inPart(s.parts[0], [112.15, -48]) && !inPart(s.parts[0], [112.15, -55]), "");
-  check(E, "the combined part keeps part 1's colour and label; the zone now extends it", JSON.stringify(s.styles) === "[0,-1,-1]" && JSON.stringify(s.labels) === '["Breza","","Far"]' && JSON.stringify(s.contested) === "[-1,0,-1]", JSON.stringify([s.styles, s.labels, s.contested]));
+  check(E, "the combined part keeps part 1's colour and label", JSON.stringify(s.styles) === "[0,-1,-1]" && JSON.stringify(s.labels) === '["Breza","","Far"]', JSON.stringify([s.styles, s.labels]));
   check(E, "the panel closes and the result is selected", (await page.isHidden("dialog.editor .ed-combine")) && (await page.evaluate(() => document.querySelector("dialog.editor").wgeEditor.selectedPart())) === 0);
   await page.mouse.move(2, 2);
   await page.screenshot({ path: path.join(OUT, "editor-combined.png") });
@@ -245,7 +249,7 @@ await step(E, "combine and extend", async () => {
   // 5. One undo step, then redo.
   await page.keyboard.press("Control+z");
   s = await ed.state();
-  check(E, "one undo puts all five parts back", s.parts.length === 5 && JSON.stringify(s.contested) === "[-1,-1,1,-1,-1]", `${s.parts.length} parts ${JSON.stringify(s.contested)}`);
+  check(E, "one undo puts all five parts back", s.parts.length === 5 && JSON.stringify(s.styles) === "[0,-1,-1,-1,-1]", `${s.parts.length} parts ${JSON.stringify(s.styles)}`);
   await page.keyboard.press("Control+Shift+z");
   s = await ed.state();
   check(E, "redo combines again", s.parts.length === 3);
@@ -300,7 +304,7 @@ await step(E, "combine and extend", async () => {
 
   const f = await save("merge-test");
   check(E, "saved geometry is valid, one polygon per part", checkGeometry(f.geometry).length === 0 && polygonsOf(f.geometry).length === 3, checkGeometry(f.geometry).join("; "));
-  check(E, "saved partLegend / partLabels / partContested match", JSON.stringify(f.properties.partLegend) === "[0,-1,-1]" && JSON.stringify(f.properties.partContested) === "[-1,0,-1]" && f.properties.partLabels[0] === "Breza", JSON.stringify(f.properties));
+  check(E, "saved partLegend / partLabels match; the old partContested is dropped", JSON.stringify(f.properties.partLegend) === "[0,-1,-1]" && !("partContested" in f.properties) && f.properties.partLabels[0] === "Breza", JSON.stringify(f.properties));
   await page.click("dialog.editor .pv-head button.ghost");
   await page.waitForSelector("dialog.editor", { state: "detached", timeout: 5000 }).catch(() => {});
 });

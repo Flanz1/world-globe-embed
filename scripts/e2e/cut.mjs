@@ -3,11 +3,12 @@
  *
  *   npm run e2e:cut
  *
- * Builds the e2e fixture (scripts/e2e/fixture.mjs) plus a region with a coloured, labelled part and a
- * contested zone, then drives the editor against the mocked GitHub API:
+ * Builds the e2e fixture (scripts/e2e/fixture.mjs) plus a region with a coloured, labelled part and an
+ * old-style contested zone (it loads as a plain part in its parent's colour), then drives the editor
+ * against the mocked GitHub API:
  * - Cut inside a part still makes a hole; Cut right across a part splits it into separate parts.
  * - Split draws a line (freehand or polygon) across a part; a line that only goes partway in is refused.
- * - The pieces keep the part's colour; the zone stays with the largest piece; one undo step each.
+ * - The pieces keep the part's colour and the label stays with the largest piece; one undo step each.
  * - Splitting the dateline-box region along the antimeridian, saved as one commit with valid geometry.
  *
  * Screenshots and report.json go to .e2e/cut/. Exits non-zero if any check fails.
@@ -45,7 +46,7 @@ async function step(group, name, fn) {
   }
 }
 
-/* ── Fixture: one extra region with a coloured part, a label and a contested zone ── */
+/* ── Fixture: one extra region with a coloured part, a label and an old-style contested zone ── */
 const box = (w, s, e, n) => [[w, s], [e, s], [e, n], [w, n], [w, s]];
 const CUT = { A: [100, -56, 120, -36], Z: [116, -50, 126, -42] };
 const dir = await makeFixture({ quiet: true });
@@ -160,7 +161,7 @@ const E = "editor";
 await step(E, "cut and split", async () => {
   await openRegion("cut-test", 112, -46);
   const start = await ed.state();
-  check(E, "opens with a coloured part and its contested zone", start.parts.length === 2 && JSON.stringify(start.contested) === "[-1,0]" && JSON.stringify(start.styles) === "[0,-1]", JSON.stringify(start));
+  check(E, "an old contested zone opens as a plain part in its parent's colour", start.parts.length === 2 && JSON.stringify(start.contested) === "[-1,-1]" && JSON.stringify(start.styles) === "[0,0]", JSON.stringify([start.styles, start.contested]));
 
   // 1. Cut (freehand) wholly inside part 1: a hole, as before.
   await page.click('dialog.editor [data-act="cut-hole"]');
@@ -174,7 +175,7 @@ await step(E, "cut and split", async () => {
   await clicks([[108, -60], [109, -60], [109, -32], [108, -32], [108, -60]]);
   s = await ed.state();
   check(E, "Cut right across a part splits it into separate parts", s.parts.length === 3, `${s.parts.length} parts`);
-  check(E, "the new part keeps the colour, the zone stays with the larger piece", JSON.stringify(s.styles) === "[0,-1,0]" && JSON.stringify(s.contested) === "[-1,0,-1]" && JSON.stringify(s.labels) === '["Vael","",""]', JSON.stringify([s.styles, s.contested, s.labels]));
+  check(E, "the new part keeps the colour, the label stays with the larger piece", JSON.stringify(s.styles) === "[0,0,0]" && JSON.stringify(s.labels) === '["Vael","",""]', JSON.stringify([s.styles, s.labels]));
   check(E, "the hole stays with its piece", s.parts.some((rings) => rings.length === 2), s.parts.map((r) => r.length).join(","));
   await page.screenshot({ path: path.join(OUT, "editor-cut-across.png") });
 
@@ -191,7 +192,7 @@ await step(E, "cut and split", async () => {
   await page.waitForTimeout(100);
   s = await ed.state();
   check(E, "Split (polygon line, Enter) splits every part it crosses", s.parts.length === 6, `${s.parts.length} parts; ${await ed.msg()}`);
-  check(E, "both pieces of the contested zone still extend part 1", s.contested.filter((k) => k === 0).length === 2 && s.contested[0] === -1, JSON.stringify(s.contested));
+  check(E, "every piece keeps its colour", s.styles.every((k) => k === 0), JSON.stringify(s.styles));
 
   // 5. Split (freehand) that only goes partway in: refused, nothing changes.
   await page.keyboard.press("f");
@@ -212,7 +213,7 @@ await step(E, "cut and split", async () => {
 
   const f = await save("cut-test");
   check(E, "saved geometry is valid, one polygon per part", checkGeometry(f.geometry).length === 0 && polygonsOf(f.geometry).length === 8, checkGeometry(f.geometry).join("; "));
-  check(E, "saved partLegend / partContested match", f.properties.partLegend.length === 8 && f.properties.partContested.length === 8 && f.properties.partLabels[0] === "Vael", JSON.stringify([f.properties.partLegend, f.properties.partContested]));
+  check(E, "saved partLegend matches; the old partContested is dropped", f.properties.partLegend.length === 8 && !("partContested" in f.properties) && f.properties.partLabels[0] === "Vael", JSON.stringify([f.properties.partLegend, f.properties.partContested]));
   await page.keyboard.press("Escape");
 });
 

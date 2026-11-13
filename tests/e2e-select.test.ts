@@ -10,7 +10,7 @@ describe("e2e suite selection", () => {
   });
   it("an editor change runs the editor suites", () => {
     const s = select(["src/admin/editor/snap.ts"]);
-    for (const x of ["cut", "merge", "locks", "coast", "ring-select", "snap", "contested"]) expect(s).toContain(x);
+    for (const x of ["cut", "merge", "locks", "coast", "ring-select", "snap", "layers"]) expect(s).toContain(x);
     expect(s).not.toContain("tiles");
     expect(s).not.toContain("upload");
   });

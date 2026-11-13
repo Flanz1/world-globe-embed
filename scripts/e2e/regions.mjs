@@ -670,14 +670,17 @@ await step(A, "editor: colours and legend", async () => {
     page.evaluate(() => {
       const d = document.querySelector("dialog.editor");
       return {
-        keys: [...d.querySelectorAll(".ed-key .ed-key-row")].map((r) => [r.querySelector("input[type=color]").value, r.querySelector("input[type=text]").value]),
-        parts: [...d.querySelectorAll(".ed-part-row select[data-part]")].map((s) => s.value),
+        keys: [...d.querySelectorAll('.ed-folder:not([data-key="-1"]) .ed-folder-head')].map((r) => [r.querySelector("input[type=color]").value, r.querySelector("input[type=text]").value]),
+        // Each part's colour, by part number (rows sit in their colour's folder).
+        parts: [...d.querySelectorAll(".ed-part-row select[data-part]")].sort((a, b) => a.dataset.part - b.dataset.part).map((s) => s.value),
+        folders: [...d.querySelectorAll(".ed-folder")].map((f) => [f.dataset.key, [...f.querySelectorAll(".ed-part-row")].map((r) => r.dataset.row).join(",")]),
         options: [...(d.querySelector(".ed-part-row select[data-part]")?.options ?? [])].map((o) => o.textContent),
         title: d.querySelector('input[name="legend-title"]').value,
       };
     });
   let pn = await panel();
   check(A, "editor lists the legend and each part's colour", pn.keys.length === 2 && JSON.stringify(pn.parts) === '["-1","0","1"]' && pn.title === "Provinces", JSON.stringify(pn));
+  check(A, "one folder per colour, Default colour first, each holding its parts", JSON.stringify(pn.folders) === JSON.stringify([["-1", "0"], ["0", "1"], ["1", "2"]]), JSON.stringify(pn.folders));
   check(A, "part colour menu: default colour, then the legend labels as text", JSON.stringify(pn.options) === JSON.stringify(["Default colour", "Green March", "<img src=x onerror=alert(3)>"]) && dialogs.length === 0, JSON.stringify(pn.options));
   // Numbered badges: the Parts list numbers its rows, and pointing at a part on the map lights up its row.
   const badges = await page.$$eval("dialog.editor .ed-part-row .ed-badge", (els) => els.map((e) => e.textContent));
@@ -698,7 +701,7 @@ await step(A, "editor: colours and legend", async () => {
   pn = await panel();
   check(A, "Add colour adds a row and focuses its label", pn.keys.length === 3 && pn.keys[2][1] === "Capital", JSON.stringify(pn.keys));
   await page.selectOption('dialog.editor .ed-part-row select[data-part="0"]', "2");
-  await page.click('dialog.editor .ed-key .ed-key-row:first-child [data-act="key-remove"]');
+  await page.click('dialog.editor .ed-folder[data-key="0"] [data-act="key-remove"]');
   pn = await panel();
   check(A, "removing a colour sends its parts back to the region colour and keeps the rest", pn.keys.length === 2 && JSON.stringify(pn.parts) === '["1","-1","0"]', JSON.stringify(pn));
   await page.screenshot({ path: path.join(OUT, "editor-legend.png") });

@@ -25,7 +25,7 @@
     "e2e": "node scripts/e2e/run.mjs",
     "e2e:regions": "tsx scripts/e2e/regions.mjs",
     "e2e:coast": "tsx scripts/e2e/coast.mjs",
-    "e2e:contested": "tsx scripts/e2e/contested.mjs",
+    "e2e:layers": "tsx scripts/e2e/layers.mjs",
     "e2e:cut": "tsx scripts/e2e/cut.mjs",
     "e2e:locks": "tsx scripts/e2e/locks.mjs",
     "e2e:merge": "tsx scripts/e2e/merge.mjs",

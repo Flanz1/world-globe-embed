@@ -9,7 +9,7 @@ import {
   LEGEND_MAX,
   OWN_COLOUR,
   REGION_COLOR,
-  normalizePartContested,
+  migrateZoneColours,
   normalizePartLabels,
   normalizePartLegend,
   uniqueId,
@@ -71,7 +71,7 @@ function freeLabel(label: string, used: Set<string>): string {
 /**
  * Merges `sources` (in order; the first is the base for the region-wide settings) into one region with
  * every part of every source: geometry, part labels, colours (each source's own colour becomes a
- * legend entry where it differs from the base's), legend entries and contested zones. Legend labels
+ * legend entry where it differs from the base's), and legend entries, in order (later sources' parts are drawn on top). Legend labels
  * that clash (same text, different colour) get a " (2)" suffix; identical entries are shared.
  */
 export function combineRegions(sources: readonly RegionFeature[], target: { id: string; base: RegionBase }): CombineResult {
@@ -98,32 +98,28 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
   const polygons: Position[][][] = [];
   const labels: string[] = [];
   const styles: number[] = [];
-  const contested: number[] = [];
 
   for (const [si, f] of sources.entries()) {
     const p = f.properties;
     const polys = polygonsOf(f.geometry);
     const n = polys.length;
     const srcLegend = Array.isArray(p.legend) ? p.legend.slice(0, LEGEND_MAX) : [];
-    const partLegend = normalizePartLegend(Array.isArray(p.partLegend) ? p.partLegend : undefined, n, srcLegend.length);
+    const partLegend = migrateZoneColours(normalizePartLegend(Array.isArray(p.partLegend) ? p.partLegend : undefined, n, srcLegend.length), Array.isArray(p.partContested) ? p.partContested : undefined);
     // Legend entries this source's parts use, mapped into the combined legend. Unused entries are kept too.
     const map = srcLegend.map((e) => entryFor(String(e?.label ?? ""), safeColour(e?.color, "#7f8c8d"), f.id));
     const own = safeColour(p.color, colour);
     let ownIndex = OWN_COLOUR;
     if (si > 0 && own !== colour && partLegend.some((k) => k === OWN_COLOUR)) {
-      const name = (typeof p.name === "string" && p.name.trim()) || f.id;
+      const name = (typeof p.colorLabel === "string" && p.colorLabel.trim()) || (typeof p.name === "string" && p.name.trim()) || f.id;
       ownIndex = entryFor(name, own, f.id);
     }
     // Older regions have one name instead of part labels: it becomes the first part's label (as in the editor).
     const legacy = !Array.isArray(p.partLabels) && p.name && (p.label ?? true) ? [p.name] : undefined;
     const partLabels = normalizePartLabels(Array.isArray(p.partLabels) ? p.partLabels : legacy, n);
-    const zones = normalizePartContested(Array.isArray(p.partContested) ? p.partContested : undefined, n);
-    const offset = polygons.length;
     for (let i = 0; i < n; i++) {
       polygons.push(polys[i]);
       labels.push(partLabels[i]);
       styles.push(partLegend[i] === OWN_COLOUR ? ownIndex : map[partLegend[i]]);
-      contested.push(zones[i] === OWN_COLOUR ? OWN_COLOUR : zones[i] + offset);
     }
   }
 
@@ -147,7 +143,7 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
 
   const desc = sources.map((f) => f.properties.description?.trim()).find((d) => d);
   const legendTitle = sources.map((f) => f.properties.legendTitle?.trim()).find((t) => t);
-  const hasZones = contested.some((k) => k !== OWN_COLOUR);
+  const colorLabel = typeof first.colorLabel === "string" ? first.colorLabel.trim().slice(0, LEGEND_LABEL_MAX) : "";
   const feature: RegionFeature = {
     $schema: "../../schema/region.schema.json",
     type: "Feature",
@@ -156,6 +152,7 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
       slot: target.base.slot,
       map: target.base.map,
       color: colour,
+      ...(colorLabel ? { colorLabel } : {}),
       fillOpacity: first.fillOpacity ?? DEFAULT_FILL_OPACITY,
       label: sources.some((f) => f.properties.label ?? true),
       ...(desc ? { description: desc } : {}),
@@ -163,7 +160,6 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
       ...(sources.some((f) => f.properties.nationalBorders === true) ? { nationalBorders: true } : {}),
       ...(legend.length ? { legend, partLegend: styles } : {}),
       partLabels: labels,
-      ...(hasZones ? { partContested: contested } : {}),
     },
     geometry,
   };

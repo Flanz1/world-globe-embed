@@ -21,6 +21,8 @@ import {
   planMove,
   pointSegmentDistance,
   removeLegendEntry,
+  reorderPart,
+  layerTarget,
   ringRefs,
   setLocked,
   ringProblem,
@@ -35,7 +37,7 @@ import {
 import { MAX_VERTICES, checkGeometry, pointInRing, type Position } from "../src/shared/geo.ts";
 
 const square = (x: number, y: number, s = 10): Position[] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]];
-const props = { color: "#c0392b", fillOpacity: 0.35, label: true, description: "", legendTitle: "", legend: [] };
+const props = { color: "#c0392b", fillOpacity: 0.35, label: true, description: "", legendTitle: "", colorLabel: "", legend: [] };
 const st = (parts: Parts): EditorState => ({ parts, styles: parts.map(() => -1), labels: parts.map(() => ""), contested: parts.map(() => -1), locked: parts.map(() => false), props: { ...props, legend: [] } });
 
 describe("editor model", () => {
@@ -412,5 +414,30 @@ describe("selecting a ring by its line", () => {
     expect(pointSegmentDistance(5, 3, 0, 0, 10, 0)).toBe(3);
     expect(pointSegmentDistance(13, 4, 0, 0, 10, 0)).toBe(5);
     expect(pointSegmentDistance(3, 4, 0, 0, 0, 0)).toBe(5);
+  });
+
+  it("reorderPart moves a part to a new layer with its colour, label and lock", () => {
+    const s0: EditorState = { ...st([[square(0, 0)], [square(5, 0)], [square(20, 0)], [square(40, 0)]]), styles: [0, -1, 1, -1], labels: ["a", "b", "c", "d"], locked: [true, false, true, false] };
+    const up = reorderPart(s0, 0, 2);
+    expect(up.labels).toEqual(["b", "c", "a", "d"]);
+    expect(up.styles).toEqual([-1, 1, 0, -1]);
+    expect(up.locked).toEqual([false, true, true, false]);
+    expect(up.parts[2]).toEqual(s0.parts[0]);
+    const down = reorderPart(s0, 3, 0);
+    expect(down.labels).toEqual(["d", "a", "b", "c"]);
+    expect(reorderPart(s0, 1, 1)).toBe(s0);
+    expect(reorderPart(s0, 1, 9)).toBe(s0);
+    expect(s0.labels).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("layerTarget jumps past the nearest overlapping part, else one place, and stops at the ends", () => {
+    // 0 overlaps 2 and 3; 1 overlaps nothing.
+    const over: [number, number][] = [[0, 2], [0, 3]];
+    expect(layerTarget(4, over, 0, 1)).toBe(2);
+    expect(layerTarget(4, over, 3, -1)).toBe(0);
+    expect(layerTarget(4, over, 1, 1)).toBe(2);
+    expect(layerTarget(4, over, 1, -1)).toBe(0);
+    expect(layerTarget(4, over, 3, 1)).toBe(-1);
+    expect(layerTarget(4, over, 0, -1)).toBe(-1);
   });
 });

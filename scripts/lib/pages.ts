@@ -84,13 +84,14 @@ export function regionJson(f: RegionFeature): string {
   const checked = parseRegionData(d);
   if (!checked || vertexCount(checked.geometry) !== vertexCount(f.geometry) || (checked.provinceBorders?.length ?? 0) !== (pb?.length ?? 0))
     throw new Error(`region "${f.id}": data didn't pass the embed's own checks`);
-  // Without a legend (or part labels, contested zones), those fields are left out (the embed fills in the defaults), so plain regions stay small.
-  const { legend, legendTitle, parts, labels, contested, provinceBorders, nationalBorders, ...rest } = checked;
+  // Without a legend (or part labels), those fields are left out (the embed fills in the defaults), so plain regions stay small.
+  const { colorLabel, legend, legendTitle, parts, labels, provinceBorders, nationalBorders, ...rest } = checked;
   const out: Partial<RegionData> = {
     ...rest,
-    ...(legend.length ? { legendTitle, legend, parts } : {}),
+    ...(colorLabel ? { colorLabel } : {}),
+    ...(legend.length || colorLabel ? { legendTitle } : {}),
+    ...(legend.length ? { legend, parts } : {}),
     ...(labels.some((t) => t) ? { labels } : {}),
-    ...(contested.some((k) => k !== -1) ? { contested } : {}),
     ...(provinceBorders?.length ? { provinceBorders } : {}),
     ...(nationalBorders ? { nationalBorders: true } : {}),
   };

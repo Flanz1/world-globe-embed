@@ -168,7 +168,7 @@ describe("regions in the build", () => {
     expect(file.json).not.toMatch(/\n/);
   });
 
-  it("never adds other regions' overlaps (each region is its own map), and keeps contested zones", () => {
+  it("never adds other regions' overlaps (each region is its own map); older contested zones are plain parts", () => {
     const sq = (x: number, y: number, s = 10): [number, number][] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s], [x, y]];
     const base = { $schema: "../../schema/region.schema.json", type: "Feature" as const };
     const a = { ...base, id: "a", properties: { slot: "inara", map: "terra", color: "#c33", partContested: [-1, 0] }, geometry: { type: "MultiPolygon" as const, coordinates: [[sq(0, 0)], [sq(8, 0, 4)]] } };
@@ -178,8 +178,11 @@ describe("regions in the build", () => {
     const get = (id: string) => JSON.parse(files.find((f) => f.path === `regions/${id}.json`)!.json);
     expect(get("a").clash).toBeUndefined();
     expect(get("b").clash).toBeUndefined();
-    expect(get("a").contested).toEqual([-1, 0]);
+    expect(get("a").contested).toBeUndefined();
     expect(get("b").contested).toBeUndefined();
+    expect(get("b").colorLabel).toBeUndefined();
+    const named = generateRegionFiles({ ...content, regions: new Map([["b", { ...b, properties: { ...b.properties, colorLabel: "Heartland", legendTitle: "Faith" } }]] as [string, RegionFeature][]) });
+    expect(JSON.parse(named[0].json)).toMatchObject({ colorLabel: "Heartland", legendTitle: "Faith" });
     expect(JSON.stringify(get("a"))).not.toContain("#33c");
   });
 

@@ -40,9 +40,9 @@ import {
 } from "three";
 import { BASE_DISTANCE, FOV_DEG, MAX_DISTANCE, MIN_DISTANCE, clamp, clampPadding, distanceForZoom, parseHex } from "../shared/params.ts";
 import { imageToGlobe, polygonsOf, type Position } from "../shared/geo.ts";
-import { regionFit, regionLabelPoints, type RegionData } from "../shared/region.ts";
+import { legendRows, regionFit, regionLabelPoints, type RegionData } from "../shared/region.ts";
 import { paintSpec, type PaintSpec } from "../shared/raster.ts";
-import { hasContestedMarks, regionPaintSpec } from "../shared/region-paint.ts";
+import { regionPaintSpec } from "../shared/region-paint.ts";
 import { deviceLimit, deviceMemory, nextTier } from "../shared/tiers.ts";
 import { createGlobeTiles } from "./globe-tiles.ts";
 import type { PreviewMessage, StartContext } from "./contract.ts";
@@ -321,7 +321,7 @@ export async function start(ctx: StartContext): Promise<void> {
     const pts = (R?.label ?? reg.label) ? regionLabelPoints(reg) : [];
     labelAt = pts.map((p) => p.at);
     labels?.set(pts.map((p) => p.text));
-    regionKey?.set(R?.key ? reg.legend : [], reg.legendTitle, !!R?.key && hasContestedMarks(spec!));
+    regionKey?.set(R?.key ? legendRows(reg) : [], reg.legendTitle);
   }
   let spec: PaintSpec | null = null;
   let specFor: RegionData | null = null;

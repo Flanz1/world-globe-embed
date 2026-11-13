@@ -16,7 +16,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ALL = ["contested", "regions", "snap", "merge", "coast", "cut", "locks", "ring-select", "tiles", "tiers", "view", "upload", "roles"];
+export const ALL = ["layers", "regions", "snap", "merge", "coast", "cut", "locks", "ring-select", "tiles", "tiers", "view", "upload", "roles"];
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const ADMIN = ["src/admin/main.ts"];
@@ -39,7 +39,7 @@ export const SUITE_ROOTS = {
   coast: EDITOR,
   "ring-select": EDITOR,
   snap: [...EDITOR, ...VIEWER],
-  contested: [...EDITOR, ...VIEWER],
+  layers: [...EDITOR, ...VIEWER],
   view: VIEWER,
   tiers: [...VIEWER, "src/shared/tiers.ts"],
   tiles: [...VIEWER, "src/shared/tiers.ts", "src/shared/tiles.ts", "src/shared/raster.ts"],
@@ -54,7 +54,7 @@ const RULES = [
   [/^scripts\/e2e\/(fixture|ports|mock-github|admin-api)\.(mjs|d\.mts)$/, ALL],
   [/^scripts\/e2e\/([\w-]+)\.mjs$/, (m) => (ALL.includes(m[1]) ? [m[1]] : [])],
   [/^(package(-lock)?\.json|vite\.config\.ts|tsconfig\.json|eslint\.config\.js)$/, ALL],
-  [/^src\/admin\/editor\/.*\.css$/, ["cut", "merge", "locks", "coast", "ring-select", "snap", "contested"]],
+  [/^src\/admin\/editor\/.*\.css$/, ["cut", "merge", "locks", "coast", "ring-select", "snap", "layers"]],
   [/^(src\/admin\/.*\.css|admin\/.*)$/, ["regions", "roles"]],
   [/^src\/(viewer|shared)\/.*\.css$/, ["view", "regions"]],
   [/^(schema\/|scripts\/build-worker-validators)/, ["regions", "roles"]],
@@ -64,7 +64,7 @@ const RULES = [
   [/^scripts\//, ["regions"]],
 ];
 
-const EDITOR_SUITES = new Set(["cut", "merge", "locks", "coast", "ring-select", "snap", "contested"]);
+const EDITOR_SUITES = new Set(["cut", "merge", "locks", "coast", "ring-select", "snap", "layers"]);
 
 let graph;
 /** suite → Set of repo-relative files its entries import. Built once with esbuild. */

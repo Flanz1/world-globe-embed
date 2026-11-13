@@ -4,7 +4,7 @@ import { checkGeometry, pointInRing, signedArea, type Position, type Ring } from
 
 const square = (x: number, y: number, s = 10): Position[] => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]];
 const rect = (x0: number, y0: number, x1: number, y1: number): Position[] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
-const props = { color: "#c0392b", fillOpacity: 0.35, label: true, description: "", legendTitle: "", legend: [{ label: "A", color: "#2e86c1" }] };
+const props = { color: "#c0392b", fillOpacity: 0.35, label: true, description: "", legendTitle: "", colorLabel: "", legend: [{ label: "A", color: "#2e86c1" }] };
 const st = (parts: Parts, extra: Partial<EditorState> = {}): EditorState => ({
   parts,
   styles: parts.map(() => -1),
