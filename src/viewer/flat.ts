@@ -128,7 +128,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       const all = [offsets[0] - 360, ...offsets, offsets[offsets.length - 1] + 360];
       paintSpec(g, spec, (lon) => sx(lon, w), (lat) => sy(lat, h), all, {
         fillOpacity: reg.fillOpacity,
-        lineWidth: 2,
+        lineWidth: 1.2,
         dim: !!R?.dim,
       }, { w, h });
     }

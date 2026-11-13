@@ -349,7 +349,7 @@ export function openEditor(o: EditorOptions): void {
         () => startDraw("border"),
         "province-border",
       ),
-      btn("Add contested zone", "Draw land a part claims but doesn't firmly hold (dashed in the embed)", () => addContested(), "add-contested"),
+      btn("Add contested zone", "Draw land a part claims but doesn't firmly hold (hatched in the embed)", () => addContested(), "add-contested"),
       h("span", { className: "sep" }),
       undoBtn,
       redoBtn,
@@ -400,7 +400,7 @@ export function openEditor(o: EditorOptions): void {
           "fieldset",
           { className: "ed-overlaps" },
           h("legend", { textContent: "Overlaps" }),
-          h("p", { className: "muted small", textContent: "Where parts overlap each other or another region on this slot, the embed draws the border dashed." }),
+          h("p", { className: "muted small", textContent: "Where parts overlap each other, the embed hatches the overlap." }),
           clashList,
         ),
         stats,
@@ -1391,7 +1391,7 @@ export function openEditor(o: EditorOptions): void {
           const sel = h("select", { ariaLabel: `Colour of part ${p + 1}`, dataset: { part: String(p) } });
           for (const k of [OWN_COLOUR, ...s.props.legend.map((_, i) => i)]) sel.append(h("option", { value: String(k), textContent: entryName(k) }));
           sel.addEventListener("change", () => setPartStyle(p, Number(sel.value)));
-          const of = h("select", { ariaLabel: `Part ${p + 1}: contested zone of`, title: "Contested of: make this part a contested zone of another part (dashed in the embed)", dataset: { contestedOf: String(p) } });
+          const of = h("select", { ariaLabel: `Part ${p + 1}: contested zone of`, title: "Contested of: make this part a contested zone of another part (hatched in the embed)", dataset: { contestedOf: String(p) } });
           of.append(h("option", { value: "-1", textContent: "— (normal part)" }));
           const hasZones = zonesOf(s.contested, p).length > 0;
           s.parts.forEach((_, k) => {
@@ -1573,7 +1573,7 @@ export function openEditor(o: EditorOptions): void {
     if (normal.length === 1) return go(normal[0]);
     const m = modal("Extends which part?", "zone-pick");
     m.body.append(
-      h("p", { className: "muted small", textContent: "The new contested zone extends one part: it's drawn in that part's colour, dashed." }),
+      h("p", { className: "muted small", textContent: "The new contested zone extends one part: it's drawn in that part's colour, hatched." }),
       h(
         "div",
         { className: "zone-pick-list" },

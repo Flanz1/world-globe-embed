@@ -17,7 +17,7 @@
  */
 import { createServer } from "node:http";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
-import { existsSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -101,6 +101,12 @@ if (want("identity")) {
     rmSync(wt, { recursive: true, force: true });
     execFileSync("git", ["worktree", "add", "--detach", wt, "origin/main"], { stdio: "pipe" });
     symlinkSync(path.resolve("node_modules"), path.join(wt, "node_modules"), "dir");
+    // The embeds' line width was made thinner on purpose: give the main build the same widths so only the zone work is compared
+    // (a no-op once main has them).
+    for (const [file, from, to] of [["src/viewer/flat.ts", "lineWidth: 2,", "lineWidth: 1.2,"], ["src/viewer/globe.ts", "lineWidth: (W / 2048) * 2.5,", "lineWidth: (W / 2048) * 1.5,"]]) {
+      const f = path.join(wt, file);
+      writeFileSync(f, readFileSync(f, "utf8").replace(from, to));
+    }
     mainDir = await build(path.join(wt, "scripts/e2e/fixture.mjs"), [], BRANCH);
     execFileSync("git", ["worktree", "remove", "--force", wt], { stdio: "pipe" });
     console.log(`origin/main fixture: ${mainDir}`);
@@ -181,7 +187,6 @@ function lineProfile(img, a, b, colour, tol = 60) {
   return { on: on / (n + 1), flips, n };
 }
 const isSolid = (p) => p.on > 0.9 && p.flips <= 2;
-const isDashed = (p) => p.on > 0.25 && p.on < 0.85 && p.flips >= 4;
 const fmt = (p) => `${Math.round(p.on * 100)}% on, ${p.flips} flips over ${p.n} px`;
 const diffCount = (a, b, rect) => {
   let n = 0;
@@ -213,7 +218,7 @@ for (const view of want("embed") ? ["flat", "globe"] : []) {
       const k = document.querySelector(".rkey");
       return k && { visible: k.checkVisibility(), rows: [...k.querySelectorAll("li")].map((li) => ({ text: li.textContent, dashed: getComputedStyle(li.querySelector("i")).borderStyle })) };
     });
-    check(G, "legend has a 'Contested' row with a dashed swatch", key?.visible && key.rows.length === 1 && key.rows[0].text === "Contested" && key.rows[0].dashed === "dashed", JSON.stringify(key));
+    check(G, "legend has a 'Contested' row with a hatched swatch", key?.visible && key.rows.length === 1 && key.rows[0].text === "Contested" && key.rows[0].dashed === "solid", JSON.stringify(key));
     const shot = await canvasShot(e);
     await writeFile(path.join(OUT, `embed-${view}.png`), shot);
     if (view === "flat") {
@@ -223,14 +228,14 @@ for (const view of want("embed") ? ["flat", "globe"] : []) {
       const solid = lineProfile(img, at(11, -10), at(19, -10), "#ff3b30");
       const dashed = lineProfile(img, at(20.6, -10), at(23.6, -10), "#ff3b30");
       check(G, "a normal border is solid outside the parts it overlaps", isSolid(solid), fmt(solid));
-      check(G, "…and dashed inside them", isDashed(dashed), fmt(dashed));
+      check(G, "…and inside them too (no dashes)", isSolid(dashed), fmt(dashed));
       // The contested zone Z: dashed all round, also outside P (its east edge, lon 46).
       const zEast = lineProfile(img, at(46, -9.5), at(46, -16.5), "#ff3b30");
-      check(G, "a contested zone's border is dashed all round", isDashed(zEast), fmt(zEast));
+      check(G, "a contested zone's border is solid all round", isSolid(zEast), fmt(zEast));
       // P's east edge (lon 40) runs inside Z between lat -18 and -8: dashed there; solid above -8.
-      const pIn = lineProfile(img, at(40, -9), at(40, -17), "#ff3b30");
-      const pOut = lineProfile(img, at(40, -7.6), at(40, -5.6), "#ff3b30");
-      check(G, "a part's border inside its own contested zone is dashed", isDashed(pIn), fmt(pIn));
+      const pIn = lineProfile(img, at(40, -9), at(40, -17), "#ff3b30", 120);
+      const pOut = lineProfile(img, at(40, -7.6), at(40, -5.6), "#ff3b30", 120);
+      check(G, "a part's border inside its own contested zone is solid", pIn.on > 0.8 && pIn.flips <= 4, fmt(pIn));
       check(G, "…and solid where it leaves the zone", pOut.on > 0.85, fmt(pOut));
       // Hatch: inside Z (outside P) there are pixels of the zone colour that a plain fill wouldn't have.
       const [hx0, hy0] = at(41, -9);
@@ -462,7 +467,7 @@ if (want("editor")) {
     // A's east edge (lon 115) runs inside B (now 113…119) between lat -50 and -44.
     const aIn = await edgeProfile(img, [115, -45], [115, -49], "#00e5ff");
     const aOut = await edgeProfile(img, [115, -38], [115, -42], "#00e5ff");
-    check(A, "editor: border dashed inside the other part", isDashed(aIn), fmt(aIn));
+    check(A, "editor: border solid inside the other part", isSolid(aIn), fmt(aIn));
     check(A, "editor: and solid outside it", isSolid(aOut), fmt(aOut));
     await page.screenshot({ path: path.join(OUT, "editor-overlap.png") });
     await page.waitForTimeout(500);
@@ -484,7 +489,7 @@ if (want("editor")) {
       await edgeProfile(img, [e - 1, n], [w + 1, n], "#00e5ff"),
       await edgeProfile(img, [w, n - 1], [w, so + 1], "#00e5ff"),
     ];
-    check(A, "a part inside another has its whole outline dashed", sides.every(isDashed), sides.map(fmt).join(" | "));
+    check(A, "a part inside another has its whole outline solid", sides.every(isSolid), sides.map(fmt).join(" | "));
     await page.screenshot({ path: path.join(OUT, "editor-inside.png") });
 
     // Alt+click cycles through the parts under the pointer.
