@@ -10,6 +10,7 @@ import {
   OWN_COLOUR,
   REGION_COLOR,
   migrateZoneColours,
+  normalizePartOccupied,
   normalizePartLabels,
   normalizePartLegend,
   uniqueId,
@@ -98,6 +99,7 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
   const polygons: Position[][][] = [];
   const labels: string[] = [];
   const styles: number[] = [];
+  const occupied: boolean[] = [];
 
   for (const [si, f] of sources.entries()) {
     const p = f.properties;
@@ -116,7 +118,9 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
     // Older regions have one name instead of part labels: it becomes the first part's label (as in the editor).
     const legacy = !Array.isArray(p.partLabels) && p.name && (p.label ?? true) ? [p.name] : undefined;
     const partLabels = normalizePartLabels(Array.isArray(p.partLabels) ? p.partLabels : legacy, n);
+    const occ = normalizePartOccupied(Array.isArray(p.partOccupied) ? p.partOccupied : undefined, Array.isArray(p.partContested) ? p.partContested : undefined, n);
     for (let i = 0; i < n; i++) {
+      occupied.push(occ[i]);
       polygons.push(polys[i]);
       labels.push(partLabels[i]);
       styles.push(partLegend[i] === OWN_COLOUR ? ownIndex : map[partLegend[i]]);
@@ -160,6 +164,7 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
       ...(sources.some((f) => f.properties.nationalBorders === true) ? { nationalBorders: true } : {}),
       ...(legend.length ? { legend, partLegend: styles } : {}),
       partLabels: labels,
+      ...(occupied.some(Boolean) ? { partOccupied: occupied } : {}),
     },
     geometry,
   };

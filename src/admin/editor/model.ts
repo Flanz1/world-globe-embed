@@ -50,8 +50,9 @@ export interface EditorState {
   /** Per part: the label the embed shows on it ("" for none). */
   labels: string[];
   /**
-   * Per part: always -1 now. Contested zones were replaced by layers (part order); older regions'
-   * zones load as plain parts. Kept so the part-reshaping helpers keep one shape.
+   * Per part: -1 for a normal part, OCCUPIED (-2) for a contested (occupied) area. (A value of 0 or more
+   * was an old contested zone's parent; older regions load those as occupied areas, so it isn't used.)
+   * Every part-reshaping helper carries it along with the parts.
    */
   contested: number[];
   /** Per part: true when it's locked (can't be moved as a whole; its vertices still edit). */
@@ -59,6 +60,17 @@ export interface EditorState {
   /** Province borders: open lines drawn inside the region (unwrapped, like the rings). Not tied to any part. */
   lines?: Position[][];
   props: RegionProps;
+}
+
+/** `contested` value for a contested (occupied) area: saved as partOccupied. */
+export const OCCUPIED = -2;
+export const isOccupied = (s: Pick<EditorState, "contested">, p: number): boolean => (s.contested[p] ?? -1) !== -1;
+
+/** Marks part p as an occupied area or a normal part again. */
+export function setOccupied(s: EditorState, p: number, on: boolean): EditorState {
+  const next = cloneState(s);
+  next.contested[p] = on ? OCCUPIED : -1;
+  return next;
 }
 
 /** A vertex: part, ring (0 = outer) and index in the open ring. */
@@ -383,7 +395,7 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
   }
   let orphaned = 0;
   const contested = parentOld.map((k) => {
-    if (k < 0) return -1;
+    if (k < 0) return k;
     if (index[k] >= 0) return index[k];
     orphaned++;
     return -1;
@@ -499,7 +511,7 @@ export function remapContested(contested: readonly number[], kept: readonly numb
   let orphaned = 0;
   const out = kept.map((old) => {
     const k = contested[old] ?? -1;
-    if (k < 0) return -1;
+    if (k < 0) return k;
     const n = at.get(k);
     if (n === undefined) {
       orphaned++;
@@ -571,7 +583,7 @@ export function toStyledGeometry(
   labels: string[] = [],
   contested: number[] = [],
   locked: boolean[] = [],
-): { geometry: RegionGeometry; partLegend: number[]; partLabels: string[]; partContested: number[]; partLocked: boolean[] } {
+): { geometry: RegionGeometry; partLegend: number[]; partLabels: string[]; partContested: number[]; partOccupied: boolean[]; partLocked: boolean[] } {
   const keep: Parts = [];
   const kept: number[] = [];
   const partLegend: number[] = [];
@@ -586,7 +598,8 @@ export function toStyledGeometry(
       partLocked.push(locked[p] !== false);
     }
   });
-  return { geometry: toStoredGeometry(keep), partLegend, partLabels, partContested: remapContested(contested, kept).contested, partLocked };
+  const partContested = remapContested(contested, kept).contested;
+  return { geometry: toStoredGeometry(keep), partLegend, partLabels, partContested, partOccupied: partContested.map((k) => k !== -1), partLocked };
 }
 
 /** Removes legend entry `k`: its parts go back to the region's colour, later indices shift down. */
@@ -624,7 +637,7 @@ export function reorderPart(s: EditorState, p: number, to: number): EditorState 
   next.parts = order.map((i) => next.parts[i]);
   next.styles = order.map((i) => s.styles[i] ?? OWN_COLOUR);
   next.labels = order.map((i) => s.labels[i] ?? "");
-  next.contested = order.map((i) => ((s.contested[i] ?? -1) >= 0 ? inv[s.contested[i]] : -1));
+  next.contested = order.map((i) => ((s.contested[i] ?? -1) >= 0 ? inv[s.contested[i]] : (s.contested[i] ?? -1)));
   next.locked = order.map((i) => s.locked[i] ?? true);
   return next;
 }

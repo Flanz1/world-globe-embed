@@ -68,6 +68,13 @@ export interface RegionProperties {
    */
   partContested?: number[];
   /**
+   * One entry per part, in order: true for a contested (occupied) area. Like any overlap of different
+   * colours, it's striped in every colour there and its own border is dashed in them, but the borders of
+   * the parts under it stay solid, as they were. Leave it out when no part is one. A legacy contested zone
+   * (partContested) counts as one.
+   */
+  partOccupied?: boolean[];
+  /**
    * One entry per part, in order: true for a part locked in the admin editor (it can't be dragged or
    * nudged as a whole; its vertices still can), false for one left unlocked. Editor-only: the embed
    * ignores it. Locked is the default: a missing list or entry means locked.
@@ -116,7 +123,9 @@ export interface RegionData {
   parts: number[];
   /** Per polygon: its label ("" for none). All empty means: show `name` once, at the region's middle. */
   labels: string[];
-  /** The parts, in drawing order: where parts overlap, a later part covers an earlier one. */
+  /** Per polygon: whether it's a contested (occupied) area (see RegionProperties.partOccupied). Missing: none. */
+  occupied?: boolean[];
+  /** The parts, in order (the order decides which colour fills an occupied overlap: the later part's). */
   geometry: RegionGeometry;
   /** Province borders (open lines), drawn dotted where they lie inside the region's parts. Missing: none. */
   provinceBorders?: Position[][];
@@ -152,6 +161,7 @@ export function regionData(f: RegionFeature): RegionData {
     legend: (p.legend ?? []).map((e) => ({ label: e.label, color: e.color })),
     parts: migrateZoneColours(normalizePartLegend(p.partLegend, n, p.legend?.length ?? 0), p.partContested),
     labels: normalizePartLabels(p.partLabels, n),
+    ...(normalizePartOccupied(p.partOccupied, p.partContested, n).some(Boolean) ? { occupied: normalizePartOccupied(p.partOccupied, p.partContested, n) } : {}),
     geometry: f.geometry,
     ...(p.provinceBorders?.length ? { provinceBorders: p.provinceBorders.map((l) => l.map(([x, y]) => [x, y] as Position)) } : {}),
     ...(p.nationalBorders === true ? { nationalBorders: true } : {}),
@@ -195,6 +205,12 @@ export function migrateZoneColours(partLegend: readonly number[], partContested:
   return partLegend.map((k, i) => (k === OWN_COLOUR && zones[i] >= 0 ? partLegend[zones[i]] : k));
 }
 
+/** partOccupied padded or cut to `n` parts; a legacy contested zone (partContested) is occupied too. */
+export function normalizePartOccupied(v: readonly unknown[] | undefined, legacy: readonly unknown[] | undefined, n: number): boolean[] {
+  const zones = normalizePartContested(legacy, n);
+  return Array.from({ length: n }, (_, i) => v?.[i] === true || zones[i] >= 0);
+}
+
 /** The embed's legend rows: every colour with a label (the region's own colour first), in order. */
 export function legendRows(r: Pick<RegionData, "color" | "colorLabel" | "legend">): LegendEntry[] {
   return [{ label: r.colorLabel, color: r.color }, ...r.legend].filter((e) => e.label.trim());
@@ -217,9 +233,12 @@ export function checkParts(p: RegionProperties, g: RegionGeometry, where: string
         : `${where}: "provinceBorders" must be lines of at least 2 [lon, lat] positions within range`,
     );
   }
+  const n = polygonsOf(g).length;
+  const o = p.partOccupied;
+  if (o && o.length !== n)
+    errors.push(`${where}: "partOccupied" has ${o.length} entr${o.length === 1 ? "y" : "ies"} but the geometry has ${n} part${n === 1 ? "" : "s"}; it needs one per part (false for a normal part)`);
   const c = p.partContested;
   if (!c) return errors;
-  const n = polygonsOf(g).length;
   if (c.length !== n)
     errors.push(`${where}: "partContested" has ${c.length} entr${c.length === 1 ? "y" : "ies"} but the geometry has ${n} part${n === 1 ? "" : "s"}; it needs one per part (-1 for a normal part)`);
   c.forEach((k, i) => {
@@ -347,7 +366,7 @@ export function parseGeometry(v: unknown): RegionGeometry | null {
  */
 export function parseRegionData(v: unknown): RegionData | null {
   if (!isObj(v)) return null;
-  const { id, slot, name, color, colorLabel, fillOpacity, label, geometry, legend, legendTitle, parts, labels, provinceBorders, nationalBorders } = v;
+  const { id, slot, name, color, colorLabel, fillOpacity, label, geometry, legend, legendTitle, parts, labels, occupied, provinceBorders, nationalBorders } = v;
   if (typeof id !== "string" || !REGION_ID.test(id)) return null;
   if (typeof slot !== "string" || !REGION_ID.test(slot)) return null;
   if (typeof name !== "string" || name.length > NAME_MAX) return null;
@@ -376,6 +395,7 @@ export function parseRegionData(v: unknown): RegionData | null {
     if (!Array.isArray(labels) || labels.length !== n) return null;
     if (!labels.every((t) => typeof t === "string" && t.length <= PART_LABEL_MAX)) return null;
   }
+  if (occupied !== undefined && (!Array.isArray(occupied) || occupied.length !== n || !occupied.every((b) => typeof b === "boolean"))) return null;
   return {
     id,
     slot,
@@ -388,7 +408,8 @@ export function parseRegionData(v: unknown): RegionData | null {
     legend: lg,
     parts: parts ? [...(parts as number[])] : new Array<number>(n).fill(OWN_COLOUR),
     labels: labels ? [...(labels as string[])] : new Array<string>(n).fill(""),
-    // Fields from older builds are ignored: `contested` (zones, now plain layers) and `clash` (overlaps
+    ...(occupied && (occupied as boolean[]).some(Boolean) ? { occupied: [...(occupied as boolean[])] } : {}),
+    // Fields from older builds are ignored: `contested` (zones, now `occupied` parts) and `clash` (overlaps
     // with other regions: regions are separate maps and never mark each other).
     geometry: g,
     // Malformed province borders are dropped (the region still loads).

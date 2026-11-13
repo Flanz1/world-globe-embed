@@ -6,7 +6,7 @@ import { loadContent } from "../scripts/lib/content.ts";
 import { contentPaths } from "../scripts/lib/paths.ts";
 import type { MapMeta } from "../src/shared/types.ts";
 import type { RegionFeature } from "../src/shared/region.ts";
-import { copyId, legendRows, migrateZoneColours, normalizePartContested, normalizePartLocked, normalizePartLabels, normalizePartLegend, regionLabelPoints, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
+import { copyId, legendRows, migrateZoneColours, normalizePartContested, normalizePartLocked, normalizePartOccupied, normalizePartLabels, normalizePartLegend, regionLabelPoints, parseRegionData, regionData, regionFit, regionLayers, uniqueId, zoomForCap, flatFit } from "../src/shared/region.ts";
 import { MAX_VERTICES } from "../src/shared/geo.ts";
 import { ZOOM_MAX, ZOOM_MIN } from "../src/shared/params.ts";
 
@@ -384,5 +384,28 @@ describe("part labels", () => {
     expect(parseRegionData({ ...wire, labels: ["a", 1, "c"] })).toBeNull();
     expect(parseRegionData({ ...wire, labels: ["x".repeat(81), "", ""] })).toBeNull();
     expect(normalizePartLabels(["a", 3 as unknown as string], 3)).toEqual(["a", "", ""]);
+  });
+});
+
+describe("occupied parts", () => {
+  it("partOccupied, and legacy contested zones, mark parts occupied", () => {
+    expect(normalizePartOccupied([true, false], undefined, 3)).toEqual([true, false, false]);
+    expect(normalizePartOccupied(undefined, [-1, 0, -1], 3)).toEqual([false, true, false]);
+    expect(normalizePartOccupied(["yes"], undefined, 1)).toEqual([false]);
+  });
+  it("regionData carries them only when some part is occupied, and parseRegionData checks them", () => {
+    const sq = (w: number) => [[[w, 0], [w + 1, 0], [w + 1, 1], [w, 1], [w, 0]]];
+    const f = (props: Record<string, unknown>): RegionFeature => ({
+      type: "Feature",
+      id: "occ",
+      properties: { slot: "s", map: "m", color: "#ff0000", ...props },
+      geometry: { type: "MultiPolygon", coordinates: [sq(0), sq(2)] },
+    }) as RegionFeature;
+    expect(regionData(f({})).occupied).toBeUndefined();
+    const d = regionData(f({ partOccupied: [false, true] }));
+    expect(d.occupied).toEqual([false, true]);
+    expect(parseRegionData(JSON.parse(JSON.stringify(d)))?.occupied).toEqual([false, true]);
+    expect(parseRegionData({ ...JSON.parse(JSON.stringify(d)), occupied: [true] })).toBeNull();
+    expect(regionData(f({ partContested: [-1, 0] })).occupied).toEqual([false, true]);
   });
 });

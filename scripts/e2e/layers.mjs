@@ -87,7 +87,18 @@ const extra = [
     partLegend: [-1, 0],
     partLabels: ["Heartland", "Claimed March"],
   }),
-  // Saved before layers: Z was a contested zone of P. It loads as a plain part in P's colour.
+  // Three colours over one spot (same bounds as layers-test, so the same framing).
+  feature("three-colours", { type: "MultiPolygon", coordinates: [[box(20, -20, 36, -8)], [box(28, -20, 46, -8)], [box(24, -14, 42, -5)]] }, {
+    legend: [{ label: "Green", color: "#2ecc40" }, { label: "Blue", color: "#2979ff" }],
+    partLegend: [-1, 0, 1],
+  }),
+  // Q is an occupied area over P.
+  feature("occupied-test", { type: "MultiPolygon", coordinates: [[box(...LY.P)], [box(...LY.Q)]] }, {
+    legend: [{ label: "March", color: "#2979ff" }],
+    partLegend: [-1, 0],
+    partOccupied: [false, true],
+  }),
+  // Saved before: Z was a contested zone of P. It loads as an occupied area in P's colour.
   feature("legacy-zone", { type: "MultiPolygon", coordinates: [[box(...LY.P)], [box(...LY.Q)]] }, { partContested: [-1, 0] }),
   feature("contested-neighbour", { type: "Polygon", coordinates: [box(...NEIGHBOUR)] }, { color: "#2979ff" }),
   feature("editor-test", { type: "MultiPolygon", coordinates: [[box(...ED.A)], [box(...ED.B)]] }, { color: "#00e5ff", partLabels: [HOSTILE, ""] }),
@@ -202,6 +213,24 @@ function lineProfile(img, a, b, colour, tol = 60) {
   return { on: on / (n + 1), flips, n };
 }
 const isSolid = (p) => p.on > 0.9 && p.flips <= 2;
+const dashed = (p) => p.on > 0.15 && p.on < 0.85 && p.flips >= 3;
+/** Share of pixels in a lon/lat box that lean clearly red, green or blue. */
+function shares(img, at, w, s, e, n) {
+  const [x0, y0] = at(w, n);
+  const [x1, y1] = at(e, s);
+  const c = { r: 0, g: 0, b: 0 };
+  let all = 0;
+  for (let y = Math.round(y0); y < Math.round(y1); y++)
+    for (let x = Math.round(x0); x < Math.round(x1); x++) {
+      const k = (y * img.info.width + x) * img.info.channels;
+      const [r, g, b] = [img.data[k], img.data[k + 1], img.data[k + 2]];
+      all++;
+      if (r - Math.max(g, b) > 40) c.r++;
+      else if (g - Math.max(r, b) > 30) c.g++;
+      else if (b - Math.max(r, g) > 40) c.b++;
+    }
+  return { r: +(c.r / all).toFixed(2), g: +(c.g / all).toFixed(2), b: +(c.b / all).toFixed(2) };
+}
 const fmt = (p) => `${Math.round(p.on * 100)}% on, ${p.flips} flips over ${p.n} px`;
 const diffCount = (a, b, rect) => {
   let n = 0;
@@ -222,7 +251,6 @@ const flatMap = () => {
   const ky = 2 / aspect;
   return (lon, lat) => [(lon - v.cx) * v.k + 400, (v.cy - lat) * v.k * ky + 240];
 };
-const absent = (p) => p.on < 0.15;
 
 for (const view of want("embed") ? ["flat", "globe"] : []) {
   const G = `embed ${view}`;
@@ -245,31 +273,19 @@ for (const view of want("embed") ? ["flat", "globe"] : []) {
     if (view === "flat") {
       const img = await raw(shot);
       const at = flatMap();
-      // P's east edge (lon 40) runs under Q between lat -15 and -8: covered there, solid below Q.
-      const pUnder = lineProfile(img, at(40, -9), at(40, -14), "#ff3b30", 120);
+      // P's east edge (lon 40) runs through the contested overlap between lat -15 and -8: dashed red and blue there, solid red below Q.
+      const pInR = lineProfile(img, at(40, -9), at(40, -14), "#ff3b30", 120);
+      const pInB = lineProfile(img, at(40, -9), at(40, -14), "#2979ff", 120);
       const pOut = lineProfile(img, at(40, -16), at(40, -19.5), "#ff3b30", 120);
-      check(G, "the lower part's border is hidden under the part on top", absent(pUnder), fmt(pUnder));
-      check(G, "…and solid where nothing covers it", isSolid(pOut), fmt(pOut));
-      // Q's south edge (lat -15) between lon 31 and 39 lies inside P: Q is on top, so it's drawn.
+      check(G, "a border through contested land is dashed in both colours", dashed(pInR) && pInB.on > 0.15, `red ${fmt(pInR)}; blue ${fmt(pInB)}`);
+      check(G, "…and solid where no other colour overlaps it", isSolid(pOut), fmt(pOut));
+      // Q's south edge (lat -15) between lon 31 and 39 runs through P: dashed too, whatever the part order.
       const qIn = lineProfile(img, at(31, -15), at(39, -15), "#2979ff", 120);
-      check(G, "the upper part's border shows over the lower part", isSolid(qIn), fmt(qIn));
-      // Contested: the overlap (lon 30…40, lat -15…-8) is Q's blue with P's red hatched over it; Q alone (lon 41…46) has no red.
-      const redness = (w, s, e, n) => {
-        const [x0, y0] = at(w, n);
-        const [x1, y1] = at(e, s);
-        let red = 0;
-        let all = 0;
-        for (let y = Math.round(y0); y < Math.round(y1); y++)
-          for (let x = Math.round(x0); x < Math.round(x1); x++) {
-            const k = (y * img.info.width + x) * img.info.channels;
-            all++;
-            if (img.data[k] - img.data[k + 2] > 40) red++;
-          }
-        return red / all;
-      };
-      const hatched = redness(32, -13.5, 38, -9.5);
-      const plainQ = redness(41.5, -13.5, 45, -9.5);
-      check(G, "the overlap is contested: hatched in the lower part's colour over the upper one's", hatched > 0.1 && plainQ < 0.02, `${Math.round(hatched * 100)}% red in the overlap, ${Math.round(plainQ * 100)}% in Q alone`);
+      check(G, "…the other part's border through it as well", dashed(qIn), fmt(qIn));
+      // The overlap (lon 30…40, lat -15…-8) is striped red and blue; Q alone (lon 41…46) has no red.
+      const hues = shares(img, at, 32, -13.5, 38, -9.5);
+      const plainQ = shares(img, at, 41.5, -13.5, 45, -9.5);
+      check(G, "the overlap is contested: stripes of both colours", hues.r > 0.1 && hues.b > 0.1 && plainQ.r < 0.02, `overlap ${JSON.stringify(hues)}; Q alone ${JSON.stringify(plainQ)}`);
     }
     await e.page.screenshot({ path: path.join(OUT, `embed-${view}-page.png`) });
     await e.ctx.close();
@@ -279,20 +295,62 @@ for (const view of want("embed") ? ["flat", "globe"] : []) {
     await k0.ctx.close();
   });
 
-  await step(G, "an old contested zone is a plain part", async () => {
+  if (view === "flat")
+    await step(G, "three colours over one spot", async () => {
+      const e = await openEmbed(q("three-colours"));
+      const shot = await canvasShot(e);
+      await writeFile(path.join(OUT, "embed-flat-three.png"), shot);
+      const img = await raw(shot);
+      const at = flatMap();
+      // All three overlap at lon 28…36, lat -14…-8: equal stripes of all three colours.
+      const all3 = shares(img, at, 29, -13, 35, -9);
+      check(G, "where three colours overlap, the stripes cycle through all three", all3.r > 0.12 && all3.g > 0.12 && all3.b > 0.12, JSON.stringify(all3));
+      // Only red and green at lon 28…36, lat -20…-14.
+      const two = shares(img, at, 29, -19, 35, -15);
+      check(G, "…and through just the two where two overlap", two.r > 0.12 && two.g > 0.12 && two.b < 0.04, JSON.stringify(two));
+      check(G, "no errors", e.errors.length === 0, e.errors.join(" | "));
+      await e.ctx.close();
+    });
+
+  await step(G, "an occupied area", async () => {
+    const data = await (await fetch(`${SITE}/regions/occupied-test.json`)).json();
+    check(G, "regions/occupied-test.json marks the occupied part", JSON.stringify(data.occupied) === "[false,true]", JSON.stringify(data.occupied));
+    const e = await openEmbed(q("occupied-test"));
+    const rows = await e.frame.evaluate(() => [...document.querySelectorAll(".rkey li")].map((li) => li.textContent));
+    check(G, "the legend has its Contested row", rows.includes("Contested"), JSON.stringify(rows));
+    if (view === "flat") {
+      const shot = await canvasShot(e);
+      await writeFile(path.join(OUT, "embed-flat-occupied.png"), shot);
+      const img = await raw(shot);
+      const at = flatMap();
+      // P's own border still shows, solid, under the occupied area…
+      const pIn = lineProfile(img, at(40, -9), at(40, -14), "#ff3b30", 120);
+      check(G, "the original border shows, solid, under the occupied area", isSolid(pIn), fmt(pIn));
+      // …while the occupied area's own outline is dashed where it lies inside P (its south edge, lat -15)…
+      const qIn = lineProfile(img, at(31, -15), at(39, -15), "#2979ff", 120);
+      check(G, "the occupied area's outline is dashed over the land it occupies", dashed(qIn), fmt(qIn));
+      // …and the occupied land is striped in both colours.
+      const hues = shares(img, at, 32, -13.5, 38, -9.5);
+      check(G, "…and the occupied land is striped in both colours", hues.r > 0.1 && hues.b > 0.1, JSON.stringify(hues));
+    }
+    check(G, "no errors", e.errors.length === 0, e.errors.join(" | "));
+    await e.ctx.close();
+  });
+
+  await step(G, "an old contested zone is an occupied area", async () => {
     const data = await (await fetch(`${SITE}/regions/legacy-zone.json`)).json();
-    check(G, "regions/legacy-zone.json has no contested field", data.contested === undefined && data.clash === undefined, JSON.stringify(Object.keys(data)));
+    check(G, "regions/legacy-zone.json marks it occupied (and has no old fields)", JSON.stringify(data.occupied) === "[false,true]" && data.contested === undefined && data.clash === undefined, JSON.stringify(data.occupied));
     const e = await openEmbed(q("legacy-zone"));
     const rows = await e.frame.evaluate(() => [...document.querySelectorAll(".rkey li")].map((li) => li.textContent));
-    check(G, "no legend rows (no Contested row)", rows.length === 0, JSON.stringify(rows));
+    check(G, "no legend rows (one colour: nothing contested)", rows.length === 0, JSON.stringify(rows));
     if (view === "flat") {
       const shot = await canvasShot(e);
       await writeFile(path.join(OUT, "embed-flat-legacy.png"), shot);
       const img = await raw(shot);
       const at = flatMap();
-      // The zone (second part, so on top) is drawn in its parent's colour, solid.
+      // The zone is drawn in its parent's colour, solid where it covers no other colour.
       const zEast = lineProfile(img, at(46, -9.5), at(46, -14.5), "#ff3b30", 120);
-      check(G, "the former zone is drawn in its parent's colour with a solid border", isSolid(zEast), fmt(zEast));
+      check(G, "the former zone is drawn in its parent's colour", isSolid(zEast), fmt(zEast));
     }
     check(G, "no errors", e.errors.length === 0, e.errors.join(" | "));
     await e.ctx.close();
@@ -494,14 +552,15 @@ if (want("editor")) {
     const cl = await ed.clashes();
     check(A, "the overlap is detected live", cl.internal.some(([i, j]) => i === 0 && j === 1), JSON.stringify(cl));
     const listed = await page.evaluate(() => [...document.querySelectorAll("dialog.editor .ed-clashes li")].map((li) => li.textContent));
-    check(A, "Overlaps says which part is on top in the contested overlap", listed.length === 1 && /^Part 2 over part 1 .*: contested, part 2's colour is the main one$/.test(listed[0]), JSON.stringify(listed));
+    check(A, "Overlaps says the two parts are contested", listed.length === 1 && /^Part 1 .* and part 2: contested, striped in both colours$/.test(listed[0]), JSON.stringify(listed));
     await unselect();
     let img = await canvasImg();
     const [bw] = partBox(s, 1);
     let aUnder = await edgeProfile(img, [115, -45], [115, -48.5], A_COL);
+    let aUnderB = await edgeProfile(img, [115, -45], [115, -48.5], B_COL);
     let bOver = await edgeProfile(img, [bw, -45], [bw, -48.5], B_COL);
-    check(A, "editor: the lower part's border is hidden under the upper part", absent(aUnder), fmt(aUnder));
-    check(A, "editor: the upper part's border shows", isSolid(bOver), fmt(bOver));
+    check(A, "editor: a border through the contested overlap is dashed in both colours", dashed(aUnder) && aUnderB.on > 0.15, `A ${fmt(aUnder)}; B ${fmt(aUnderB)}`);
+    check(A, "editor: …the other part's border too", dashed(bOver), fmt(bOver));
     await page.screenshot({ path: path.join(OUT, "editor-layers-b-on-top.png") });
     // Back on part 2: it goes under part 1 (and becomes part 1).
     await page.click('dialog.editor .ed-part-row[data-row="1"] [data-act="part-backward"]');
@@ -513,9 +572,7 @@ if (want("editor")) {
     img = await canvasImg();
     aUnder = await edgeProfile(img, [115, -45], [115, -48.5], A_COL);
     bOver = await edgeProfile(img, [bw, -45], [bw, -48.5], B_COL);
-    // (A vertex handle sits on this edge, hence a short gap.)
-    check(A, "editor: now A's border shows over B…", aUnder.on > 0.8, fmt(aUnder));
-    check(A, "…and B's border is hidden under A (only its contested hatch shows there)", !isSolid(bOver) && bOver.on < 0.7, fmt(bOver));
+    check(A, "editor: the part order doesn't change the contested look (both borders still dashed)", dashed(aUnder) && dashed(bOver), `A ${fmt(aUnder)}; B ${fmt(bOver)}`);
     await page.screenshot({ path: path.join(OUT, "editor-layers-a-on-top.png") });
     await page.waitForTimeout(500);
     // ] brings the selected part forward again.
@@ -547,6 +604,25 @@ if (want("editor")) {
     await unselect();
     check(A, "nothing selected: no layer bar", !(await bar()).shown);
     await page.screenshot({ path: path.join(OUT, "editor-overlap.png") });
+  });
+
+  await step(A, "contested (occupied) areas", async () => {
+    // Part 2 (B) becomes an occupied area: A's own border shows, solid, under it; B's outline is dashed.
+    await page.click('dialog.editor .ed-part-row[data-row="1"] [data-act="part-occupied"]');
+    const s = await ed.state();
+    check(A, "a part's Contested button makes it an occupied area", JSON.stringify(s.contested) === "[-1,-2]" && (await page.getAttribute('dialog.editor .ed-part-row[data-row="1"] [data-act="part-occupied"]', "aria-pressed")) === "true", JSON.stringify(s.contested));
+    const listed = await page.evaluate(() => [...document.querySelectorAll("dialog.editor .ed-clashes li")].map((li) => li.textContent));
+    check(A, "Overlaps says which part occupies which", /^Part 2 occupies part of part 1/.test(listed[0] ?? ""), JSON.stringify(listed));
+    await unselect();
+    const img = await canvasImg();
+    const [bw] = partBox(s, 1);
+    const aIn = await edgeProfile(img, [115, -45], [115, -48.5], A_COL);
+    const bIn = await edgeProfile(img, [bw, -45], [bw, -48.5], B_COL);
+    check(A, "editor: the original border shows, solid, under the occupied area", aIn.on > 0.8, fmt(aIn));
+    check(A, "editor: the occupied area's outline is dashed over the land it occupies", dashed(bIn), fmt(bIn));
+    await page.screenshot({ path: path.join(OUT, "editor-occupied.png") });
+    await page.keyboard.press("Control+z");
+    check(A, "undo makes it a normal part again", JSON.stringify((await ed.state()).contested) === "[-1,-1]");
   });
 
   await step(A, "moving parts", async () => {
