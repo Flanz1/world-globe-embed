@@ -15,6 +15,7 @@ import { categories, canAddCategory, canEditCategory, creatorOf, initCategories,
 import { $, h } from "./dom.ts";
 import { hasPendingSaves, optimistic } from "./optimistic.ts";
 import { openEditor, type EditorOptions } from "./editor/editor.ts";
+import { MAX_LIVE } from "./editor/live.ts";
 import type { OverlayMeta } from "./editor/overlay-filter.ts";
 import type { FileCommit, GitHub } from "./github.ts";
 import { loadMapImage } from "./images.ts";
@@ -530,6 +531,8 @@ export function openCombine(): void {
   const baseBox = h("fieldset", { className: "combine-base", hidden: true });
   const out = h("div", { className: "combine-out", role: "status", ariaLive: "polite" });
   const go = h("button", { type: "button", textContent: "Combine", disabled: true, dataset: { action: "combine" } });
+  const together = h("button", { type: "button", className: "ghost", textContent: "Edit together", disabled: true, dataset: { action: "edit-together" } });
+  const togetherWhy = h("p", { className: "muted small combine-together" });
   const list = h(
     "div",
     { className: "combine-list" },
@@ -584,6 +587,10 @@ export function openCombine(): void {
     const r = sources.length >= 2 && base ? combineRegions(sources, { id: REGION_ID.test(id) ? id : "combined", base }) : null;
     if (r) problems.push(...r.errors);
     go.disabled = problems.length > 0 || !r?.feature;
+    const why = togetherProblem(picked);
+    together.disabled = !!why;
+    together.title = why;
+    togetherWhy.textContent = sources.length >= 2 ? (why || "Edit together: open these regions in one editor; saving writes the changes back to each of them.") : "";
     out.replaceChildren(
       ...problems.map((t) => h("p", { className: sources.length < 2 ? "muted small" : "error small", textContent: t })),
       ...(r?.notes ?? []).map((t) => h("p", { className: "warn small", textContent: t })),
@@ -602,15 +609,63 @@ export function openCombine(): void {
     openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature: r.feature, sha: null, isNew: true, neighbours: others(), neighbourMeta: overlayMeta(), takenIds: taken, afterCommit: deps.afterCommit });
   });
 
+  together.addEventListener("click", () => {
+    if (together.disabled) return;
+    m.close();
+    editTogether(picked);
+  });
+
   m.body.append(
-    h("p", { className: "small", textContent: "Tick the regions to combine. Their areas, labels, colours and legends are copied into one new region, which opens in the editor for you to check and save. The first region you tick sets the main colour." }),
+    h("p", {
+      className: "small",
+      textContent:
+        "Tick the regions to combine. Combine copies their areas, labels, colours and legends into one new region, which opens in the editor for you to check and save; the originals stay as they are. Edit together opens the regions themselves in one editor instead: your changes are saved back to each of them. The first region you tick sets the main colour.",
+    }),
     list,
     h("label", {}, "New region id ", idIn),
     baseBox,
     out,
+    togetherWhy,
   );
-  m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), go);
+  m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), together, go);
   update();
+}
+
+/** Why the picked regions can't be edited together, or "". */
+function togetherProblem(picked: readonly RegionEntry[]): string {
+  if (picked.length < 2) return "Tick at least two regions.";
+  if (picked.length > MAX_LIVE) return `At most ${MAX_LIVE} regions can be edited together.`;
+  const no = picked.filter((e) => !e.feature || !canEdit(e.feature)).map((e) => e.id);
+  if (no.length) return `You can't edit ${no.join(", ")}, so ${no.length > 1 ? "they" : "it"} can't be edited together with the others.`;
+  if (new Set(picked.map((e) => e.feature!.properties.slot)).size > 1) return "Only regions on the same slot can be edited together.";
+  const slot = picked[0].feature!.properties.slot;
+  if (!deps.slots().slots[slot]) return `The slot "${slot}" doesn't exist any more.`;
+  return "";
+}
+
+/**
+ * "Edit together": the picked regions open in one editor; each part remembers its region, and saving
+ * writes every changed region back to its own file (one commit). Nothing new is created.
+ */
+export function editTogether(picked: readonly RegionEntry[]): void {
+  if (togetherProblem(picked)) return;
+  const slot = picked[0].feature!.properties.slot;
+  const pool = () => entries.filter((e) => e.feature && !e.problem && e.feature.properties.slot === slot && canEdit(e.feature)).map((e) => ({ id: e.id, feature: e.feature!, sha: e.sha }));
+  const neighboursFor = (ids: Set<string>) => entries.filter((x) => x.feature && !ids.has(x.id)).map((x) => x.feature!);
+  const sources = picked.map((e) => ({ id: e.id, feature: e.feature!, sha: e.sha }));
+  openEditor({
+    gh: deps.gh(),
+    maps: deps.maps(),
+    slots: deps.slots(),
+    feature: sources[0].feature,
+    sha: sources[0].sha,
+    isNew: false,
+    neighbours: neighboursFor(new Set(sources.map((x) => x.id))),
+    neighbourMeta: overlayMeta(),
+    takenIds: new Set(entries.map((x) => x.id)),
+    afterCommit: deps.afterCommit,
+    live: { sources, pool, neighboursFor },
+  });
 }
 
 /**

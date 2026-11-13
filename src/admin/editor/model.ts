@@ -24,11 +24,36 @@ import {
   type RegionGeometry,
   type Ring,
 } from "../../shared/geo.ts";
-import { OWN_COLOUR, type LegendEntry } from "../../shared/region.ts";
+import {
+  DEFAULT_FILL_OPACITY,
+  LEGEND_LABEL_MAX,
+  LEGEND_MAX,
+  LEGEND_TITLE_MAX,
+  OWN_COLOUR,
+  REGION_COLOR,
+  migrateZoneColours,
+  normalizePartLabelHidden,
+  normalizePartLabels,
+  normalizePartLegend,
+  normalizePartLocked,
+  type LegendEntry,
+  type RegionFeature,
+} from "../../shared/region.ts";
 export { partAnchor } from "../../shared/geo.ts";
 
 /** parts[p][0] is part p's outer ring, parts[p][1..] its holes. */
 export type Parts = Ring[][];
+
+/**
+ * A colour folder in the editor. When several regions are edited together (live.ts), each entry
+ * remembers where it came from: `src` is the region's id, and either `srcIdx` (its legend index there)
+ * or `own` (that region's own colour). These tags never reach a saved file.
+ */
+export interface EditorLegendEntry extends LegendEntry {
+  src?: string;
+  srcIdx?: number;
+  own?: boolean;
+}
 
 export interface RegionProps {
   color: string;
@@ -38,7 +63,7 @@ export interface RegionProps {
   label: boolean;
   description: string;
   legendTitle: string;
-  legend: LegendEntry[];
+  legend: EditorLegendEntry[];
   /** Draw national borders where parts share a line (off unless asked). */
   nationalBorders?: boolean;
 }
@@ -60,6 +85,11 @@ export interface EditorState {
   locked: boolean[];
   /** Province borders: open lines drawn inside the region (unwrapped, like the rings). Not tied to any part. */
   lines?: Position[][];
+  /**
+   * Per part, only when several regions are edited together (live.ts): the id of the region the part
+   * belongs to (and is saved back to). Every helper that removes or reorders parts carries it along.
+   */
+  owners?: string[];
   props: RegionProps;
 }
 
@@ -80,9 +110,43 @@ export const cloneState = (s: EditorState): EditorState => ({
   labelHidden: [...(s.labelHidden ?? [])],
   contested: [...(s.contested ?? [])],
   locked: [...(s.locked ?? [])],
+  ...(s.owners ? { owners: [...s.owners] } : {}),
   lines: (s.lines ?? []).map((l) => l.map(([x, y]) => [x, y] as Position)),
   props: { ...s.props, legend: s.props.legend.map((e) => ({ ...e })) },
 });
+
+const expandHex = (c: string) => (/^#[0-9a-f]{3}$/i.test(c) ? `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}` : c).toLowerCase();
+
+/** Editor state for a saved region (or the empty state for a new one). */
+export function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"): EditorState {
+  const fp = f?.properties;
+  const legend = (fp?.legend ?? [])
+    .slice(0, LEGEND_MAX)
+    .map((e) => ({ label: String(e.label ?? "").slice(0, LEGEND_LABEL_MAX), color: REGION_COLOR.test(e.color) ? expandHex(e.color) : "#7f8c8d" }));
+  const parts = f ? partsFromGeometry(f.geometry) : [];
+  // Older regions have one name instead of part labels: it becomes the first part's label.
+  const legacy = !fp?.partLabels && fp?.name && (fp.label ?? true) ? [fp.name] : undefined;
+  return {
+    parts,
+    // Contested zones (older regions) are plain parts now: a zone without its own colour keeps its parent's.
+    styles: migrateZoneColours(normalizePartLegend(fp?.partLegend, parts.length, legend.length), fp?.partContested),
+    labels: normalizePartLabels(fp?.partLabels ?? legacy, parts.length),
+    labelHidden: normalizePartLabelHidden(fp?.partLabelHidden, parts.length),
+    contested: new Array<number>(parts.length).fill(-1),
+    locked: normalizePartLocked(fp?.partLocked, parts.length),
+    lines: (fp?.provinceBorders ?? []).filter((l) => l.length >= 2).map((l) => unwrapRing(l.map(([x, y]) => [x, y] as Position))),
+    props: {
+      color: fp && REGION_COLOR.test(fp.color) ? expandHex(fp.color) : fallbackColour,
+      colorLabel: String(fp?.colorLabel ?? "").slice(0, LEGEND_LABEL_MAX),
+      fillOpacity: fp?.fillOpacity ?? DEFAULT_FILL_OPACITY,
+      label: fp?.label ?? true,
+      description: fp?.description ?? "",
+      legendTitle: (fp?.legendTitle ?? "").slice(0, LEGEND_TITLE_MAX),
+      legend,
+      nationalBorders: fp?.nationalBorders === true,
+    },
+  };
+}
 
 export function countVertices(parts: Parts): number {
   let n = 0;
@@ -358,9 +422,10 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
   const labels: string[] = [];
   const labelHidden: boolean[] = [];
   const locked: boolean[] = [];
+  const owners: string[] = [];
   const parentOld: number[] = [];
   const index = s.parts.map(() => -1);
-  const extra: { rings: Ring[]; style: number; parent: number; lock: boolean; hide: boolean }[] = [];
+  const extra: { rings: Ring[]; style: number; parent: number; lock: boolean; hide: boolean; owner: string }[] = [];
   const cut: number[] = [];
   let removed = 0;
   s.parts.forEach((rings, p) => {
@@ -369,6 +434,7 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
     const parent = s.contested[p] ?? -1;
     const lock = s.locked?.[p] !== false;
     const hide = s.labelHidden?.[p] === true;
+    const owner = s.owners?.[p] ?? "";
     if (pc) cut.push(p);
     if (pc && !pc.length) return void removed++;
     index[p] = parts.length;
@@ -377,8 +443,9 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
     labels.push(s.labels[p] ?? "");
     labelHidden.push(hide);
     locked.push(lock);
+    owners.push(owner);
     parentOld.push(parent);
-    for (const more of pc?.slice(1) ?? []) extra.push({ rings: more, style, parent, lock, hide });
+    for (const more of pc?.slice(1) ?? []) extra.push({ rings: more, style, parent, lock, hide, owner });
   });
   for (const e of extra) {
     parts.push(e.rings);
@@ -386,6 +453,7 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
     labels.push("");
     labelHidden.push(e.hide);
     locked.push(e.lock);
+    owners.push(e.owner);
     parentOld.push(e.parent);
   }
   let orphaned = 0;
@@ -402,6 +470,7 @@ export function cutParts(s: EditorState, cutters: Ring[], opts: { onlySplit?: bo
   next.labelHidden = labelHidden;
   next.contested = contested;
   next.locked = locked;
+  if (s.owners) next.owners = owners;
   // Check the changed parts as they'd be stored (rounded): a cut can leave a hole touching the edge.
   const changedNew = [...cut.map((p) => index[p]).filter((i) => i >= 0), ...extra.map((_, i) => parts.length - extra.length + i)];
   const bad = changedNew.length ? checkGeometry(toStoredGeometry(changedNew.map((i) => parts[i]))) : [];
@@ -654,6 +723,7 @@ export function reorderPart(s: EditorState, p: number, to: number): EditorState 
   next.labelHidden = order.map((i) => s.labelHidden?.[i] === true);
   next.contested = order.map((i) => ((s.contested[i] ?? -1) >= 0 ? inv[s.contested[i]] : -1));
   next.locked = order.map((i) => s.locked[i] ?? true);
+  if (s.owners) next.owners = order.map((i) => s.owners![i] ?? "");
   return next;
 }
 
