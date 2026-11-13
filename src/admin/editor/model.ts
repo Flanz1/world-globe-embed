@@ -16,6 +16,7 @@ import {
   openRing,
   pointInRing,
   polygonsOf,
+  segmentsIntersect,
   signedArea,
   simplifyRing,
   toStoredGeometry,
@@ -777,4 +778,45 @@ export class History {
     this.version++;
     return true;
   }
+}
+
+/**
+ * Tidies the end of a freehand stroke that overshot its start: when the last stretch crosses one of
+ * the first edges, the loop between the crossing and the end is kept and the little tails on either side
+ * are dropped, with the crossing itself as the new vertex. Only trims when the tails are short (at most
+ * a quarter of the stroke), so a deliberate figure-eight is still refused as self-crossing. `ky` scales
+ * latitude to the screen's aspect so "short" matches what was drawn.
+ */
+export function trimStrokeOvershoot(open: Position[], ky = 1): Position[] {
+  const n = open.length;
+  if (n < 4 || n > 3000) return open;
+  const len = (a: Position, b: Position) => Math.hypot(b[0] - a[0], (b[1] - a[1]) * ky);
+  const cum = [0];
+  for (let i = 1; i < n; i++) cum.push(cum[i - 1] + len(open[i - 1], open[i]));
+  const total = cum[n - 1];
+  let best: { j: number; i: number; x: Position } | null = null;
+  for (let j = 0; j < n - 3 && !best; j++) {
+    for (let i = n - 2; i > j + 1; i--) {
+      if (!segmentsIntersect(open[j], open[j + 1], open[i], open[i + 1])) continue;
+      const x = crossingPoint(open[j], open[j + 1], open[i], open[i + 1]);
+      if (!x) continue;
+      // What would be thrown away: the start up to the crossing, and the end past it.
+      const dropped = cum[j] + len(open[j], x) + (total - cum[i + 1]) + len(open[i + 1], x);
+      if (dropped <= total * 0.25) best = { j, i, x };
+      break;
+    }
+  }
+  if (!best) return open;
+  const out = [best.x, ...open.slice(best.j + 1, best.i + 1)];
+  return out.length >= 3 ? out : open;
+}
+
+/** Where segments ab and cd cross, or null when they are parallel. */
+function crossingPoint(a: Position, b: Position, c: Position, d: Position): Position | null {
+  const r: Position = [b[0] - a[0], b[1] - a[1]];
+  const q: Position = [d[0] - c[0], d[1] - c[1]];
+  const den = r[0] * q[1] - r[1] * q[0];
+  if (Math.abs(den) < 1e-12) return null;
+  const t = ((c[0] - a[0]) * q[1] - (c[1] - a[1]) * q[0]) / den;
+  return [a[0] + t * r[0], a[1] + t * r[1]];
 }
