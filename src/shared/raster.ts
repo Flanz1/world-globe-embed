@@ -80,15 +80,33 @@ export function paintLayers(
   ctx.lineJoin = "round";
   ctx.lineWidth = s.lineWidth;
   for (const l of layers) {
+    const trace = () => traceGeometry(ctx, l.geometry, x, y, offsets);
     ctx.beginPath();
-    traceGeometry(ctx, l.geometry, x, y, offsets);
+    trace();
     ctx.globalAlpha = Math.max(0, Math.min(1, s.fillOpacity));
     ctx.fillStyle = l.color;
     ctx.fill("evenodd");
     ctx.globalAlpha = 1;
     ctx.strokeStyle = l.color;
-    ctx.stroke();
+    insetStroke(ctx, s.lineWidth, trace);
   }
+  ctx.restore();
+}
+
+/**
+ * Strokes an outline that sits just inside the shape: double width, clipped to the shape's own interior.
+ * Where two parts touch, each keeps its own line beside the other's instead of one covering the other.
+ * `trace` draws the lines to stroke, `interior` the closed shape to clip to (the same unless edges are left out).
+ */
+function insetStroke(ctx: Ctx, lw: number, trace: () => void, interior: () => void = trace): void {
+  ctx.save();
+  ctx.beginPath();
+  interior();
+  ctx.clip("evenodd");
+  ctx.beginPath();
+  trace();
+  ctx.lineWidth = lw * 2;
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -250,9 +268,13 @@ export function paintSpec(
     ctx.fill("evenodd");
     ctx.globalAlpha = 1;
     ctx.strokeStyle = p.color;
-    ctx.beginPath();
-    tracePoly(ctx, p.rings, x, y, offsets, p.hide);
-    ctx.stroke();
+    // Every border is a thin solid line, inset so touching parts keep both their lines.
+    insetStroke(
+      ctx,
+      lw,
+      () => tracePoly(ctx, p.rings, x, y, offsets, p.hide),
+      () => tracePoly(ctx, p.rings, x, y, offsets),
+    );
     if (front.length) ctx.restore();
   });
   if (spec.borders) paintBorders(ctx, spec, x, y, offsets, lw, area);
