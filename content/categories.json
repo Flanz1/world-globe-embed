@@ -70,6 +70,7 @@
       "id": "nirydian-religions",
       "name": "Nirydian Religions",
       "regions": [
+        "javalim",
         "tsurugism"
       ],
       "parent": "religion",
