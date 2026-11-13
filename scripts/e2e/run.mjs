@@ -32,6 +32,10 @@ for (const s of suites) {
   process.exit(2);
 }
 
+// Per-suite wall-clock limit and the point after which failed suites are no longer retried (both in minutes).
+const SUITE_LIMIT_MS = (Number(process.env.E2E_SUITE_MINUTES) || 20) * 60000;
+const RETRY_UNTIL_MS = (Number(process.env.E2E_RETRY_UNTIL_MINUTES) || 22) * 60000;
+const MAX_RETRIES = Number(process.env.E2E_MAX_RETRIES ?? 3);
 const LOGS = path.resolve(".e2e/logs");
 mkdirSync(LOGS, { recursive: true });
 const t00 = Date.now();
@@ -42,13 +46,16 @@ function runSuite(name, index) {
     const t0 = Date.now();
     const logFile = path.join(LOGS, `${name}.log`);
     const log = createWriteStream(logFile);
-    const child = spawn(process.execPath, ["--import", "tsx", path.join(HERE, `${name}.mjs`)], {
+    const child = spawn(process.execPath, ["--import", "tsx", "--import", path.join(HERE, "ci-timeouts.mjs"), path.join(HERE, `${name}.mjs`)], {
       env: { ...process.env, E2E_PORT_BASE: String(20000 + index * 20) },
       stdio: ["ignore", "pipe", "pipe"],
     });
+    // A suite that hangs must not eat the whole CI budget: kill it and report it as failed.
+    const killer = setTimeout(() => { log.write(`\nE2E: suite exceeded ${SUITE_LIMIT_MS / 60000} min, killed\n`); child.kill("SIGKILL"); }, SUITE_LIMIT_MS);
     child.stdout.pipe(log, { end: false });
     child.stderr.pipe(log, { end: false });
     child.on("close", (code) => {
+      clearTimeout(killer);
       log.end();
       const secs = (Date.now() - t0) / 1000;
       const summary = (readFileSync(logFile, "utf8").match(/\d+\/\d+ checks passed/g) ?? []).pop() ?? "";
@@ -69,7 +76,11 @@ await Promise.all(Array.from({ length: Math.min(jobs, queue.length) }, async () 
 // one more go on its own before calling it failed.
 // Only when suites really did compete (jobs > 1 and more than one suite), and only the ones that timed out:
 // a deterministic failure fails the same way again, so retrying it just doubles the runtime.
-const retry = jobs > 1 && suites.length > 1 ? results.filter((r) => r.code !== 0 && r.timedOut).map((r) => r.name) : [];
+// Retries are bounded so they can't multiply the runtime: at most MAX_RETRIES suites, and none once the run
+// is already past RETRY_UNTIL_MS (a run that slow has a machine problem, not a flaky suite).
+const wantRetry = jobs > 1 && suites.length > 1 ? results.filter((r) => r.code !== 0 && r.timedOut).map((r) => r.name) : [];
+const retry = Date.now() - t00 > RETRY_UNTIL_MS ? [] : wantRetry.slice(0, MAX_RETRIES);
+if (wantRetry.length > retry.length) console.log(`\nNot retrying (limit): ${wantRetry.filter((n) => !retry.includes(n)).join(", ")}`);
 if (retry.length) {
   console.log(`\nRetrying alone: ${retry.join(", ")}`);
   for (const name of retry) {
