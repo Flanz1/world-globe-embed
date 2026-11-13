@@ -32,12 +32,8 @@
   </section>
 
   <div id="main" hidden>
-    <section class="card" id="status-card">
-      <h2>Status</h2>
-      <p id="status" aria-live="polite" class="muted">Loading…</p>
-      <ul id="runs" class="runs"></ul>
-    </section>
-
+    <div class="layout">
+    <div class="content">
     <div class="tabs" role="tablist" aria-label="Admin sections">
       <button type="button" role="tab" id="tab-btn-maps" aria-controls="tab-maps" aria-selected="true">Maps &amp; slots</button>
       <button type="button" role="tab" id="tab-btn-regions" aria-controls="tab-regions" aria-selected="false">Regions</button>
@@ -123,6 +119,15 @@
         <p class="muted">People who signed in but aren't on the list yet (kept for 30 days).</p>
         <div id="waiting-list" class="users"></div>
       </section>
+    </div>
+    <aside id="status-card" class="card sidebar" aria-label="Save and deploy status">
+      <h2>Status</h2>
+      <p id="status" aria-live="polite" class="muted">Loading…</p>
+      <h3>Checks</h3>
+      <ul id="checks" class="checks"></ul>
+      <h3>Workflows</h3>
+      <ul id="runs" class="runs"></ul>
+    </aside>
     </div>
   </div>
 </main>

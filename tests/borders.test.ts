@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { regionBorders } from "../src/shared/borders.ts";
 import type { Ring } from "../src/shared/geo.ts";
-import { regionPaintSpec } from "../src/shared/region-paint.ts";
+import { hasContestedMarks, regionPaintSpec } from "../src/shared/region-paint.ts";
 
 /** A closed counter-clockwise box, as stored. */
 const box = (w: number, s: number, e: number, n: number): Ring => [
@@ -86,5 +86,13 @@ describe("paint spec", () => {
     const spec = regionPaintSpec({ ...base, legend: [], parts: [-1, -1, -1, -1], geometry: over });
     expect(spec.plain).toBe(false);
     expect(spec.front).toEqual([[1, 2], [2], [], []]);
+    // All one colour: overlapping, but nothing contested.
+    expect(hasContestedMarks(spec)).toBe(false);
+  });
+  it("overlapping parts of different colours are contested (legend row)", () => {
+    const over = { type: "MultiPolygon" as const, coordinates: [[box(0, 0, 10, 10)], [box(5, 0, 15, 10)], [box(30, 0, 40, 10)]] };
+    expect(hasContestedMarks(regionPaintSpec({ ...base, parts: [0, 1, 0], geometry: over }))).toBe(true);
+    const apart = { type: "MultiPolygon" as const, coordinates: [[box(0, 0, 10, 10)], [box(11, 0, 15, 10)]] };
+    expect(hasContestedMarks(regionPaintSpec({ ...base, parts: [0, 1], geometry: apart }))).toBe(false);
   });
 });

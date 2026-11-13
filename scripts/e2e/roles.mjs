@@ -309,8 +309,8 @@ async function commits(page, fn) {
   const n = mock.log.length;
   await fn();
   await waitFor(page, async () => mock.log.length > n);
-  // The page stays busy until the list has been reloaded.
-  await waitFor(page, async () => (await page.locator("button[aria-busy=true]").count()) === 0);
+  // The page shows the change at once; wait until the save has landed and the list has been reloaded.
+  await waitFor(page, async () => !/saving/.test((await page.textContent("#status")) ?? ""));
   await page.waitForSelector("#regions .rcard", { timeout: 15000 });
 }
 async function addCategory(page, name) {
@@ -422,6 +422,34 @@ await step(K, "folders nest: subfolders, dragging regions and folders, moving, d
   await ctx.close();
 });
 
+await step(K, "a category change shows at once, and is undone with the reason if the save fails", async () => {
+  mock.externalWrite("main", "content/categories.json", JSON.stringify({ categories: [{ id: "kingdoms", name: "Kingdoms", regions: [], createdBy: { id: 45669787, login: "Flanz1" } }] }, null, 2) + "\n");
+  const { ctx, page, errors } = await open("Flanz1");
+  await page.goto(`${ADMIN}#regions`);
+  await page.waitForSelector("#regions .rfolder", { timeout: 15000 });
+  // Hold the final step of every commit, then refuse it.
+  let release;
+  const held = new Promise((r) => (release = r));
+  await ctx.route(/\/git\/refs\/heads\//, async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    await held;
+    await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ message: "GitHub is having a bad day." }) });
+  });
+  const before = cats()[0].regions.join();
+  await page.selectOption('[data-region="provinces"] [data-action="category"]', "kingdoms");
+  await waitFor(page, async () => (await inFolder(page, "kingdoms")).includes("provinces"), 3000);
+  check(K, "the region is in its new folder while the save is still pending", (await inFolder(page, "kingdoms")).includes("provinces") && cats()[0].regions.join() === before, (await inFolder(page, "kingdoms")).join());
+  check(K, "the status says it's saving", /saving/.test((await page.textContent("#status")) ?? ""));
+  release();
+  await waitFor(page, async () => /undone/.test((await page.textContent("#status")) ?? ""));
+  const msg = (await page.textContent("#status")) ?? "";
+  check(K, "a failed save is undone with the reason", /GitHub is having a bad day/.test(msg) && /undone/.test(msg), msg);
+  await waitFor(page, async () => !(await inFolder(page, "kingdoms")).includes("provinces"));
+  check(K, "…and the region is back where it was", !(await inFolder(page, "kingdoms")).includes("provinces") && (await inFolder(page, "~uncategorized")).includes("provinces"));
+  check(K, "no page errors", errors.length === 0, errors.join(" | ") || "none");
+  await ctx.close();
+});
+
 await step(K, "contributors and editors follow the region rules", async () => {
   // Earlier checks made carto-ann an Editor: put the plain contributor back.
   const people = access();
@@ -468,6 +496,35 @@ await step(K, "contributors and editors follow the region rules", async () => {
   });
   check(K, "the editor renamed the owner's category", cats().some((k) => k.id === "kingdoms" && k.name === "Realms"));
   await bo.ctx.close();
+});
+
+/* ═════════════ 5. Transferring who created a region ═════════════ */
+const T = "transfer";
+await step(T, "only the owner and admins can hand a region over", async () => {
+  const ann = await open("carto-ann");
+  await ann.page.goto(`${ADMIN}#regions`);
+  await ann.page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  check(T, "a contributor has no Transfer button", (await ann.page.locator('[data-region="landmark-disc"] [data-action="transfer"]').count()) === 0);
+  const bo = await open("drafter-bo");
+  await bo.page.goto(`${ADMIN}#regions`);
+  await bo.page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  check(T, "an editor has no Transfer button", (await bo.page.locator('[data-region="landmark-disc"] [data-action="transfer"]').count()) === 0);
+  const r = await forceCommit(bo.page, { path: "content/regions/landmark-disc.json", content: JSON.stringify({ ...regionOn("landmark-disc"), properties: { ...regionOn("landmark-disc").properties, createdBy: { id: 5003, login: "drafter-bo" }, updatedBy: { id: 5003, login: "drafter-bo" } } }) + "\n" });
+  check(T, "API refuses an editor taking a region over", r.status === 403 && /owner or an admin/.test(r.body.message), `${r.status} ${r.body.message}`);
+  await ann.ctx.close();
+  await bo.ctx.close();
+  const { ctx, page } = await open("e2e-user");
+  await page.goto(`${ADMIN}#regions`);
+  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  const n = mock.log.length;
+  await page.click('[data-region="landmark-disc"] [data-action="transfer"]');
+  await page.waitForSelector("dialog[open] select");
+  await page.selectOption("dialog[open] select", { label: "drafter-bo" });
+  await page.click("dialog[open] .dlg-foot button:not(.ghost)");
+  await waitFor(page, async () => mock.log.length > n);
+  const t = regionOn("landmark-disc");
+  check(T, "an admin hands it to drafter-bo; only the creator changes", t.properties.createdBy?.login === "drafter-bo" && t.properties.updatedBy?.login === "e2e-user", `${t.properties.createdBy?.login} / ${t.properties.updatedBy?.login}`);
+  await ctx.close();
 });
 
 const O = "owner";

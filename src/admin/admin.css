@@ -9,7 +9,7 @@
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, sans-serif; }
 header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 header h1 { font-size: 18px; margin: 0; margin-right: auto; }
-main { max-width: 960px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+main { max-width: 1280px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
 #main { display: grid; gap: 16px; }
 #main[hidden], [hidden] { display: none !important; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
@@ -211,9 +211,23 @@ button.tiny { padding: 1px 7px; font-size: 12px; }
 .ed-ov-btn.active { background: var(--accent); color: var(--card); }
 .ed-ov-panel { position: absolute; right: 8px; top: 8px; z-index: 3; display: grid; gap: 6px; width: min(340px, calc(100% - 16px)); max-height: min(70vh, 520px); grid-template-rows: auto auto auto auto auto minmax(0, 1fr); padding: 10px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
 .ed-ov-panel[hidden] { display: none; }
+.ed-layer-bar { position: absolute; right: 8px; top: 8px; z-index: 3; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
+.ed-layer-bar[hidden] { display: none; }
+.ed-layer-name { font-size: 12px; color: var(--muted, #a99); white-space: nowrap; }
 .ed-ov-panel .row { display: flex; flex-wrap: wrap; gap: 6px; }
 .ed-ov-panel select { flex: 1 1 90px; min-width: 0; }
 .ed-ov-list { overflow: auto; display: grid; align-content: start; gap: 2px; }
 .ed-ov-row { display: flex; align-items: baseline; gap: 6px; padding: 2px 0; cursor: pointer; }
 .ed-ov-name { font-weight: 600; }
 .ed-ov-info { margin: 0; }
+
+/* ── Status sidebar (right) ── */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; align-items: start; }
+.content { display: grid; gap: 16px; min-width: 0; }
+.sidebar { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; order: 2; }
+.sidebar h3 { font-size: 13px; margin: 12px 0 4px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.sidebar #status { overflow-wrap: anywhere; margin: 0; }
+.sidebar .runs { overflow-wrap: anywhere; }
+.checks { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 4px; font-size: 13px; }
+.checks .warn { color: #b26a00; }
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .sidebar { position: static; max-height: none; order: -1; } }

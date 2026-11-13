@@ -128,7 +128,10 @@ export interface PaintSpec {
   plain: boolean;
   layers: { color: string; geometry: RegionGeometry }[];
   parts: PaintPart[];
-  /** Per part: the later parts that overlap it. They are layers on top: the part is hidden under them. */
+  /**
+   * Per part: the later parts that overlap it. They are layers on top: where they overlap, the overlap is
+   * contested, filled in the upper part's colour (the main one) and hatched in this part's (the secondary).
+   */
   front: number[][];
   /** National borders (lines parts of different legend colours share) and province borders (lines drawn inside the region), as open polylines. */
   borders?: { national: Position[][]; provincial: Position[][] };
@@ -141,6 +144,46 @@ export const NATIONAL_W = 1;
 export const CASING_W = 1.8;
 export const PROVINCIAL_W = 1.2;
 export const PROVINCIAL_GAP = 2.5;
+
+/** The contested hatch's opacity on top of the fill. */
+const HATCH_ALPHA = 0.55;
+
+type AnyCanvas = HTMLCanvasElement | OffscreenCanvas;
+const patterns = new WeakMap<object, Map<string, CanvasPattern | null>>();
+
+/** A diagonal hatch tile in `color`, its spacing scaled by the line width; cached per canvas. */
+function hatchPattern(ctx: Ctx, color: string, lw: number): CanvasPattern | null {
+  const key = `${color}|${Math.round(lw * 4)}`;
+  let m = patterns.get(ctx.canvas);
+  if (!m) patterns.set(ctx.canvas, (m = new Map()));
+  if (m.has(key)) return m.get(key)!;
+  const s = Math.max(4, Math.round(lw * 4));
+  let tile: AnyCanvas;
+  if (typeof OffscreenCanvas !== "undefined") tile = new OffscreenCanvas(s, s);
+  else {
+    tile = document.createElement("canvas");
+    tile.width = tile.height = s;
+  }
+  const t = tile.getContext("2d") as Ctx | null;
+  let pat: CanvasPattern | null = null;
+  if (t) {
+    t.strokeStyle = color;
+    t.lineWidth = Math.max(1, lw * 0.45);
+    t.lineCap = "square";
+    t.beginPath();
+    // One diagonal plus the two corner pieces, so the tile repeats seamlessly.
+    t.moveTo(0, s);
+    t.lineTo(s, 0);
+    t.moveTo(-s / 2, s / 2);
+    t.lineTo(s / 2, -s / 2);
+    t.moveTo(s / 2, s * 1.5);
+    t.lineTo(s * 1.5, s / 2);
+    t.stroke();
+    pat = ctx.createPattern(tile as CanvasImageSource, "repeat");
+  }
+  m.set(key, pat);
+  return pat;
+}
 
 function tracePoly(ctx: Ctx, rings: Position[][], x: (lon: number) => number, y: (lat: number) => number, offsets: number[], hide?: Set<number>[]): void {
   // Holes in the outer ring's copy, so a clip or fill with evenodd cuts them out at every offset.
@@ -231,7 +274,8 @@ function paintBorders(ctx: Ctx, spec: PaintSpec, x: (lon: number) => number, y: 
 /**
  * Draws a region from a PaintSpec. Plain regions go through paintLayers unchanged. Otherwise each part,
  * first to last (bottom layer to top), is filled and outlined in its colour, except where a later part
- * overlapping it covers it; then the borders.
+ * overlapping it covers it; a part's overlaps with the parts under it are hatched in their colours
+ * (contested: the upper colour is the main one, the lower the secondary); then the borders.
  */
 export function paintSpec(
   ctx: Ctx,
@@ -266,6 +310,22 @@ export function paintSpec(
     ctx.globalAlpha = fo;
     ctx.fillStyle = p.color;
     ctx.fill("evenodd");
+    // Contested: where this part covers earlier ones, hatch the overlap in each covered part's colour.
+    spec.front.forEach((f, j) => {
+      if (j >= i || !f.includes(i) || spec.parts[j].color === p.color) return;
+      const pat = hatchPattern(ctx, spec.parts[j].color, lw);
+      if (!pat) return;
+      ctx.save();
+      ctx.beginPath();
+      tracePoly(ctx, spec.parts[j].rings, x, y, offsets);
+      ctx.clip("evenodd");
+      ctx.beginPath();
+      tracePoly(ctx, p.rings, x, y, offsets);
+      ctx.globalAlpha = HATCH_ALPHA;
+      ctx.fillStyle = pat;
+      ctx.fill("evenodd");
+      ctx.restore();
+    });
     ctx.globalAlpha = 1;
     ctx.strokeStyle = p.color;
     // Every border is a thin solid line, inset so touching parts keep both their lines.

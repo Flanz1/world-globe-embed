@@ -13,13 +13,15 @@ import { paintSpecOf, regionClashes } from "../shared/region-paint.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
 import { categories, canAddCategory, canEditCategory, creatorOf, initCategories, loadCategories, moveFolder, moveFolderTo, moveRegions, newCategory, remove as removeCategory, rename as renameCategory, shift as shiftCategory } from "./categories.ts";
 import { $, h } from "./dom.ts";
+import { hasPendingSaves, optimistic } from "./optimistic.ts";
 import { openEditor, type EditorOptions } from "./editor/editor.ts";
 import type { OverlayMeta } from "./editor/overlay-filter.ts";
 import type { FileCommit, GitHub } from "./github.ts";
 import { loadMapImage } from "./images.ts";
 import { compareBy, creatorChoices, creatorId, matchesQuery, type Filterable } from "./region-filter.ts";
 import { modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
-import { OWNER_ID, can, canDelete, canEdit, currentUser, ownerOf } from "./session.ts";
+import { OWNER_ID, account, can, canDelete, canEdit, canTransfer, currentUser, ownerOf, refusal } from "./session.ts";
+import type { AccessFile, Account } from "../shared/access.ts";
 
 export interface RegionEntry {
   id: string;
@@ -55,7 +57,7 @@ export function regionEntries(): RegionEntry[] {
 export async function loadRegions(): Promise<void> {
   const gh = deps.gh();
   const files = (await gh.listDir("content/regions")).filter((f) => f.type === "file" && f.name.endsWith(".json"));
-  entries = await Promise.all(
+  const loaded = await Promise.all(
     files.map(async (f): Promise<RegionEntry> => {
       const id = f.name.slice(0, -5);
       try {
@@ -77,8 +79,11 @@ export async function loadRegions(): Promise<void> {
       }
     }),
   );
+  if (!hasPendingSaves()) entries = loaded;
   // Categories are optional: if the file can't be read, regions just show uncategorized.
   await loadCategories().catch(() => {});
+  // A change is still being saved: this read may predate it. The save reloads when it's done.
+  if (hasPendingSaves()) return;
   renderRegions();
   // Last commit (author and date) per file, filled in as they arrive.
   for (const e of entries) {
@@ -202,6 +207,7 @@ function card(e: RegionEntry): HTMLElement {
         btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot)),
         btn("Copy embed code", () => openEmbedDialog({ region: { id: e.id, name: e.id, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot })),
         btn("Delete", () => del(e), "ghost danger", noDelete),
+        canTransfer() ? btn("Transfer", () => transfer(e, f), "ghost", "") : null,
       ),
     ),
   );
@@ -584,9 +590,66 @@ export function openCombine(): void {
   update();
 }
 
+/**
+ * "Transfer": changes who is recorded as a region's creator (and so who may edit and delete it as their own).
+ * Shown to the owner and admins only; the admin API refuses anyone else. Only createdBy changes.
+ */
+async function transfer(e: RegionEntry, f: RegionFeature): Promise<void> {
+  const people = new Map<number, Account>([[OWNER_ID, { id: OWNER_ID, login: currentUser()?.id === OWNER_ID ? currentUser()!.login : "the owner" }]]);
+  try {
+    const a = JSON.parse((await deps.gh().readFile("content/access.json")).text) as AccessFile;
+    for (const u of a.users) people.set(u.id, { id: u.id, login: u.login });
+  } catch {
+    /* no access.json yet: only the owner and the region's creators can be chosen */
+  }
+  for (const x of entries) {
+    const c = x.feature?.properties.createdBy;
+    if (c) people.set(c.id, { id: c.id, login: c.login });
+  }
+  const now = ownerOf(f);
+  const m = modal(`Transfer "${e.id}"`);
+  const select = h("select", { ariaLabel: "New creator" });
+  for (const u of [...people.values()].sort((a, b) => a.login.localeCompare(b.login)))
+    select.append(h("option", { value: String(u.id), textContent: u.id === now ? `${u.login} (current)` : u.login }));
+  select.value = String(now);
+  const go = h("button", { type: "button", textContent: "Transfer", disabled: true });
+  select.addEventListener("change", () => (go.disabled = Number(select.value) === now));
+  m.body.append(
+    h("p", {}, "Choose who created ", h("code", { textContent: e.id }), ". They become its owner: they can edit and delete it as their own. Nothing else about the region changes."),
+    h("label", {}, "Creator", select),
+  );
+  go.addEventListener("click", () => {
+    const to = people.get(Number(select.value));
+    if (!to) return;
+    m.close();
+    void deps.act(`Transferring ${e.id} to ${to.login}…`, () =>
+      deps.gh().commit(`Transfer region ${e.id} to ${to.login}`, async () => {
+        const cur = await deps.gh().readFile(e.path);
+        const r = JSON.parse(cur.text) as RegionFeature;
+        r.properties.createdBy = to;
+        r.properties.updatedBy = account();
+        r.properties.updated = stamp();
+        return [{ path: e.path, content: stringifyCompact(r) + "\n" }];
+      }),
+    );
+  });
+  m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), go);
+}
+
 function del(e: RegionEntry): void {
   openDelete(e.id, () => {
-    void deps.act(`Deleting ${e.id}…`, () => deps.gh().commit(`Delete region ${e.id}`, async () => [{ path: e.path, content: "", delete: true }]));
+    void optimistic({
+      label: `Delete region ${e.id}`,
+      check: () => refusal({ path: e.path, before: e.feature ? serialize(e.feature) : "", after: null }),
+      apply: () => {
+        const before = entries;
+        entries = entries.filter((x) => x !== e);
+        return before;
+      },
+      undo: (before) => void (entries = before),
+      render: renderRegions,
+      commit: () => deps.gh().commit(`Delete region ${e.id}`, async () => [{ path: e.path, content: "", delete: true }]),
+    });
   });
 }
 
@@ -607,6 +670,6 @@ export function initRegions(d: RegionsDeps): void {
     ev.dataTransfer?.setData("text/plain", `region:${card.dataset.region}`);
   });
   list.addEventListener("dragend", () => void (dragging = null));
-  initCategories({ gh: d.gh, act: d.act, regionIds: () => new Set(entries.map((e) => e.id)) });
+  initCategories({ gh: d.gh, render: renderRegions, regionOwner: (id) => { const e = entries.find((x) => x.id === id); return e ? (e.feature ? ownerOf(e.feature) : OWNER_ID) : null; }, regionIds: () => new Set(entries.map((e) => e.id)) });
   for (const b of document.querySelectorAll<HTMLButtonElement>(".r-new")) b.addEventListener("click", () => newRegion($<HTMLSelectElement>("#r-new-slot").value));
 }

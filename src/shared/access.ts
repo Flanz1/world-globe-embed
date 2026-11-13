@@ -92,6 +92,19 @@ export function regionOwner(f: { properties?: { createdBy?: Account } } | null |
   return typeof id === "number" ? id : ownerId;
 }
 
+/** Who may hand a region to another creator: the repository owner, or anyone allowed to manage users (admins). */
+export const canTransferRegions = (perms: ReadonlySet<Permission> | null, isOwner: boolean) => isOwner || !!perms?.has("users");
+
+/** True when two regions differ only in who created them and the save stamps (so an ownership transfer, nothing else). */
+function onlyOwnershipDiffers(a: RegionLike, b: RegionLike): boolean {
+  const strip = (r: RegionLike) => {
+    const props: Record<string, unknown> = { ...r.properties };
+    for (const k of ["createdBy", "created", "updatedBy", "updated"]) delete props[k];
+    return { ...r, properties: props };
+  };
+  return same(strip(a), strip(b));
+}
+
 export const canEditRegion = (perms: ReadonlySet<Permission> | null, userId: number, owner: number) =>
   !!perms && (owner === userId ? perms.has("regions") : perms.has("editOthers"));
 
@@ -136,7 +149,7 @@ const parse = (text: string): unknown => {
   }
 };
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-type RegionLike = { id?: unknown; properties?: { createdBy?: Account; updatedBy?: Account } };
+type RegionLike = { id?: unknown; properties?: { createdBy?: Account; updatedBy?: Account; updated?: string; created?: string } };
 
 /**
  * Whether `actor` may make this change. Returns the reason it's refused, or null when it's allowed.
@@ -183,9 +196,13 @@ function checkRegionChange(d: FileDiff, actor: Actor, ownerId: number): string |
     if (!c || c.id !== actor.id || c.login !== actor.login) return `New region "${id}" must have createdBy set to you (${actor.login}).`;
     return null;
   }
+  const transfer = !same(before.properties?.createdBy, after.properties?.createdBy);
+  const mayTransfer = canTransferRegions(actor.permissions, actor.owner);
+  // Handing a region to someone else is allowed to the owner and admins, even for regions they couldn't otherwise edit, as long as nothing else changes.
+  if (transfer && mayTransfer && !actor.owner && !canEditRegion(actor.permissions, actor.id, owner) && onlyOwnershipDiffers(before, after)) return null;
   if (!actor.owner && !canEditRegion(actor.permissions, actor.id, owner))
     return mine ? "You don't have permission to edit regions." : `You can't edit "${id}": someone else created it.`;
-  if (!actor.owner && !same(before.properties?.createdBy, after.properties?.createdBy)) return `Only the repository owner can change who created "${id}".`;
+  if (transfer && !mayTransfer) return `Only the repository owner or an admin can change who created "${id}".`;
   return null;
 }
 
