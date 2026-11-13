@@ -52,7 +52,8 @@ function runSuite(name, index) {
       log.end();
       const secs = (Date.now() - t0) / 1000;
       const summary = (readFileSync(logFile, "utf8").match(/\d+\/\d+ checks passed/g) ?? []).pop() ?? "";
-      results.push({ name, code, secs, summary });
+      const timedOut = code !== 0 && /Timeout \d+ms exceeded/.test(readFileSync(logFile, "utf8"));
+      results.push({ name, code, secs, summary, timedOut });
       console.log(`${code === 0 ? "PASS" : "FAIL"} ${name.padEnd(12)} ${secs.toFixed(1).padStart(6)}s  ${summary}`);
       if (code !== 0) console.log(readFileSync(logFile, "utf8").split("\n").filter((l) => /✗|Error|threw/.test(l)).slice(-15).join("\n") + `\n  full log: ${logFile}`);
       resolve();
@@ -66,7 +67,9 @@ await Promise.all(Array.from({ length: Math.min(jobs, queue.length) }, async () 
 }));
 // Software-GL browsers time out on screenshots when suites compete for CPU: give each failed suite
 // one more go on its own before calling it failed.
-const retry = results.filter((r) => r.code !== 0).map((r) => r.name);
+// Only when suites really did compete (jobs > 1 and more than one suite), and only the ones that timed out:
+// a deterministic failure fails the same way again, so retrying it just doubles the runtime.
+const retry = jobs > 1 && suites.length > 1 ? results.filter((r) => r.code !== 0 && r.timedOut).map((r) => r.name) : [];
 if (retry.length) {
   console.log(`\nRetrying alone: ${retry.join(", ")}`);
   for (const name of retry) {
