@@ -2,7 +2,7 @@
  * Who is signed in to the admin page and what they may do. The page uses this only to hide or disable
  * what someone can't do; the admin API enforces the same rules (src/shared/access.ts) on every save.
  */
-import { canDeleteRegion, canEditRegion, checkChange, regionOwner, type Account, type FileDiff, type Permission } from "../shared/access.ts";
+import { canDeleteRegion, canEditRegion, canTransferRegions, checkChange, regionOwner, type Account, type FileDiff, type Permission } from "../shared/access.ts";
 import type { Me } from "./github.ts";
 import type { RegionFeature } from "../shared/region.ts";
 
@@ -33,3 +33,6 @@ export function refusal(diff: FileDiff): string | null {
   if (!me) return "You're signed out. Sign in again.";
   return checkChange(diff, { id: me.id, login: me.login, owner: me.owner, permissions: perms()! }, OWNER_ID);
 }
+
+/** Handing a region to another creator: the owner and admins (Manage users) only. */
+export const canTransfer = () => !!me && canTransferRegions(perms(), me.owner);

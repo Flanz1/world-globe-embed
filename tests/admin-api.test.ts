@@ -244,7 +244,22 @@ describe("admin API permissions", () => {
     expect(await tryCommit(gh, [put("content/regions/simon-land.json", region("simon-land", SIMON, BO, { color: "#abcdef" }))])).toBeNull();
     expect(await tryCommit(gh, [put("content/regions/old-land.json", region("old-land", undefined, BO))])).toBeNull();
     expect(await tryCommit(gh, [del("content/regions/simon-land.json")])).toMatch(/can't delete/);
-    expect(await tryCommit(gh, [put("content/regions/simon-land.json", region("simon-land", BO, BO))])).toMatch(/Only the repository owner can change who created/);
+    expect(await tryCommit(gh, [put("content/regions/simon-land.json", region("simon-land", BO, BO))])).toMatch(/Only the repository owner or an admin can change who created/);
+  });
+
+  it("lets only the owner or an admin transfer who created a region", async () => {
+    // Contributors and editors can't, even for their own region.
+    expect(await tryCommit(await client(ANN), [put("content/regions/ann-land.json", region("ann-land", BO, ANN))])).toMatch(/owner or an admin/);
+    // An admin (Manage users) can hand over a region they couldn't edit otherwise, if nothing else changes.
+    const mgr = await client(MANAGER);
+    expect(await tryCommit(mgr, [put("content/regions/simon-land.json", region("simon-land", ANN, MANAGER, { updated: "2026-11-13T10:00:00Z" }))])).toBeNull();
+    expect(JSON.parse(mock.read("main", "content/regions/simon-land.json")!).properties.createdBy).toEqual(ANN);
+    // ...but not slip another edit in with it.
+    expect(await tryCommit(mgr, [put("content/regions/ann-land.json", region("ann-land", BO, MANAGER, { color: "#abcdef" }))])).toMatch(/can't edit/);
+    // Regions with no creator recorded can be handed to their real author.
+    expect(await tryCommit(mgr, [put("content/regions/old-land.json", region("old-land", SIMON, MANAGER))])).toBeNull();
+    // The owner can too.
+    expect(await tryCommit(await client(OWNER), [put("content/regions/old-land.json", region("old-land", ANN, OWNER))])).toBeNull();
   });
 
   it("keeps maps, uploads and slots to people with Maps & slots", async () => {
