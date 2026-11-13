@@ -82,6 +82,8 @@ export interface RegionProperties {
    * ignores it. Locked is the default: a missing list or entry means locked.
    */
   partLocked?: boolean[];
+  /** A linked combined region: the regions it's made of (see shared/combine.ts resolveLinked). */
+  linked?: string[];
   /** Province borders: open lines drawn inside the region (dotted in the embed). They don't change the parts. */
   provinceBorders?: Position[][];
   /**

@@ -4,7 +4,7 @@
  * action that writes is one commit.
  */
 import { stringifyCompact } from "../shared/json.ts";
-import { baseKey, combineRegions, combinedId, regionBases, type RegionBase } from "../shared/combine.ts";
+import { LINKED_MAX, baseKey, combineRegions, combinedId, regionBases, resolveLinked, type RegionBase } from "../shared/combine.ts";
 import { checkGeometry, geometryBounds, polygonsOf, vertexCount } from "../shared/geo.ts";
 import { paintSpec } from "../shared/raster.ts";
 import { REGION_COLOR, REGION_ID, copyId, flatFit, migrateZoneColours, normalizePartLegend, regionData, type RegionFeature } from "../shared/region.ts";
@@ -32,6 +32,8 @@ export interface RegionEntry {
   feature: RegionFeature | null;
   /** Why the file can't be used, if it can't. */
   problem?: string;
+  /** A linked combined region: the linked ids that have no usable region. (`feature` is rebuilt from the linked regions.) */
+  linkMissing?: string[];
   commit?: FileCommit | null;
 }
 
@@ -103,6 +105,14 @@ export async function loadRegions(): Promise<void> {
   const current = new Set(files.map((f) => f.sha));
   for (const k of parsed.keys()) if (!current.has(k)) parsed.delete(k);
   loaded.sort((a, b) => a.id.localeCompare(b.id));
+  // Linked combined regions show their linked regions as they are now (the file holds a snapshot from its last save).
+  const byId = new Map(loaded.map((e) => [e.id, e]));
+  for (const e of loaded) {
+    if (!e.feature?.properties.linked) continue;
+    const r = resolveLinked(e.feature, (id) => byId.get(id)?.feature ?? undefined);
+    e.linkMissing = r.missing;
+    if (r.feature) e.feature = r.feature;
+  }
   if (!hasPendingSaves()) entries = loaded;
   // Categories are optional: if the file can't be read, regions just show uncategorized.
   await loadCategories().catch(() => {});
@@ -201,7 +211,9 @@ function card(e: RegionEntry): HTMLElement {
   const btn = (text: string, onclick: () => void, cls = "ghost", why = "") =>
     h("button", { type: "button", className: cls, textContent: text, onclick, disabled: !!why, title: why, dataset: { action: text.toLowerCase().replace(/\W+/g, "-") } });
   const someoneElse = ownerOf(f) !== currentUser()?.id;
-  const noEdit = canEdit(f) ? "" : someoneElse ? `${creatorName(e)} created this region, and you can't edit other people's regions.` : "You don't have permission to edit regions.";
+  const linked = p.linked ?? null;
+  const linkBlock = linked ? linkProblem(e) : "";
+  const noEdit = linkBlock ? linkBlock : canEdit(f) ? "" : someoneElse ? `${creatorName(e)} created this region, and you can't edit other people's regions.` : "You don't have permission to edit regions.";
   const noDelete = canDelete(f) ? "" : someoneElse ? `${creatorName(e)} created this region, and you can't delete other people's regions.` : "You don't have permission to delete regions.";
   const noCreate = can("regions") ? "" : "You don't have permission to create regions.";
   return h(
@@ -212,6 +224,15 @@ function card(e: RegionEntry): HTMLElement {
       "div",
       { className: "rinfo" },
       h("div", {}, swatch, h("strong", { className: "rname", textContent: e.id }), " ", h("span", { className: "badge rcreator", textContent: creatorName(e), title: "Created by" })),
+      linked
+        ? h(
+            "div",
+            { className: "small rlinked" },
+            h("span", { className: "badge", textContent: "linked", title: "A linked combined region: it's made of these regions as they are now. Editing it edits them; editing them changes it." }),
+            ` ${linked.join(", ")}`,
+            e.linkMissing?.length ? h("span", { className: "badge warn", textContent: `missing: ${e.linkMissing.join(", ")}` }) : null,
+          )
+        : null,
       labelsText(p) ? h("div", { className: "muted small rlabels", textContent: labelsText(p) }) : null,
       h(
         "div",
@@ -493,6 +514,7 @@ function overlayMeta(): EditorOptions["neighbourMeta"] {
 
 function edit(e: RegionEntry): void {
   if (!e.feature || !canEdit(e.feature)) return;
+  if (e.feature.properties.linked) return editLinked(e);
   openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature: e.feature, sha: e.sha, isNew: false, neighbours: others(e), neighbourMeta: overlayMeta(), takenIds: new Set(entries.map((x) => x.id)), afterCommit: deps.afterCommit });
 }
 
@@ -533,6 +555,8 @@ export function openCombine(): void {
   const go = h("button", { type: "button", textContent: "Combine", disabled: true, dataset: { action: "combine" } });
   const together = h("button", { type: "button", className: "ghost", textContent: "Edit together", disabled: true, dataset: { action: "edit-together" } });
   const togetherWhy = h("p", { className: "muted small combine-together" });
+  const keepLinked = h("input", { type: "checkbox", checked: true, name: "keep-linked" });
+  keepLinked.addEventListener("change", () => update());
   const list = h(
     "div",
     { className: "combine-list" },
@@ -586,7 +610,12 @@ export function openCombine(): void {
     if (base && sources.length >= 2 && !deps.slots().slots[base.slot]) problems.push(`The slot "${base.slot}" doesn't exist any more.`);
     const r = sources.length >= 2 && base ? combineRegions(sources, { id: REGION_ID.test(id) ? id : "combined", base }) : null;
     if (r) problems.push(...r.errors);
+    if (keepLinked.checked && sources.length >= 2) {
+      const why = togetherProblem(picked, LINKED_MAX);
+      if (why) problems.push(why);
+    }
     go.disabled = problems.length > 0 || !r?.feature;
+    go.textContent = keepLinked.checked ? "Combine linked" : "Combine";
     const why = togetherProblem(picked);
     together.disabled = !!why;
     together.title = why;
@@ -606,6 +635,10 @@ export function openCombine(): void {
     if (!r.feature) return;
     r.feature.properties.map = deps.slots().slots[base.slot]?.map ?? base.map;
     m.close();
+    if (keepLinked.checked) {
+      r.feature.properties.linked = picked.map((e) => e.id);
+      return editTogether(picked, { id, sha: null, feature: r.feature });
+    }
     openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature: r.feature, sha: null, isNew: true, neighbours: others(), neighbourMeta: overlayMeta(), takenIds: taken, afterCommit: deps.afterCommit });
   });
 
@@ -619,10 +652,16 @@ export function openCombine(): void {
     h("p", {
       className: "small",
       textContent:
-        "Tick the regions to combine. Combine copies their areas, labels, colours and legends into one new region, which opens in the editor for you to check and save; the originals stay as they are. Edit together opens the regions themselves in one editor instead: your changes are saved back to each of them. The first region you tick sets the main colour.",
+        "Tick the regions to combine. Combine makes one new region from them, which opens in the editor for you to check and save. Kept linked, it stays made of the originals: editing it edits them and editing them changes it. Unlinked, it's a separate copy. Edit together just opens the regions in one editor without making anything new. The first region you tick sets the main colour.",
     }),
     list,
     h("label", {}, "New region id ", idIn),
+    h(
+      "label",
+      { className: "check", title: "The new region is made of the ticked regions as they are now: editing it edits them, and editing them changes it. Untick for a separate copy." },
+      keepLinked,
+      "Keep linked to the originals (edits go both ways)",
+    ),
     baseBox,
     out,
     togetherWhy,
@@ -632,9 +671,11 @@ export function openCombine(): void {
 }
 
 /** Why the picked regions can't be edited together, or "". */
-function togetherProblem(picked: readonly RegionEntry[]): string {
+function togetherProblem(picked: readonly RegionEntry[], max = MAX_LIVE): string {
   if (picked.length < 2) return "Tick at least two regions.";
-  if (picked.length > MAX_LIVE) return `At most ${MAX_LIVE} regions can be edited together.`;
+  if (picked.length > max) return `At most ${max} regions can be ${max === LINKED_MAX ? "linked" : "edited together"}.`;
+  const linkedOnes = picked.filter((e) => e.feature?.properties.linked).map((e) => e.id);
+  if (linkedOnes.length) return `${linkedOnes.join(", ")} ${linkedOnes.length > 1 ? "are linked regions" : "is a linked region"}: tick the regions ${linkedOnes.length > 1 ? "they link" : "it links"} instead.`;
   const no = picked.filter((e) => !e.feature || !canEdit(e.feature)).map((e) => e.id);
   if (no.length) return `You can't edit ${no.join(", ")}, so ${no.length > 1 ? "they" : "it"} can't be edited together with the others.`;
   if (new Set(picked.map((e) => e.feature!.properties.slot)).size > 1) return "Only regions on the same slot can be edited together.";
@@ -647,11 +688,15 @@ function togetherProblem(picked: readonly RegionEntry[]): string {
  * "Edit together": the picked regions open in one editor; each part remembers its region, and saving
  * writes every changed region back to its own file (one commit). Nothing new is created.
  */
-export function editTogether(picked: readonly RegionEntry[]): void {
-  if (togetherProblem(picked)) return;
+export function editTogether(picked: readonly RegionEntry[], link?: NonNullable<EditorOptions["live"]>["link"]): void {
+  if (picked.length >= 2 && togetherProblem(picked, link ? LINKED_MAX : MAX_LIVE)) return;
+  if (!picked.length || picked.some((e) => !e.feature || !canEdit(e.feature))) return;
   const slot = picked[0].feature!.properties.slot;
-  const pool = () => entries.filter((e) => e.feature && !e.problem && e.feature.properties.slot === slot && canEdit(e.feature)).map((e) => ({ id: e.id, feature: e.feature!, sha: e.sha }));
-  const neighboursFor = (ids: Set<string>) => entries.filter((x) => x.feature && !ids.has(x.id)).map((x) => x.feature!);
+  const pool = () =>
+    entries.filter((e) => e.feature && !e.problem && !e.feature.properties.linked && e.feature.properties.slot === slot && canEdit(e.feature)).map((e) => ({ id: e.id, feature: e.feature!, sha: e.sha }));
+  // Linked regions made of what's being edited would just repeat it as outlines.
+  const neighboursFor = (ids: Set<string>) =>
+    entries.filter((x) => x.feature && !ids.has(x.id) && x.id !== link?.id && !x.feature.properties.linked?.some((l) => ids.has(l))).map((x) => x.feature!);
   const sources = picked.map((e) => ({ id: e.id, feature: e.feature!, sha: e.sha }));
   openEditor({
     gh: deps.gh(),
@@ -664,8 +709,29 @@ export function editTogether(picked: readonly RegionEntry[]): void {
     neighbourMeta: overlayMeta(),
     takenIds: new Set(entries.map((x) => x.id)),
     afterCommit: deps.afterCommit,
-    live: { sources, pool, neighboursFor },
+    live: { sources, pool, neighboursFor, ...(link ? { link } : {}) },
   });
+}
+
+/** Why a linked region can't be edited (its linked regions are missing or not yours to edit), or "". */
+function linkProblem(e: RegionEntry): string {
+  const f = e.feature;
+  if (!f || !canEdit(f)) return "";
+  const ids = (f.properties.linked ?? []).filter((id) => !e.linkMissing?.includes(id));
+  if (!ids.length) return "None of the regions this links exist any more.";
+  const no = ids.filter((id) => {
+    const x = entries.find((y) => y.id === id)?.feature;
+    return !x || !canEdit(x);
+  });
+  return no.length ? `Editing this edits ${no.join(", ")}, which you can't edit.` : "";
+}
+
+/** Edit on a linked region: its linked regions open together, and saving also updates the linked region's file. */
+function editLinked(e: RegionEntry): void {
+  if (!e.feature || linkProblem(e)) return;
+  const ids = (e.feature.properties.linked ?? []).filter((id) => !e.linkMissing?.includes(id));
+  const picked = ids.map((id) => entries.find((x) => x.id === id)!).filter(Boolean);
+  editTogether(picked, { id: e.id, sha: e.sha, feature: e.feature });
 }
 
 /**
