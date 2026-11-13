@@ -8,7 +8,8 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, sans-serif; }
 header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-header h1 { font-size: 18px; margin: 0; margin-right: auto; }
+header h1 { font-size: 18px; margin: 0; margin-right: 8px; }
+header #who { margin-left: auto; }
 main { max-width: none; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
 #main { display: grid; gap: 16px; }
 #main[hidden], [hidden] { display: none !important; }
@@ -60,9 +61,9 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .55); }
 
 /* ── Branch banner and tabs ── */
 .branch { font-size: 13px; padding: 3px 8px; border-radius: 6px; background: #e8a33d; color: #1b1915; font-weight: 600; }
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
-.tabs button { background: transparent; color: var(--muted); border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; padding: 8px 14px; }
-.tabs button[aria-selected="true"] { color: var(--fg); background: var(--card); border-color: var(--line); margin-bottom: -1px; }
+.tabs { display: flex; gap: 4px; }
+.tabs button { background: transparent; color: var(--muted); border: 1px solid transparent; border-radius: 8px; padding: 6px 14px; }
+.tabs button[aria-selected="true"] { color: var(--fg); background: var(--card); border-color: var(--line); }
 .tabpanel { display: grid; gap: 16px; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 .grow { flex: 1 1 200px; }
