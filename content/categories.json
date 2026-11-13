@@ -42,7 +42,9 @@
     {
       "id": "nirdya",
       "name": "Nirdya",
-      "regions": [],
+      "regions": [
+        "twintailborder"
+      ],
       "parent": "country",
       "createdBy": {
         "id": 45669787,
