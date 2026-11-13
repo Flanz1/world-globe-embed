@@ -18,7 +18,8 @@
         "diarism",
         "gethricism",
         "kethregion",
-        "razmyrregion"
+        "razmyrregion",
+        "region"
       ],
       "parent": "religion",
       "createdBy": {
