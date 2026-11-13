@@ -43,6 +43,7 @@
       "id": "nirdya",
       "name": "Nirdya",
       "regions": [
+        "hericium-clan",
         "twintailborder"
       ],
       "parent": "country",
