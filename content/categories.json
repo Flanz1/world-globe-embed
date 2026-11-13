@@ -4,7 +4,9 @@
     {
       "id": "gethricism",
       "name": "gethricism",
-      "regions": [],
+      "regions": [
+        "diarism"
+      ],
       "createdBy": {
         "id": 45669787,
         "login": "Flanz1"
