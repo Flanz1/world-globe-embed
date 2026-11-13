@@ -92,6 +92,7 @@ import {
   setLabelsHidden,
   setLocked,
   ringProblem,
+  trimStrokeOvershoot,
   simplifyParts,
   smoothParts,
   toGeometry,
@@ -146,6 +147,10 @@ type DrawTarget = "part" | "cut" | "split" | "extend" | "border";
 
 const HANDLE = 5;
 const HIT = 8;
+/** Screen-pixel radius around a polygon's first point inside which a click closes the outline (the point lights up). */
+const CLOSE_R = 14;
+/** A freehand stroke smaller than this on screen (px) is a slip, not an outline. */
+const MIN_STROKE = 12;
 const EDGE_HIT = 6;
 const SNAP_PX = 10;
 const SNAP_COLOUR = "#4dd0e1";
@@ -989,6 +994,20 @@ export function openEditor(o: EditorOptions): void {
         }
       }
       g.fillStyle = "#fff";
+      if (drawing && cursor && tool === "polygon" && closesAt(sx(cursor[0]), sy(cursor[1]))) {
+        // The next click closes the outline: light the first point up.
+        g.save();
+        g.strokeStyle = SNAP_COLOUR;
+        g.fillStyle = SNAP_COLOUR;
+        g.lineWidth = 3;
+        g.beginPath();
+        g.arc(sx(pts[0][0]), sy(pts[0][1]), CLOSE_R, 0, Math.PI * 2);
+        g.globalAlpha = 0.25;
+        g.fill();
+        g.globalAlpha = 1;
+        g.stroke();
+        g.restore();
+      }
       for (const [i, pt] of pts.entries()) {
         g.beginPath();
         g.arc(sx(pt[0]), sy(pt[1]), i === 0 ? 6 : 3.5, 0, Math.PI * 2);
@@ -1737,7 +1756,7 @@ export function openEditor(o: EditorOptions): void {
         ? "Drag around the area to cut away; let go to cut. Inside a part it makes a hole, right across a part it splits it."
         : "Click points around the area to cut away. Double-click, Enter or click the first point to cut.";
     if (drawTool === "freehand") return `${zone}Drag on the map to draw the outline; let go to close it. Along a border, the stroke follows it. Press P for the polygon tool.`;
-    return `${zone}Click to add points. Double-click, Enter or click the first point to close. Click two points on one border to follow it (Tab: the other way round).`;
+    return `${zone}Click to add points. Double-click, Enter or click the lit-up first point to close. Click two points on one border to follow it (Tab: the other way round).`;
   }
   function startDraw(t: DrawTarget): void {
     closeCombine(true);
@@ -2269,7 +2288,7 @@ export function openEditor(o: EditorOptions): void {
     return tr.map((t) => ({ pos: t.pos, ring: next.ring, at: t.at, kind: "vertex" as const }));
   }
   /** Whether a click at screen (x, y) would close the outline on its first point. */
-  const closesAt = (x: number, y: number) => !!drawing && !lineTarget() && drawing.length >= 3 && Math.hypot(sx(drawing[0][0]) - x, sy(drawing[0][1]) - y) <= HIT;
+  const closesAt = (x: number, y: number) => !!drawing && !lineTarget() && drawing.length >= 3 && Math.hypot(sx(drawing[0][0]) - x, sy(drawing[0][1]) - y) <= CLOSE_R;
   /** What the polygon tool would add on the next click (for the preview), and whether it follows a border. */
   function pendingTail(): { pts: Position[]; traced: boolean } | null {
     if (!drawing || !cursor || tool !== "polygon") return null;
@@ -2843,7 +2862,14 @@ export function openEditor(o: EditorOptions): void {
         return;
       }
       if (d.pts.length < 3) return draw();
-      if (!finishRing(follow ? traced(true) : simple(d.pts))) draw();
+      const xs = d.pts.map((q) => sx(q[0]));
+      const ys = d.pts.map((q) => sy(q[1]));
+      if (Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) < MIN_STROKE) {
+        setMsg("That stroke was too short to be an outline, so nothing was drawn.", "error");
+        return draw();
+      }
+      // A stroke that overshoots its start and crosses itself there is trimmed back to the loop; it closes only here, on release.
+      if (!finishRing(trimStrokeOvershoot(follow ? traced(true) : simple(d.pts), ky))) draw();
       return;
     }
     if (d.kind === "lvertex") {
