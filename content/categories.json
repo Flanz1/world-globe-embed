@@ -83,6 +83,7 @@
       "id": "vas-ira",
       "name": "Vas Ira",
       "regions": [
+        "bihrasmanism",
         "noorism"
       ],
       "parent": "nirydian-religions",
