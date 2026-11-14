@@ -557,23 +557,80 @@ export function openCombine(): void {
   const togetherWhy = h("p", { className: "muted small combine-together" });
   const keepLinked = h("input", { type: "checkbox", checked: true, name: "keep-linked" });
   keepLinked.addEventListener("change", () => update());
-  const list = h(
-    "div",
-    { className: "combine-list" },
-    ...usable.map((e) => {
-      const p = e.feature!.properties;
-      const sw = h("span", { className: "swatch", ariaHidden: "true" });
-      sw.style.backgroundColor = safeColor(p.color);
-      const box = h("input", { type: "checkbox", value: e.id });
-      box.addEventListener("change", () => {
-        const i = picked.indexOf(e);
-        if (box.checked && i < 0) picked.push(e);
-        if (!box.checked && i >= 0) picked.splice(i, 1);
-        update();
-      });
-      return h("label", { className: "check" }, box, sw, h("span", { textContent: e.id }), h("span", { className: "muted small", textContent: ` slot ${p.slot} · map ${p.map}` }));
-    }),
+  // Search, creator filter and sorting work like the Regions list; regions sit in their folders.
+  const qIn = h("input", { type: "search", placeholder: "Name, id or creator", autocomplete: "off", ariaLabel: "Search regions", dataset: { role: "combine-search" } });
+  const whoSel = h("select", { ariaLabel: "Created by", dataset: { role: "combine-creator" } });
+  whoSel.append(
+    h("option", { value: "", textContent: "Anyone" }),
+    h("option", { value: "me", textContent: "Me" }),
+    ...creatorChoices(usable.map(filterable), currentUser()?.id).map(([id, name]) => h("option", { value: String(id), textContent: name })),
   );
+  const sortSel = h("select", { ariaLabel: "Sort regions", dataset: { role: "combine-sort" } });
+  sortSel.append(...[["name", "Id"], ["updated", "Last updated"], ["created", "Newest first"], ["creator", "Creator"]].map(([v, t]) => h("option", { value: v, textContent: t })));
+  const closed = new Set<string>();
+  const list = h("div", { className: "combine-list" });
+
+  const row = (e: RegionEntry): HTMLElement => {
+    const p = e.feature!.properties;
+    const sw = h("span", { className: "swatch", ariaHidden: "true" });
+    sw.style.backgroundColor = safeColor(p.color);
+    const box = h("input", { type: "checkbox", value: e.id, checked: picked.includes(e) });
+    box.addEventListener("change", () => {
+      const i = picked.indexOf(e);
+      if (box.checked && i < 0) picked.push(e);
+      if (!box.checked && i >= 0) picked.splice(i, 1);
+      update();
+    });
+    return h("label", { className: "check" }, box, sw, h("span", { textContent: e.id }), h("span", { className: "muted small", textContent: ` slot ${p.slot} · map ${p.map}` }));
+  };
+
+  function renderList(): void {
+    const q = qIn.value.trim().toLowerCase();
+    const whoId = creatorId(whoSel.value, currentUser()?.id);
+    const shown = usable
+      .filter((e) => whoId == null || ownerOf(e.feature!) === whoId)
+      .filter((e) => matchesQuery(q, filterable(e)))
+      .sort((a, b) => compareBy(sortSel.value, filterable(a), filterable(b)));
+    const filtering = !!(q || whoId != null);
+    const cats = categories();
+    const home = placements(cats);
+    const known = new Set(cats.categories.map((k) => k.id));
+    const group = (id: string, title: string, members: HTMLElement[], kids: HTMLElement[], total: number): HTMLElement => {
+      const d = h("details", { className: "combine-folder", dataset: { category: id } });
+      d.open = filtering || !closed.has(id);
+      d.addEventListener("toggle", () => {
+        if (filtering) return;
+        if (d.open) closed.delete(id);
+        else closed.add(id);
+      });
+      d.append(h("summary", {}, `${title} `, h("span", { className: "muted small", textContent: `(${total})` })), ...kids, ...members);
+      return d;
+    };
+    const tree = (parent: string | null): { el: HTMLElement; total: number }[] =>
+      childrenOf(cats, parent)
+        .map((k) => {
+          const mem = shown.filter((e) => home.get(e.id) === k.id);
+          const kids = tree(k.id);
+          const total = mem.length + kids.reduce((n, x) => n + x.total, 0);
+          return { k, mem, kids, total };
+        })
+        .filter(({ total }) => !filtering || total)
+        .map(({ k, mem, kids, total }) => ({ el: group(k.id, k.name, mem.map(row), kids.map((x) => x.el), total), total }));
+    let out: HTMLElement[];
+    if (!shown.length) out = [h("p", { className: "muted small", textContent: "No regions match." })];
+    else if (!cats.categories.length) out = shown.map(row);
+    else {
+      out = tree(null).map((x) => x.el);
+      const rest = shown.filter((e) => !known.has(home.get(e.id) ?? ""));
+      if (rest.length) out.push(group(UNCATEGORIZED, "Uncategorized", rest.map(row), [], rest.length));
+    }
+    list.replaceChildren(...out);
+  }
+  qIn.addEventListener("input", renderList);
+  whoSel.addEventListener("change", renderList);
+  sortSel.addEventListener("change", renderList);
+  const filterRow = h("div", { className: "row combine-tools" }, h("label", { className: "grow" }, "Search ", qIn), h("label", {}, "Created by ", whoSel), h("label", {}, "Sort ", sortSel));
+  renderList();
 
   function update(): void {
     const sources = picked.map((e) => e.feature!);
@@ -654,6 +711,7 @@ export function openCombine(): void {
       textContent:
         "Tick the regions to combine. Combine makes one new region from them, which opens in the editor for you to check and save. Kept linked, it stays made of the originals: editing it edits them and editing them changes it. Unlinked, it's a separate copy. Edit together just opens the regions in one editor without making anything new. The first region you tick sets the main colour.",
     }),
+    filterRow,
     list,
     h("label", {}, "New region id ", idIn),
     h(

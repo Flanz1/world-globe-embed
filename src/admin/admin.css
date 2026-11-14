@@ -206,6 +206,10 @@ button.tiny { padding: 1px 7px; font-size: 12px; }
 
 /* Combine regions dialog */
 .combine-list { display: grid; gap: 4px; max-height: 40vh; overflow-y: auto; padding: 6px; border: 1px solid var(--line); border-radius: 6px; }
+.combine-tools { margin: 6px 0; gap: 6px 10px; }
+.combine-folder { padding-left: 4px; }
+.combine-folder > summary { cursor: pointer; padding: 2px 0; }
+.combine-folder .combine-folder, .combine-folder > .check { margin-left: 14px; }
 .combine-base { display: grid; gap: 4px; border: 1px solid var(--line); border-radius: 6px; }
 .combine-out p { margin: 2px 0; }
 .warn { color: #b9770e; }
