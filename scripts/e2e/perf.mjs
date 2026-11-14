@@ -113,7 +113,6 @@ const typeInto = (selector) =>
   );
 const avg = (a) => a.reduce((s, x) => s + x, 0) / a.length;
 let typing = [0];
-let typeBusy = 0;
 for (const [name, sel] of [
   ["description", 'dialog.editor textarea[name="description"]'],
   ["legend title", 'dialog.editor input[name="legend-title"]'],
@@ -124,7 +123,6 @@ for (const [name, sel] of [
   console.log(`typing ${name}: ${(b / 40).toFixed(1)} ms/keystroke of main-thread work (incl. the paint that follows)`);
   if (name === "description") {
     typing = times;
-    typeBusy = b;
   }
 }
 // Dragging: grab a vertex, then move in small steps, one frame each.
