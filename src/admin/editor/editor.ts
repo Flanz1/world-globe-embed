@@ -843,7 +843,7 @@ export function openEditor(o: EditorOptions): void {
    * Neighbours (other regions on the slot) are separate maps: they're drawn as outlines to trace against
    * and snap to, but never compared with this region, so they never cover or mark its parts.
    */
-  type ClashState = { version: number; preps: Prepared[]; clashes: Clashes; spec: ReturnType<typeof paintSpecOf> };
+  type ClashState = { version: number; parts: Parts; preps: Prepared[]; clashes: Clashes; spec: ReturnType<typeof paintSpecOf> };
   let clashCache: ClashState | null = null;
   /** During a drag: the clashes where it began, and which parts the drag moves. */
   let dragBase: { cs: ClashState; moving: Set<number> } | null = null;
@@ -851,13 +851,18 @@ export function openEditor(o: EditorOptions): void {
    * Clashes and the paint spec for the current parts, recomputed only when they change (not on pan or
    * zoom). While a drag moves some parts, only the pairs involving those parts are tested again.
    */
+  const own0 = () => !!hist.state.owners;
   function clashState(): ClashState {
     if (clashCache && clashCache.version === hist.version) return clashCache;
     const ps = parts();
     let preps: Prepared[];
     let clashes: Clashes;
     const base = dragBase && hist.dragging && dragBase.cs.preps.length === ps.length ? dragBase : null;
-    if (ps.length < 2) {
+    if (clashCache && clashCache.parts === ps && !own0()) {
+      // Only a property changed (colour, label, opacity…): the geometry is the same objects, so the overlaps are too.
+      preps = clashCache.preps;
+      clashes = clashCache.clashes;
+    } else if (ps.length < 2) {
       // One part can't overlap anything: nothing to prepare (a big ring would cost milliseconds per drag move).
       preps = [];
       clashes = { internal: [] };
@@ -877,7 +882,7 @@ export function openEditor(o: EditorOptions): void {
     const own = st.owners;
     if (own) clashes = { internal: clashes.internal.filter(([i, j]) => own[i] === own[j]) };
     const spec = paintSpecOf({ color: st.props.color, legend: st.props.legend, parts: st.styles, ...(occupied.some(Boolean) ? { occupied } : {}), geometry: asGeometry(ps), ...(st.lines?.length ? { provinceBorders: st.lines } : {}), ...(st.props.nationalBorders ? { nationalBorders: true } : {}) }, clashes);
-    clashCache = { version: hist.version, preps, clashes, spec };
+    clashCache = { version: hist.version, parts: ps, preps, clashes, spec };
     return clashCache;
   }
   /** Call when a drag starts: later clashState() calls only re-test the moving parts. */
@@ -1464,18 +1469,19 @@ export function openEditor(o: EditorOptions): void {
     changed();
   });
   colorIn.addEventListener("input", () => (setProp("color", colorIn.value.toLowerCase(), "Default colour"), changed()));
-  colorLabelIn.addEventListener("input", () => (setProp("colorLabel", colorLabelIn.value.slice(0, LEGEND_LABEL_MAX), "Colour label"), changed()));
+  colorLabelIn.addEventListener("input", () => (setProp("colorLabel", colorLabelIn.value.slice(0, LEGEND_LABEL_MAX), "Colour label"), typed()));
   opacityIn.addEventListener("input", () => (setProp("fillOpacity", Number(opacityIn.value), "Fill opacity"), changed()));
   labelIn.addEventListener("change", () => (setProp("label", labelIn.checked, "Label"), changed()));
   borderIn.addEventListener("change", () => (setProp("nationalBorders", borderIn.checked, "National borders"), changed()));
   descIn.addEventListener("input", () => (setProp("description", descIn.value, "Description"), changed("panel")));
-  keyTitleIn.addEventListener("input", () => (setProp("legendTitle", keyTitleIn.value.slice(0, LEGEND_TITLE_MAX), "Legend title"), changed()));
+  keyTitleIn.addEventListener("input", () => (setProp("legendTitle", keyTitleIn.value.slice(0, LEGEND_TITLE_MAX), "Legend title"), typed()));
 
   /* ── Colours and legend ── */
   const entryName = (k: number) => (k === OWN_COLOUR ? hist.state.props.colorLabel.trim() || DEFAULT_COLOUR_NAME : hist.state.props.legend[k]?.label.trim() || `Colour ${k + 1}`);
-  function setLegend(label: string, legend: EditorState["props"]["legend"], merge?: string): void {
+  function setLegend(label: string, legend: EditorState["props"]["legend"], merge?: string, typing = false): void {
     hist.apply(label, { ...hist.state, props: { ...hist.state.props, legend } }, merge);
-    changed();
+    if (typing) typed();
+    else changed();
   }
   function addLegendEntry(): void {
     const l = hist.state.props.legend;
@@ -1627,7 +1633,7 @@ export function openEditor(o: EditorOptions): void {
       const labels = [...hist.state.labels];
       labels[p] = lbl.value.slice(0, PART_LABEL_MAX);
       hist.apply("Part label", { ...hist.state, labels }, `part-label:${p}`);
-      changed();
+      typed();
     });
     const tiny = (text: string, title: string, act: string, onclick: (ev: MouseEvent) => void, extra = "") =>
       h("button", { type: "button", className: `ghost tiny${extra}`, textContent: text, title, dataset: { act }, onclick: (ev: MouseEvent) => (ev.stopPropagation(), onclick(ev)) });
@@ -1687,7 +1693,7 @@ export function openEditor(o: EditorOptions): void {
       name.addEventListener("input", () => {
         const legend = hist.state.props.legend.map((x) => ({ ...x }));
         legend[k].label = name.value.slice(0, LEGEND_LABEL_MAX);
-        setLegend("Legend label", legend, `key-label:${k}`);
+        setLegend("Legend label", legend, `key-label:${k}`, true);
       });
     }
     const open = !folded.has(k);
@@ -1834,6 +1840,20 @@ export function openEditor(o: EditorOptions): void {
     addKeyBtn.disabled = s.props.legend.length >= legendCap;
   }
 
+  /**
+   * After an edit made by typing (a name, a title): only the buttons now; the map, the side panel and the globe catch up
+   * once typing pauses, so a keystroke never waits for them.
+   */
+  let typingTimer = 0;
+  function typed(): void {
+    undoBtn.disabled = !hist.canUndo;
+    redoBtn.disabled = !hist.canRedo;
+    window.clearTimeout(typingTimer);
+    typingTimer = window.setTimeout(() => {
+      typingTimer = 0;
+      if (dlg.isConnected) changed();
+    }, 200);
+  }
   /** After any state change: redraw, update the panel and the globe. */
   function changed(only?: "panel"): void {
     if (only === "panel") {
