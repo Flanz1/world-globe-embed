@@ -14,6 +14,13 @@ export const CATEGORY_NAME_MAX = 60;
 export const MAX_DEPTH = 5;
 /** Regions one commit may move between folders: the admin API looks up each one's owner (a subrequest each), so the admin page moves a bigger batch in several commits. */
 export const MAX_MOVED_PER_COMMIT = 24;
+/**
+ * Region files one commit may change. The admin API checks a commit by reading every changed region (and, for
+ * anyone but the owner, what it was before): each read is a subrequest, and a request gets about 50 in all
+ * (~14 are the fixed part). So the owner's commit fits 32 files, everyone else's 16; the admin page saves
+ * bigger batches (editing several regions together) as several commits.
+ */
+export const regionsPerCommit = (owner: boolean): number => (owner ? 32 : 16);
 
 /** A GitHub account (same shape as access.ts's Account). */
 interface Creator {

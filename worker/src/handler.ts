@@ -12,7 +12,7 @@
  *
  * `handle` takes the upstream fetch as an argument so tests can point it at an in-memory GitHub.
  */
-import { diffCategories, MAX_MOVED_PER_COMMIT, type CategoriesFile } from "../../src/shared/categories.ts";
+import { diffCategories, MAX_MOVED_PER_COMMIT, regionsPerCommit, type CategoriesFile } from "../../src/shared/categories.ts";
 import { ACCESS_PATH, PERMISSIONS, checkChange, pathKind, permissionsOf, regionOwner, type AccessFile, type Actor, type FileDiff, type Permission } from "../../src/shared/access.ts";
 import { appJwt, nonce, sign, verify } from "./crypto.ts";
 import { validateAccess, validateCategories, validateRegion, type ValidateFn } from "./generated/validators.js";
@@ -417,7 +417,8 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
     const k = pathKind(c.path);
     return k === "region" || k === "access" || k === "categories";
   });
-  if (reads.length > MAX_READ_FILES) return [`That commit changes ${reads.length} regions; the admin page saves at most ${MAX_READ_FILES} at a time.`];
+  const maxReads = regionsPerCommit(actor.owner);
+  if (reads.length > maxReads) return [`That commit changes ${reads.length} regions; the admin page saves at most ${maxReads} at a time.`];
   for (const c of changes) {
     if (c.type === "tree") {
       problems.push(checkChange({ path: c.path, before: null, after: null }, actor, ownerId(env)) ?? `${c.path} can't be changed here.`);
@@ -430,7 +431,9 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
     const kind = pathKind(c.path);
     const d: FileDiff = { path: c.path, before: null, after: null };
     if (kind === "region" || kind === "access" || kind === "categories") {
-      [d.before, d.after] = await Promise.all([c.before ? blobText(env, up, c.before) : null, c.after ? blobText(env, up, c.after) : null]);
+      // The owner may change any region, so what one was before doesn't matter: not reading it halves the subrequests of a big save.
+      const skipBefore = actor.owner && kind === "region" && c.after !== null;
+      [d.before, d.after] = await Promise.all([c.before ? (skipBefore ? "{}" : blobText(env, up, c.before)) : null, c.after ? blobText(env, up, c.after) : null]);
       if (kind === "categories" && !actor.owner) {
         const moved = movedRegions(d);
         if (moved.length > MAX_READ_FILES) {

@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { GitHub, NotListed, type FileChange } from "../src/admin/github.ts";
+import { GitHub, GitHubError, NotListed, mapLimit, retrying, type FileChange } from "../src/admin/github.ts";
 import { handle, resetCaches, returnAllowed, type Env, type KV } from "../worker/src/handler.ts";
 import { appJwt, fromB64url, sign, verify } from "../worker/src/crypto.ts";
 import { MockGitHub, mockFetch } from "../scripts/e2e/mock-github.mjs";
@@ -510,5 +510,68 @@ describe("admin API branch updates", () => {
 describe("generated validators", () => {
   it("are up to date with schema/", () => {
     expect(readFileSync(VALIDATORS_FILE, "utf8")).toBe(generateValidators());
+  });
+});
+
+describe("admin API big saves", () => {
+  /** Upstream (GitHub) calls the Worker made for its busiest request: a Worker gets about 50 per request. */
+  function countSubrequests() {
+    resetCaches();
+    const up0 = mockFetch(mock);
+    let calls = 0;
+    const stats = { busiest: 0 };
+    const up = (async (u: string, i?: RequestInit) => (calls++, up0(u, i))) as typeof up0;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls = 0;
+      const r = await handle(new Request(input, init), env, up);
+      stats.busiest = Math.max(stats.busiest, calls);
+      return r;
+    }) as typeof fetch;
+    return stats;
+  }
+  const mk = (id: string, who: { id: number; login: string }, v: number) => region(id, SIMON, who, { color: `#${String(v).padStart(6, "0")}` });
+  const batch = (n: number, who: { id: number; login: string }, v: number) => Array.from({ length: n }, (_, k) => put(`content/regions/big-${k}.json`, mk(`big-${k}`, who, v)));
+
+  it("lets the owner save 32 changed regions in one commit, within the subrequest limit", async () => {
+    const stats = countSubrequests();
+    const gh = await client(OWNER);
+    expect(await tryCommit(gh, batch(32, OWNER, 1))).toBeNull();
+    expect(await tryCommit(gh, batch(32, OWNER, 2))).toBeNull();
+    expect(stats.busiest).toBeLessThanOrEqual(50);
+    expect(await tryCommit(gh, batch(33, OWNER, 3))).toMatch(/changes 33 regions; the admin page saves at most 32/);
+  });
+
+  it("lets an editor save 16 changed regions in one commit, within the subrequest limit", async () => {
+    const stats = countSubrequests();
+    expect(await tryCommit(await client(OWNER), batch(16, OWNER, 1))).toBeNull();
+    const bo = await client(BO);
+    expect(await tryCommit(bo, batch(16, BO, 2))).toBeNull();
+    expect(stats.busiest).toBeLessThanOrEqual(50);
+    expect(await tryCommit(bo, batch(17, BO, 3))).toMatch(/changes 17 regions; the admin page saves at most 16/);
+  });
+
+  it("still needs the old version for anyone but the owner (editors can't take over someone's region)", async () => {
+    const bo = await client(BO);
+    expect(await tryCommit(await client(OWNER), batch(2, OWNER, 1))).toBeNull();
+    expect(await tryCommit(bo, [put("content/regions/big-0.json", mk("big-0", BO, 4).replace('"id": 5002', '"id": 5003'))])).toBeNull();
+    expect(await tryCommit(bo, [put("content/regions/big-1.json", region("big-1", BO, BO))])).toMatch(/who created/);
+  });
+
+  it("uploads in a few at a time and retries a busy GitHub", async () => {
+    let live = 0;
+    let peak = 0;
+    const out = await mapLimit([1, 2, 3, 4, 5, 6, 7, 8, 9], 3, async (x) => {
+      peak = Math.max(peak, ++live);
+      await new Promise((r) => setTimeout(r, 2));
+      live--;
+      return x * 2;
+    });
+    expect(out).toEqual([2, 4, 6, 8, 10, 12, 14, 16, 18]);
+    expect(peak).toBe(3);
+    let tries = 0;
+    expect(await retrying(async () => (++tries < 3 ? Promise.reject(new GitHubError(403, "You have exceeded a secondary rate limit.")) : "ok"), 3, 1)).toBe("ok");
+    tries = 0;
+    await expect(retrying(async () => (tries++, Promise.reject(new GitHubError(403, "No permission"))), 3, 1)).rejects.toThrow("No permission");
+    expect(tries).toBe(1);
   });
 });

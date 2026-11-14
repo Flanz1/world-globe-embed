@@ -54,14 +54,15 @@ import { clampPadding } from "../../shared/params.ts";
 import { TEXTURE_WIDTHS, type MapMeta, type SlotsFile, type TextureWidth } from "../../shared/types.ts";
 import { deviceLimit, nextTier } from "../../shared/tiers.ts";
 import { h } from "../dom.ts";
-import type { GitHub } from "../github.ts";
+import { mapLimit, type GitHub } from "../github.ts";
+import { regionsPerCommit } from "../../shared/categories.ts";
 import { loadMapImage } from "../images.ts";
 import { SITE } from "../dom.ts";
 import { createOverlayFilter, type OverlayCategory, type OverlayMeta } from "./overlay-filter.ts";
 import { TILE_BUDGET, TILE_LEVELS, TileCache, levelFor, tileRect, tilesAt, tileUrl, type TileLevel } from "../../shared/tiles.ts";
 import { alertBox, confirmBox, modal, openEmbedDialog, previewUrl, sendRegion } from "../region-dialogs.ts";
 import { regionPath, serialize, stamp } from "../regions.ts";
-import { account } from "../session.ts";
+import { account, currentUser } from "../session.ts";
 import { combineKind, combineParts, extendPart, type MergeResult } from "./merge.ts";
 import { LINKED_MAX, combineRegions } from "../../shared/combine.ts";
 import { MAX_LIVE, liveState, ownEntry, previewLegend, removeLiveEntry, splitLive, type LiveSource } from "./live.ts";
@@ -3359,59 +3360,84 @@ export function openEditor(o: EditorOptions): void {
     }
     // The linked region: rebuilt from the regions as they'll be saved, written when it changes (or is new).
     let linkFile: { feature: RegionFeature; text: string } | null = null;
+    let linkWarning = "";
     if (link) {
       if (!link.sha && o.takenIds.has(link.id)) return setMsg(`The id "${link.id}" is taken. Close and pick another one.`, "error");
       const now = live.map((x) => files.find((f) => f.src === x)?.feature ?? x.feature);
       const r = combineRegions(now, { id: link.id, base: { slot: slotName, map: slot.map } }, 1);
-      if (!r.feature) return setMsg(`The linked region ${link.id} can't be made from these: ${r.errors[0]}`, "error");
-      const lp = link.feature.properties;
-      const made = link.sha && lp.createdBy ? { ...(lp.created ? { created: lp.created } : {}), createdBy: lp.createdBy } : { created: stamp(), createdBy: account() };
-      const core: RegionFeature = { ...r.feature, properties: { ...r.feature.properties, linked: live.map((x) => x.id), ...made } };
-      const strip = (f: RegionFeature) => {
-        const rest = { ...f.properties };
-        delete rest.updated;
-        delete rest.updatedBy;
-        return serialize({ ...f, properties: rest });
-      };
-      if (!link.sha || strip(core) !== strip(link.feature)) {
-        const feature: RegionFeature = { ...core, properties: { ...core.properties, updated: stamp(), updatedBy: account() } };
-        linkFile = { feature, text: serialize(feature) };
+      if (!r.feature) {
+        // A linked region that already exists keeps its old snapshot (it's rebuilt from the regions when it's read), so the regions themselves still save.
+        if (!link.sha) return setMsg(`The linked region ${link.id} can't be made from these: ${r.errors[0]}`, "error");
+        linkWarning = ` ${link.id} wasn't updated: ${r.errors[0]}`;
+      } else {
+        const lp = link.feature.properties;
+        const made = link.sha && lp.createdBy ? { ...(lp.created ? { created: lp.created } : {}), createdBy: lp.createdBy } : { created: stamp(), createdBy: account() };
+        const core: RegionFeature = { ...r.feature, properties: { ...r.feature.properties, linked: live.map((x) => x.id), ...made } };
+        const strip = (f: RegionFeature) => {
+          const rest = { ...f.properties };
+          delete rest.updated;
+          delete rest.updatedBy;
+          return serialize({ ...f, properties: rest });
+        };
+        if (!link.sha || strip(core) !== strip(link.feature)) {
+          const feature: RegionFeature = { ...core, properties: { ...core.properties, updated: stamp(), updatedBy: account() } };
+          linkFile = { feature, text: serialize(feature) };
+        }
       }
     }
-    if (!files.length && !linkFile) return setMsg("Nothing to save: no region changed.", "ok");
-    const ids = [...files.map((f) => f.src.id), ...(linkFile && link ? [link.id] : [])];
+    if (!files.length && !linkFile) return setMsg(linkWarning ? `Nothing to save.${linkWarning}` : "Nothing to save: no region changed.", linkWarning ? "error" : "ok");
+    // The admin API checks a commit by reading every region in it, which only goes so far: a big save is several commits, the linked region in the last.
+    type Item = { kind: "region"; f: (typeof files)[number] } | { kind: "link"; f: { feature: RegionFeature; text: string } };
+    const items: Item[] = [...files.map((f): Item => ({ kind: "region", f })), ...(linkFile ? [{ kind: "link", f: linkFile } as Item] : [])];
+    const per = regionsPerCommit(!!currentUser()?.owner);
+    const chunks: Item[][] = [];
+    for (let i = 0; i < items.length; i += per) chunks.push(items.slice(i, i + per));
+    const idOf = (it: Item) => (it.kind === "link" ? link!.id : it.f.src.id);
+    const ids = items.map(idOf);
     saving = true;
     saveBtn.disabled = true;
-    setMsg(`Saving ${ids.join(", ")}…`);
+    let done = 0;
+    let lastSha = "";
     try {
-      const commitSha = await o.gh.commit(`Save region${ids.length > 1 ? "s" : ""} ${ids.join(", ")}`, async () => {
-        const stale: string[] = [];
-        await Promise.all(
-          files.map(async (f) => {
-            if ((await o.gh.fileSha(regionPath(f.src.id))) !== f.src.sha) stale.push(f.src.id);
-          }),
-        );
-        if (linkFile && link && (await o.gh.fileSha(regionPath(link.id))) !== link.sha) stale.push(link.id);
-        if (stale.length) throw new Conflict(stale.sort().join(", "));
-        return [...files.map((f) => ({ path: regionPath(f.src.id), content: f.text })), ...(linkFile && link ? [{ path: regionPath(link.id), content: linkFile.text }] : [])];
-      });
-      if (linkFile && link) {
-        link.sha = await gitBlobSha(linkFile.text);
-        link.feature = linkFile.feature;
-        o.takenIds.add(link.id);
-      }
-      for (const f of files) {
-        f.src.sha = await gitBlobSha(f.text);
-        f.src.feature = f.feature;
-        baseline.set(f.src.id, f.core);
+      for (const [ci, chunk] of chunks.entries()) {
+        const cids = chunk.map(idOf);
+        setMsg(chunks.length > 1 ? `Saving ${done + 1}–${done + chunk.length} of ${ids.length} regions (commit ${ci + 1} of ${chunks.length})…` : `Saving ${ids.join(", ")}…`);
+        const commitSha = await o.gh.commit(`Save region${cids.length > 1 ? "s" : ""} ${cids.length > 4 ? `${cids.slice(0, 3).join(", ")} and ${cids.length - 3} more` : cids.join(", ")}`, async () => {
+          const stale: string[] = [];
+          await mapLimit(chunk, 6, async (it) => {
+            const cid = idOf(it);
+            const want = it.kind === "link" ? link!.sha : it.f.src.sha;
+            if ((await o.gh.fileSha(regionPath(cid))) !== want) stale.push(cid);
+          });
+          if (stale.length) throw new Conflict(stale.sort().join(", "));
+          return chunk.map((it) => ({ path: regionPath(idOf(it)), content: it.f.text }));
+        });
+        lastSha = commitSha;
+        for (const it of chunk) {
+          if (it.kind === "link" && link) {
+            link.sha = await gitBlobSha(it.f.text);
+            link.feature = it.f.feature;
+            o.takenIds.add(link.id);
+          } else if (it.kind === "region") {
+            it.f.src.sha = await gitBlobSha(it.f.text);
+            it.f.src.feature = it.f.feature;
+            baseline.set(it.f.src.id, it.f.core);
+          }
+        }
+        done += chunk.length;
       }
       saved = JSON.stringify(hist.state);
-      setMsg(`Saved ${ids.join(", ")} in commit ${commitSha.slice(0, 7)} to ${o.gh.branch}.`, "ok");
+      void o.afterCommit(lastSha);
+      setMsg(`Saved ${ids.length > 6 ? `${ids.length} regions` : ids.join(", ")} in ${chunks.length > 1 ? `${chunks.length} commits` : `commit ${lastSha.slice(0, 7)}`} to ${o.gh.branch}.${linkWarning}`, linkWarning ? "error" : "ok");
       syncPanel();
-      void o.afterCommit(commitSha);
     } catch (e) {
+      if (done) {
+        syncPanel();
+        void o.afterCommit(lastSha);
+      }
+      const partial = done ? ` ${done} of ${ids.length} regions were saved; save again to write the rest.` : "";
       if (e instanceof Conflict) void liveConflict(e.message);
-      else setMsg((e as Error).message, "error");
+      else setMsg(`${(e as Error).message}${partial}`, "error");
     } finally {
       saving = false;
       saveBtn.disabled = false;
