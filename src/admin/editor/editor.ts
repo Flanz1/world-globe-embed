@@ -1416,23 +1416,32 @@ export function openEditor(o: EditorOptions): void {
     ...(hist.state.lines?.length ? { provinceBorders: storedLines(hist.state.lines) } : {}),
   });
   let previewRaf = 0;
+  let previewTimer = 0;
   let lastSent = -1;
-  let lastSentAt = 0;
-  const PREVIEW_DRAG_MS = 250;
+  /** While dragging, the globe updates only once the pointer rests this long (and again on drop). */
+  const PREVIEW_REST_MS = 300;
   function sendPreview(centre = false, focus?: number): void {
     if (centre) return sendRegion(frameEl, regionNow(), true, focus);
-    // At most one update per animation frame; while dragging, one every PREVIEW_DRAG_MS (the globe shares the
-    // main thread with the editor, and redrawing it per pointer move is what makes a drag lag).
-    if (previewRaf || lastSent === hist.version) return;
-    const wait = hist.dragging ? Math.max(0, lastSentAt + PREVIEW_DRAG_MS - performance.now()) : 0;
+    if (lastSent === hist.version) return;
     const send = () => {
       previewRaf = 0;
+      previewTimer = 0;
       if (lastSent === hist.version) return;
       lastSent = hist.version;
-      lastSentAt = performance.now();
       sendRegion(frameEl, regionNow());
     };
-    previewRaf = wait ? window.setTimeout(send, wait) : requestAnimationFrame(send);
+    if (hist.dragging) {
+      // Every globe update repaints the region onto the globe's large overlay texture and uploads it to the GPU.
+      // Doing that mid-drag, even a few times a second, is what made dragging stutter (also with one small part),
+      // so a drag only updates the globe when the pointer rests, and when it ends.
+      window.clearTimeout(previewTimer);
+      previewTimer = window.setTimeout(send, PREVIEW_REST_MS);
+      return;
+    }
+    window.clearTimeout(previewTimer);
+    previewTimer = 0;
+    // At most one update per animation frame.
+    if (!previewRaf) previewRaf = requestAnimationFrame(send);
   }
   frameEl.addEventListener("load", () => {
     lastSent = -1;
