@@ -613,6 +613,10 @@ if (want("editor")) {
     await page.click('dialog.editor .ed-part-row[data-row="1"] [data-act="part-occupied"]');
     const s = await ed.state();
     check(A, "a part's Contested button makes it an occupied area", JSON.stringify(s.contested) === "[-1,-2]" && (await page.getAttribute('dialog.editor .ed-part-row[data-row="1"] [data-act="part-occupied"]', "aria-pressed")) === "true", JSON.stringify(s.contested));
+    // The Overlaps list is rebuilt on a later frame than the state change: wait for it rather than read it at once.
+    await page
+      .waitForFunction(() => /occupies/.test(document.querySelector("dialog.editor .ed-clashes li")?.textContent ?? ""), null, { timeout: 5000 })
+      .catch(() => {});
     const listed = await page.evaluate(() => [...document.querySelectorAll("dialog.editor .ed-clashes li")].map((li) => li.textContent));
     check(A, "Overlaps says which part occupies which", /^Part 2 occupies part of part 1/.test(listed[0] ?? ""), JSON.stringify(listed));
     await unselect();
