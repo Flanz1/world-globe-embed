@@ -164,7 +164,7 @@ const E = "editor";
 await step(E, "cut and split", async () => {
   await openRegion("cut-test", 112, -46);
   const start = await ed.state();
-  check(E, "an old contested zone opens as a plain part in its parent's colour", start.parts.length === 2 && JSON.stringify(start.contested) === "[-1,-1]" && JSON.stringify(start.styles) === "[0,0]", JSON.stringify([start.styles, start.contested]));
+  check(E, "an old contested zone opens as an occupied (contested) area in its parent's colour", start.parts.length === 2 && JSON.stringify(start.contested) === "[-1,-2]" && JSON.stringify(start.styles) === "[0,0]", JSON.stringify([start.styles, start.contested]));
 
   // 1. Cut (freehand) wholly inside part 1: a hole, as before.
   await page.click('dialog.editor [data-act="cut-hole"]');
