@@ -605,6 +605,14 @@ await step(A, "combine", async () => {
   check(A, "combine warns about different base maps and offers a choice", bases === 2 && /different maps/.test(warnText), `${bases} bases; ${warnText}`);
   await page.screenshot({ path: path.join(OUT, "combine-different-maps.png") });
   await page.uncheck('dialog.combine-dlg input[value="old-map-region"]');
+  // The selector searches and sorts like the Regions list, and ticks survive it.
+  const rows = () => page.locator("dialog.combine-dlg .combine-list label.check");
+  const all = await rows().count();
+  await page.fill('dialog.combine-dlg [data-role="combine-search"]', "old-map");
+  check(A, "combine selector search narrows the list", (await rows().count()) === 1 && (await rows().count()) < all, `${all} -> ${await rows().count()}`);
+  await page.fill('dialog.combine-dlg [data-role="combine-search"]', "");
+  await page.selectOption('dialog.combine-dlg [data-role="combine-sort"]', "creator");
+  check(A, "combine selector keeps ticks after search/sort", (await page.isChecked('dialog.combine-dlg input[value="test-kingdom"]')) && (await rows().count()) === all);
   // A copy (unlinked): linked combined regions are checked in live.mjs.
   await page.uncheck('dialog.combine-dlg input[name="keep-linked"]');
   const id = await page.inputValue("dialog.combine-dlg input[type=text]");
