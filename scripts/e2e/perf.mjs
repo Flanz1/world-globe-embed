@@ -90,27 +90,41 @@ const busy = async (fn) => {
   return [r, b / 1000];
 };
 // Typing: dispatch input events like keystrokes and time each one until the next frame has painted.
-const [typing, typeBusy] = await busy(() => page.evaluate(async () => {
-  const ta = document.querySelector('dialog.editor textarea[name="description"]');
-  ta.focus();
-  const raf = () => new Promise((r) => requestAnimationFrame(() => r()));
-  const times = [];
-  let v = ta.value;
-  for (let i = 0; i < 40; i++) {
-    v += String.fromCharCode(97 + (i % 26));
-    const t0 = performance.now();
-    ta.value = v;
-    ta.dispatchEvent(new Event("input", { bubbles: true }));
-    await raf();
-    await raf();
-    times.push(performance.now() - t0);
-  }
-  return times;
-}));
+const typeInto = (selector) =>
+  busy(() =>
+    page.evaluate(async (sel) => {
+      const ta = document.querySelector(sel);
+      if (!ta) return null;
+      ta.focus();
+      const raf = () => new Promise((r) => requestAnimationFrame(() => r()));
+      const times = [];
+      let v = ta.value;
+      for (let i = 0; i < 40; i++) {
+        v += String.fromCharCode(97 + (i % 26));
+        const t0 = performance.now();
+        ta.value = v;
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+        await raf();
+        await raf();
+        times.push(performance.now() - t0);
+      }
+      return times;
+    }, selector),
+  );
 const avg = (a) => a.reduce((s, x) => s + x, 0) / a.length;
-console.log(`typing busy: ${(typeBusy / 40).toFixed(1)} ms/keystroke of main-thread work; `);
-console.log(`typing: ${avg(typing).toFixed(1)} ms/keystroke (to second frame), max ${Math.max(...typing).toFixed(1)}`);
-
+let typing = [0];
+for (const [name, sel] of [
+  ["description", 'dialog.editor textarea[name="description"]'],
+  ["legend title", 'dialog.editor input[name="legend-title"]'],
+  ["part label", 'dialog.editor input[data-part-label="0"]'],
+]) {
+  const [times, b] = await typeInto(sel);
+  if (!times) continue;
+  console.log(`typing ${name}: ${(b / 40).toFixed(1)} ms/keystroke of main-thread work (incl. the paint that follows)`);
+  if (name === "description") {
+    typing = times;
+  }
+}
 // Dragging: grab a vertex, then move in small steps, one frame each.
 await call("setView", GRAB[0], GRAB[1], 20);
 await page.waitForTimeout(400);
