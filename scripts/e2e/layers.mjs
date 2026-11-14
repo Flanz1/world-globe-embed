@@ -516,6 +516,8 @@ if (want("editor")) {
     check(A, "Add colour makes a folder; moving part 2 into it", JSON.stringify(await folders()) === JSON.stringify([["-1", [0]], ["0", [1]]]) && s.props.legend[0].label === "March" && JSON.stringify(s.styles) === "[-1,0]", JSON.stringify([await folders(), s.styles]));
     // The default colour is renamed like any other colour.
     await page.fill('dialog.editor input[name="color-label"]', "Heartland");
+    // The side panel catches up once typing pauses.
+    await page.waitForFunction(() => document.querySelector('dialog.editor select[data-part="1"] option')?.textContent === "Heartland", null, { timeout: 5000 }).catch(() => {});
     s = await ed.state();
     const opts = await page.evaluate(() => [...document.querySelectorAll('dialog.editor select[data-part="1"] option')].map((o) => o.textContent));
     check(A, "the default colour can be renamed; part colour menus follow", s.props.colorLabel === "Heartland" && JSON.stringify(opts) === '["Heartland","March"]', JSON.stringify([s.props.colorLabel, opts]));
