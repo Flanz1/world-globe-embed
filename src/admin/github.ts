@@ -6,6 +6,36 @@
  */
 import type { Permission } from "../shared/access.ts";
 
+/** `fn` over `items`, at most `limit` at a time; results in order, the first failure rejects. */
+export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i], i);
+      }
+    }),
+  );
+  return out;
+}
+
+/** Whether a failed request is worth sending again: the network dropped it, GitHub is busy, or a rate limit. */
+const transient = (e: unknown): boolean => e instanceof GitHubError ? [0, 429, 500, 502, 503, 504].includes(e.status) || (e.status === 403 && /rate limit|abuse/i.test(e.message)) : e instanceof TypeError;
+
+/** Runs `fn`, again up to `tries` times (with a growing pause) when it fails for a passing reason. */
+export async function retrying<T>(fn: () => Promise<T>, tries = 3, pause = 1000): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (attempt >= tries || !transient(e)) throw e;
+      await new Promise((r) => setTimeout(r, pause * attempt));
+    }
+  }
+}
+
 export class GitHubError extends Error {
   constructor(
     public status: number,
@@ -267,18 +297,16 @@ export class GitHub {
       const ref = await this.request<{ object: { sha: string } }>(`/repos/${this.repo}/git/ref/heads/${this.branch}`);
       const parent = await this.request<{ tree: { sha: string } }>(`/repos/${this.repo}/git/commits/${ref.object.sha}`);
       const changes = await build();
-      const tree = await Promise.all(
-        changes.map(async (c) => {
-          // A null sha removes the file from the tree.
-          if (c.delete) return { path: c.path, mode: "100644", type: "blob", sha: null };
-          if (c.sha) return { path: c.path, mode: "100644", type: "blob", sha: c.sha };
-          const blob = await this.request<{ sha: string }>(`/repos/${this.repo}/git/blobs`, {
-            method: "POST",
-            body: JSON.stringify({ content: c.base64 ? c.content : utf8ToBase64(c.content), encoding: "base64" }),
-          });
-          return { path: c.path, mode: "100644", type: "blob", sha: blob.sha };
-        }),
-      );
+      // A few uploads at a time, each retried when GitHub or the network hiccups: a save of dozens of big files
+      // sent all at once trips GitHub's rate limits and the Worker's limits, and one failure loses the whole save.
+      const tree = await mapLimit(changes, 4, async (c) => {
+        // A null sha removes the file from the tree.
+        if (c.delete) return { path: c.path, mode: "100644", type: "blob", sha: null };
+        if (c.sha) return { path: c.path, mode: "100644", type: "blob", sha: c.sha };
+        const body = JSON.stringify({ content: c.base64 ? c.content : utf8ToBase64(c.content), encoding: "base64" });
+        const blob = await retrying(() => this.request<{ sha: string }>(`/repos/${this.repo}/git/blobs`, { method: "POST", body }));
+        return { path: c.path, mode: "100644", type: "blob", sha: blob.sha };
+      });
       const newTree = await this.request<{ sha: string }>(`/repos/${this.repo}/git/trees`, {
         method: "POST",
         body: JSON.stringify({ base_tree: parent.tree.sha, tree }),

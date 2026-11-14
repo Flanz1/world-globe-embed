@@ -31,6 +31,7 @@
     "e2e:locks": "tsx scripts/e2e/locks.mjs",
     "e2e:merge": "tsx scripts/e2e/merge.mjs",
     "e2e:live": "tsx scripts/e2e/live.mjs",
+    "e2e:live-many": "tsx scripts/e2e/live-many.mjs",
     "e2e:ring-select": "tsx scripts/e2e/ring-select.mjs",
     "e2e:snap": "tsx scripts/e2e/snap.mjs",
     "e2e:overlay": "tsx scripts/e2e/overlay.mjs",
