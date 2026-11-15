@@ -56,9 +56,9 @@ const pin = (id, name, kind, at, extra = {}) => ({
 });
 const NOTE = "https://garmeley.example/Places/Magenta-Harbour";
 const SEED = [
-  pin("magenta-harbour", "Magenta Harbour", "city", [DISC.lon, DISC.lat], { description: "A busy port on the magenta isle.", link: NOTE }),
-  pin("old-ruin", "Old Ruin", "ruin", [-175, -20]),
-  pin("red-field", "Battle of the Red Field", "battle", [65, -35], { color: "#ff0000" }),
+  pin("magenta-harbour", "Magenta Harbour", "city", [DISC.lon, DISC.lat], { category: "Cities", description: "A busy port on the magenta isle.", link: NOTE }),
+  pin("old-ruin", "Old Ruin", "ruin", [-175, -20], { category: "Holy sites" }),
+  pin("red-field", "Battle of the Red Field", "battle", [65, -35], { category: "Battles", color: "#ff0000" }),
   pin("markup", "<img src=x onerror=alert(1)>", "landmark", [-120, 30], { description: "<b>bold?</b>" }),
 ];
 
@@ -155,6 +155,15 @@ for (const view of ["flat", "globe"]) {
     await ready(page);
     await page.waitForSelector(".wpin", { state: "attached", timeout: 15000 });
     check(E, `${view}: pins=city,ruin draws only those kinds`, (await page.locator(".wpin").count()) === 2);
+    // Categories (by slug); a category and a kind can be mixed.
+    await page.goto(`${SITE}/v/${SLOT.slug}/?view=${view}&pins=battles`);
+    await ready(page);
+    await page.waitForSelector(".wpin", { state: "attached", timeout: 15000 });
+    check(E, `${view}: pins=battles draws only that category`, (await page.locator(".wpin").count()) === 1 && (await page.locator('.wpin[data-name="Battle of the Red Field"]').count()) === 1);
+    await page.goto(`${SITE}/v/${SLOT.slug}/?view=${view}&pins=holy-sites,cities`);
+    await ready(page);
+    await page.waitForSelector(".wpin", { state: "attached", timeout: 15000 });
+    check(E, `${view}: pins=holy-sites,cities draws both categories`, (await page.locator(".wpin").count()) === 2);
     await page.goto(`${SITE}/v/${SLOT.slug}/?view=${view}&pins=nonsense`);
     await ready(page);
     await page.waitForTimeout(300);
@@ -211,13 +220,14 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   await page.mouse.click(pane.x + pane.width / 2, pane.y + pane.height / 2);
   await page.waitForSelector(".pn-form");
   check(A, "clicking the map opens the new-pin form", (await page.locator(".pn-marker").count()) === SEED.length + 1);
-  await page.fill(".pn-form input[type=text]", "Test Harbour");
+  await page.fill('.pn-form input[aria-label="Name"]', "Test Harbour");
   await page.selectOption(".pn-form select", "port");
   await page.fill(".pn-form input[type=url]", "http://not-https.example/x");
   await page.click(".pn-form button[type=submit]");
   check(A, "a link that isn't https is refused", /https/.test((await page.textContent(".pn-form .error")) ?? "") && mock.log.length === n0);
   await page.fill(".pn-form input[type=url]", NOTE);
   await page.fill(".pn-form textarea", "A test.");
+  await page.fill('.pn-form input[aria-label="Category"]', "Trade ports");
   await page.screenshot({ path: path.join(OUT, "admin-new-pin.png") });
   await page.click(".pn-form button[type=submit]");
   await waitCommit(page, n0);
@@ -225,7 +235,7 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   check(A, "saving is one commit to content/pins/test-harbour.json", c.length === 1 && c[0].branch === BRANCH && c[0].changes.length === 1 && c[0].changes[0].path === "content/pins/test-harbour.json", JSON.stringify(c));
   const f = onBranch("content/pins/test-harbour.json");
   const p = f?.properties;
-  check(A, "the file has the form's values", p?.name === "Test Harbour" && p.kind === "port" && p.link === NOTE && p.description === "A test." && p.slot === SLOT.slug && p.map === "landmarks", JSON.stringify(p));
+  check(A, "the file has the form's values", p?.name === "Test Harbour" && p.kind === "port" && p.link === NOTE && p.description === "A test." && p.slot === SLOT.slug && p.map === "landmarks" && p.category === "Trade ports", JSON.stringify(p));
   check(A, "…placed by and saved by the signed-in person", p?.createdBy?.login === "Flanz1" && p?.updatedBy?.login === "Flanz1" && /^\d{4}-\d\d-\d\dT/.test(p?.created ?? ""));
   const [lon, lat] = f?.geometry.coordinates ?? [99, 99];
   check(A, "the position is where the map was clicked (the middle of the map)", Math.abs(lon) < 1 && Math.abs(lat) < 1, `${lon}, ${lat}`);
@@ -252,6 +262,13 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   await page.click(".pn-form button:has-text('Delete pin')");
   await page.click("dialog.small-dlg.danger[open] button:has-text('Delete pin')");
   await waitCommit(page, n2);
+  await page.click("#tab-pins button:has-text('Embed code')");
+  await page.waitForSelector(".embed-dlg .pn-cats, .pn-cats");
+  await page.check('.pn-cats input[aria-label="Battles"]');
+  await page.check('.pn-cats input[aria-label="Holy sites"]');
+  const embedCode = await page.inputValue('textarea[aria-label="Embed code"]');
+  check(A, "the embed code builder picks categories", /pins=battles,holy-sites"/.test(embedCode) && (await page.locator('.pn-cats input[aria-label="All pins"]').isChecked()) === false, embedCode);
+  await page.keyboard.press("Escape");
   check(A, "deleting removes the file in one commit", !onBranch("content/pins/test-harbour.json") && mock.log.length === n2 + 1);
   await page.waitForTimeout(500);
   check(A, "…and the pin leaves the list", (await page.locator(".pn-row").count()) === SEED.length);
@@ -263,14 +280,14 @@ await step(A, "a contributor", async () => {
   const { ctx, page, errors } = await adminPage("carto-ann");
   await page.locator(".pn-row", { hasText: "Old Ruin" }).click();
   await page.waitForSelector(".pn-form");
-  check(A, "can open someone else's pin but not change it", (await page.locator(".pn-form input[type=text]").isDisabled()) && (await page.locator(".pn-form button[type=submit]").count()) === 0 && (await page.locator(".pn-form button:has-text('Delete pin')").count()) === 0);
+  check(A, "can open someone else's pin but not change it", (await page.locator('.pn-form input[aria-label="Name"]').isDisabled()) && (await page.locator(".pn-form button[type=submit]").count()) === 0 && (await page.locator(".pn-form button:has-text('Delete pin')").count()) === 0);
   await page.screenshot({ path: path.join(OUT, "admin-contributor.png") });
   const n0 = mock.log.length;
   await page.click("#tab-pins button:has-text('Place a pin')");
   const pane = await page.locator(".pn-pane").boundingBox();
   await page.mouse.click(pane.x + pane.width / 3, pane.y + pane.height / 2);
-  await page.waitForSelector(".pn-form input[type=text]:not([disabled])");
-  await page.fill(".pn-form input[type=text]", "Ann's Camp");
+  await page.waitForSelector('.pn-form input[aria-label="Name"]:not([disabled])');
+  await page.fill('.pn-form input[aria-label="Name"]', "Ann's Camp");
   await page.click(".pn-form button[type=submit]");
   await waitCommit(page, n0);
   const f = onBranch("content/pins/ann-s-camp.json");

@@ -3487,7 +3487,7 @@ return errors === 0;
 validate29.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 export const validatePin = validate30;
-const schema48 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/pin.schema.json","title":"Map pin","description":"One place (a city, ruin, battle site…) marked on a map: a GeoJSON Point Feature (RFC 7946) stored as content/pins/<id>.json. COORDINATES ARE [lon, lat] IN THE MAP IMAGE'S OWN FRAME, exactly like regions (lon = x / width * 360 - 180, lat = 90 - y / height * 180), so a pin stays on the same spot of the land when the slot's pole padding or prime meridian shift change. The id is permanent (embeds can point at it). Embeds draw pins on top of regions when asked with ?pins=1 (all pins of the slot) or ?pins=city,battle (only those kinds).","type":"object","required":["type","id","properties","geometry"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"type":{"const":"Feature"},"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Permanent id; must match the file name."},"properties":{"type":"object","required":["slot","map","name","kind"],"additionalProperties":false,"properties":{"slot":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Slot (in content/slots.json) whose embeds show this pin."},"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id the pin was placed on."},"name":{"type":"string","minLength":1,"maxLength":80,"description":"Display name (plain text)."},"kind":{"enum":["city","town","fortress","port","temple","ruin","battle","landmark","mountain","other"],"description":"What sort of place it is; decides the icon."},"color":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$","description":"Optional marker colour, #rgb or #rrggbb. Leave it out for the kind's own colour."},"description":{"type":"string","maxLength":300,"description":"Optional short plain-text description, shown when the marker is opened."},"link":{"type":"string","maxLength":400,"pattern":"^https://[^\\s\"'<>]+$","description":"Optional https link, normally the place's note in the Obsidian vault. Opens in a new tab."},"createdBy":{"$ref":"#/$defs/account","description":"Who placed the pin: they (and anyone allowed to edit others' regions) can change it."},"created":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},"updatedBy":{"$ref":"#/$defs/account","description":"Who saved this version."},"updated":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"}}},"geometry":{"type":"object","required":["type","coordinates"],"additionalProperties":false,"properties":{"type":{"const":"Point"},"coordinates":{"type":"array","minItems":2,"maxItems":2,"prefixItems":[{"type":"number","minimum":-180,"maximum":180},{"type":"number","minimum":-90,"maximum":90}],"description":"[lon, lat] in the map image's frame."}}}},"$defs":{"account":{"type":"object","required":["id","login"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1,"description":"GitHub account id (permanent, survives a rename)."},"login":{"type":"string","pattern":"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$","description":"GitHub username when saved."}}}}};
+const schema48 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/pin.schema.json","title":"Map pin","description":"One place (a city, ruin, battle site…) marked on a map: a GeoJSON Point Feature (RFC 7946) stored as content/pins/<id>.json. COORDINATES ARE [lon, lat] IN THE MAP IMAGE'S OWN FRAME, exactly like regions (lon = x / width * 360 - 180, lat = 90 - y / height * 180), so a pin stays on the same spot of the land when the slot's pole padding or prime meridian shift change. The id is permanent (embeds can point at it). Embeds draw pins on top of regions when asked with ?pins=1 (all pins of the slot) or ?pins=battles,city (only pins in those categories or of those kinds).","type":"object","required":["type","id","properties","geometry"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"type":{"const":"Feature"},"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Permanent id; must match the file name."},"properties":{"type":"object","required":["slot","map","name","kind"],"additionalProperties":false,"properties":{"slot":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Slot (in content/slots.json) whose embeds show this pin."},"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id the pin was placed on."},"name":{"type":"string","minLength":1,"maxLength":80,"description":"Display name (plain text)."},"kind":{"enum":["city","town","fortress","port","temple","ruin","battle","landmark","mountain","other"],"description":"What sort of place it is; decides the icon."},"category":{"type":"string","minLength":1,"maxLength":40,"description":"Optional group the pin belongs to, e.g. \"Holy sites\" or \"Battles\". Embeds can show only some categories with ?pins=holy-sites,battles (the name lowercased, other characters turned into dashes)."},"color":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$","description":"Optional marker colour, #rgb or #rrggbb. Leave it out for the kind's own colour."},"description":{"type":"string","maxLength":300,"description":"Optional short plain-text description, shown when the marker is opened."},"link":{"type":"string","maxLength":400,"pattern":"^https://[^\\s\"'<>]+$","description":"Optional https link, normally the place's note in the Obsidian vault. Opens in a new tab."},"createdBy":{"$ref":"#/$defs/account","description":"Who placed the pin: they (and anyone allowed to edit others' regions) can change it."},"created":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},"updatedBy":{"$ref":"#/$defs/account","description":"Who saved this version."},"updated":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"}}},"geometry":{"type":"object","required":["type","coordinates"],"additionalProperties":false,"properties":{"type":{"const":"Point"},"coordinates":{"type":"array","minItems":2,"maxItems":2,"prefixItems":[{"type":"number","minimum":-180,"maximum":180},{"type":"number","minimum":-90,"maximum":90}],"description":"[lon, lat] in the map image's frame."}}}},"$defs":{"account":{"type":"object","required":["id","login"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1,"description":"GitHub account id (permanent, survives a rename)."},"login":{"type":"string","pattern":"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$","description":"GitHub username when saved."}}}}};
 const schema49 = {"type":"object","required":["id","login"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1,"description":"GitHub account id (permanent, survives a rename)."},"login":{"type":"string","pattern":"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$","description":"GitHub username when saved."}}};
 const pattern39 = new RegExp("^https://[^\\s\"'<>]+$", "u");
 
@@ -3666,18 +3666,24 @@ else {
 var valid1 = true;
 }
 if(valid1){
-if(data3.color !== undefined){
-let data8 = data3.color;
+if(data3.category !== undefined){
+let data8 = data3.category;
 const _errs17 = errors;
 if(errors === _errs17){
 if(typeof data8 === "string"){
-if(!pattern7.test(data8)){
-validate30.errors = [{instancePath:instancePath+"/properties/color",schemaPath:"#/properties/properties/properties/color/pattern",keyword:"pattern",params:{pattern: "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"},message:"must match pattern \""+"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"+"\""}];
+if(func2(data8) > 40){
+validate30.errors = [{instancePath:instancePath+"/properties/category",schemaPath:"#/properties/properties/properties/category/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data8) < 1){
+validate30.errors = [{instancePath:instancePath+"/properties/category",schemaPath:"#/properties/properties/properties/category/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
 return false;
 }
 }
+}
 else {
-validate30.errors = [{instancePath:instancePath+"/properties/color",schemaPath:"#/properties/properties/properties/color/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+validate30.errors = [{instancePath:instancePath+"/properties/category",schemaPath:"#/properties/properties/properties/category/type",keyword:"type",params:{type: "string"},message:"must be string"}];
 return false;
 }
 }
@@ -3687,18 +3693,18 @@ else {
 var valid1 = true;
 }
 if(valid1){
-if(data3.description !== undefined){
-let data9 = data3.description;
+if(data3.color !== undefined){
+let data9 = data3.color;
 const _errs19 = errors;
 if(errors === _errs19){
 if(typeof data9 === "string"){
-if(func2(data9) > 300){
-validate30.errors = [{instancePath:instancePath+"/properties/description",schemaPath:"#/properties/properties/properties/description/maxLength",keyword:"maxLength",params:{limit: 300},message:"must NOT have more than 300 characters"}];
+if(!pattern7.test(data9)){
+validate30.errors = [{instancePath:instancePath+"/properties/color",schemaPath:"#/properties/properties/properties/color/pattern",keyword:"pattern",params:{pattern: "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"},message:"must match pattern \""+"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"+"\""}];
 return false;
 }
 }
 else {
-validate30.errors = [{instancePath:instancePath+"/properties/description",schemaPath:"#/properties/properties/properties/description/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+validate30.errors = [{instancePath:instancePath+"/properties/color",schemaPath:"#/properties/properties/properties/color/type",keyword:"type",params:{type: "string"},message:"must be string"}];
 return false;
 }
 }
@@ -3708,17 +3714,38 @@ else {
 var valid1 = true;
 }
 if(valid1){
-if(data3.link !== undefined){
-let data10 = data3.link;
+if(data3.description !== undefined){
+let data10 = data3.description;
 const _errs21 = errors;
 if(errors === _errs21){
 if(typeof data10 === "string"){
-if(func2(data10) > 400){
+if(func2(data10) > 300){
+validate30.errors = [{instancePath:instancePath+"/properties/description",schemaPath:"#/properties/properties/properties/description/maxLength",keyword:"maxLength",params:{limit: 300},message:"must NOT have more than 300 characters"}];
+return false;
+}
+}
+else {
+validate30.errors = [{instancePath:instancePath+"/properties/description",schemaPath:"#/properties/properties/properties/description/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid1 = _errs21 === errors;
+}
+else {
+var valid1 = true;
+}
+if(valid1){
+if(data3.link !== undefined){
+let data11 = data3.link;
+const _errs23 = errors;
+if(errors === _errs23){
+if(typeof data11 === "string"){
+if(func2(data11) > 400){
 validate30.errors = [{instancePath:instancePath+"/properties/link",schemaPath:"#/properties/properties/properties/link/maxLength",keyword:"maxLength",params:{limit: 400},message:"must NOT have more than 400 characters"}];
 return false;
 }
 else {
-if(!pattern39.test(data10)){
+if(!pattern39.test(data11)){
 validate30.errors = [{instancePath:instancePath+"/properties/link",schemaPath:"#/properties/properties/properties/link/pattern",keyword:"pattern",params:{pattern: "^https://[^\\s\"'<>]+$"},message:"must match pattern \""+"^https://[^\\s\"'<>]+$"+"\""}];
 return false;
 }
@@ -3729,60 +3756,60 @@ validate30.errors = [{instancePath:instancePath+"/properties/link",schemaPath:"#
 return false;
 }
 }
-var valid1 = _errs21 === errors;
+var valid1 = _errs23 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.createdBy !== undefined){
-let data11 = data3.createdBy;
-const _errs23 = errors;
-const _errs24 = errors;
-if(errors === _errs24){
-if(data11 && typeof data11 == "object" && !Array.isArray(data11)){
+let data12 = data3.createdBy;
+const _errs25 = errors;
+const _errs26 = errors;
+if(errors === _errs26){
+if(data12 && typeof data12 == "object" && !Array.isArray(data12)){
 let missing2;
-if(((data11.id === undefined) && (missing2 = "id")) || ((data11.login === undefined) && (missing2 = "login"))){
+if(((data12.id === undefined) && (missing2 = "id")) || ((data12.login === undefined) && (missing2 = "login"))){
 validate30.errors = [{instancePath:instancePath+"/properties/createdBy",schemaPath:"#/$defs/account/required",keyword:"required",params:{missingProperty: missing2},message:"must have required property '"+missing2+"'"}];
 return false;
 }
 else {
-const _errs26 = errors;
-for(const key2 in data11){
+const _errs28 = errors;
+for(const key2 in data12){
 if(!((key2 === "id") || (key2 === "login"))){
 validate30.errors = [{instancePath:instancePath+"/properties/createdBy",schemaPath:"#/$defs/account/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key2},message:"must NOT have additional properties"}];
 return false;
 break;
 }
 }
-if(_errs26 === errors){
-if(data11.id !== undefined){
-let data12 = data11.id;
-const _errs27 = errors;
-if(!(((typeof data12 == "number") && (!(data12 % 1) && !isNaN(data12))) && (isFinite(data12)))){
+if(_errs28 === errors){
+if(data12.id !== undefined){
+let data13 = data12.id;
+const _errs29 = errors;
+if(!(((typeof data13 == "number") && (!(data13 % 1) && !isNaN(data13))) && (isFinite(data13)))){
 validate30.errors = [{instancePath:instancePath+"/properties/createdBy/id",schemaPath:"#/$defs/account/properties/id/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
 return false;
 }
-if(errors === _errs27){
-if((typeof data12 == "number") && (isFinite(data12))){
-if(data12 < 1 || isNaN(data12)){
+if(errors === _errs29){
+if((typeof data13 == "number") && (isFinite(data13))){
+if(data13 < 1 || isNaN(data13)){
 validate30.errors = [{instancePath:instancePath+"/properties/createdBy/id",schemaPath:"#/$defs/account/properties/id/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
 return false;
 }
 }
 }
-var valid3 = _errs27 === errors;
+var valid3 = _errs29 === errors;
 }
 else {
 var valid3 = true;
 }
 if(valid3){
-if(data11.login !== undefined){
-let data13 = data11.login;
-const _errs29 = errors;
-if(errors === _errs29){
-if(typeof data13 === "string"){
-if(!pattern13.test(data13)){
+if(data12.login !== undefined){
+let data14 = data12.login;
+const _errs31 = errors;
+if(errors === _errs31){
+if(typeof data14 === "string"){
+if(!pattern13.test(data14)){
 validate30.errors = [{instancePath:instancePath+"/properties/createdBy/login",schemaPath:"#/$defs/account/properties/login/pattern",keyword:"pattern",params:{pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"},message:"must match pattern \""+"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"+"\""}];
 return false;
 }
@@ -3792,7 +3819,7 @@ validate30.errors = [{instancePath:instancePath+"/properties/createdBy/login",sc
 return false;
 }
 }
-var valid3 = _errs29 === errors;
+var valid3 = _errs31 === errors;
 }
 else {
 var valid3 = true;
@@ -3806,23 +3833,23 @@ validate30.errors = [{instancePath:instancePath+"/properties/createdBy",schemaPa
 return false;
 }
 }
-var valid1 = _errs23 === errors;
+var valid1 = _errs25 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.created !== undefined){
-let data14 = data3.created;
-const _errs31 = errors;
-if(errors === _errs31){
-if(typeof data14 === "string"){
-if(func2(data14) > 40){
+let data15 = data3.created;
+const _errs33 = errors;
+if(errors === _errs33){
+if(typeof data15 === "string"){
+if(func2(data15) > 40){
 validate30.errors = [{instancePath:instancePath+"/properties/created",schemaPath:"#/properties/properties/properties/created/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
 return false;
 }
 else {
-if(!pattern11.test(data14)){
+if(!pattern11.test(data15)){
 validate30.errors = [{instancePath:instancePath+"/properties/created",schemaPath:"#/properties/properties/properties/created/pattern",keyword:"pattern",params:{pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},message:"must match pattern \""+"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"+"\""}];
 return false;
 }
@@ -3833,60 +3860,60 @@ validate30.errors = [{instancePath:instancePath+"/properties/created",schemaPath
 return false;
 }
 }
-var valid1 = _errs31 === errors;
+var valid1 = _errs33 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.updatedBy !== undefined){
-let data15 = data3.updatedBy;
-const _errs33 = errors;
-const _errs34 = errors;
-if(errors === _errs34){
-if(data15 && typeof data15 == "object" && !Array.isArray(data15)){
+let data16 = data3.updatedBy;
+const _errs35 = errors;
+const _errs36 = errors;
+if(errors === _errs36){
+if(data16 && typeof data16 == "object" && !Array.isArray(data16)){
 let missing3;
-if(((data15.id === undefined) && (missing3 = "id")) || ((data15.login === undefined) && (missing3 = "login"))){
+if(((data16.id === undefined) && (missing3 = "id")) || ((data16.login === undefined) && (missing3 = "login"))){
 validate30.errors = [{instancePath:instancePath+"/properties/updatedBy",schemaPath:"#/$defs/account/required",keyword:"required",params:{missingProperty: missing3},message:"must have required property '"+missing3+"'"}];
 return false;
 }
 else {
-const _errs36 = errors;
-for(const key3 in data15){
+const _errs38 = errors;
+for(const key3 in data16){
 if(!((key3 === "id") || (key3 === "login"))){
 validate30.errors = [{instancePath:instancePath+"/properties/updatedBy",schemaPath:"#/$defs/account/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key3},message:"must NOT have additional properties"}];
 return false;
 break;
 }
 }
-if(_errs36 === errors){
-if(data15.id !== undefined){
-let data16 = data15.id;
-const _errs37 = errors;
-if(!(((typeof data16 == "number") && (!(data16 % 1) && !isNaN(data16))) && (isFinite(data16)))){
+if(_errs38 === errors){
+if(data16.id !== undefined){
+let data17 = data16.id;
+const _errs39 = errors;
+if(!(((typeof data17 == "number") && (!(data17 % 1) && !isNaN(data17))) && (isFinite(data17)))){
 validate30.errors = [{instancePath:instancePath+"/properties/updatedBy/id",schemaPath:"#/$defs/account/properties/id/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
 return false;
 }
-if(errors === _errs37){
-if((typeof data16 == "number") && (isFinite(data16))){
-if(data16 < 1 || isNaN(data16)){
+if(errors === _errs39){
+if((typeof data17 == "number") && (isFinite(data17))){
+if(data17 < 1 || isNaN(data17)){
 validate30.errors = [{instancePath:instancePath+"/properties/updatedBy/id",schemaPath:"#/$defs/account/properties/id/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
 return false;
 }
 }
 }
-var valid5 = _errs37 === errors;
+var valid5 = _errs39 === errors;
 }
 else {
 var valid5 = true;
 }
 if(valid5){
-if(data15.login !== undefined){
-let data17 = data15.login;
-const _errs39 = errors;
-if(errors === _errs39){
-if(typeof data17 === "string"){
-if(!pattern13.test(data17)){
+if(data16.login !== undefined){
+let data18 = data16.login;
+const _errs41 = errors;
+if(errors === _errs41){
+if(typeof data18 === "string"){
+if(!pattern13.test(data18)){
 validate30.errors = [{instancePath:instancePath+"/properties/updatedBy/login",schemaPath:"#/$defs/account/properties/login/pattern",keyword:"pattern",params:{pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"},message:"must match pattern \""+"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"+"\""}];
 return false;
 }
@@ -3896,7 +3923,7 @@ validate30.errors = [{instancePath:instancePath+"/properties/updatedBy/login",sc
 return false;
 }
 }
-var valid5 = _errs39 === errors;
+var valid5 = _errs41 === errors;
 }
 else {
 var valid5 = true;
@@ -3910,23 +3937,23 @@ validate30.errors = [{instancePath:instancePath+"/properties/updatedBy",schemaPa
 return false;
 }
 }
-var valid1 = _errs33 === errors;
+var valid1 = _errs35 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.updated !== undefined){
-let data18 = data3.updated;
-const _errs41 = errors;
-if(errors === _errs41){
-if(typeof data18 === "string"){
-if(func2(data18) > 40){
+let data19 = data3.updated;
+const _errs43 = errors;
+if(errors === _errs43){
+if(typeof data19 === "string"){
+if(func2(data19) > 40){
 validate30.errors = [{instancePath:instancePath+"/properties/updated",schemaPath:"#/properties/properties/properties/updated/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
 return false;
 }
 else {
-if(!pattern11.test(data18)){
+if(!pattern11.test(data19)){
 validate30.errors = [{instancePath:instancePath+"/properties/updated",schemaPath:"#/properties/properties/properties/updated/pattern",keyword:"pattern",params:{pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},message:"must match pattern \""+"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"+"\""}];
 return false;
 }
@@ -3937,10 +3964,11 @@ validate30.errors = [{instancePath:instancePath+"/properties/updated",schemaPath
 return false;
 }
 }
-var valid1 = _errs41 === errors;
+var valid1 = _errs43 === errors;
 }
 else {
 var valid1 = true;
+}
 }
 }
 }
@@ -3967,64 +3995,64 @@ var valid0 = true;
 }
 if(valid0){
 if(data.geometry !== undefined){
-let data19 = data.geometry;
-const _errs43 = errors;
-if(errors === _errs43){
-if(data19 && typeof data19 == "object" && !Array.isArray(data19)){
+let data20 = data.geometry;
+const _errs45 = errors;
+if(errors === _errs45){
+if(data20 && typeof data20 == "object" && !Array.isArray(data20)){
 let missing4;
-if(((data19.type === undefined) && (missing4 = "type")) || ((data19.coordinates === undefined) && (missing4 = "coordinates"))){
+if(((data20.type === undefined) && (missing4 = "type")) || ((data20.coordinates === undefined) && (missing4 = "coordinates"))){
 validate30.errors = [{instancePath:instancePath+"/geometry",schemaPath:"#/properties/geometry/required",keyword:"required",params:{missingProperty: missing4},message:"must have required property '"+missing4+"'"}];
 return false;
 }
 else {
-const _errs45 = errors;
-for(const key4 in data19){
+const _errs47 = errors;
+for(const key4 in data20){
 if(!((key4 === "type") || (key4 === "coordinates"))){
 validate30.errors = [{instancePath:instancePath+"/geometry",schemaPath:"#/properties/geometry/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key4},message:"must NOT have additional properties"}];
 return false;
 break;
 }
 }
-if(_errs45 === errors){
-if(data19.type !== undefined){
-const _errs46 = errors;
-if("Point" !== data19.type){
+if(_errs47 === errors){
+if(data20.type !== undefined){
+const _errs48 = errors;
+if("Point" !== data20.type){
 validate30.errors = [{instancePath:instancePath+"/geometry/type",schemaPath:"#/properties/geometry/properties/type/const",keyword:"const",params:{allowedValue: "Point"},message:"must be equal to constant"}];
 return false;
 }
-var valid6 = _errs46 === errors;
+var valid6 = _errs48 === errors;
 }
 else {
 var valid6 = true;
 }
 if(valid6){
-if(data19.coordinates !== undefined){
-let data21 = data19.coordinates;
-const _errs47 = errors;
-if(errors === _errs47){
-if(Array.isArray(data21)){
-if(data21.length > 2){
+if(data20.coordinates !== undefined){
+let data22 = data20.coordinates;
+const _errs49 = errors;
+if(errors === _errs49){
+if(Array.isArray(data22)){
+if(data22.length > 2){
 validate30.errors = [{instancePath:instancePath+"/geometry/coordinates",schemaPath:"#/properties/geometry/properties/coordinates/maxItems",keyword:"maxItems",params:{limit: 2},message:"must NOT have more than 2 items"}];
 return false;
 }
 else {
-if(data21.length < 2){
+if(data22.length < 2){
 validate30.errors = [{instancePath:instancePath+"/geometry/coordinates",schemaPath:"#/properties/geometry/properties/coordinates/minItems",keyword:"minItems",params:{limit: 2},message:"must NOT have fewer than 2 items"}];
 return false;
 }
 else {
-const len0 = data21.length;
+const len0 = data22.length;
 if(len0 > 0){
-let data22 = data21[0];
-const _errs49 = errors;
-if(errors === _errs49){
-if((typeof data22 == "number") && (isFinite(data22))){
-if(data22 > 180 || isNaN(data22)){
+let data23 = data22[0];
+const _errs51 = errors;
+if(errors === _errs51){
+if((typeof data23 == "number") && (isFinite(data23))){
+if(data23 > 180 || isNaN(data23)){
 validate30.errors = [{instancePath:instancePath+"/geometry/coordinates/0",schemaPath:"#/properties/geometry/properties/coordinates/prefixItems/0/maximum",keyword:"maximum",params:{comparison: "<=", limit: 180},message:"must be <= 180"}];
 return false;
 }
 else {
-if(data22 < -180 || isNaN(data22)){
+if(data23 < -180 || isNaN(data23)){
 validate30.errors = [{instancePath:instancePath+"/geometry/coordinates/0",schemaPath:"#/properties/geometry/properties/coordinates/prefixItems/0/minimum",keyword:"minimum",params:{comparison: ">=", limit: -180},message:"must be >= -180"}];
 return false;
 }
@@ -4035,20 +4063,20 @@ validate30.errors = [{instancePath:instancePath+"/geometry/coordinates/0",schema
 return false;
 }
 }
-var valid7 = _errs49 === errors;
+var valid7 = _errs51 === errors;
 }
 if(valid7){
 if(len0 > 1){
-let data23 = data21[1];
-const _errs51 = errors;
-if(errors === _errs51){
-if((typeof data23 == "number") && (isFinite(data23))){
-if(data23 > 90 || isNaN(data23)){
+let data24 = data22[1];
+const _errs53 = errors;
+if(errors === _errs53){
+if((typeof data24 == "number") && (isFinite(data24))){
+if(data24 > 90 || isNaN(data24)){
 validate30.errors = [{instancePath:instancePath+"/geometry/coordinates/1",schemaPath:"#/properties/geometry/properties/coordinates/prefixItems/1/maximum",keyword:"maximum",params:{comparison: "<=", limit: 90},message:"must be <= 90"}];
 return false;
 }
 else {
-if(data23 < -90 || isNaN(data23)){
+if(data24 < -90 || isNaN(data24)){
 validate30.errors = [{instancePath:instancePath+"/geometry/coordinates/1",schemaPath:"#/properties/geometry/properties/coordinates/prefixItems/1/minimum",keyword:"minimum",params:{comparison: ">=", limit: -90},message:"must be >= -90"}];
 return false;
 }
@@ -4059,7 +4087,7 @@ validate30.errors = [{instancePath:instancePath+"/geometry/coordinates/1",schema
 return false;
 }
 }
-var valid7 = _errs51 === errors;
+var valid7 = _errs53 === errors;
 }
 }
 }
@@ -4070,7 +4098,7 @@ validate30.errors = [{instancePath:instancePath+"/geometry/coordinates",schemaPa
 return false;
 }
 }
-var valid6 = _errs47 === errors;
+var valid6 = _errs49 === errors;
 }
 else {
 var valid6 = true;
@@ -4084,7 +4112,7 @@ validate30.errors = [{instancePath:instancePath+"/geometry",schemaPath:"#/proper
 return false;
 }
 }
-var valid0 = _errs43 === errors;
+var valid0 = _errs45 === errors;
 }
 else {
 var valid0 = true;

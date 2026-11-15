@@ -2,7 +2,7 @@
  * Map pins: single places (a city, a ruin, a battle site…) on a slot's map. One file per pin in
  * content/pins/<id>.json, a GeoJSON Point Feature in the map image's own lon/lat frame, like regions.
  * The site build bundles each slot's pins into pins/<slot>.json, which embeds fetch when asked with
- * ?pins=1 (every pin) or ?pins=city,battle (only those kinds).
+ * ?pins=1 (every pin) or ?pins=battles,city (only pins in those categories or of those kinds).
  */
 import type { Account } from "./access.ts";
 import { clamp } from "./params.ts";
@@ -12,6 +12,7 @@ export const PIN_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 export const PIN_NAME_MAX = 80;
 export const PIN_DESCRIPTION_MAX = 300;
 export const PIN_LINK_MAX = 400;
+export const PIN_CATEGORY_MAX = 40;
 /** Most pins one slot's embed will draw (keeps the bundle and the page light). */
 export const MAX_PINS_PER_SLOT = 2000;
 
@@ -35,6 +36,16 @@ export const kindInfo = (k: PinKind) => PIN_KINDS.find((x) => x.id === k)!;
 /** The colour a pin is drawn in: its own, or its kind's. */
 export const pinColor = (p: { kind: PinKind; color?: string }): string => (p.color && PIN_COLOR.test(p.color) ? p.color : kindInfo(p.kind).color);
 
+/** "Holy sites" → "holy-sites": what ?pins= uses for a category. Empty when the name has no letters or digits. */
+export const categorySlug = (name: string): string =>
+  name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+
 /** content/pins/<id>.json */
 export interface PinFeature {
   $schema?: string;
@@ -45,6 +56,8 @@ export interface PinFeature {
     map: string;
     name: string;
     kind: PinKind;
+    /** Free-form group the pin belongs to ("Holy sites", "Battles"); embeds can show just some categories. */
+    category?: string;
     color?: string;
     description?: string;
     link?: string;
@@ -65,6 +78,7 @@ export interface PinData {
   kind: PinKind;
   /** [lon, lat] in the map image's frame. */
   at: [number, number];
+  category?: string;
   color?: string;
   description?: string;
   link?: string;
@@ -91,6 +105,7 @@ export function checkPin(f: PinFeature, where = `pin "${f.id}"`): string[] {
   const out: string[] = [];
   const p = f.properties;
   if (!text(p.name, PIN_NAME_MAX) || !p.name.trim()) out.push(`${where}: the name must be 1–${PIN_NAME_MAX} characters of plain text`);
+  if (p.category !== undefined && (!text(p.category, PIN_CATEGORY_MAX) || !categorySlug(p.category))) out.push(`${where}: the category must be 1–${PIN_CATEGORY_MAX} characters of plain text with at least one letter or digit`);
   if (p.description !== undefined && !(typeof p.description === "string" && p.description.length <= PIN_DESCRIPTION_MAX)) out.push(`${where}: the description is too long`);
   if (p.link !== undefined && safeLink(p.link) === null) out.push(`${where}: the link must be a full https:// address`);
   const [lon, lat] = f.geometry.coordinates;
@@ -109,6 +124,7 @@ export function pinData(f: PinFeature): PinData {
     name: p.name,
     kind: p.kind,
     at: [round(lon), round(lat)],
+    ...(p.category ? { category: p.category } : {}),
     ...(p.color ? { color: p.color } : {}),
     ...(p.description ? { description: p.description } : {}),
     ...(p.link ? { link: p.link } : {}),
@@ -139,6 +155,7 @@ export function parsePinsFile(j: unknown): PinData[] | null {
       name: r.name,
       kind: r.kind,
       at: [at[0], at[1]],
+      ...(typeof r.category === "string" && text(r.category, PIN_CATEGORY_MAX) && categorySlug(r.category) ? { category: r.category } : {}),
       ...(typeof r.color === "string" && PIN_COLOR.test(r.color) ? { color: r.color } : {}),
       ...(typeof r.description === "string" && r.description.length <= PIN_DESCRIPTION_MAX ? { description: r.description } : {}),
       ...(link ? { link } : {}),
@@ -147,20 +164,35 @@ export function parsePinsFile(j: unknown): PinData[] | null {
   return out;
 }
 
+/** What ?pins= asked for: every pin, or the pins whose category (as a slug) or kind is in the set. */
+export type PinSelection = "all" | Set<string>;
+
 /**
- * ?pins= : "1"/"true"/"all" → every pin; a comma list of kinds → only those; "0", empty or missing → none (null).
- * Unknown kinds are ignored; a list with none left shows nothing.
+ * ?pins= : "1"/"true"/"all" → every pin; a comma list → only pins in those categories (`battles`, `holy-sites`)
+ * or of those kinds (`city`, `battle`); "0", empty or missing → none (null). A name that is neither a category
+ * nor a kind of any pin simply matches nothing.
  */
-export function parsePinsParam(v: string | null | undefined): "all" | Set<PinKind> | null {
+export function parsePinsParam(v: string | null | undefined): PinSelection | null {
   if (v == null) return null;
   const s = v.trim().toLowerCase();
   if (!s || s === "0" || s === "false" || s === "no") return null;
   if (s === "1" || s === "true" || s === "all") return "all";
-  const kinds = s.split(",").map((x) => x.trim()).filter(isPinKind);
-  return kinds.length ? new Set(kinds) : null;
+  const names = s.split(",").map((x) => x.trim()).filter((x) => /^[a-z0-9][a-z0-9-]{0,63}$/.test(x));
+  return names.length ? new Set(names) : null;
 }
 
-export const pinShown = (sel: "all" | Set<PinKind>, p: { kind: PinKind }): boolean => sel === "all" || sel.has(p.kind);
+export const pinShown = (sel: PinSelection, p: { kind: PinKind; category?: string }): boolean =>
+  sel === "all" || sel.has(p.kind) || (!!p.category && sel.has(categorySlug(p.category)));
+
+/** The distinct categories of some pins as {slug, name}, sorted by name (the first spelling wins when two differ only in case). */
+export function categoriesOf(pins: readonly { category?: string }[]): { slug: string; name: string }[] {
+  const m = new Map<string, string>();
+  for (const p of pins) {
+    const slug = p.category ? categorySlug(p.category) : "";
+    if (slug && !m.has(slug)) m.set(slug, p.category!.trim());
+  }
+  return [...m].map(([slug, name]) => ({ slug, name })).sort((a, b) => a.name.localeCompare(b.name));
+}
 
 /** Pin markers shrink a little on small embeds so they don't swamp the map. */
 export const markerSize = (stageMin: number): number => Math.round(clamp(stageMin / 18, 18, 28));

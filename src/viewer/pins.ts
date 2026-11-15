@@ -1,5 +1,5 @@
 /**
- * Map pins in the embed, shared by the globe and flat viewers: ?pins=1 (or ?pins=city,battle) fetches
+ * Map pins in the embed, shared by the globe and flat viewers: ?pins=1 (or ?pins=battles,city) fetches
  * pins/<slot>.json and draws each pin as a small round marker on top of the map and the regions. A marker
  * shows its name on hover or focus; clicking it opens a card with the description and a link (normally to
  * the place's note in the Obsidian vault). Everything from the data is set with textContent or checked
@@ -91,7 +91,7 @@ export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: s
     title.textContent = p.name;
     const kind = document.createElement("p");
     kind.className = "kind";
-    kind.textContent = kindInfo(p.kind).label;
+    kind.textContent = p.category ? `${p.category} · ${kindInfo(p.kind).label}` : kindInfo(p.kind).label;
     const x = document.createElement("button");
     x.type = "button";
     x.className = "x";
@@ -134,7 +134,7 @@ export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: s
     b.className = "wpin";
     b.hidden = true;
     b.dataset.name = p.name;
-    b.setAttribute("aria-label", `${p.name}, ${kindInfo(p.kind).label}`);
+    b.setAttribute("aria-label", `${p.name}, ${p.category ? `${p.category}, ` : ""}${kindInfo(p.kind).label}`);
     b.setAttribute("aria-expanded", "false");
     const bg = pinColor(p);
     b.style.background = bg;

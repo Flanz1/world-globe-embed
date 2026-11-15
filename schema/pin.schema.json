@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://flanz1.github.io/world-globe-embed/schema/pin.schema.json",
   "title": "Map pin",
-  "description": "One place (a city, ruin, battle site…) marked on a map: a GeoJSON Point Feature (RFC 7946) stored as content/pins/<id>.json. COORDINATES ARE [lon, lat] IN THE MAP IMAGE'S OWN FRAME, exactly like regions (lon = x / width * 360 - 180, lat = 90 - y / height * 180), so a pin stays on the same spot of the land when the slot's pole padding or prime meridian shift change. The id is permanent (embeds can point at it). Embeds draw pins on top of regions when asked with ?pins=1 (all pins of the slot) or ?pins=city,battle (only those kinds).",
+  "description": "One place (a city, ruin, battle site…) marked on a map: a GeoJSON Point Feature (RFC 7946) stored as content/pins/<id>.json. COORDINATES ARE [lon, lat] IN THE MAP IMAGE'S OWN FRAME, exactly like regions (lon = x / width * 360 - 180, lat = 90 - y / height * 180), so a pin stays on the same spot of the land when the slot's pole padding or prime meridian shift change. The id is permanent (embeds can point at it). Embeds draw pins on top of regions when asked with ?pins=1 (all pins of the slot) or ?pins=battles,city (only pins in those categories or of those kinds).",
   "type": "object",
   "required": ["type", "id", "properties", "geometry"],
   "additionalProperties": false,
@@ -22,6 +22,7 @@
           "enum": ["city", "town", "fortress", "port", "temple", "ruin", "battle", "landmark", "mountain", "other"],
           "description": "What sort of place it is; decides the icon."
         },
+        "category": { "type": "string", "minLength": 1, "maxLength": 40, "description": "Optional group the pin belongs to, e.g. \"Holy sites\" or \"Battles\". Embeds can show only some categories with ?pins=holy-sites,battles (the name lowercased, other characters turned into dashes)." },
         "color": { "type": "string", "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", "description": "Optional marker colour, #rgb or #rrggbb. Leave it out for the kind's own colour." },
         "description": { "type": "string", "maxLength": 300, "description": "Optional short plain-text description, shown when the marker is opened." },
         "link": { "type": "string", "maxLength": 400, "pattern": "^https://[^\\s\"'<>]+$", "description": "Optional https link, normally the place's note in the Obsidian vault. Opens in a new tab." },

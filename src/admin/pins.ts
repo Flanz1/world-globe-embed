@@ -8,7 +8,7 @@
 import { escapeHtml } from "../shared/page.ts";
 import { stringifyCompact } from "../shared/json.ts";
 import { pinIcon, inkFor } from "../shared/pin-icons.ts";
-import { PIN_DESCRIPTION_MAX, PIN_KINDS, PIN_NAME_MAX, PIN_ID, checkPin, isPinKind, kindInfo, pinColor, pinPath, safeLink, type PinFeature } from "../shared/pins.ts";
+import { PIN_CATEGORY_MAX, PIN_DESCRIPTION_MAX, PIN_KINDS, PIN_NAME_MAX, PIN_ID, categoriesOf, checkPin, isPinKind, kindInfo, pinColor, pinPath, safeLink, type PinFeature } from "../shared/pins.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
 import { clamp } from "../shared/params.ts";
 import { $, SITE, h } from "./dom.ts";
@@ -298,6 +298,9 @@ function renderForm(rebuild: boolean): void {
   }
   const name = h("input", { type: "text", maxLength: PIN_NAME_MAX, value: p.name, required: true, disabled: !ok, autocomplete: "off", ariaLabel: "Name" });
   const kind = h("select", { disabled: !ok, ariaLabel: "Kind" }, ...PIN_KINDS.map((k) => h("option", { value: k.id, textContent: k.label, selected: k.id === p.kind })));
+  const catList = h("datalist", { id: "pn-cats" }, ...categoriesOf(slotPins().map((e) => e.feature!.properties)).map((c) => h("option", { value: c.name })));
+  const category = h("input", { type: "text", maxLength: PIN_CATEGORY_MAX, value: p.category ?? "", disabled: !ok, autocomplete: "off", placeholder: "e.g. Holy sites, Battles, Cities", ariaLabel: "Category" });
+  category.setAttribute("list", "pn-cats");
   const useColor = h("input", { type: "checkbox", checked: !!p.color, disabled: !ok, ariaLabel: "Use a custom colour" });
   const color = h("input", { type: "color", value: p.color && /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : kindInfo(p.kind).color, disabled: !ok || !p.color, ariaLabel: "Colour" });
   const desc = h("textarea", { rows: 3, maxLength: PIN_DESCRIPTION_MAX, value: p.description ?? "", disabled: !ok, ariaLabel: "Description" });
@@ -309,6 +312,9 @@ function renderForm(rebuild: boolean): void {
   const sync = () => {
     p.name = name.value;
     if (isPinKind(kind.value)) p.kind = kind.value;
+    const cat = category.value.replace(/\s+/g, " ").trim();
+    if (cat) p.category = cat;
+    else delete p.category;
     color.disabled = !ok || !useColor.checked;
     if (useColor.checked) p.color = color.value;
     else delete p.color;
@@ -322,12 +328,13 @@ function renderForm(rebuild: boolean): void {
     updateButtons();
     redraw();
   };
-  for (const c of [name, kind, useColor, color, desc, link]) c.addEventListener("input", sync);
+  for (const c of [name, kind, category, useColor, color, desc, link]) c.addEventListener("input", sync);
   const form = h(
     "form",
     { className: "pn-form" },
     h("label", {}, "Name", name),
-    h("label", {}, "Kind", kind),
+    h("label", {}, "Kind (decides the icon)", kind),
+    h("label", {}, "Category (optional: lets an embed show only some pins)", category, catList),
     h("div", { className: "pn-color" }, h("label", { className: "check" }, useColor, "Custom colour"), color),
     h("label", {}, `Description (optional, up to ${PIN_DESCRIPTION_MAX} characters)`, desc),
     h("label", {}, "Link to the note (optional)", link),
@@ -422,7 +429,7 @@ async function remove_(): Promise<void> {
 
 function renderList(): void {
   const q = search.trim().toLowerCase();
-  const rows = slotPins().filter((e) => !q || e.feature!.properties.name.toLowerCase().includes(q) || e.id.includes(q) || e.feature!.properties.kind.includes(q));
+  const rows = slotPins().filter((e) => !q || e.feature!.properties.name.toLowerCase().includes(q) || e.id.includes(q) || e.feature!.properties.kind.includes(q) || (e.feature!.properties.category ?? "").toLowerCase().includes(q));
   const bad = entries.filter((e) => !e.feature);
   el.count.textContent = `${slotPins().length} pin${slotPins().length === 1 ? "" : "s"} on this slot`;
   el.list.replaceChildren(
@@ -436,7 +443,7 @@ function renderList(): void {
         { type: "button", className: `pn-row${selected === e.id ? " on" : ""}`, onclick: () => (select(e.id), centreOn(e.feature!)) },
         sw,
         h("span", { className: "pn-name", textContent: p.name }),
-        h("span", { className: "muted small", textContent: kindInfo(p.kind).label }),
+        h("span", { className: "muted small", textContent: p.category ? `${p.category} · ${kindInfo(p.kind).label}` : kindInfo(p.kind).label }),
       );
     }),
     ...(rows.length ? [] : [h("p", { className: "muted small", textContent: slotPins().length ? "No pin matches." : "No pins yet." })]),
@@ -463,21 +470,32 @@ function syncControls(): void {
 
 function embedDialog(): void {
   const m = modal(`Embed "${slot}" with pins`, "embed-dlg");
-  const kinds = h("select", { ariaLabel: "Which pins" }, h("option", { value: "1", textContent: "All pins" }), ...PIN_KINDS.map((k) => h("option", { value: k.id, textContent: `Only ${k.label.toLowerCase()}` })));
+  const cats = categoriesOf(slotPins().map((e) => e.feature!.properties));
+  const all = h("input", { type: "checkbox", checked: true, ariaLabel: "All pins" });
+  const boxes = cats.map((c) => ({ slug: c.slug, box: h("input", { type: "checkbox", ariaLabel: c.name }) }));
   const code = h("textarea", { className: "code", readOnly: true, rows: 5, spellcheck: false, ariaLabel: "Embed code" });
   const copied = h("span", { className: "ok small", role: "status" });
   const title = deps.slots().slots[slot]?.title ?? slot;
   const update = () => {
     const url = new URL(`v/${encodeURIComponent(slot)}/`, SITE);
-    url.searchParams.set("pins", kinds.value);
+    const chosen = boxes.filter((b) => b.box.checked).map((b) => b.slug);
+    url.searchParams.set("pins", all.checked || !chosen.length ? "1" : chosen.join(","));
     code.value =
-      `<iframe src="${escapeHtml(url.href)}" width="100%" height="480" style="border:0;border-radius:8px;background:transparent" ` +
+      `<iframe src="${escapeHtml(url.href.replace(/%2C/gi, ","))}" width="100%" height="480" style="border:0;border-radius:8px;background:transparent" ` +
       `loading="lazy" allow="fullscreen" title="${escapeHtml(`${title} map with pins`)}"></iframe>`;
     copied.textContent = "";
   };
-  kinds.addEventListener("change", update);
+  all.addEventListener("change", () => {
+    if (all.checked) for (const b of boxes) b.box.checked = false;
+    update();
+  });
+  for (const b of boxes)
+    b.box.addEventListener("change", () => {
+      all.checked = !boxes.some((x) => x.box.checked);
+      update();
+    });
   m.body.append(
-    h("label", {}, "Show", kinds),
+    h("fieldset", { className: "pn-cats" }, h("legend", { textContent: "Show" }), h("label", { className: "check" }, all, "All pins"), ...cats.map((c, i) => h("label", { className: "check" }, boxes[i].box, c.name)), cats.length ? null : h("p", { className: "muted small", textContent: "Give pins a category to build embeds that show only some of them." })),
     code,
     h("p", { className: "muted small", textContent: "The whole slot with its pins. To draw pins over a region, tick “Show map pins” in that region's embed code instead. New and changed pins show up in embeds after the next deploy." }),
   );

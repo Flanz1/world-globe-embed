@@ -6,7 +6,7 @@ import { loadContent } from "../scripts/lib/content.ts";
 import { generatePinFiles } from "../scripts/lib/pages.ts";
 import { contentPaths } from "../scripts/lib/paths.ts";
 import { checkChange, pathKind, type Actor, type Permission } from "../src/shared/access.ts";
-import { checkPin, parsePinsFile, parsePinsParam, pinShown, pinsJson, safeLink, type PinFeature } from "../src/shared/pins.ts";
+import { categoriesOf, categorySlug, checkPin, parsePinsFile, parsePinsParam, pinShown, pinsJson, safeLink, type PinFeature } from "../src/shared/pins.ts";
 import { validatePin } from "../worker/src/generated/validators.js";
 
 const ME = { id: 5002, login: "ann" };
@@ -29,11 +29,38 @@ describe("pin links and params", () => {
     expect(parsePinsParam("0")).toBeNull();
     expect(parsePinsParam(null)).toBeNull();
     expect(parsePinsParam("")).toBeNull();
-    expect(parsePinsParam("nonsense")).toBeNull();
-    const kinds = parsePinsParam("city, Battle,nonsense");
+    expect(parsePinsParam("!!!")).toBeNull();
+    const kinds = parsePinsParam("city, Battle");
     expect(kinds).toEqual(new Set(["city", "battle"]));
     expect(pinShown(kinds!, { kind: "city" })).toBe(true);
     expect(pinShown(kinds!, { kind: "ruin" })).toBe(false);
+  });
+  it("?pins= also picks categories by their slug", () => {
+    const sel = parsePinsParam("holy-sites,cities")!;
+    expect(pinShown(sel, { kind: "temple", category: "Holy sites" })).toBe(true);
+    expect(pinShown(sel, { kind: "city", category: "Cities" })).toBe(true);
+    expect(pinShown(sel, { kind: "temple", category: "Battles" })).toBe(false);
+    expect(pinShown(sel, { kind: "temple" })).toBe(false);
+    expect(pinShown("all", { kind: "temple" })).toBe(true);
+  });
+  it("category names become slugs and are listed once", () => {
+    expect(categorySlug("Holy  Sites!")).toBe("holy-sites");
+    expect(categorySlug("Écoles")).toBe("ecoles");
+    expect(categoriesOf([{ category: "Holy sites" }, { category: "holy SITES" }, {}, { category: "Battles" }])).toEqual([
+      { slug: "battles", name: "Battles" },
+      { slug: "holy-sites", name: "Holy sites" },
+    ]);
+  });
+  it("a pin's category is checked, schema-valid and reaches the embed file", () => {
+    expect(checkPin(pin("a", { category: "Holy sites" }))).toEqual([]);
+    expect(checkPin(pin("a", { category: "!!!" })).length).toBe(1);
+    expect(validatePin(pin("a", { category: "Holy sites" }))).toBe(true);
+    expect(validatePin(pin("a", { category: "" }))).toBe(false);
+    expect(validatePin(pin("a", { category: "x".repeat(41) }))).toBe(false);
+    const d = JSON.parse(pinsJson([pin("a", { category: "Holy sites" })])) as { pins: { category?: string }[] };
+    expect(d.pins[0].category).toBe("Holy sites");
+    expect(parsePinsFile(d)![0].category).toBe("Holy sites");
+    expect(parsePinsFile({ pins: [{ ...d.pins[0], category: "a\u0001" }] })![0].category).toBeUndefined();
   });
 });
 
