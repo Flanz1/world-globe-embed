@@ -22,6 +22,7 @@ import type { Editing, FileCommit, GitHub } from "./github.ts";
 import { loadMapImage } from "./images.ts";
 import { compareBy, creatorChoices, creatorId, matchesQuery, type Filterable } from "./region-filter.ts";
 import { openHistory } from "./region-history.ts";
+import { openTrash } from "./trash.ts";
 import { alertBox, confirmBox, modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
 import { declineSuggestion, initSuggestions, loadSuggestions, markAccepted, pendingFor } from "./suggestions.ts";
 import type { SuggestionSummary } from "./github.ts";
@@ -994,6 +995,7 @@ export function initRegions(d: RegionsDeps): void {
   ui.creator().addEventListener("change", renderRegions);
   $("#r-combine").addEventListener("click", openCombine);
   $("#r-new-category").addEventListener("click", () => newCategory());
+  $("#r-trash").addEventListener("click", () => openTrash({ gh: d.gh(), act: d.act }));
   // Region cards can be dragged onto a folder (one listener for all cards: the list is rebuilt on every change).
   const list = $("#regions");
   list.addEventListener("dragstart", (ev) => {

@@ -178,6 +178,13 @@ export function checkChange(d: FileDiff, actor: Actor, ownerId: number): string 
   }
 }
 
+/**
+ * Who may add a region or pin that names someone else as its creator: the owner, and people who may both edit and
+ * delete other people's regions (they can already do both to them). That is what lets them restore someone else's
+ * deleted region from the trash without taking it over.
+ */
+const mayRecordCreator = (actor: Actor) => actor.owner || (actor.permissions.has("regions") && actor.permissions.has("editOthers") && actor.permissions.has("deleteOthers"));
+
 function checkRegionChange(d: FileDiff, actor: Actor, ownerId: number): string | null {
   const id = REGION_FILE.exec(d.path)![1];
   const before = d.before === null ? null : (parse(d.before) as RegionLike | undefined);
@@ -196,7 +203,7 @@ function checkRegionChange(d: FileDiff, actor: Actor, ownerId: number): string |
   if (!before) {
     if (!actor.owner && !actor.permissions.has("regions")) return "You don't have permission to create regions.";
     const c = after.properties?.createdBy;
-    if (actor.owner && c) return null; // The owner may record someone else as the creator (e.g. when moving regions over).
+    if (c && mayRecordCreator(actor)) return null; // The owner may record someone else as the creator (e.g. when moving regions over, or restoring a deleted one).
     if (!c || c.id !== actor.id || c.login !== actor.login) return `New region "${id}" must have createdBy set to you (${actor.login}).`;
     return null;
   }
@@ -232,7 +239,7 @@ function checkPinChange(d: FileDiff, actor: Actor, ownerId: number): string | nu
   if (!before) {
     if (!actor.owner && !actor.permissions.has("regions")) return "You don't have permission to place pins.";
     const c = after.properties?.createdBy;
-    if (actor.owner && c) return null;
+    if (c && mayRecordCreator(actor)) return null;
     if (!c || c.id !== actor.id || c.login !== actor.login) return `The new pin "${id}" must have createdBy set to you (${actor.login}).`;
     return null;
   }
