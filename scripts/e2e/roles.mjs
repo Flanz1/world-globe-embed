@@ -464,7 +464,9 @@ await step(K, "a category change shows at once, and is undone with the reason if
   await page.selectOption('[data-region="provinces"] [data-action="category"]', "kingdoms");
   await waitFor(page, async () => (await inFolder(page, "kingdoms")).includes("provinces"), 3000);
   check(K, "the region is in its new folder while the save is still pending", (await inFolder(page, "kingdoms")).includes("provinces") && cats()[0].regions.join() === before, (await inFolder(page, "kingdoms")).join());
-  check(K, "the status says it's saving", /saving/.test((await page.textContent("#status")) ?? ""));
+  // The status is set as the save starts, which can land a moment after the folder moves under CI load: wait for it.
+  await waitFor(page, async () => /saving/.test((await page.textContent("#status")) ?? ""), 5000);
+  check(K, "the status says it's saving", /saving/.test((await page.textContent("#status")) ?? ""), (await page.textContent("#status")) ?? "");
   release();
   await waitFor(page, async () => /undone/.test((await page.textContent("#status")) ?? ""));
   const msg = (await page.textContent("#status")) ?? "";
