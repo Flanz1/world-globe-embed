@@ -1,0 +1,27 @@
+{
+  "$schema": "../../schema/pin.schema.json",
+  "type": "Feature",
+  "id": "loney-peak",
+  "properties": {
+    "slot": "inara",
+    "map": "globe-map",
+    "name": "Loney Peak",
+    "kind": "temple",
+    "description": "One of the Five Holy Sites of Zuhurism, and the only one not held by a zuhuri lord, pilgrimages here have been cause for great conflcit.",
+    "color": "#4e1818",
+    "updatedBy": {
+      "id": 138310181,
+      "login": "LoopSimon"
+    },
+    "updated": "2026-11-15T11:14:11Z",
+    "createdBy": {
+      "id": 138310181,
+      "login": "LoopSimon"
+    },
+    "created": "2026-11-15T11:14:11Z"
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [15.8418, 39.6311]
+  }
+}
