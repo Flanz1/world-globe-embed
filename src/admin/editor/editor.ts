@@ -1281,6 +1281,22 @@ export function openEditor(o: EditorOptions): void {
   const DENSE_RING = 1500;
   const MIN_HANDLE_GAP = 5;
   const MIN_MIDPOINT_EDGE = 14;
+  /** Bounds of each ring [west, south, east, north], kept for as long as the ring object lives (rings are never mutated). */
+  const ringBoxes = new WeakMap<Position[], [number, number, number, number]>();
+  function ringBox(ring: Position[]): [number, number, number, number] {
+    let b = ringBoxes.get(ring);
+    if (!b) {
+      b = [Infinity, Infinity, -Infinity, -Infinity];
+      for (const [x, y] of ring) {
+        if (x < b[0]) b[0] = x;
+        if (x > b[2]) b[2] = x;
+        if (y < b[1]) b[1] = y;
+        if (y > b[3]) b[3] = y;
+      }
+      ringBoxes.set(ring, b);
+    }
+    return b;
+  }
   function drawHandles(offs: number[]): void {
     const { w, h: hh } = size();
     const glued = glue().glued;
@@ -1289,6 +1305,12 @@ export function openEditor(o: EditorOptions): void {
     parts().forEach((rings, p) =>
       rings.forEach((ring, r) => {
         const n = ring.length;
+        // A ring that's entirely off screen (in every copy of the map) has no handle to draw: skip its whole loop
+        // (a part you aren't dragging, a long way off, costs nothing per frame).
+        const [bw, bs, be, bn] = ringBox(ring);
+        const top = sy(bn) - 10;
+        const bottom = sy(bs) + 10;
+        if (bottom < 0 || top > hh || !offs.some((off) => sx(be + off) + 10 >= 0 && sx(bw + off) - 10 <= w)) return;
         // Midpoints first (under the vertices).
         g.fillStyle = "rgba(255,255,255,.55)";
         g.strokeStyle = "rgba(0,0,0,.6)";
