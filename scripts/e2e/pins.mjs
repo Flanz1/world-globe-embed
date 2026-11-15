@@ -1,4 +1,4 @@
-// e2e-suite: roots=VIEWER,src/viewer/pins.ts,src/admin/pins.ts cut=src/admin/session.ts,src/admin/github.ts,src/shared/access.ts,src/shared/categories.ts weight=2
+// e2e-suite: roots=VIEWER,src/viewer/pins.ts,src/admin/pins.ts cut=src/admin/session.ts,src/admin/github.ts,src/shared/access.ts,src/shared/categories.ts,src/admin/pinmaps.ts,src/shared/pinmaps.ts weight=2
 /**
  * Browser checks for map pins, in headless Chromium.
  *
@@ -56,13 +56,33 @@ const pin = (id, name, kind, at, extra = {}) => ({
 });
 const NOTE = "https://garmeley.example/Places/Magenta-Harbour";
 const SEED = [
-  pin("magenta-harbour", "Magenta Harbour", "city", [DISC.lon, DISC.lat], { category: "Cities", description: "A busy port on the magenta isle.", link: NOTE }),
-  pin("old-ruin", "Old Ruin", "ruin", [-175, -20], { category: "Holy sites" }),
-  pin("red-field", "Battle of the Red Field", "battle", [65, -35], { category: "Battles", color: "#ff0000" }),
+  pin("magenta-harbour", "Magenta Harbour", "city", [DISC.lon, DISC.lat], { pinMap: "cities", description: "A busy port on the magenta isle.", link: NOTE }),
+  pin("old-ruin", "Old Ruin", "ruin", [-175, -20], { pinMap: "holy-sites" }),
+  pin("red-field", "Battle of the Red Field", "battle", [65, -35], { pinMap: "battles", color: "#ff0000" }),
   pin("markup", "<img src=x onerror=alert(1)>", "landmark", [-120, 30], { description: "<b>bold?</b>" }),
 ];
 
+const PINMAPS = {
+  $schema: "../schema/pinmaps.schema.json",
+  folders: [
+    { id: "places", name: "Places", regions: ["holy-sites"] },
+    { id: "war", name: "War", parent: "places", regions: ["battles"] },
+  ],
+  maps: [
+    { id: "holy-sites", name: "Holy sites", slot: SLOT.slug },
+    { id: "battles", name: "Battles", slot: SLOT.slug },
+    { id: "cities", name: "Cities", slot: SLOT.slug },
+  ],
+};
 const dir = await makeFixture({ quiet: true });
+writeFileSync(path.join(dir, "content/pinmaps.json"), JSON.stringify(PINMAPS, null, 2) + "\n");
+{
+  // The magenta region includes the "Cities" pin map, so its embed shows those pins by itself.
+  const rf = path.join(dir, "content/regions/landmark-disc.json");
+  const r = JSON.parse(readFileSync(rf, "utf8"));
+  r.properties.pinMaps = ["cities"];
+  writeFileSync(rf, JSON.stringify(r, null, 2) + "\n");
+}
 mkdirSync(path.join(dir, "content/pins"), { recursive: true });
 for (const p of SEED) writeFileSync(path.join(dir, "content/pins", `${p.id}.json`), JSON.stringify(p, null, 2) + "\n");
 const accessFile = path.join(dir, "content/access.json");
@@ -129,6 +149,20 @@ for (const view of ["flat", "globe"]) {
     check(E, `${view}: the pin sits on the landmark it marks, with the region drawn there`, d < 14, `${d.toFixed(1)}px from the region's label`);
     await page.screenshot({ path: path.join(OUT, `embed-${view}-region.png`) });
 
+    // A region that includes a pin map shows its pins by itself; ?pins= overrides, ?pins=0 turns them off.
+    await page.goto(`${SITE}/v/${SLOT.slug}/?view=${view}&region=landmark-disc&lock=0`);
+    await ready(page);
+    await page.waitForSelector(".wpin", { state: "attached", timeout: 15000 });
+    check(E, `${view}: a region with a pin map shows just that pin map's pins`, (await page.locator(".wpin").count()) === 1 && (await page.locator('.wpin[data-name="Magenta Harbour"]').count()) === 1);
+    await page.goto(`${SITE}/v/${SLOT.slug}/?view=${view}&region=landmark-disc&pins=0&lock=0`);
+    await ready(page);
+    await page.waitForTimeout(300);
+    check(E, `${view}: pins=0 turns a region's pin maps off`, (await page.locator(".wpin").count()) === 0);
+    await page.goto(`${SITE}/v/${SLOT.slug}/?view=${view}&region=landmark-disc&pins=1&lock=0`);
+    await ready(page);
+    await page.waitForSelector(".wpin", { state: "attached", timeout: 15000 });
+    check(E, `${view}: pins=1 on a region embed shows every pin`, (await page.locator(".wpin").count()) === SEED.length);
+
     // Opening a marker.
     await harbour.click();
     const card = page.locator(".wpin-card");
@@ -155,15 +189,15 @@ for (const view of ["flat", "globe"]) {
     await ready(page);
     await page.waitForSelector(".wpin", { state: "attached", timeout: 15000 });
     check(E, `${view}: pins=city,ruin draws only those kinds`, (await page.locator(".wpin").count()) === 2);
-    // Categories (by slug); a category and a kind can be mixed.
+    // Pin maps (by id); a pin map and a kind can be mixed.
     await page.goto(`${SITE}/v/${SLOT.slug}/?view=${view}&pins=battles`);
     await ready(page);
     await page.waitForSelector(".wpin", { state: "attached", timeout: 15000 });
-    check(E, `${view}: pins=battles draws only that category`, (await page.locator(".wpin").count()) === 1 && (await page.locator('.wpin[data-name="Battle of the Red Field"]').count()) === 1);
+    check(E, `${view}: pins=battles draws only that pin map`, (await page.locator(".wpin").count()) === 1 && (await page.locator('.wpin[data-name="Battle of the Red Field"]').count()) === 1);
     await page.goto(`${SITE}/v/${SLOT.slug}/?view=${view}&pins=holy-sites,cities`);
     await ready(page);
     await page.waitForSelector(".wpin", { state: "attached", timeout: 15000 });
-    check(E, `${view}: pins=holy-sites,cities draws both categories`, (await page.locator(".wpin").count()) === 2);
+    check(E, `${view}: pins=holy-sites,cities draws both pin maps`, (await page.locator(".wpin").count()) === 2);
     await page.goto(`${SITE}/v/${SLOT.slug}/?view=${view}&pins=nonsense`);
     await ready(page);
     await page.waitForTimeout(300);
@@ -227,7 +261,7 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   check(A, "a link that isn't https is refused", /https/.test((await page.textContent(".pn-form .error")) ?? "") && mock.log.length === n0);
   await page.fill(".pn-form input[type=url]", NOTE);
   await page.fill(".pn-form textarea", "A test.");
-  await page.fill('.pn-form input[aria-label="Category"]', "Trade ports");
+  await page.selectOption('.pn-form select[aria-label="Pin map"]', "battles");
   await page.screenshot({ path: path.join(OUT, "admin-new-pin.png") });
   await page.click(".pn-form button[type=submit]");
   await waitCommit(page, n0);
@@ -235,7 +269,7 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   check(A, "saving is one commit to content/pins/test-harbour.json", c.length === 1 && c[0].branch === BRANCH && c[0].changes.length === 1 && c[0].changes[0].path === "content/pins/test-harbour.json", JSON.stringify(c));
   const f = onBranch("content/pins/test-harbour.json");
   const p = f?.properties;
-  check(A, "the file has the form's values", p?.name === "Test Harbour" && p.kind === "port" && p.link === NOTE && p.description === "A test." && p.slot === SLOT.slug && p.map === "landmarks" && p.category === "Trade ports", JSON.stringify(p));
+  check(A, "the file has the form's values", p?.name === "Test Harbour" && p.kind === "port" && p.link === NOTE && p.description === "A test." && p.slot === SLOT.slug && p.map === "landmarks" && p.pinMap === "battles", JSON.stringify(p));
   check(A, "…placed by and saved by the signed-in person", p?.createdBy?.login === "Flanz1" && p?.updatedBy?.login === "Flanz1" && /^\d{4}-\d\d-\d\dT/.test(p?.created ?? ""));
   const [lon, lat] = f?.geometry.coordinates ?? [99, 99];
   check(A, "the position is where the map was clicked (the middle of the map)", Math.abs(lon) < 1 && Math.abs(lat) < 1, `${lon}, ${lat}`);
@@ -267,11 +301,78 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   await page.check('.pn-cats input[aria-label="Battles"]');
   await page.check('.pn-cats input[aria-label="Holy sites"]');
   const embedCode = await page.inputValue('textarea[aria-label="Embed code"]');
-  check(A, "the embed code builder picks categories", /pins=battles,holy-sites"/.test(embedCode) && (await page.locator('.pn-cats input[aria-label="All pins"]').isChecked()) === false, embedCode);
+  check(A, "the embed code builder picks pin maps", /pins=holy-sites,battles"/.test(embedCode) && (await page.locator('.pn-cats input[aria-label="All pins"]').isChecked()) === false, embedCode);
   await page.keyboard.press("Escape");
   check(A, "deleting removes the file in one commit", !onBranch("content/pins/test-harbour.json") && mock.log.length === n2 + 1);
   await page.waitForTimeout(500);
   check(A, "…and the pin leaves the list", (await page.locator(".pn-row").count()) === SEED.length);
+  check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+});
+
+await step(A, "owner organises pin maps and folders", async () => {
+  const { ctx, page, errors } = await adminPage("Flanz1");
+  check(A, "pin maps show in their folders, nested", (await page.locator('.rfolder[data-pinfolder="places"] .rfolder[data-pinfolder="war"] .pinmap[data-pinmap="battles"]').count()) === 1 && (await page.locator('.rfolder[data-pinfolder="places"] > .rfolder-body > .pinmap[data-pinmap="holy-sites"]').count()) === 1);
+  check(A, "a pin map outside any folder is listed too", (await page.locator('.pinmap[data-pinmap="cities"]').count()) === 1);
+  // A new pin map.
+  let n = mock.log.length;
+  await page.click("#tab-pins button[data-action=new-pinmap]");
+  await page.fill('dialog[open] input[data-field="pinmap-name"]', "Trade ports");
+  await page.click('dialog[open] button[data-action="confirm-pinmap"]');
+  await waitCommit(page, n);
+  let f = onBranch("content/pinmaps.json");
+  check(A, "adding a pin map is one commit to content/pinmaps.json", mock.log.length === n + 1 && f?.maps.some((m) => m.id === "trade-ports" && m.slot === SLOT.slug && m.name === "Trade ports"), JSON.stringify(f?.maps));
+  await page.waitForSelector('.pinmap[data-pinmap="trade-ports"]');
+  // Duplicate names on a slot are refused.
+  n = mock.log.length;
+  await page.click("#tab-pins button[data-action=new-pinmap]");
+  await page.fill('dialog[open] input[data-field="pinmap-name"]', "trade PORTS");
+  await page.click('dialog[open] button[data-action="confirm-pinmap"]');
+  check(A, "a second pin map with the same name is refused", /already a pin map/.test((await page.textContent("dialog[open] .error")) ?? "") && mock.log.length === n);
+  await page.keyboard.press("Escape");
+  // A new folder, then the pin map into it.
+  n = mock.log.length;
+  await page.click("#tab-pins button[data-action=new-pinfolder]");
+  await page.fill('dialog[open] input[data-field="pinmap-name"]', "Trade");
+  await page.click('dialog[open] button[data-action="confirm-pinmap"]');
+  await waitCommit(page, n);
+  f = onBranch("content/pinmaps.json");
+  check(A, "adding a folder is one commit", mock.log.length === n + 1 && f?.folders.some((k) => k.id === "trade" && !k.parent), JSON.stringify(f?.folders.map((k) => k.id)));
+  n = mock.log.length;
+  await page.click('.pinmap[data-pinmap="trade-ports"] button[data-action="move-map"]');
+  await page.selectOption('dialog[open] select[data-field="pinmap-folder"]', "trade");
+  await page.click('dialog[open] button[data-action="confirm-move-pinmap"]');
+  await waitCommit(page, n);
+  f = onBranch("content/pinmaps.json");
+  check(A, "moving a pin map into a folder", f?.folders.find((k) => k.id === "trade")?.regions.includes("trade-ports"), JSON.stringify(f?.folders));
+  // A subfolder, then rename the pin map.
+  n = mock.log.length;
+  await page.click('.rfolder[data-pinfolder="trade"] > .rfolder-head button[data-action="subfolder"]');
+  await page.fill('dialog[open] input[data-field="pinmap-name"]', "Sea");
+  await page.click('dialog[open] button[data-action="confirm-pinmap"]');
+  await waitCommit(page, n);
+  f = onBranch("content/pinmaps.json");
+  check(A, "a subfolder nests under its folder", f?.folders.some((k) => k.id === "sea" && k.parent === "trade"), JSON.stringify(f?.folders.map((k) => [k.id, k.parent])));
+  n = mock.log.length;
+  await page.click('.pinmap[data-pinmap="trade-ports"] button[data-action="rename-map"]');
+  await page.fill('dialog[open] input[data-field="pinmap-name"]', "Ports of trade");
+  await page.click('dialog[open] button[data-action="confirm-pinmap"]');
+  await waitCommit(page, n);
+  f = onBranch("content/pinmaps.json");
+  check(A, "renaming keeps the id (embeds keep working)", f?.maps.some((m) => m.id === "trade-ports" && m.name === "Ports of trade"));
+  // Deleting a pin map leaves its pins.
+  n = mock.log.length;
+  await page.click('.pinmap[data-pinmap="battles"] button[data-action="delete-map"]');
+  await page.click("dialog.small-dlg.danger[open] button:has-text('Delete pin map')");
+  await waitCommit(page, n);
+  f = onBranch("content/pinmaps.json");
+  check(A, "deleting a pin map removes it from its folder and keeps the pins", !f?.maps.some((m) => m.id === "battles") && !f?.folders.some((k) => k.regions.includes("battles")) && !!onBranch("content/pins/red-field.json"));
+  await page.waitForTimeout(400);
+  check(A, "…the pin shows as not in a pin map", (await page.locator('.pinmap.loose .pn-row:has-text("Battle of the Red Field")').count()) === 1);
+  // Embed code for one pin map.
+  await page.click('.pinmap[data-pinmap="holy-sites"] button[data-action="embed-map"]');
+  const code = await page.inputValue('textarea[aria-label="Embed code"]');
+  check(A, "a pin map's own embed code points at it", /pins=holy-sites"/.test(code), code);
   check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));
   await ctx.close();
 });

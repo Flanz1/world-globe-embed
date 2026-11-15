@@ -6,7 +6,7 @@ import { loadContent } from "../scripts/lib/content.ts";
 import { generatePinFiles } from "../scripts/lib/pages.ts";
 import { contentPaths } from "../scripts/lib/paths.ts";
 import { checkChange, pathKind, type Actor, type Permission } from "../src/shared/access.ts";
-import { categoriesOf, categorySlug, checkPin, parsePinsFile, parsePinsParam, pinShown, pinsJson, safeLink, type PinFeature } from "../src/shared/pins.ts";
+import { checkPin, parsePinsFile, parsePinsParam, pinShown, pinsJson, safeLink, type PinFeature } from "../src/shared/pins.ts";
 import { validatePin } from "../worker/src/generated/validators.js";
 
 const ME = { id: 5002, login: "ann" };
@@ -35,32 +35,26 @@ describe("pin links and params", () => {
     expect(pinShown(kinds!, { kind: "city" })).toBe(true);
     expect(pinShown(kinds!, { kind: "ruin" })).toBe(false);
   });
-  it("?pins= also picks categories by their slug", () => {
+  it("?pins= also picks pin maps by their id", () => {
     const sel = parsePinsParam("holy-sites,cities")!;
-    expect(pinShown(sel, { kind: "temple", category: "Holy sites" })).toBe(true);
-    expect(pinShown(sel, { kind: "city", category: "Cities" })).toBe(true);
-    expect(pinShown(sel, { kind: "temple", category: "Battles" })).toBe(false);
+    expect(pinShown(sel, { kind: "temple", pinMap: "holy-sites" })).toBe(true);
+    expect(pinShown(sel, { kind: "city", pinMap: "cities" })).toBe(true);
+    expect(pinShown(sel, { kind: "temple", pinMap: "battles" })).toBe(false);
     expect(pinShown(sel, { kind: "temple" })).toBe(false);
     expect(pinShown("all", { kind: "temple" })).toBe(true);
   });
-  it("category names become slugs and are listed once", () => {
-    expect(categorySlug("Holy  Sites!")).toBe("holy-sites");
-    expect(categorySlug("Écoles")).toBe("ecoles");
-    expect(categoriesOf([{ category: "Holy sites" }, { category: "holy SITES" }, {}, { category: "Battles" }])).toEqual([
-      { slug: "battles", name: "Battles" },
-      { slug: "holy-sites", name: "Holy sites" },
-    ]);
-  });
-  it("a pin's category is checked, schema-valid and reaches the embed file", () => {
-    expect(checkPin(pin("a", { category: "Holy sites" }))).toEqual([]);
-    expect(checkPin(pin("a", { category: "!!!" })).length).toBe(1);
-    expect(validatePin(pin("a", { category: "Holy sites" }))).toBe(true);
-    expect(validatePin(pin("a", { category: "" }))).toBe(false);
-    expect(validatePin(pin("a", { category: "x".repeat(41) }))).toBe(false);
-    const d = JSON.parse(pinsJson([pin("a", { category: "Holy sites" })])) as { pins: { category?: string }[] };
-    expect(d.pins[0].category).toBe("Holy sites");
-    expect(parsePinsFile(d)![0].category).toBe("Holy sites");
-    expect(parsePinsFile({ pins: [{ ...d.pins[0], category: "a\u0001" }] })![0].category).toBeUndefined();
+  it("a pin's pin map is checked, schema-valid and reaches the embed file with the pin map's name", () => {
+    expect(checkPin(pin("a", { pinMap: "holy-sites" }))).toEqual([]);
+    expect(checkPin(pin("a", { pinMap: "Holy Sites" })).length).toBe(1);
+    expect(validatePin(pin("a", { pinMap: "holy-sites" }))).toBe(true);
+    expect(validatePin(pin("a", { pinMap: "" }))).toBe(false);
+    const d = JSON.parse(pinsJson([pin("a", { pinMap: "holy-sites" })], [{ id: "holy-sites", name: "Holy sites" }, { id: "unused", name: "Unused" }])) as { pins: { pinMap?: string }[]; maps: { id: string }[] };
+    expect(d.pins[0].pinMap).toBe("holy-sites");
+    expect(d.maps).toEqual([{ id: "holy-sites", name: "Holy sites" }]);
+    const f = parsePinsFile(d)!;
+    expect(f.pins[0].pinMap).toBe("holy-sites");
+    expect(f.maps[0].name).toBe("Holy sites");
+    expect(parsePinsFile({ pins: [{ ...d.pins[0], pinMap: "Bad Id" }] })!.pins[0].pinMap).toBeUndefined();
   });
 });
 
@@ -71,7 +65,7 @@ describe("pin files", () => {
     expect(d.pins.map((p) => p.id)).toEqual(["a", "b"]);
     expect(d.pins[1].at).toEqual([1.2346, -2]);
     expect(j).not.toMatch(/createdBy|updatedBy|ann/);
-    expect(parsePinsFile(d)).toHaveLength(2);
+    expect(parsePinsFile(d)!.pins).toHaveLength(2);
   });
   it("fetched data is re-checked: bad entries are dropped, never trusted", () => {
     const parsed = parsePinsFile({
@@ -85,7 +79,7 @@ describe("pin files", () => {
         "nope",
       ],
     });
-    expect(parsed).toEqual([{ id: "ok", name: "Fine", kind: "city", at: [1, 2] }]);
+    expect(parsed).toEqual({ pins: [{ id: "ok", name: "Fine", kind: "city", at: [1, 2] }], maps: [] });
     expect(parsePinsFile({})).toBeNull();
     expect(parsePinsFile(null)).toBeNull();
   });

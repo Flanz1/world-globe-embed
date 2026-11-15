@@ -16,7 +16,7 @@ import { diffCategories, MAX_MOVED_PER_COMMIT, regionsPerCommit, type Categories
 import { ACCESS_PATH, PERMISSIONS, checkChange, pathKind, permissionsOf, regionOwner, type AccessFile, type Actor, type FileDiff, type Permission } from "../../src/shared/access.ts";
 import { HISTORY_MAX_LIMIT, HISTORY_MAX_WITH_FILES, type HistoryEntry, type HistoryPage } from "../../src/shared/history.ts";
 import { appJwt, nonce, sign, verify } from "./crypto.ts";
-import { validateAccess, validateCategories, validateMap, validatePin, validateRegion, validateSlots, type ValidateFn } from "./generated/validators.js";
+import { validateAccess, validateCategories, validateMap, validatePin, validatePinMaps, validateRegion, validateSlots, type ValidateFn } from "./generated/validators.js";
 import { rateLimited, type RateLimiter } from "./ratelimit.ts";
 import * as proposals from "./proposals.ts";
 
@@ -603,7 +603,7 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
   const problems: string[] = [];
   const reads = changes.filter((c) => {
     const k = pathKind(c.path);
-    return k === "region" || k === "pin" || k === "access" || k === "categories";
+    return k === "region" || k === "pin" || k === "access" || k === "categories" || k === "pinmaps";
   });
   const maxReads = regionsPerCommit(actor.owner);
   if (reads.length > maxReads) return [`That commit changes ${reads.length} regions; the admin page saves at most ${maxReads} at a time.`];
@@ -618,7 +618,7 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
     }
     const kind = pathKind(c.path);
     const d: FileDiff = { path: c.path, before: null, after: null };
-    if (kind === "region" || kind === "pin" || kind === "access" || kind === "categories") {
+    if (kind === "region" || kind === "pin" || kind === "access" || kind === "categories" || kind === "pinmaps") {
       // The owner may change any region, so what one was before doesn't matter: not reading it halves the subrequests of a big save.
       const skipBefore = actor.owner && (kind === "region" || kind === "pin") && c.after !== null;
       [d.before, d.after] = await Promise.all([c.before ? (skipBefore ? "{}" : blobText(env, up, c.before)) : null, c.after ? blobText(env, up, c.after) : null]);
@@ -644,7 +644,7 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
       const err = await checkMapsFile(env, up, c.path, c.after, commitSha);
       if (err) problems.push(err);
     }
-    if (d.after !== null && (kind === "region" || kind === "pin" || kind === "access" || kind === "categories")) {
+    if (d.after !== null && (kind === "region" || kind === "pin" || kind === "access" || kind === "categories" || kind === "pinmaps")) {
       let data: unknown;
       try {
         data = JSON.parse(d.after);
@@ -652,7 +652,7 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
         problems.push(`${c.path} isn't valid JSON.`);
         continue;
       }
-      const err = schemaError(kind === "region" ? validateRegion : kind === "pin" ? validatePin : kind === "access" ? validateAccess : validateCategories, data, c.path);
+      const err = schemaError(kind === "region" ? validateRegion : kind === "pin" ? validatePin : kind === "access" ? validateAccess : kind === "pinmaps" ? validatePinMaps : validateCategories, data, c.path);
       if (err) problems.push(err);
     }
   }

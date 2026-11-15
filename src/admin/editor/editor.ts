@@ -116,6 +116,8 @@ import {
   type RingProblem,
   type VRef,
 } from "./model.ts";
+import { pinMaps as allPinMaps } from "../pinmaps.ts";
+import { REGION_PINMAPS_MAX, mapsOfSlot } from "../../shared/pinmaps.ts";
 import { clearDraft, draftKey, loadDraft, saveDraft, type Draft } from "./draft.ts";
 import { Coast, loadCoast, thinTrace } from "./coast.ts";
 import { fillArea, type Barrier } from "./fill.ts";
@@ -505,6 +507,15 @@ export function openEditor(o: EditorOptions): void {
     h("label", {}, "Heading of the toggle list", underTitleIn),
     h("label", {}, "Name of this region's own toggle", layerLabelIn),
   );
+  /* "Show pin maps": pin maps of this slot whose pins show on this region's embed. */
+  const pinMapList = h("div", { className: "ed-pinmaps-list" });
+  const pinMapBox = h(
+    "fieldset",
+    { className: "ed-pinmaps" },
+    h("legend", { textContent: "Show pin maps on this region" }),
+    h("p", { className: "muted small", textContent: "Tick the pin maps (made in the Pins tab) whose pins should show on this region's embed. A ?pins= in the embed code overrides this." }),
+    pinMapList,
+  );
   const descIn = h("textarea", { maxLength: 500, rows: 3, value: hist.state.props.description, name: "description" });
   const stats = h("p", { className: "muted small ed-stats" });
   const keyTitleIn = h("input", { type: "text", maxLength: LEGEND_TITLE_MAX, placeholder: "Legend", value: hist.state.props.legendTitle, name: "legend-title" });
@@ -596,6 +607,7 @@ export function openEditor(o: EditorOptions): void {
         h("label", { className: "check", title: "Draw a dark border where parts of different colours share a line (parts of one colour read as one). Off: parts that touch just touch." }, borderIn, "Draw national borders"),
         h("label", {}, "Description (plain text)", descIn),
         underBox,
+        pinMapBox,
         h(
           "fieldset",
           { className: "ed-colours" },
@@ -629,6 +641,7 @@ export function openEditor(o: EditorOptions): void {
     // Editing together: settings that belong to one region stay as each region has them, so they're not shown.
     for (const el of [idIn, opacityIn, labelIn, borderIn, descIn, keyTitleIn]) (el.closest("label") as HTMLElement).hidden = true;
     underBox.hidden = true;
+    pinMapBox.hidden = true;
     for (const act of ["province-border", "embed"]) (dlg.querySelector(`button[data-act="${act}"]`) as HTMLElement).hidden = true;
     const ownerIn = h(
       "select",
@@ -1670,6 +1683,7 @@ export function openEditor(o: EditorOptions): void {
     labelIn.checked = s.label;
     borderIn.checked = s.nationalBorders === true;
     renderUnder();
+    renderPinMapBox();
     if (document.activeElement !== descIn) descIn.value = s.description;
     if (document.activeElement !== keyTitleIn) keyTitleIn.value = s.legendTitle;
     if (document.activeElement !== colorLabelIn) colorLabelIn.value = s.colorLabel;
@@ -1755,6 +1769,32 @@ export function openEditor(o: EditorOptions): void {
     if (document.activeElement !== underTitleIn) underTitleIn.value = p.underTitle ?? "";
     if (document.activeElement !== layerLabelIn) layerLabelIn.value = p.layerLabel ?? "";
     for (const el of [underClipIn, underTitleIn, layerLabelIn]) (el.closest("label") as HTMLElement).hidden = !list.length;
+  }
+  let pinMapKey = "";
+  function renderPinMapBox(): void {
+    const maps = mapsOfSlot(allPinMaps(), slotName);
+    const on = hist.state.props.pinMaps ?? [];
+    const key = JSON.stringify([maps.map((m) => [m.id, m.name]), on]);
+    if (key === pinMapKey) return;
+    pinMapKey = key;
+    pinMapList.replaceChildren(
+      ...(maps.length
+        ? maps.map((m) => {
+            const box = h("input", { type: "checkbox", checked: on.includes(m.id), ariaLabel: m.name, dataset: { pinmap: m.id } });
+            box.addEventListener("change", () => {
+              const cur = hist.state.props.pinMaps ?? [];
+              const next = box.checked ? [...cur.filter((x) => x !== m.id), m.id] : cur.filter((x) => x !== m.id);
+              if (next.length > REGION_PINMAPS_MAX) {
+                box.checked = false;
+                return setMsg(`A region can include at most ${REGION_PINMAPS_MAX} pin maps.`, "error");
+              }
+              setProp("pinMaps", next.length ? next : undefined, "Pin maps");
+              changed("panel");
+            });
+            return h("label", { className: "check" }, box, m.name);
+          })
+        : [h("p", { className: "muted small", textContent: "This slot has no pin maps yet. Add one in the Pins tab." })]),
+    );
   }
   underAdd.addEventListener("change", () => {
     if (!underAdd.value) return;
@@ -3615,6 +3655,7 @@ export function openEditor(o: EditorOptions): void {
         ...(partLocked.some((l) => !l) ? { partLocked } : {}),
         ...(provinceLines.length ? { provinceBorders: provinceLines } : {}),
         ...(props.nationalBorders ? { nationalBorders: true } : {}),
+        ...(props.pinMaps?.length ? { pinMaps: props.pinMaps.slice(0, REGION_PINMAPS_MAX) } : {}),
         ...(props.under?.length
           ? {
               under: props.under.map((e) => ({ id: e.id, ...(e.label?.trim() ? { label: e.label.trim().slice(0, LEGEND_LABEL_MAX) } : {}), ...(typeof e.on === "boolean" ? { on: e.on } : {}) })),

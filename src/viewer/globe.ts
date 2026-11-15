@@ -401,7 +401,7 @@ export async function start(ctx: StartContext): Promise<void> {
       return { x: ((tmpV.x + 1) / 2) * stage.clientWidth, y: ((1 - tmpV.y) / 2) * stage.clientHeight, visible: facing };
     });
   }
-  void setupPins(stage, canvas, cfg.slug).then((l) => {
+  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins).then((l) => {
     pinLayer = l;
     invalidate();
   });

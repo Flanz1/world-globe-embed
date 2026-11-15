@@ -71,6 +71,8 @@ export interface RegionProps {
   nationalBorders?: boolean;
   /** Regions shown under this one in its embed (see RegionProperties.under), bottom first. */
   under?: UnderEntry[];
+  /** Ids of the pin maps whose pins show on this region's embed (RegionProperties.pinMaps). */
+  pinMaps?: string[];
   /** false: the underlays aren't cut to this region's outline. */
   underClip?: boolean;
   underTitle?: string;
@@ -173,6 +175,7 @@ export function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"
       legendTitle: (fp?.legendTitle ?? "").slice(0, LEGEND_TITLE_MAX),
       legend,
       nationalBorders: fp?.nationalBorders === true,
+      ...(fp?.pinMaps?.length ? { pinMaps: [...fp.pinMaps] } : {}),
       ...(fp?.under?.length ? { under: fp.under.map((e) => ({ ...e })), underClip: fp.underClip !== false, underTitle: fp.underTitle ?? "", layerLabel: fp.layerLabel ?? "" } : {}),
     },
   };

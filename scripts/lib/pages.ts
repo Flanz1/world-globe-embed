@@ -31,11 +31,13 @@ const modules = (m: string | ViewerModules, preloads: string[] = []): ViewerModu
   typeof m === "string" ? { globe: m, globePreloads: preloads } : m;
 
 /** The underlay settings of a region for the inline index: only regions that exist on its slot (and aren't itself). */
-function underIndex(r: RegionFeature, all: ReadonlyMap<string, RegionFeature> | undefined): Pick<RegionIndexEntry, "u" | "uc" | "ut" | "ul"> {
+function underIndex(r: RegionFeature, all: ReadonlyMap<string, RegionFeature> | undefined, pinMaps?: ReadonlyMap<string, { slot: string }>): Pick<RegionIndexEntry, "u" | "uc" | "ut" | "ul" | "pm"> {
   const p = r.properties;
+  const pm = (p.pinMaps ?? []).filter((id) => pinMaps?.get(id)?.slot === p.slot);
   const u = (p.under ?? []).filter((e) => e.id !== r.id && all?.get(e.id)?.properties.slot === p.slot);
-  if (!u.length) return {};
+  if (!u.length) return pm.length ? { pm } : {};
   return {
+    ...(pm.length ? { pm } : {}),
     u: u.map((e) => ({ id: e.id, ...(e.label?.trim() ? { label: e.label.trim() } : {}), ...(typeof e.on === "boolean" ? { on: e.on } : {}) })),
     ...(p.underClip === false ? { uc: false as const } : {}),
     ...(p.underTitle?.trim() ? { ut: p.underTitle.trim() } : {}),
@@ -49,7 +51,7 @@ export function regionIndex(content: Content, slug: string): Record<string, Regi
   const out: Record<string, RegionIndexEntry> = {};
   if (!slot) return out;
   const frame = { north: slot.north ?? DEFAULT_VIEW.north, south: slot.south ?? DEFAULT_VIEW.south, shift: slot.shift ?? DEFAULT_VIEW.shift };
-  for (const [id, r] of content.regions ?? []) if (r.properties.slot === slug) out[id] = { ...regionIndexEntry(r.geometry, frame), ...underIndex(r, content.regions) };
+  for (const [id, r] of content.regions ?? []) if (r.properties.slot === slug) out[id] = { ...regionIndexEntry(r.geometry, frame), ...underIndex(r, content.regions, new Map((content.pinMaps?.maps ?? []).map((m) => [m.id, m]))) };
   return out;
 }
 
@@ -127,7 +129,7 @@ export function generateRegionFiles(content: Content): { path: string; json: str
 export function generatePinFiles(content: Content): { path: string; json: string }[] {
   const bySlot = new Map<string, PinFeature[]>();
   for (const pin of content.pins?.values() ?? []) bySlot.set(pin.properties.slot, [...(bySlot.get(pin.properties.slot) ?? []), pin]);
-  return [...bySlot].sort(([a], [b]) => a.localeCompare(b)).map(([slot, pins]) => ({ path: `pins/${slot}.json`, json: pinsJson(pins) }));
+  return [...bySlot].sort(([a], [b]) => a.localeCompare(b)).map(([slot, pins]) => ({ path: `pins/${slot}.json`, json: pinsJson(pins, (content.pinMaps?.maps ?? []).filter((m) => m.slot === slot)) }));
 }
 
 /**
