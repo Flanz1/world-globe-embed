@@ -4,7 +4,9 @@
     {
       "id": "religion",
       "name": "Religion",
-      "regions": [],
+      "regions": [
+        "gethricism"
+      ],
       "createdBy": {
         "id": 45669787,
         "login": "Flanz1"
