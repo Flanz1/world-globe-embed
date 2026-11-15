@@ -68,7 +68,8 @@ background-image:var(--lqip);background-size:var(--fw) var(--fh);background-posi
 .rkey li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rkey i{flex:none;width:12px;height:12px;border-radius:3px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
 .rkey i.dash{box-shadow:none;border:1px solid #f3ead8;box-sizing:border-box;background:repeating-linear-gradient(135deg,rgba(243,234,216,.35) 0 1px,transparent 1px 4px)}
-.rkey[hidden],.rkey ul[hidden]{display:none}
+.rkey[hidden],.rkey ul[hidden],.rlayers[hidden]{display:none}
+.rlayers{display:grid;gap:3px;padding:2px 8px 6px}.rlayers label{display:flex;align-items:center;gap:6px;cursor:pointer;min-width:0}.rlayers-head{font-weight:600;opacity:.85}.rlayers input{margin:0;flex:none}.rlayers span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rnote{position:fixed;left:8px;top:8px;margin:0;padding:3px 8px;border-radius:6px;background:rgba(20,18,14,.6);color:#e8dcc8;font-size:11px;pointer-events:none}
 @media (prefers-reduced-motion:reduce){#poster,#globe{transition:none}}
 `.replace(/\n/g, "");
@@ -139,7 +140,16 @@ function checkIndex(regions: Record<string, RegionIndexEntry>): Record<string, R
   for (const [id, e] of Object.entries(regions)) {
     if (!REGION_ID.test(id)) throw new Error(`region id "${id}" is not a valid id`);
     if (!finite(...e.c, e.z, ...e.b) || e.c.length !== 2 || e.b.length !== 4) throw new Error(`region "${id}": bad index numbers`);
-    out[id] = { c: [e.c[0], e.c[1]], z: e.z, b: [e.b[0], e.b[1], e.b[2], e.b[3]] };
+    const u = (e.u ?? []).filter((x) => REGION_ID.test(x.id)).map((x) => ({ id: x.id, ...(typeof x.label === "string" ? { label: x.label } : {}), ...(typeof x.on === "boolean" ? { on: x.on } : {}) }));
+    out[id] = {
+      c: [e.c[0], e.c[1]],
+      z: e.z,
+      b: [e.b[0], e.b[1], e.b[2], e.b[3]],
+      ...(u.length ? { u } : {}),
+      ...(u.length && e.uc === false ? { uc: false as const } : {}),
+      ...(u.length && typeof e.ut === "string" ? { ut: e.ut } : {}),
+      ...(u.length && typeof e.ul === "string" ? { ul: e.ul } : {}),
+    };
   }
   return out;
 }

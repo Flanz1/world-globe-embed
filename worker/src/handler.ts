@@ -14,6 +14,7 @@
  */
 import { diffCategories, MAX_MOVED_PER_COMMIT, regionsPerCommit, type CategoriesFile } from "../../src/shared/categories.ts";
 import { ACCESS_PATH, PERMISSIONS, checkChange, pathKind, permissionsOf, regionOwner, type AccessFile, type Actor, type FileDiff, type Permission } from "../../src/shared/access.ts";
+import { HISTORY_MAX_LIMIT, HISTORY_MAX_WITH_FILES, type HistoryEntry, type HistoryPage } from "../../src/shared/history.ts";
 import { appJwt, nonce, sign, verify } from "./crypto.ts";
 import { validateAccess, validateCategories, validateRegion, type ValidateFn } from "./generated/validators.js";
 
@@ -53,6 +54,9 @@ const MAX_CHANGED_FILES = 400;
 /** Region and access files whose text a single commit may make the API read (each is a subrequest). */
 const MAX_READ_FILES = MAX_MOVED_PER_COMMIT;
 const WAITING_DAYS = 30;
+/** An editor tab says it's still open every 30 s; KV won't keep a key shorter than 60 s, and a silent tab drops off after this long. */
+export const EDITING_SECONDS = 90;
+const MAX_EDITING_REGIONS = MAX_MOVED_PER_COMMIT;
 
 export interface Session {
   id: number;
@@ -282,6 +286,50 @@ async function authCallback(req: Request, env: Env, up: Upstream): Promise<Respo
   return back(`session=${await sign(s, env.SESSION_KEY)}`);
 }
 
+/* ── Save log ── */
+
+interface GhCommit {
+  sha: string;
+  commit: { message?: string; author?: { name?: string; date?: string } | null; committer?: { date?: string } | null };
+  author?: { login?: string; id?: number } | null;
+  files?: { filename: string; status: string }[];
+}
+
+/**
+ * GET /history: the saves (commits) on the content branch, newest first, shaped for the admin page.
+ * `path` limits it to saves that touched a file or folder in content/ (default: all of content/),
+ * `limit` is how many (up to 50), `page` pages back in time and `files=1` adds each save's changed files.
+ * Anyone on the admin list may read it; it carries nothing that isn't already public in the repository.
+ */
+async function history(req: Request, env: Env, up: Upstream, url: URL): Promise<Response> {
+  await listedActor(req, env, up);
+  const path = (url.searchParams.get("path") ?? "content").replace(/\/+$/, "");
+  if (!/^content(\/[A-Za-z0-9._-]{1,200}){0,4}$/.test(path) || path.split("/").includes("..")) throw new HttpError(400, "History is only kept for files in content/.");
+  const withFiles = url.searchParams.get("files") === "1";
+  const cap = withFiles ? HISTORY_MAX_WITH_FILES : HISTORY_MAX_LIMIT;
+  const limit = Math.min(cap, Math.max(1, Math.floor(Number(url.searchParams.get("limit") ?? 20)) || 20));
+  const page = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get("page") ?? 1)) || 1));
+  const qs = new URLSearchParams({ path, sha: branchOf(env), per_page: String(limit), page: String(page) });
+  const list = await ghJson<GhCommit[]>(env, up, `${repoPath(env)}/commits?${qs}`);
+  const entries: HistoryEntry[] = await Promise.all(
+    list.map(async (c): Promise<HistoryEntry> => {
+      const e: HistoryEntry = {
+        sha: c.sha,
+        date: c.commit.author?.date ?? c.commit.committer?.date ?? "",
+        author: { login: c.author?.login ?? c.commit.author?.name ?? "unknown", id: typeof c.author?.id === "number" ? c.author.id : null },
+        message: (c.commit.message ?? "").slice(0, 300),
+      };
+      if (withFiles) {
+        const d = await ghJson<GhCommit>(env, up, `${repoPath(env)}/commits/${c.sha}`);
+        e.files = (d.files ?? []).map((f) => ({ path: f.filename, status: (["added", "removed", "renamed"].includes(f.status) ? f.status : "modified") as "added" | "modified" | "removed" | "renamed" }));
+      }
+      return e;
+    }),
+  );
+  const body: HistoryPage = { entries, next: list.length === limit ? page + 1 : null };
+  return json(200, body);
+}
+
 /* ── Session info, users, waiting list ── */
 
 async function sessionInfo(req: Request, env: Env, up: Upstream): Promise<Response> {
@@ -315,6 +363,54 @@ async function dismissWaiting(req: Request, env: Env, up: Upstream, id: string):
   needUsers(await listedActor(req, env, up));
   if (!/^\d{1,15}$/.test(id)) throw new HttpError(400, "Bad account id.");
   await env.WAITING?.delete(`w:${id}`);
+  return new Response(null, { status: 204 });
+}
+
+/* ── Who has a region open ── */
+
+export interface Editing {
+  id: number;
+  login: string;
+  tab: string;
+  regions: string[];
+  at: string;
+}
+
+/** Everyone whose editor was open (and said so) in the last EDITING_SECONDS. Only a hint to avoid clashes: saving is still checked against the branch head. */
+async function activeEditing(env: Env): Promise<Editing[]> {
+  if (!env.WAITING) return [];
+  const { keys } = await env.WAITING.list({ prefix: "e:", limit: 200 });
+  const since = Date.now() - EDITING_SECONDS * 1000;
+  return keys.map((k) => k.metadata as Editing | undefined).filter((m): m is Editing => !!m && Date.parse(m.at) >= since);
+}
+
+async function editingList(req: Request, env: Env, up: Upstream): Promise<Response> {
+  await listedActor(req, env, up);
+  return json(200, await activeEditing(env));
+}
+
+/** "I have these regions open": also answers with who else has, so a tab learns about a newcomer within one beat. */
+async function editingBeat(req: Request, env: Env, up: Upstream): Promise<Response> {
+  const actor = await listedActor(req, env, up);
+  if (!canWriteAnything(actor)) throw new HttpError(403, "You can look around, but you don't have permission to change anything.");
+  const body = await readJson<{ tab?: unknown; regions?: unknown }>(req);
+  const regions = body.regions;
+  if (typeof body.tab !== "string" || !/^[a-z0-9]{6,24}$/.test(body.tab) || !Array.isArray(regions) || regions.length > MAX_EDITING_REGIONS || !regions.every((r) => typeof r === "string" && /^[a-z0-9][a-z0-9-]{0,63}$/.test(r)))
+    throw new HttpError(422, "Bad editing notice.");
+  if (env.WAITING) {
+    const me: Editing = { id: actor.id, login: actor.login, tab: body.tab, regions: regions as string[], at: new Date().toISOString() };
+    try {
+      await env.WAITING.put(`e:${actor.id}:${body.tab}`, "", { expirationTtl: EDITING_SECONDS, metadata: me });
+    } catch {
+      /* A hint only; never fail an editor over it. */
+    }
+  }
+  return json(200, await activeEditing(env));
+}
+
+async function editingDone(req: Request, env: Env, up: Upstream, tab: string): Promise<Response> {
+  const actor = await listedActor(req, env, up);
+  await env.WAITING?.delete(`e:${actor.id}:${tab}`);
   return new Response(null, { status: 204 });
 }
 
@@ -576,8 +672,12 @@ export async function handle(req: Request, env: Env, up: Upstream): Promise<Resp
     let m: RegExpExecArray | null;
     if (req.method === "GET" && p === "/session") return withCors(await sessionInfo(req, env, up));
     if (req.method === "GET" && (m = /^\/users\/([^/]+)$/.exec(p))) return withCors(await lookupUser(req, env, up, decodeURIComponent(m[1])));
+    if (req.method === "GET" && p === "/history") return withCors(await history(req, env, up, url));
     if (req.method === "GET" && p === "/waiting") return withCors(await waitingList(req, env, up));
     if (req.method === "DELETE" && (m = /^\/waiting\/([^/]+)$/.exec(p))) return withCors(await dismissWaiting(req, env, up, m[1]));
+    if (req.method === "GET" && p === "/editing") return withCors(await editingList(req, env, up));
+    if (req.method === "POST" && p === "/editing") return withCors(await editingBeat(req, env, up));
+    if (req.method === "DELETE" && (m = /^\/editing\/([a-z0-9]{6,24})$/.exec(p))) return withCors(await editingDone(req, env, up, m[1]));
     if (p.startsWith("/gh/")) return withCors(await proxy(req, env, up, p.slice(3), url));
     if (p === "/") return new Response("World globe admin API. Sign in from the admin page.", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
     throw new HttpError(404, "Not found.");

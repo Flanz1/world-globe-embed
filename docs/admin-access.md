@@ -47,6 +47,8 @@ The API checks all of this on save, like the other rules.
 
 If someone signs in before they're added, they're told they're waiting, and they appear under **Asked for access** in the Users tab, where you can approve them in one click. Removing someone takes effect on their next save, even while they're still signed in. Sessions last 12 hours and only live in that browser tab.
 
+While a region is open in the editor, that tab tells the admin API every 30 seconds (stored in the same KV namespace under `e:` keys, forgotten after 90 seconds of silence). The editor then warns "Ann has this region open", and the Regions tab shows who is editing each card. It's only a hint: saving is still checked against the branch.
+
 ## One-time setup (repository owner)
 
 You do this once. Until it's done, the Admin API workflow skips its deploy and the admin page says sign-in isn't set up.
@@ -125,3 +127,7 @@ Once you've signed in through the new page:
 ## Running the API locally or in tests
 
 `tests/admin-api.test.ts` runs the real handler in Node against the in-memory GitHub in `scripts/e2e/mock-github.mjs`, through the admin page's own client. The browser checks (`npm run e2e:*`) do the same inside Playwright. The schema validators the Worker uses are generated: after changing `schema/region.schema.json` or `schema/access.schema.json`, run `npm run worker:validators` (a test fails if you forget).
+
+## Save log (`GET /history`)
+
+The admin API serves the saves (commits) on the content branch, shaped for the admin page: `GET /history?path=content/regions/<id>.json&limit=20&page=1&files=1`. Everything is optional: `path` (anything under `content/`, default all of it), `limit` (up to 50, or 20 with `files=1`), `page` to go back in time, and `files=1` to include each save's changed files. The answer is `{ entries: [{ sha, date, author: { login, id }, message, files? }], next }` (types and helpers in `src/shared/history.ts`; client `GitHub.history()`), newest first. Anyone on the admin list may read it. `GitHub.readFileAt(path, sha)` reads a file as it was in one of those saves. The Regions tab's version history and the activity feed both build on this.

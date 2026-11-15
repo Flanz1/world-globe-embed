@@ -9,7 +9,7 @@
  * view=flat.
  */
 import { applyParams, diameterFraction, distanceForZoom, posterVars } from "../shared/params.ts";
-import { REGION_ID, flatFit, parseRegionData, type RegionData } from "../shared/region.ts";
+import { REGION_ID, flatFit, mergeRegions, parseRegionData, parseRegionIds, type RegionData } from "../shared/region.ts";
 import type { ViewerConfig } from "../shared/types.ts";
 import type { BootData, FlatStartContext, RegionContext, StartContext, ViewMode } from "./contract.ts";
 
@@ -53,11 +53,17 @@ if (data.maps) {
 
 /* ── Region (?region=<id>) ── */
 let region: RegionContext | null = null;
-const regionId = q.get("region");
+const preview = !!data.maps;
+// ?regions=a,b,c stacks several regions of the slot (the last on top); not in the admin preview, which shows one region.
+const stacked = !preview && q.has("regions") ? parseRegionIds(q.get("regions")) : null;
+const regionId = stacked ? (stacked[0] ?? "") : q.get("region");
 if (regionId !== null) {
-  const preview = !!data.maps;
-  const entry = data.regions && Object.prototype.hasOwnProperty.call(data.regions, regionId) ? data.regions[regionId] : undefined;
-  if (REGION_ID.test(regionId) && (entry || preview)) {
+  const inIndex = (id: string) => (data.regions && Object.prototype.hasOwnProperty.call(data.regions, id) ? data.regions[id] : undefined);
+  const entry = inIndex(regionId);
+  // region=<id>: the region's own underlays go below it (under=0 leaves them out).
+  const under = !stacked && !preview && entry?.u && q.get("under") !== "0" ? entry.u.filter((e) => e.id !== regionId && inIndex(e.id)) : [];
+  const ids = stacked ? stacked.filter(inIndex) : [...under.map((e) => e.id), regionId];
+  if ((stacked ? ids.length > 0 : REGION_ID.test(regionId) && (entry || preview))) {
     const given = (k: string) => {
       const v = q.get(k);
       return v != null && v.trim() !== "" && Number.isFinite(Number(v));
@@ -83,29 +89,54 @@ if (regionId !== null) {
       subscribe = (cb) => void subs.push(cb);
     } else {
       // Starts now, in parallel with the first texture.
-      regionData = fetch(`${data.root ?? "../../"}regions/${regionId}.json`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((j) => {
-          const r = parseRegionData(j);
-          return r && r.id === regionId && r.slot === cfg.slug ? r : null;
-        })
-        .catch(() => null);
+      const load = (id: string): Promise<RegionData | null> =>
+        fetch(`${data.root ?? "../../"}regions/${id}.json`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((j) => {
+            const r = parseRegionData(j);
+            return r && r.id === id && r.slot === cfg.slug ? r : null;
+          })
+          .catch(() => null);
+      regionData =
+        ids.length > 1
+          ? Promise.all(ids.map(load)).then((all) => {
+              const found = all.filter((r): r is RegionData => !!r);
+              // The region itself must be there; without it the underlays alone aren't what was asked for.
+              if (under.length && all[all.length - 1] === null) return null;
+              return found.length ? mergeRegions(found, under.length > 0 && entry?.uc !== false) : null;
+            })
+          : load(ids[0]);
     }
+    const entries = ids.map(inIndex).filter((e) => !!e);
     region = {
-      id: regionId,
+      id: ids.join(","),
       data: regionData,
       subscribe,
       label: label === "1" ? true : label === "0" ? false : null,
       key: q.get("key") !== "0",
       dim: q.get("dim") === "1",
+      toggle: q.get("toggle") !== "0",
       lock: q.get("lock") !== "0",
       explicit,
-      fitted: !!entry,
-      bounds: entry?.b,
+      // Stacked regions (?regions=) are framed once they've loaded; until then the poster faces the first (or the union, flat). A region with underlays is framed by itself, from the index.
+      fitted: (ids.length === 1 || under.length > 0) && !!entry,
+      ...(ids.length > 1
+        ? {
+            layers: {
+              names: under.length
+                ? { ...Object.fromEntries(under.map((e) => [e.id, e.label ?? ""])), [regionId]: entry?.ul ?? "" }
+                : {},
+              title: entry?.ut ?? "",
+              hidden: under.length ? under.filter((e, i) => (e.on === undefined ? i > 0 : !e.on)).map((e) => e.id) : [],
+            },
+          }
+        : {}),
+      bounds: entries.length > 1 && !under.length ? [Math.min(...entries.map((e) => e!.b[0])), Math.min(...entries.map((e) => e!.b[1])), Math.max(...entries.map((e) => e!.b[2])), Math.max(...entries.map((e) => e!.b[3]))] : entry?.b,
     };
     // Region embeds start still, so the region stays in view.
     if (!q.has("rotate")) cfg.rotate = false;
     if (entry && view === "globe") {
+      // (With several regions this is the first one's view; the viewer re-frames once they've loaded.)
       if (!explicit.lon) cfg.lon = entry.c[0];
       if (!explicit.lat) cfg.lat = entry.c[1];
       if (!explicit.zoom) cfg.zoom = entry.z;

@@ -33,6 +33,8 @@ import {
   LEGEND_LABEL_MAX,
   LEGEND_MAX,
   LEGEND_TITLE_MAX,
+  UNDER_MAX,
+  UNDER_TITLE_MAX,
   OWN_COLOUR,
   REGION_ID,
   flatFit,
@@ -49,6 +51,7 @@ import {
   uniqueId,
   type RegionData,
   type RegionFeature,
+  type UnderEntry,
 } from "../../shared/region.ts";
 import { clampPadding } from "../../shared/params.ts";
 import { TEXTURE_WIDTHS, type MapMeta, type SlotsFile, type TextureWidth } from "../../shared/types.ts";
@@ -63,6 +66,7 @@ import { TILE_BUDGET, TILE_LEVELS, TileCache, levelFor, tileRect, tilesAt, tileU
 import { alertBox, confirmBox, modal, openEmbedDialog, previewUrl, sendRegion } from "../region-dialogs.ts";
 import { regionPath, serialize, stamp } from "../regions.ts";
 import { account, currentUser } from "../session.ts";
+import { editingNote, startPresence } from "./presence.ts";
 import { combineKind, combineParts, extendPart, type MergeResult } from "./merge.ts";
 import { LINKED_MAX, combineRegions } from "../../shared/combine.ts";
 import { MAX_LIVE, liveState, ownEntry, previewLegend, removeLiveEntry, splitLive, type LiveSource } from "./live.ts";
@@ -402,6 +406,8 @@ export function openEditor(o: EditorOptions): void {
   let g = mainCtx;
   const status = h("div", { className: "ed-status", ariaLive: "off" });
   const msg = h("p", { className: "ed-msg", role: "status", ariaLive: "polite" });
+  /** "Ann has this region open too": filled by the presence beat. */
+  const editingBanner = h("p", { className: "ed-editing", role: "status", ariaLive: "polite", hidden: true });
   const frameEl = h("iframe", { className: "ed-globe", title: "Globe preview of the region" });
   const ctxMenu = h("div", { className: "ed-menu", hidden: true, role: "menu" });
   const tip = h("div", { className: "ed-tip", hidden: true });
@@ -453,6 +459,23 @@ export function openEditor(o: EditorOptions): void {
   const opacityOut = h("output", {});
   const labelIn = h("input", { type: "checkbox", checked: hist.state.props.label, name: "label" });
   const borderIn = h("input", { type: "checkbox", checked: hist.state.props.nationalBorders === true, name: "national-borders" });
+  /* "Show under this region": other regions of the slot drawn below this one in its embed, each with a legend toggle. */
+  const underList = h("div", { className: "ed-under-list" });
+  const underAdd = h("select", { name: "under-add", ariaLabel: "Add a region to show under this one" });
+  const underClipIn = h("input", { type: "checkbox", checked: true, name: "under-clip" });
+  const underTitleIn = h("input", { type: "text", maxLength: UNDER_TITLE_MAX, placeholder: "Layers", name: "under-title", ariaLabel: "Heading of the toggle list" });
+  const layerLabelIn = h("input", { type: "text", maxLength: LEGEND_LABEL_MAX, placeholder: "This region", name: "layer-label", ariaLabel: "Name of this region's own toggle" });
+  const underBox = h(
+    "fieldset",
+    { className: "ed-under" },
+    h("legend", { textContent: "Show under this region" }),
+    h("p", { className: "muted small", textContent: "Other regions of this slot (religion, culture, trade goods…) drawn under this one, each with a toggle in the embed's legend." }),
+    underList,
+    h("label", {}, "Add a region", underAdd),
+    h("label", { className: "check", title: "Cut the underlays to this region's outline, so only what lies inside it shows." }, underClipIn, "Only show them inside this region"),
+    h("label", {}, "Heading of the toggle list", underTitleIn),
+    h("label", {}, "Name of this region's own toggle", layerLabelIn),
+  );
   const descIn = h("textarea", { maxLength: 500, rows: 3, value: hist.state.props.description, name: "description" });
   const stats = h("p", { className: "muted small ed-stats" });
   const keyTitleIn = h("input", { type: "text", maxLength: LEGEND_TITLE_MAX, placeholder: "Legend", value: hist.state.props.legendTitle, name: "legend-title" });
@@ -533,6 +556,7 @@ export function openEditor(o: EditorOptions): void {
         frameEl,
         h("div", { className: "row" }, btn("Centre on region", "Turn the globe preview to face the region", () => sendPreview(true), "centre"), btn("Embed code…", "Copy the iframe code for this region", () => embed(), "embed")),
         draftBar,
+        editingBanner,
         msg,
         h("label", {}, "Id (permanent; embeds use it)", idIn),
         h("p", { className: "muted small", textContent: `Slot: ${slotName} · map: ${slot.map}` }),
@@ -540,6 +564,7 @@ export function openEditor(o: EditorOptions): void {
         h("label", { className: "check" }, labelIn, "Show part labels in embed"),
         h("label", { className: "check", title: "Draw a dark border where parts of different colours share a line (parts of one colour read as one). Off: parts that touch just touch." }, borderIn, "Draw national borders"),
         h("label", {}, "Description (plain text)", descIn),
+        underBox,
         h(
           "fieldset",
           { className: "ed-colours" },
@@ -572,6 +597,7 @@ export function openEditor(o: EditorOptions): void {
   if (live) {
     // Editing together: settings that belong to one region stay as each region has them, so they're not shown.
     for (const el of [idIn, opacityIn, labelIn, borderIn, descIn, keyTitleIn]) (el.closest("label") as HTMLElement).hidden = true;
+    underBox.hidden = true;
     for (const act of ["province-border", "embed"]) (dlg.querySelector(`button[data-act="${act}"]`) as HTMLElement).hidden = true;
     const ownerIn = h(
       "select",
@@ -1526,6 +1552,7 @@ export function openEditor(o: EditorOptions): void {
     opacityOut.value = `${Math.round(s.fillOpacity * 100)}%`;
     labelIn.checked = s.label;
     borderIn.checked = s.nationalBorders === true;
+    renderUnder();
     if (document.activeElement !== descIn) descIn.value = s.description;
     if (document.activeElement !== keyTitleIn) keyTitleIn.value = s.legendTitle;
     if (document.activeElement !== colorLabelIn) colorLabelIn.value = s.colorLabel;
@@ -1551,6 +1578,76 @@ export function openEditor(o: EditorOptions): void {
   colorLabelIn.addEventListener("input", () => (setProp("colorLabel", colorLabelIn.value.slice(0, LEGEND_LABEL_MAX), "Colour label"), typed()));
   opacityIn.addEventListener("input", () => (setProp("fillOpacity", Number(opacityIn.value), "Fill opacity"), changed()));
   labelIn.addEventListener("change", () => (setProp("label", labelIn.checked, "Label"), changed()));
+  const regionTitle = (rid: string) => neighbours.find((n) => n.id === rid)?.properties.name || rid;
+  let underKey = "";
+  let underIds = "";
+  const setUnder = (list: UnderEntry[], label: string) => setProp("under", list.length ? list : undefined, label);
+  function renderUnder(): void {
+    const p = hist.state.props;
+    const list = p.under ?? [];
+    const key = JSON.stringify(list.map((e) => [e.id, e.label ?? "", e.on ?? null]));
+    const idsSame = list.map((e) => e.id).join(",") === underIds;
+    // Undo/redo of a name or switch rebuilds the rows, but never while the user is typing in one.
+    if (key !== underKey && (!idsSame || !underList.contains(document.activeElement))) {
+      underKey = key;
+      underIds = list.map((e) => e.id).join(",");
+      underList.replaceChildren(
+        ...list.map((e, i) => {
+          const nameIn = h("input", { type: "text", maxLength: LEGEND_LABEL_MAX, placeholder: regionTitle(e.id), value: e.label ?? "", ariaLabel: `Toggle name for ${e.id}` });
+          nameIn.addEventListener("input", () => {
+            const cur = hist.state.props.under ?? [];
+            setUnder(cur.map((x, j) => (j === i ? { ...x, ...(nameIn.value.trim() ? { label: nameIn.value.slice(0, LEGEND_LABEL_MAX) } : { label: undefined }) } : x)), "Toggle name");
+            typed();
+          });
+          const onIn = h("input", { type: "checkbox", checked: e.on ?? i === 0, ariaLabel: `${e.id} starts shown` });
+          onIn.addEventListener("change", () => {
+            setUnder((hist.state.props.under ?? []).map((x, j) => (j === i ? { ...x, on: onIn.checked } : x)), "Toggle starts shown");
+            changed("panel");
+          });
+          const move = (d: -1 | 1) => () => {
+            const cur = [...(hist.state.props.under ?? [])];
+            if (i + d < 0 || i + d >= cur.length) return;
+            [cur[i], cur[i + d]] = [cur[i + d], cur[i]];
+            setUnder(cur, "Underlay order");
+            changed("panel");
+          };
+          return h(
+            "div",
+            { className: "ed-under-row" },
+            h("span", { className: "small", textContent: e.id, title: "Region id" }),
+            nameIn,
+            h("label", { className: "check small", title: "Starts shown in the embed" }, onIn, "On"),
+            btn("↑", "Move down a layer (drawn lower)", move(-1)),
+            btn("↓", "Move up a layer (drawn higher)", move(1)),
+            btn("Remove", "Stop showing this region under this one", () => {
+              setUnder((hist.state.props.under ?? []).filter((_, j) => j !== i), "Remove underlay");
+              changed("panel");
+            }),
+          );
+        }),
+      );
+      const used = new Set(list.map((e) => e.id));
+      const free = neighbours.filter((n) => n.id !== id && !used.has(n.id));
+      underAdd.replaceChildren(
+        h("option", { value: "", textContent: list.length >= UNDER_MAX ? "(most reached)" : free.length ? "Choose a region…" : "(no other regions on this slot)" }),
+        ...free.map((n) => h("option", { value: n.id, textContent: n.properties.name ? `${n.properties.name} (${n.id})` : n.id })),
+      );
+      underAdd.disabled = list.length >= UNDER_MAX || !free.length;
+    }
+    underClipIn.checked = p.underClip !== false;
+    if (document.activeElement !== underTitleIn) underTitleIn.value = p.underTitle ?? "";
+    if (document.activeElement !== layerLabelIn) layerLabelIn.value = p.layerLabel ?? "";
+    for (const el of [underClipIn, underTitleIn, layerLabelIn]) (el.closest("label") as HTMLElement).hidden = !list.length;
+  }
+  underAdd.addEventListener("change", () => {
+    if (!underAdd.value) return;
+    setUnder([...(hist.state.props.under ?? []), { id: underAdd.value }], "Add underlay");
+    underAdd.value = "";
+    changed("panel");
+  });
+  underClipIn.addEventListener("change", () => (setProp("underClip", underClipIn.checked, "Underlays inside only"), changed("panel")));
+  underTitleIn.addEventListener("input", () => (setProp("underTitle", underTitleIn.value.slice(0, UNDER_TITLE_MAX), "Toggle list heading"), typed()));
+  layerLabelIn.addEventListener("input", () => (setProp("layerLabel", layerLabelIn.value.slice(0, LEGEND_LABEL_MAX), "Own toggle name"), typed()));
   borderIn.addEventListener("change", () => (setProp("nationalBorders", borderIn.checked, "National borders"), changed()));
   descIn.addEventListener("input", () => (setProp("description", descIn.value, "Description"), changed("panel")));
   keyTitleIn.addEventListener("input", () => (setProp("legendTitle", keyTitleIn.value.slice(0, LEGEND_TITLE_MAX), "Legend title"), typed()));
@@ -3360,6 +3457,14 @@ export function openEditor(o: EditorOptions): void {
         ...(partLocked.some((l) => !l) ? { partLocked } : {}),
         ...(provinceLines.length ? { provinceBorders: provinceLines } : {}),
         ...(props.nationalBorders ? { nationalBorders: true } : {}),
+        ...(props.under?.length
+          ? {
+              under: props.under.map((e) => ({ id: e.id, ...(e.label?.trim() ? { label: e.label.trim().slice(0, LEGEND_LABEL_MAX) } : {}), ...(typeof e.on === "boolean" ? { on: e.on } : {}) })),
+              ...(props.underClip === false ? { underClip: false } : {}),
+              ...(props.underTitle?.trim() ? { underTitle: props.underTitle.trim().slice(0, UNDER_TITLE_MAX) } : {}),
+              ...(props.layerLabel?.trim() ? { layerLabel: props.layerLabel.trim().slice(0, LEGEND_LABEL_MAX) } : {}),
+            }
+          : {}),
       },
       geometry,
     };
@@ -3646,6 +3751,18 @@ export function openEditor(o: EditorOptions): void {
     }
   }
 
+  /* ── Someone else editing the same region ── */
+  const presence = startPresence(
+    o.gh,
+    () => (live ? live.map((x) => x.id) : isNew ? [] : [id]),
+    currentUser()?.id,
+    (others) => {
+      const note = editingNote(others, live ? live.map((x) => x.id) : [id]);
+      editingBanner.textContent = note;
+      editingBanner.hidden = !note;
+    },
+  );
+
   /* ── Close ── */
   const beforeUnload = (e: BeforeUnloadEvent) => {
     if (dirty()) e.preventDefault();
@@ -3664,6 +3781,7 @@ export function openEditor(o: EditorOptions): void {
     window.removeEventListener("pagehide", draftFlush);
     document.removeEventListener("visibilitychange", onHide);
     draftFlush();
+    presence.stop();
     ro.disconnect();
     frameEl.src = "about:blank";
     dlg.close();

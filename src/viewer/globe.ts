@@ -41,12 +41,12 @@ import {
 import { BASE_DISTANCE, FOV_DEG, MAX_DISTANCE, MIN_DISTANCE, clamp, clampPadding, distanceForZoom, parseHex } from "../shared/params.ts";
 import { imageToGlobe, polygonsOf, type Position } from "../shared/geo.ts";
 import { legendRows, regionFit, regionLabelPoints, type RegionData } from "../shared/region.ts";
-import { paintSpec, type PaintSpec } from "../shared/raster.ts";
-import { hasContestedMarks, regionPaintSpec } from "../shared/region-paint.ts";
+import { paintLayerStack, type PaintLayer } from "../shared/raster.ts";
+import { hasContestedLayers, regionPaintLayers } from "../shared/region-paint.ts";
 import { deviceLimit, deviceMemory, nextTier } from "../shared/tiers.ts";
 import { createGlobeTiles } from "./globe-tiles.ts";
 import type { PreviewMessage, StartContext } from "./contract.ts";
-import { RELOCK_MS, makeLabels, makeLegend, regionNote, setupLock, type Lock } from "./region-ui.ts";
+import { RELOCK_MS, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
 
 const DEG = Math.PI / 180;
 /** Auto-spin speed in radians per second (about 2 minutes per turn, like the desktop app). */
@@ -311,27 +311,29 @@ export async function start(ctx: StartContext): Promise<void> {
     const g = o.canvas.getContext("2d")!;
     g.clearRect(0, 0, W, H);
     // Clashes are worked out once per region (or live update), not per redraw.
-    if (specFor !== reg) {
-      spec = regionPaintSpec(reg);
-      specFor = reg;
+    const vis = visible.of(reg);
+    if (specFor !== vis) {
+      spec = regionPaintLayers(vis);
+      specFor = vis;
     }
     // Map-image frame → texture pixels, exactly like the map texture's own UVs.
-    paintSpec(
+    paintLayerStack(
       g,
       spec!,
       (lon) => ((lon + 180) / 360) * W,
       (lat) => ((90 - lat) / 180) * H,
       [-360, 0, 360],
-      { fillOpacity: reg.fillOpacity, lineWidth: (W / 2048) * 1.5, dim: dimOn() },
+      { lineWidth: (W / 2048) * 1.5, dim: dimOn() },
       { w: W, h: H },
     );
     o.tex.needsUpdate = true;
-    const pts = (R?.label ?? reg.label) ? regionLabelPoints(reg) : [];
+    const pts = (R?.label ?? vis.label) ? regionLabelPoints(vis, R?.label === true) : [];
     labelAt = pts.map((p) => p.at);
     labels?.set(pts.map((p) => p.text));
-    regionKey?.set(R?.key ? legendRows(reg) : [], reg.legendTitle, !!R?.key && hasContestedMarks(spec!));
+    regionKey?.set(R?.key ? legendRows(vis) : [], vis.legendTitle, !!R?.key && hasContestedLayers(spec!));
   }
-  let spec: PaintSpec | null = null;
+  const visible = makeVisibility();
+  let spec: PaintLayer[] | null = null;
   let specFor: RegionData | null = null;
   const labels = R ? makeLabels(stage) : null;
   const regionKey = R ? makeLegend(stage) : null;
@@ -612,6 +614,7 @@ export async function start(ctx: StartContext): Promise<void> {
         return invalidate();
       }
       reg = r;
+      if (R.toggle && regionKey) setupLayers(regionKey, r, visible, () => (drawRegion(), invalidate()), R.layers);
       drawRegion();
       // No inline index (the admin preview): frame it now, unless the reader already moved the view.
       if (!R.fitted) {

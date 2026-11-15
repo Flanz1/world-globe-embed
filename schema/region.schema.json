@@ -172,6 +172,24 @@
           "type": "boolean",
           "description": "Draw national borders: where two parts of the region share a line exactly (drawn with snapping or tracing), the embed draws a thick dark line on a light casing between parts of different legend colours, and leaves the line off between parts of the same colour. Off unless true: parts that touch just touch. Leave it out for off."
         },
+        "under": {
+          "type": "array",
+          "maxItems": 8,
+          "description": "Regions of the same slot shown under this one in its embed (a religion map, culture, trade goods…), bottom first. Each gets a toggle in the embed's legend. Regions that don't exist on the slot are ignored.",
+          "items": {
+            "type": "object",
+            "required": ["id"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+              "label": { "type": "string", "maxLength": 60, "description": "Name of its toggle in the legend (plain text). Defaults to the region's name, else its id." },
+              "on": { "type": "boolean", "description": "Whether it starts shown. Missing: the first underlay does, the others don't." }
+            }
+          }
+        },
+        "underClip": { "type": "boolean", "description": "With under: false to show the underlays outside this region's outline too. Leave it out to cut them to the outline." },
+        "underTitle": { "type": "string", "maxLength": 40, "description": "With under: heading of the toggle list in the embed. Defaults to \"Layers\"." },
+        "layerLabel": { "type": "string", "maxLength": 60, "description": "With under: this region's own toggle name in the legend. Defaults to its name, else its id." },
         "provinceBorders": {
           "type": "array",
           "maxItems": 500,
