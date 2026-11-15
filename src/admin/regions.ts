@@ -258,6 +258,7 @@ function card(e: RegionEntry): HTMLElement {
         "div",
         { className: "actions" },
         canEdit(f) || !can("regions") || linked ? btn("Edit", () => edit(e), "", noEdit) : btn("Suggest changes", () => suggest(e), "", ""),
+        canEdit(f) && can("regions") && !linked ? h("button", { type: "button", className: "ghost", textContent: "Propose changes", title: "Draw changes and send them for somebody else to accept or decline", onclick: () => suggest(e), dataset: { action: "propose-changes" } }) : null,
         !canEdit(f) || !pendingFor(e.id) ? null : h("span", { className: "badge warn", textContent: `${pendingFor(e.id)} suggestion${pendingFor(e.id) > 1 ? "s" : ""}`, title: "Waiting in the list above the regions" }),
         btn("Duplicate", () => duplicate(e), "ghost", noCreate),
         btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot)),

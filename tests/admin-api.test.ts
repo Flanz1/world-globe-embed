@@ -700,9 +700,8 @@ describe("suggested changes", () => {
     expect((await (await client(BO)).suggestion(`simon-land~${ANN.id}`)).feature.id).toBe("simon-land");
   });
 
-  it("refuses suggestions for regions you can edit, missing regions, other ids, bad shapes and people without Create regions", async () => {
+  it("refuses suggestions for missing regions, other ids, bad shapes and people without Create regions", async () => {
     const ann = await client(ANN);
-    await expect(send(ann, "ann-land", ANN)).rejects.toThrow(/edit this region yourself/);
     await expect(send(ann, "nowhere", ANN)).rejects.toThrow(/no region "nowhere"/);
     await expect(ann.suggest("simon-land", suggestion("ann-land", ANN), "")).rejects.toThrow(/must have the id/);
     await expect(ann.suggest("simon-land", { ...suggestion("simon-land", ANN), geometry: 5 }, "")).rejects.toThrow(/schema/);
@@ -729,7 +728,7 @@ describe("suggested changes", () => {
   it("lets only people who may edit the region accept or decline, once", async () => {
     await send(await client(ANN), "simon-land", ANN);
     const id = `simon-land~${ANN.id}`;
-    await expect((await client(ANN)).decideSuggestion(id, "accepted")).rejects.toThrow(/can't decide/);
+    await expect((await client(ANN)).decideSuggestion(id, "accepted")).rejects.toThrow(/your own suggestion/);
     await expect((await client(MANAGER)).decideSuggestion(id, "declined")).rejects.toThrow(/can't decide|can't see/);
     await (await client(SIMON)).decideSuggestion(id, "declined", "keep the old border");
     const after = (await (await client(ANN)).suggestions())[0];
@@ -761,6 +760,23 @@ describe("suggested changes", () => {
     await (await client(SIMON)).decideSuggestion(id, "declined");
     await (await client(SIMON)).removeSuggestion(id);
     expect((await ann.suggestions()).length).toBe(0);
+  });
+
+  it("lets people who can edit a region propose too, but never decide their own", async () => {
+    const bo = await client(BO);
+    await send(bo, "simon-land", BO, "for Simon to check");
+    const id = `simon-land~${BO.id}`;
+    await expect(bo.decideSuggestion(id, "accepted")).rejects.toThrow(/your own suggestion/);
+    await expect(bo.decideSuggestion(id, "declined")).rejects.toThrow(/your own suggestion/);
+    // Others who may edit it can: the region's creator, and the owner.
+    expect((await (await client(SIMON)).suggestions()).map((x) => x.id)).toContain(id);
+    await (await client(SIMON)).decideSuggestion(id, "accepted");
+    // The owner proposes on their own region; an editor decides.
+    await send(await client(OWNER), "old-land", OWNER);
+    const oid = `old-land~${OWNER.id}`;
+    await expect((await client(OWNER)).decideSuggestion(oid, "accepted")).rejects.toThrow(/your own suggestion/);
+    await (await client(BO)).decideSuggestion(oid, "declined");
+    expect((await (await client(OWNER)).suggestions()).find((x) => x.id === oid)?.status).toBe("declined");
   });
 
   it("answers 501 where there's no key-value store", async () => {
