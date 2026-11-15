@@ -166,7 +166,9 @@ describe("admin API sign-in", () => {
   it("signs in through GitHub and hands the admin page a session for that account", async () => {
     const bad = await call(`${API}/auth/login?return=${encodeURIComponent("https://evil.example/")}`);
     expect(bad.status).toBe(400);
-    const start = await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}`);
+    const NONCE = "n".repeat(24);
+    expect((await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}`)).status).toBe(400);
+    const start = await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}&nonce=${NONCE}`);
     expect(start.status).toBe(302);
     const to = new URL(start.headers.get("Location")!);
     expect(to.origin + to.pathname).toBe("https://github.com/login/oauth/authorize");
@@ -181,7 +183,8 @@ describe("admin API sign-in", () => {
     expect(back.status).toBe(302);
     const loc = back.headers.get("Location")!;
     expect(loc.startsWith(`${ADMIN}#session=`)).toBe(true);
-    const token = loc.split("#session=")[1];
+    expect(loc.endsWith(`&nonce=${NONCE}`)).toBe(true);
+    const token = loc.split("#session=")[1].split("&")[0];
     const s = await verify<{ id: number; login: string; exp: number }>(token, KEY);
     expect(s).toMatchObject(ANN);
     expect(s!.exp - Date.now() / 1000).toBeLessThanOrEqual(12 * 3600 + 5);
@@ -657,13 +660,13 @@ describe("admin API hardening", () => {
 
   it("answers 429 when one address asks too much, and counts sign-in apart", async () => {
     const ip = { "CF-Connecting-IP": "203.0.113.9" };
-    for (let i = 0; i < 20; i++) expect((await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}`, { headers: ip })).status).toBe(302);
-    const r = await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}`, { headers: ip });
+    for (let i = 0; i < 20; i++) expect((await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}&nonce=${"n".repeat(24)}`, { headers: ip })).status).toBe(302);
+    const r = await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}&nonce=${"n".repeat(24)}`, { headers: ip });
     expect(r.status).toBe(429);
     expect(r.headers.get("Retry-After")).toBe("60");
     // Other addresses and the rest of the API are unaffected.
     expect((await call(`${API}/`, { headers: ip })).status).toBe(200);
-    expect((await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}`, { headers: { "CF-Connecting-IP": "203.0.113.10" } })).status).toBe(302);
+    expect((await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}&nonce=${"n".repeat(24)}`, { headers: { "CF-Connecting-IP": "203.0.113.10" } })).status).toBe(302);
   });
 
   it("uses the Cloudflare limiter when there is one", async () => {

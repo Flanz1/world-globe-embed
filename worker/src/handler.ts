@@ -265,7 +265,10 @@ async function authLogin(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const ret = url.searchParams.get("return") ?? "";
   if (!returnAllowed(ret, env)) return new Response("This sign-in link doesn't come from the admin page.", { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });
-  const state = await sign({ r: ret, n: nonce(), exp: Math.floor(Date.now() / 1000) + 600 }, env.SESSION_KEY);
+  // The admin page keeps a random value for this tab and gets it back with the session, so a session link from somewhere else is refused.
+  const tab = url.searchParams.get("nonce") ?? "";
+  if (!/^[A-Za-z0-9_-]{16,64}$/.test(tab)) return new Response("This sign-in link doesn't come from the admin page.", { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  const state = await sign({ r: ret, n: nonce(), c: tab, exp: Math.floor(Date.now() / 1000) + 600 }, env.SESSION_KEY);
   const to = new URL(`${WEB}/login/oauth/authorize`);
   to.searchParams.set("client_id", env.APP_CLIENT_ID);
   to.searchParams.set("redirect_uri", new URL("/auth/callback", url).href);
@@ -276,9 +279,9 @@ async function authLogin(req: Request, env: Env): Promise<Response> {
 
 async function authCallback(req: Request, env: Env, up: Upstream): Promise<Response> {
   const url = new URL(req.url);
-  const st = await verify<{ r: string; exp: number }>(url.searchParams.get("state") ?? "", env.SESSION_KEY);
+  const st = await verify<{ r: string; c?: string; exp: number }>(url.searchParams.get("state") ?? "", env.SESSION_KEY);
   if (!st || !returnAllowed(st.r, env)) return new Response("This sign-in link has expired. Go back to the admin page and sign in again.", { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });
-  const back = (fragment: string) => new Response(null, { status: 302, headers: { Location: `${st.r.split("#")[0]}#${fragment}`, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+  const back = (fragment: string) => new Response(null, { status: 302, headers: { Location: `${st.r.split("#")[0]}#${fragment}&nonce=${st.c ?? ""}`, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
   const code = url.searchParams.get("code");
   if (!code) return back(`signin-error=${encodeURIComponent("GitHub sign-in was cancelled.")}`);
   const tok = await up(`${WEB}/login/oauth/access_token`, {

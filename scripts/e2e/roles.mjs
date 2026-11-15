@@ -153,6 +153,15 @@ await step(S, "sign in with GitHub", async () => {
   });
   check(S, "back on the admin page, signed in as the GitHub account", ((await page.textContent("#who")) ?? "").endsWith("signed in as carto-ann"), await page.textContent("#who"));
   check(S, "the session isn't left in the address", !page.url().includes("session="), page.url());
+  {
+    // A #session= link from elsewhere (no nonce from this tab) must not sign anyone in.
+    const tok = await page.evaluate(() => sessionStorage.getItem("wge-admin-session"));
+    const other = await ctx.newPage();
+    await other.goto(`${ADMIN}#session=${tok}&nonce=forged`);
+    await other.waitForSelector("#signin", { state: "visible", timeout: 10000 });
+    check(S, "a session link not started on this tab is ignored", ((await other.textContent("#signin-error")) ?? "").includes("didn't start on this page") && !(await other.evaluate(() => sessionStorage.getItem("wge-admin-session"))));
+    await other.close();
+  }
   check(S, "session kept in sessionStorage only", await page.evaluate(() => !!sessionStorage.getItem("wge-admin-session") && !localStorage.getItem("wge-admin-session")));
   const csp = await page.evaluate(() => window.__csp);
   check(S, "no CSP violations", csp.length === 0, csp.join(" | ") || "none");
