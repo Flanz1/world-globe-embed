@@ -651,6 +651,36 @@ await step(A, "delete", async () => {
   check(A, "delete warns that embeds stop showing it", /stop showing it/.test(warning), warning);
 });
 
+await step(A, "version history and restore", async () => {
+  const id = "test-kingdom";
+  const p = `content/regions/${id}.json`;
+  const original = JSON.parse(mock.read(BRANCH, p));
+  // Someone else moves the region east by 10 degrees.
+  const moved = structuredClone(original);
+  const shift = (r) => r.map(([x, y]) => [x + 10, y]);
+  moved.geometry.coordinates = moved.geometry.type === "Polygon" ? moved.geometry.coordinates.map(shift) : moved.geometry.coordinates.map((poly) => poly.map(shift));
+  mock.externalWrite(BRANCH, p, JSON.stringify(moved, null, 2) + "\n");
+  await page.reload();
+  await page.waitForSelector(`[data-region="${id}"] [data-action="history"]`, { timeout: 15000 });
+  await page.click(`[data-region="${id}"] [data-action="history"]`);
+  await page.waitForSelector("dialog.history .hist-item", { timeout: 10000 });
+  const items = await page.locator("dialog.history .hist-item").count();
+  check(A, "history lists the saves, newest first", items >= 2 && /external edit/.test((await page.locator("dialog.history .hist-item").first().textContent()) ?? ""), `${items} saves`);
+  const who = await page.locator("dialog.history .hist-item").first().textContent();
+  check(A, "history says who saved", /someone-else/.test(who ?? ""), who ?? "");
+  await page.locator("dialog.history .hist-item").nth(items - 1).click();
+  await page.waitForSelector("dialog.history canvas.hist-canvas", { timeout: 10000 });
+  check(A, "picking an old save previews it over the current outline", await page.locator("dialog.history .hist-key").isVisible());
+  await page.screenshot({ path: path.join(OUT, "history.png") });
+  const n = mock.log.length;
+  await page.click('dialog.history button:has-text("Restore this version")');
+  await waitCommits(n);
+  const c = commitsSince(n);
+  const back = JSON.parse(mock.read(BRANCH, p));
+  check(A, "restore is one commit that brings the old shape back", c.length === 1 && /^Restore region test-kingdom/.test(c[0].message) && JSON.stringify(back.geometry) === JSON.stringify(original.geometry), c.map((x) => x.message).join(" | "));
+  check(A, "restore keeps who created the region", JSON.stringify(back.properties.createdBy) === JSON.stringify(original.properties.createdBy), JSON.stringify(back.properties.createdBy));
+});
+
 await step(A, "conflict detection", async () => {
   await page.waitForSelector('[data-region="landmark-disc"]');
   await page.click('[data-region="landmark-disc"] [data-action="edit"]');
@@ -839,7 +869,7 @@ await step(A, "security and branch", async () => {
   check(A, "no page errors in the admin page", errors.length === 0, errors.join(" | ") || "none");
   check(A, "no alert() from region data", dialogs.length === 0, dialogs.join(" | ") || "none");
   check(A, "nothing written to main", mock.refs.get("main") === mainAtStart && mock.log.every((c) => c.branch === BRANCH), `${mock.log.length} commits, all on ${BRANCH}`);
-  check(A, "each action was one commit", mock.log.length === n0 + 5, mock.log.map((c) => c.message).join(" | "));
+  check(A, "each action was one commit", mock.log.length === n0 + 6, mock.log.map((c) => c.message).join(" | "));
 });
 await ctx.close();
 

@@ -20,6 +20,7 @@ import type { OverlayMeta } from "./editor/overlay-filter.ts";
 import type { FileCommit, GitHub } from "./github.ts";
 import { loadMapImage } from "./images.ts";
 import { compareBy, creatorChoices, creatorId, matchesQuery, type Filterable } from "./region-filter.ts";
+import { openHistory } from "./region-history.ts";
 import { modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
 import { OWNER_ID, account, can, canDelete, canEdit, canTransfer, currentUser, ownerOf, refusal } from "./session.ts";
 import type { AccessFile, Account } from "../shared/access.ts";
@@ -251,6 +252,7 @@ function card(e: RegionEntry): HTMLElement {
         btn("Duplicate", () => duplicate(e), "ghost", noCreate),
         btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot)),
         btn("Copy embed code", () => openEmbedDialog({ region: { id: e.id, name: e.id, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot })),
+        linked ? null : btn("History", () => openHistory({ gh: deps.gh(), id: e.id, path: e.path, feature: f, map, noRestore: noEdit, act: deps.act }), "ghost", ""),
         btn("Delete", () => del(e), "ghost danger", noDelete),
         canTransfer() ? btn("Transfer", () => transfer(e, f), "ghost", "") : null,
       ),
