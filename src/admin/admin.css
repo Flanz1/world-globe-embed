@@ -336,4 +336,11 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
 /* Regions pinned to the top of a folder. */
 .rcard.pinned { border-color: var(--accent, var(--line)); }
 .rcard.drop { outline: 2px dashed var(--accent, currentColor); outline-offset: 2px; }
-.rpinned { margin-left: 4px; }
+.rcard.has-pin { position: relative; }
+.rcard.has-pin .rinfo > div:first-child { padding-right: 96px; }
+.rpin-bar { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; align-items: center; }
+.rcard .rpin-btn { padding: 2px 7px; font-size: 13px; line-height: 1; border-radius: 6px; }
+.rcard .rpin-toggle { display: inline-flex; align-items: center; padding: 4px 6px; opacity: .65; }
+.rcard .rpin-toggle:hover:not(:disabled), .rcard .rpin-toggle.on { opacity: 1; color: var(--accent, #c9a227); }
+.rcard .rpin-toggle svg { transform: rotate(0deg); }
+@media (max-width: 560px) { .rcard.has-pin .rinfo > div:first-child { padding-right: 0; } .rpin-bar { top: 6px; right: 6px; } }
