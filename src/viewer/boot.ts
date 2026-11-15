@@ -47,6 +47,9 @@ if (data.maps) {
     cfg.title = m.name;
     cfg.aspect = m.aspect;
     document.title = `${m.name} (preview)`;
+    // Only the admin page's own preview takes the radius from the URL; embeds get it from the slot.
+    const r = Number(q.get("radius"));
+    if (q.has("radius") && Number.isFinite(r)) cfg.radius = r;
     root.style.setProperty("--lqip", `url("${m.lqip}")`);
   }
 }

@@ -7,13 +7,14 @@
  * Region embeds start locked on the region; unlocked, drag pans and wheel/pinch zoom.
  */
 import { clamp, clampPadding } from "../shared/params.ts";
-import { geometryBounds, globeToImage, polygonsOf, type Position } from "../shared/geo.ts";
+import { geometryBounds, globeToImage, imageToGlobe, polygonsOf, type Position } from "../shared/geo.ts";
 import { FLAT_K_MAX, flatFit, flatMinK, legendRows, regionLabelPoints, type FlatView, type RegionData } from "../shared/region.ts";
 import { paintLayerStack, type PaintLayer } from "../shared/raster.ts";
 import { hasContestedLayers, regionPaintLayers } from "../shared/region-paint.ts";
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
 import { TILE_BUDGET, TileCache, levelFor, tileRect, tilesAt, tileUrl } from "../shared/tiles.ts";
 import type { FlatStartContext, PreviewMessage } from "./contract.ts";
+import { setupRuler } from "./ruler.ts";
 import { RELOCK_MS, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
 
 type Img = ImageBitmap | HTMLImageElement;
@@ -84,6 +85,27 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     if (view.cx > 540 || view.cx < -540) view.cx = ((((view.cx + 180) % 360) + 360) % 360) - 180;
   };
 
+  /* ── Ruler: points live on the globe, so the padded, shifted map image maps onto them ── */
+  const frame = () => ({ north: cfg.north, south: cfg.south, shift: cfg.shift });
+  const ruler = setupRuler(cfg, {
+    canvas,
+    stage,
+    pick(x, y) {
+      const { w, h } = size();
+      const lat = view.cy - (y - h / 2) / (view.k * ky);
+      if (lat > 90 || lat < -90) return null;
+      return imageToGlobe([view.cx + (x - w / 2) / view.k, lat], frame());
+    },
+    project(p, nearX) {
+      const { w, h } = size();
+      const [lon, lat] = globeToImage(p, frame());
+      let x = sx(lon + 360 * Math.round((view.cx - lon) / 360), w);
+      const span = 360 * view.k;
+      if (nearX !== undefined) x += span * Math.round((nearX - x) / span);
+      return { x, y: sy(lat, h), ok: true };
+    },
+  });
+
   /* ── Render on demand ── */
   let raf = 0;
   function render(): void {
@@ -138,6 +160,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       const y = sy(at[1], h);
       labels?.place(i, x, y, x >= 0 && x <= w && y >= 0 && y <= h);
     });
+    ruler.redraw();
     maybeUpgrade();
     maybeTiles();
   }

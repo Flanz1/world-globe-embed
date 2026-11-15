@@ -126,10 +126,11 @@ function renderSlots(): void {
               patch.north === (slot.north ?? 0) &&
               patch.south === (slot.south ?? 0) &&
               patch.pole.toLowerCase() === (slot.pole ?? "#e8dcc8").toLowerCase() &&
-              patch.shift === (slot.shift ?? 0);
+              patch.shift === (slot.shift ?? 0) &&
+              patch.radius === (slot.radius ?? 0);
             if (unchanged) return setStatus("Nothing changed.");
             void act(`Saving ${slug}…`, () =>
-              gh!.commit(`Update slot "${slug}": map "${patch.map}", ${patch.view} view, padding N ${patch.north}% / S ${patch.south}%, prime meridian ${patch.shift}°`, async () => [
+              gh!.commit(`Update slot "${slug}": map "${patch.map}", ${patch.view} view, padding N ${patch.north}% / S ${patch.south}%, prime meridian ${patch.shift}°, world radius ${patch.radius ? `${patch.radius} km` : "none"}`, async () => [
                 await slotsChange((s) => {
                   const cur = s.slots[slug];
                   if (!cur) throw new Error(`Slot "${slug}" no longer exists.`);
@@ -138,7 +139,7 @@ function renderSlots(): void {
                   if (patch.view === "flat") cur.view = "flat";
                   else delete cur.view;
                   // Keep slots.json tidy: write padding only when it's used.
-                  for (const k of ["north", "south", "shift"] as const) {
+                  for (const k of ["north", "south", "shift", "radius"] as const) {
                     if (patch[k]) cur[k] = patch[k];
                     else delete cur[k];
                   }

@@ -41,6 +41,7 @@
     "e2e:upload": "tsx scripts/e2e/upload.mjs",
     "e2e:stack": "tsx scripts/e2e/stack.mjs",
     "e2e:view": "tsx scripts/e2e/view.mjs",
+    "e2e:ruler": "tsx scripts/e2e/ruler.mjs",
     "region-owners": "tsx scripts/region-owners.ts",
     "worker:validators": "tsx scripts/build-worker-validators.ts",
     "e2e:roles": "tsx scripts/e2e/roles.mjs"
