@@ -146,7 +146,7 @@ kbd { font: 12px ui-monospace, monospace; padding: 1px 5px; border: 1px solid va
 dialog.editor { width: calc(100vw - 16px); height: calc(100vh - 16px); max-width: none; max-height: none; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--fg); }
 dialog.editor[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
 .ed-toolbar { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--line); align-items: center; }
-.ed-toolbar button { padding: 3px 10px; font-size: 13px; }
+.ed-toolbar button { padding: 3px 8px; font-size: 13px; }
 .ed-toolbar button[aria-pressed="true"] { background: var(--accent); color: var(--card); }
 .ed-toolbar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
 .ed-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 34%); min-height: 0; }

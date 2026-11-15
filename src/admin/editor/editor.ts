@@ -114,6 +114,7 @@ import {
   type VRef,
 } from "./model.ts";
 import { Coast, loadCoast, thinTrace } from "./coast.ts";
+import { fillArea, type Barrier } from "./fill.ts";
 import { carryLines, posKey, findSnap, followBorders, lineCarry, type LineCarry, insertOnEdges, partRings, sharedEdges, snapRing, traceBetween, vertexIndex, withGlued, type Snap, type SnapRing } from "./snap.ts";
 
 export interface EditorOptions {
@@ -154,7 +155,7 @@ export interface EditorOptions {
   };
 }
 
-type Tool = "select" | "polygon" | "freehand";
+type Tool = "select" | "polygon" | "freehand" | "fill";
 /** What the polygon and freehand tools draw: a part, a shape to cut away, a split line, land to add to a part or a province border. */
 type DrawTarget = "part" | "cut" | "split" | "extend" | "border";
 
@@ -195,6 +196,7 @@ export const SHORTCUT_GROUPS: { title: string; rows: [string, string][] }[] = [
       ["V", "Select tool"],
       ["P", "Polygon tool"],
       ["F", "Freehand tool"],
+      ["B", "Fill tool: click inside an area to trace it out to the coast and to other parts' borders"],
       ["S", "Snapping on or off (hold Ctrl to place one point freely)"],
       ["O", "Coast snapping on or off"],
       ["G", "Show or hide the grid"],
@@ -453,6 +455,7 @@ export function openEditor(o: EditorOptions): void {
       toolBtn("select", "Select", "V", ": click a part to select it, drag inside it to move it, Ctrl+drag to move the whole region, Alt+click for the next part where parts overlap"),
       toolBtn("polygon", "Polygon", "P"),
       toolBtn("freehand", "Freehand", "F"),
+      toolBtn("fill", "Fill", "B", ": click inside an area (an island, a province between borders) to trace it out to the coast and to the borders of other parts and regions"),
       h("span", { className: "sep" }),
       btn("Add part", "Draw another polygon (an island or exclave), in the default colour; a colour's + Part draws one in that colour", () => ((newPartStyle = OWN_COLOUR), (newPartOccupied = false), startDraw("part")), "add-part"),
       btn("Cut", "Draw a shape to cut away: inside a part it makes a hole, across a part's edge it bites it, right across it splits it into separate parts", () => startDraw("cut"), "cut-hole"),
@@ -1384,7 +1387,7 @@ export function openEditor(o: EditorOptions): void {
     const n = countVertices(parts());
     const parts_ = parts().length;
     const what = target === "cut" ? "Cut" : target === "split" ? "Split" : target === "border" ? "Province border" : target === "extend" ? (extendTarget >= 0 ? `Extend part ${extendTarget + 1}` : "Extend") : "";
-    let line = `${tool === "select" ? "Select" : `${tool === "polygon" ? "Polygon" : "Freehand"}${what ? ` (${what})` : ""}`} · ${n} vertices`;
+    let line = `${tool === "select" ? "Select" : tool === "fill" ? "Fill" : `${tool === "polygon" ? "Polygon" : "Freehand"}${what ? ` (${what})` : ""}`} · ${n} vertices`;
     if (tool === "select" && selPart >= 0) line += ` · ${pickHint || `Part ${selPart + 1} selected`}`;
     if (snapHint && snapOn) line += ` · snaps to ${snapName(snapHint.snap, snapHint.rings)}`;
     if (tool === "polygon" && drawing && pendingTail()?.traced) line += ` · follows the border${traceFlip ? " the other way" : ""} (Tab: ${traceFlip ? "back" : "other way"})`;
@@ -1992,7 +1995,7 @@ export function openEditor(o: EditorOptions): void {
   function setTool(t: Tool): void {
     if (drawing && t !== "polygon") drawing = null;
     tool = t;
-    if (t !== "select") drawTool = t;
+    if (t === "polygon" || t === "freehand") drawTool = t;
     if (t !== "polygon" && t !== "freehand") target = "part";
     canvas.style.cursor = t === "select" ? "default" : "crosshair";
     toggleSimplify(false);
@@ -2092,6 +2095,45 @@ export function openEditor(o: EditorOptions): void {
     setMsg(bits.length ? `${label}: ${bits.join(", ")}.` : "Cut. Drag vertices to refine it.", "ok");
     endDraw();
     return true;
+  }
+
+  /**
+   * The fill tool: traces the area under `w0` out to the coast and to the borders of the region's own
+   * parts and the visible neighbours, then adds it like a drawn outline.
+   */
+  function fillAt(w0: Position): void {
+    const inside = partAt(parts(), w0, hist.state.contested);
+    if (inside >= 0) return setMsg(`That spot is already inside part ${inside + 1}. Fill an area outside the parts, or use Extend to add to a part.`, "error");
+    const tol = 1 / view.k;
+    const rings = [...partRings(parts()), ...shownNbRings()];
+    const coastR = coast && coastOn ? coastRings(tol) : [];
+    const barriers: Barrier[] = [
+      ...rings.map((r) => ({ pts: r.pts, closed: true })),
+      ...coastR.map((r) => ({ pts: r.pts, closed: r.src.kind === "coast" ? (coast!.data.lines[r.src.c]?.closed ?? false) : true })),
+    ];
+    const res = fillArea(w0, barriers, ky, tol);
+    if (!res.ok) {
+      const why =
+        res.reason === "line"
+          ? "Click a little to one side: that spot is on a line."
+          : res.reason === "none"
+            ? `There's nothing to fill against here${coast ? " (turn the coast on with O)" : ""}: draw the area's outline instead.`
+            : "That area isn't closed in: its edge has a gap or is open sea. Click inside land or a province between borders, or draw the outline.";
+      return setMsg(why, "error");
+    }
+    // Stretches along a border take that border's own vertices, so neighbours share it exactly.
+    const all = [...rings, ...coastR];
+    const sc = { k: 1 / res.cell, ky };
+    const isCoast = (i: number) => all[i].src.kind === "coast";
+    const at = (q: Position): Snap | null => findSnap(all, q, sc, 2.5, isCoast) ?? findSnap(all, q, sc, 2.5, (i) => !isCoast(i));
+    // The whole outline along one closed line (an island): that line's own vertices.
+    const first = at(res.ring[0]);
+    const src = first ? all[first.ring].src : null;
+    const isClosed = src ? src.kind !== "coast" || !!coast?.data.lines[src.c]?.closed : false;
+    const one = !!first && isClosed && res.ring.every((q) => at(q)?.ring === first.ring);
+    let out = one ? all[first!.ring].pts.map((q) => [q[0], q[1]] as Position) : followBorders(res.ring, at, all, ky, res.cell, true).pts;
+    if (out.length < 3) out = simplifyRing(res.ring.map(([x, y]) => [x, y * ky]), res.cell).map(([x, y]) => [x, y / ky] as Position);
+    finishRing(out);
   }
 
   /** Finishes a split line or a province border from the polygon or freehand tool. */
@@ -2815,6 +2857,7 @@ export function openEditor(o: EditorOptions): void {
       drag = { kind: "free", pts: [w0] };
       return draw();
     }
+    if (tool === "fill") return void fillAt(w0);
     // Select tool.
     edgePick = null;
     if (selLine >= 0 && !simplifyPreview) {
@@ -3286,6 +3329,7 @@ export function openEditor(o: EditorOptions): void {
     if (k === "v") setTool("select");
     else if (k === "p") setTool("polygon");
     else if (k === "f") setTool("freehand");
+    else if (k === "b") setTool("fill");
     else if (k === "g") toggleGrid();
     else if (k === "s") toggleSnap();
     else if (k === "l" && selPart >= 0) togglePartLock(selPart);
