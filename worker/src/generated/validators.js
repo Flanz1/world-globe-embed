@@ -2241,8 +2241,8 @@ validate27.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 export const validateSlots = validate28;
 const schema39 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/slots.schema.json","title":"Globe embed slots","description":"Which map each embed (slot) shows, plus its view defaults.","type":"object","required":["slots"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"slots":{"type":"object","propertyNames":{"pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"additionalProperties":{"$ref":"#/$defs/slot"}}},"$defs":{"slot":{"type":"object","required":["map"],"additionalProperties":false,"properties":{"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id (file stem in content/maps/)."},"title":{"type":"string","maxLength":120},"view":{"enum":["globe","flat"],"description":"Which view the embed opens in (default globe). ?view= overrides it."},"grid":{"type":"boolean"},"rotate":{"type":"boolean"},"legend":{"type":"boolean"},"controls":{"type":"boolean"},"bg":{"type":"string","pattern":"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},"lat":{"type":"number","minimum":-90,"maximum":90},"lon":{"type":"number","minimum":-180,"maximum":180},"zoom":{"type":"number","minimum":0.4,"maximum":2.2},"north":{"type":"number","minimum":0,"maximum":49,"description":"Percent of the globe's height left unmapped at the north pole."},"south":{"type":"number","minimum":0,"maximum":49,"description":"Percent left unmapped at the south pole."},"pole":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$","description":"Fill colour for the padded polar areas."},"shift":{"type":"number","minimum":-180,"maximum":180,"description":"Prime meridian: moves the map east (+) or west (-) by this many degrees so its prime meridian lines up with the grid's."}}}}};
 const schema40 = {"type":"object","required":["map"],"additionalProperties":false,"properties":{"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id (file stem in content/maps/)."},"title":{"type":"string","maxLength":120},"view":{"enum":["globe","flat"],"description":"Which view the embed opens in (default globe). ?view= overrides it."},"grid":{"type":"boolean"},"rotate":{"type":"boolean"},"legend":{"type":"boolean"},"controls":{"type":"boolean"},"bg":{"type":"string","pattern":"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},"lat":{"type":"number","minimum":-90,"maximum":90},"lon":{"type":"number","minimum":-180,"maximum":180},"zoom":{"type":"number","minimum":0.4,"maximum":2.2},"north":{"type":"number","minimum":0,"maximum":49,"description":"Percent of the globe's height left unmapped at the north pole."},"south":{"type":"number","minimum":0,"maximum":49,"description":"Percent left unmapped at the south pole."},"pole":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$","description":"Fill colour for the padded polar areas."},"shift":{"type":"number","minimum":-180,"maximum":180,"description":"Prime meridian: moves the map east (+) or west (-) by this many degrees so its prime meridian lines up with the grid's."}}};
-const pattern22 = new RegExp("^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$", "u");
-const pattern23 = new RegExp("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$", "u");
+const pattern23 = new RegExp("^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$", "u");
+const pattern24 = new RegExp("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$", "u");
 
 function validate28(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="https://flanz1.github.io/world-globe-embed/schema/slots.schema.json" */;
@@ -2448,7 +2448,7 @@ let data10 = data2.bg;
 const _errs25 = errors;
 if(errors === _errs25){
 if(typeof data10 === "string"){
-if(!pattern22.test(data10)){
+if(!pattern23.test(data10)){
 validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/bg",schemaPath:"#/$defs/slot/properties/bg/pattern",keyword:"pattern",params:{pattern: "^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},message:"must match pattern \""+"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"+"\""}];
 return false;
 }
@@ -2604,7 +2604,7 @@ let data16 = data2.pole;
 const _errs37 = errors;
 if(errors === _errs37){
 if(typeof data16 === "string"){
-if(!pattern23.test(data16)){
+if(!pattern24.test(data16)){
 validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/pole",schemaPath:"#/$defs/slot/properties/pole/pattern",keyword:"pattern",params:{pattern: "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"},message:"must match pattern \""+"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"+"\""}];
 return false;
 }
@@ -2703,11 +2703,11 @@ export const validateMap = validate29;
 const schema41 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/map.schema.json","title":"Processed map metadata","description":"Written by process-maps.yml. Edit only 'name' by hand.","type":"object","required":["id","name","uploadedBy","date","aspect","width","height","hash","sizes","lqip"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"name":{"type":"string","minLength":1,"maxLength":120},"uploadedBy":{"type":"string"},"date":{"type":"string","format":"date-time"},"aspect":{"type":"number","minimum":1,"maximum":4},"width":{"type":"integer","minimum":1024},"height":{"type":"integer","minimum":256},"hash":{"type":"string","pattern":"^[0-9a-f]{12}$"},"sizes":{"type":"object","required":["1024"],"additionalProperties":false,"properties":{"1024":{"$ref":"#/$defs/path"},"2048":{"$ref":"#/$defs/path"},"4096":{"$ref":"#/$defs/path"},"8192":{"$ref":"#/$defs/path"}}},"tiles":{"type":"object","additionalProperties":false,"properties":{"16384":{"$ref":"#/$defs/tiles"},"32768":{"$ref":"#/$defs/tiles"}}},"coast":{"type":"string","pattern":"^maps/[a-z0-9-]+/[0-9a-f]{12}-coast\\.bin$"},"lqip":{"type":"string","pattern":"^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$","maxLength":2800}},"$defs":{"path":{"type":"string","pattern":"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"},"tiles":{"type":"object","required":["w","h","size","cols","rows","url"],"additionalProperties":false,"properties":{"w":{"enum":[16384,32768]},"h":{"type":"integer","minimum":1},"size":{"const":2048},"cols":{"type":"integer","minimum":1,"maximum":16},"rows":{"type":"integer","minimum":1,"maximum":16},"url":{"type":"string","pattern":"^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"}}}}};
 const schema42 = {"type":"string","pattern":"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"};
 const schema46 = {"type":"object","required":["w","h","size","cols","rows","url"],"additionalProperties":false,"properties":{"w":{"enum":[16384,32768]},"h":{"type":"integer","minimum":1},"size":{"const":2048},"cols":{"type":"integer","minimum":1,"maximum":16},"rows":{"type":"integer","minimum":1,"maximum":16},"url":{"type":"string","pattern":"^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"}}};
-const pattern25 = new RegExp("^[0-9a-f]{12}$", "u");
-const pattern26 = new RegExp("^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$", "u");
-const pattern30 = new RegExp("^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$", "u");
-const pattern32 = new RegExp("^maps/[a-z0-9-]+/[0-9a-f]{12}-coast\\.bin$", "u");
-const pattern33 = new RegExp("^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$", "u");
+const pattern26 = new RegExp("^[0-9a-f]{12}$", "u");
+const pattern27 = new RegExp("^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$", "u");
+const pattern31 = new RegExp("^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$", "u");
+const pattern33 = new RegExp("^maps/[a-z0-9-]+/[0-9a-f]{12}-coast\\.bin$", "u");
+const pattern34 = new RegExp("^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$", "u");
 
 function validate29(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="https://flanz1.github.io/world-globe-embed/schema/map.schema.json" */;
@@ -2899,7 +2899,7 @@ let data8 = data.hash;
 const _errs18 = errors;
 if(errors === _errs18){
 if(typeof data8 === "string"){
-if(!pattern25.test(data8)){
+if(!pattern26.test(data8)){
 validate29.errors = [{instancePath:instancePath+"/hash",schemaPath:"#/properties/hash/pattern",keyword:"pattern",params:{pattern: "^[0-9a-f]{12}$"},message:"must match pattern \""+"^[0-9a-f]{12}$"+"\""}];
 return false;
 }
@@ -2941,7 +2941,7 @@ const _errs23 = errors;
 const _errs24 = errors;
 if(errors === _errs24){
 if(typeof data10 === "string"){
-if(!pattern26.test(data10)){
+if(!pattern27.test(data10)){
 validate29.errors = [{instancePath:instancePath+"/sizes/1024",schemaPath:"#/$defs/path/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"+"\""}];
 return false;
 }
@@ -2963,7 +2963,7 @@ const _errs26 = errors;
 const _errs27 = errors;
 if(errors === _errs27){
 if(typeof data11 === "string"){
-if(!pattern26.test(data11)){
+if(!pattern27.test(data11)){
 validate29.errors = [{instancePath:instancePath+"/sizes/2048",schemaPath:"#/$defs/path/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"+"\""}];
 return false;
 }
@@ -2985,7 +2985,7 @@ const _errs29 = errors;
 const _errs30 = errors;
 if(errors === _errs30){
 if(typeof data12 === "string"){
-if(!pattern26.test(data12)){
+if(!pattern27.test(data12)){
 validate29.errors = [{instancePath:instancePath+"/sizes/4096",schemaPath:"#/$defs/path/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"+"\""}];
 return false;
 }
@@ -3007,7 +3007,7 @@ const _errs32 = errors;
 const _errs33 = errors;
 if(errors === _errs33){
 if(typeof data13 === "string"){
-if(!pattern26.test(data13)){
+if(!pattern27.test(data13)){
 validate29.errors = [{instancePath:instancePath+"/sizes/8192",schemaPath:"#/$defs/path/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"+"\""}];
 return false;
 }
@@ -3179,7 +3179,7 @@ let data21 = data15.url;
 const _errs50 = errors;
 if(errors === _errs50){
 if(typeof data21 === "string"){
-if(!pattern30.test(data21)){
+if(!pattern31.test(data21)){
 validate29.errors = [{instancePath:instancePath+"/tiles/16384/url",schemaPath:"#/$defs/tiles/properties/url/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"+"\""}];
 return false;
 }
@@ -3339,7 +3339,7 @@ let data28 = data22.url;
 const _errs64 = errors;
 if(errors === _errs64){
 if(typeof data28 === "string"){
-if(!pattern30.test(data28)){
+if(!pattern31.test(data28)){
 validate29.errors = [{instancePath:instancePath+"/tiles/32768/url",schemaPath:"#/$defs/tiles/properties/url/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"+"\""}];
 return false;
 }
@@ -3391,7 +3391,7 @@ let data29 = data.coast;
 const _errs66 = errors;
 if(errors === _errs66){
 if(typeof data29 === "string"){
-if(!pattern32.test(data29)){
+if(!pattern33.test(data29)){
 validate29.errors = [{instancePath:instancePath+"/coast",schemaPath:"#/properties/coast/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-coast\\.bin$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-coast\\.bin$"+"\""}];
 return false;
 }
@@ -3417,7 +3417,7 @@ validate29.errors = [{instancePath:instancePath+"/lqip",schemaPath:"#/properties
 return false;
 }
 else {
-if(!pattern33.test(data30)){
+if(!pattern34.test(data30)){
 validate29.errors = [{instancePath:instancePath+"/lqip",schemaPath:"#/properties/lqip/pattern",keyword:"pattern",params:{pattern: "^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$"},message:"must match pattern \""+"^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$"+"\""}];
 return false;
 }
