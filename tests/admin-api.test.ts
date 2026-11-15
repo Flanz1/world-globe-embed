@@ -475,6 +475,45 @@ describe("admin API reads", () => {
   });
 });
 
+describe("admin API save log", () => {
+  const regionPath = "content/regions/ann-land.json";
+  it("lists the saves that touched a file, newest first, with who made them, and pages back", async () => {
+    const ann = await client(ANN);
+    const bo = await client(BO);
+    for (const [who, label, by] of [[ann, "one", ANN], [bo, "two", BO], [ann, "three", ANN]] as const) {
+      await who.commit(`Edit ${label}`, async () => [put(regionPath, region("ann-land", ANN, by, { color: label === "one" ? "#111111" : label === "two" ? "#222222" : "#333333" }))]);
+    }
+    await bo.commit("Edit elsewhere", async () => [put("content/regions/old-land.json", region("old-land", undefined, BO, { color: "#abcdef" }))]);
+    const first = await ann.history({ path: regionPath, limit: 2 });
+    expect(first.entries.map((e) => e.message)).toEqual(["Edit three", "Edit two"]);
+    expect(first.entries[1].author).toEqual({ login: BO.login, id: BO.id });
+    expect(first.entries[0].sha).toMatch(/^[0-9a-f]{40}$/);
+    expect(first.next).toBe(2);
+    const second = await ann.history({ path: regionPath, limit: 2, page: first.next! });
+    expect(second.entries.map((e) => e.message)).toEqual(["Edit one", "initial"]);
+    // The whole of content/ includes the other region's save; files=1 names what each save changed.
+    const all = await ann.history({ files: true, limit: 2 });
+    expect(all.entries[0].message).toBe("Edit elsewhere");
+    expect(all.entries[0].files).toEqual([{ path: "content/regions/old-land.json", status: "modified" }]);
+  });
+  it("is for people on the admin list, and only for content/", async () => {
+    const r = await call(`${API}/history`, { headers: { Authorization: `Bearer ${await session(STRANGER)}` } });
+    expect(r.status).toBe(403);
+    expect((await call(`${API}/history`)).status).toBe(401);
+    const ann = await client(ANN);
+    await expect(ann.history({ path: "worker/src/handler.ts" })).rejects.toThrow(/only kept for files in content/);
+    await expect(ann.history({ path: "content/../.github" })).rejects.toThrow(GitHubError);
+  });
+  it("reads a file as it was in an earlier save", async () => {
+    const ann = await client(ANN);
+    const was = await ann.readText(regionPath);
+    await ann.commit("Edit", async () => [put(regionPath, region("ann-land", ANN, ANN, { color: "#999999" }))]);
+    const log = await ann.history({ path: regionPath });
+    expect(await ann.readFileAt(regionPath, log.entries[1].sha)).toBe(was);
+    expect(await ann.readFileAt("content/regions/nope.json", log.entries[1].sha)).toBeNull();
+  });
+});
+
 describe("admin API branch updates", () => {
   const raw = async (who: { id: number; login: string }, method: string, p: string, body?: unknown) => {
     const r = await call(`${API}/gh/repos/${REPO}${p}`, { method, headers: { Authorization: `Bearer ${await session(who)}`, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });

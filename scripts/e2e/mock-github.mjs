@@ -227,13 +227,21 @@ export class MockGitHub {
     }
     if (method === "GET" && p === `${base}/commits`) {
       const fp = url.searchParams.get("path");
+      const per = Number(url.searchParams.get("per_page") ?? 30);
+      const page = Number(url.searchParams.get("page") ?? 1);
+      const out = [];
       let sha = this.refs.get(url.searchParams.get("sha") ?? this.defaultBranch);
       while (sha) {
         const c = this.commits.get(sha);
-        if (!fp || c.changed?.includes(fp)) return json(200, [{ sha, commit: { message: c.message, author: { name: c.author, date: c.date } }, author: { login: c.author } }]);
+        if (!fp || c.changed?.some((x) => x === fp || x.startsWith(`${fp}/`))) out.push({ sha, commit: { message: c.message, author: { name: c.author, date: c.date } }, author: { login: c.author, id: ACCOUNTS.find((a) => a.login === c.author)?.id } });
         sha = c.parent;
       }
-      return json(200, []);
+      return json(200, out.slice((page - 1) * per, page * per));
+    }
+    if (method === "GET" && (m = /^\/commits\/([0-9a-f]{40})$/.exec(p.slice(base.length)))) {
+      const c = this.commits.get(m[1]);
+      if (!c) return json(404, { message: "Not Found" });
+      return json(200, { sha: m[1], commit: { message: c.message, author: { name: c.author, date: c.date } }, author: { login: c.author }, files: (c.changes ?? (c.changed ?? []).map((x) => ({ path: x, deleted: false }))).map((x) => ({ filename: x.path, status: x.deleted ? "removed" : "modified" })) });
     }
     return json(404, { message: `mock: no route for ${method} ${p}` });
   }
