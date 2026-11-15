@@ -14,7 +14,6 @@
   <div class="tabs" id="tabs" hidden role="tablist" aria-label="Admin sections">
     <button type="button" role="tab" id="tab-btn-maps" aria-controls="tab-maps" aria-selected="true">Maps &amp; slots</button>
     <button type="button" role="tab" id="tab-btn-regions" aria-controls="tab-regions" aria-selected="false">Regions</button>
-    <button type="button" role="tab" id="tab-btn-activity" aria-controls="tab-activity" aria-selected="false">Activity</button>
     <button type="button" role="tab" id="tab-btn-users" aria-controls="tab-users" aria-selected="false" hidden>Users</button>
   </div>
   <span id="who" class="muted"></span>
@@ -39,6 +38,12 @@
 
   <div id="main" hidden>
     <div class="layout">
+    <aside id="activity-card" class="card sidebar sidebar-left" aria-label="Recent activity">
+      <h2>Recent activity</h2>
+      <ul id="activity-list" class="activity compact"></ul>
+      <p id="activity-note" class="muted small" aria-live="polite"></p>
+      <button id="activity-open" type="button" class="ghost">Open full activity</button>
+    </aside>
     <div class="content">
     <div id="tab-maps" role="tabpanel" aria-labelledby="tab-btn-maps" class="tabpanel">
     <section class="card">
@@ -95,18 +100,6 @@
           <button type="button" class="r-new">New region</button>
         </div>
         <div id="regions" class="regions"></div>
-      </section>
-    </div>
-
-    <div id="tab-activity" role="tabpanel" aria-labelledby="tab-btn-activity" class="tabpanel" hidden>
-      <section class="card">
-        <h2>Recent activity</h2>
-        <p class="muted">Who saved, moved or deleted what, newest first. Click a region to open it.</p>
-        <ul id="activity-list" class="activity"></ul>
-        <div class="row">
-          <button id="activity-refresh" type="button" class="ghost">Refresh</button>
-          <span id="activity-note" class="muted small" aria-live="polite"></span>
-        </div>
       </section>
     </div>
 

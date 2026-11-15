@@ -242,14 +242,15 @@ button.tiny { padding: 1px 7px; font-size: 12px; }
 .ed-ov-name { font-weight: 600; }
 .ed-ov-info { margin: 0; }
 
-/* ── Status sidebar (right) ── */
+/* ── Status sidebar (right) and Recent activity sidebar (left) ── */
 #signin, #waiting { width: 100%; max-width: 960px; margin: 0 auto; }
-/* Content stays centred on the page; the status sits in the free space to its right. */
+/* Content stays centred on the page; recent activity sits in the free space to its left and the status to its right. */
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 960px) minmax(0, 1fr); gap: 16px; align-items: start; }
 .layout > .content { grid-column: 2; }
 .layout > .sidebar { grid-column: 3; justify-self: start; width: 100%; max-width: 300px; }
-/* Not enough room beside a centred column: content takes the left, status the right. */
-@media (max-width: 1560px) { .layout { grid-template-columns: minmax(0, 1fr) 280px; } .layout > .content { grid-column: 1; } .layout > .sidebar { grid-column: 2; max-width: none; } }
+.layout > .sidebar-left { grid-column: 1; grid-row: 1; justify-self: end; }
+/* Not enough room beside a centred column: activity on the left, content, status on the right. */
+@media (max-width: 1700px) { .layout { grid-template-columns: 260px minmax(0, 1fr) 260px; } .layout > .content { grid-column: 2; } .layout > .sidebar { grid-column: 3; max-width: none; } .layout > .sidebar-left { grid-column: 1; max-width: none; justify-self: stretch; } }
 .content { display: grid; gap: 16px; min-width: 0; }
 .sidebar { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
 .sidebar h3 { font-size: 13px; margin: 12px 0 4px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
@@ -257,7 +258,7 @@ button.tiny { padding: 1px 7px; font-size: 12px; }
 .sidebar .runs { overflow-wrap: anywhere; }
 .checks { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 4px; font-size: 13px; }
 .checks .warn { color: #b26a00; }
-@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .layout > .content, .layout > .sidebar { grid-column: 1; } .sidebar { position: static; max-height: none; order: -1; } }
+@media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } .layout > .content, .layout > .sidebar { grid-column: 1; } .layout > .sidebar-left { grid-row: auto; order: 1; } .layout > .content { order: 0; } .sidebar { position: static; max-height: none; order: -1; } .layout > .sidebar-left { order: 1; } }
 
 /* Editor: several regions edited together */
 .ed-part-row select[data-part-owner] { grid-column: 2 / 4; }
@@ -281,5 +282,11 @@ dialog.history { width: min(940px, calc(100vw - 32px)); }
 .act-row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; border-bottom: 1px solid var(--line); padding: 6px 2px; }
 .act-text { min-width: 0; overflow-wrap: anywhere; }
 .act-row time { white-space: nowrap; }
+.activity.compact { margin: 6px 0 10px; gap: 0; font-size: 13px; }
+.activity.compact .act-row { flex-direction: column; gap: 0; padding: 5px 0; }
+.sidebar-left h2 { margin-bottom: 4px; }
+.activity-dlg { width: min(900px, calc(100vw - 32px)); }
+.act-filters { gap: 12px 18px; flex-wrap: wrap; }
+.act-pager { justify-content: center; gap: 8px; align-items: center; }
 .act-gone { text-decoration: line-through; color: var(--muted, inherit); }
 button.link { background: none; border: 0; padding: 0; font: inherit; color: var(--accent, #4a8cff); text-decoration: underline; cursor: pointer; }
