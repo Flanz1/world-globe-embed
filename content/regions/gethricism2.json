@@ -9,6 +9,7 @@
     "colorLabel": "Diarism",
     "fillOpacity": 0.35,
     "label": true,
+    "description": "Old-do not use",
     "legendTitle": "Gethricism",
     "legend": [
       {
@@ -179,15 +180,15 @@
       4,
       4
     ],
-    "updated": "2026-11-13T19:08:45Z",
+    "updated": "2026-11-15T13:03:16Z",
     "created": "2026-11-13T19:08:45Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
