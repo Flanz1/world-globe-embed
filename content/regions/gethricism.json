@@ -9,7 +9,7 @@
     "colorLabel": "Diarism",
     "fillOpacity": 0.35,
     "label": true,
-    "legendTitle": "High Gethricism",
+    "legendTitle": "Gethricism",
     "legend": [
       {
         "label": "Kethricism",
@@ -321,12 +321,15 @@
       "region",
       "trinicism"
     ],
+    "linkedNames": {
+      "legendTitle": "Gethricism"
+    },
     "created": "2026-11-15T13:01:56Z",
     "createdBy": {
       "id": 45669787,
       "login": "Flanz1"
     },
-    "updated": "2026-11-15T13:44:40Z",
+    "updated": "2026-11-15T20:28:18Z",
     "updatedBy": {
       "id": 45669787,
       "login": "Flanz1"
