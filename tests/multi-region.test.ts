@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Position } from "../src/shared/geo.ts";
-import { hasContestedLayers, regionPaintLayers } from "../src/shared/region-paint.ts";
+import { hasContestedLayers, legendRowsFor, regionPaintLayers } from "../src/shared/region-paint.ts";
 import { legendRows, mergeRegions, parseRegionIds, regionLabelPoints, REGIONS_MAX, type RegionData } from "../src/shared/region.ts";
 
 const square = (x: number, y: number, s = 10): Position[][] => [[[x, y], [x + s, y], [x + s, y + s], [x, y + s], [x, y]]];
@@ -48,6 +48,17 @@ describe("mergeRegions", () => {
   it("cuts the underlays to the top region only with clip", () => {
     expect(regionPaintLayers(mergeRegions([a, b], true)).map((l) => !!l.clip)).toEqual([true, false]);
     expect(regionPaintLayers(mergeRegions([a, b])).map((l) => !!l.clip)).toEqual([false, false]);
+  });
+  it("draws the top region border-only over which the others show (with clip)", () => {
+    expect(regionPaintLayers(mergeRegions([a, b], true)).map((l) => !!l.noFill)).toEqual([false, true]);
+    expect(regionPaintLayers(mergeRegions([a, b])).map((l) => !!l.noFill)).toEqual([false, false]);
+  });
+  it("lists a layer's colour only if some of it lies inside the region", () => {
+    const inside = region("in", "#00ff00", [square(2, 2, 3)], { colorLabel: "inside" });
+    const outside = region("out", "#0000ff", [square(50, 50)], { colorLabel: "outside" });
+    const top = region("top", "#ff00ff", [square(0, 0)], { colorLabel: "top" });
+    expect(legendRowsFor(mergeRegions([inside, outside, top], true)).map((e) => e.label)).toEqual(["inside", "top"]);
+    expect(legendRowsFor(mergeRegions([inside, outside, top])).map((e) => e.label)).toEqual(["inside", "outside", "top"]);
   });
   it("labels each region on its own, honouring its label setting unless forced", () => {
     const x = region("x", "#111", [square(0, 0)], { name: "X" });

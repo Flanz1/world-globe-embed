@@ -8,9 +8,9 @@
  */
 import { clamp, clampPadding } from "../shared/params.ts";
 import { geometryBounds, globeToImage, imageToGlobe, polygonsOf, type Position } from "../shared/geo.ts";
-import { FLAT_K_MAX, flatFit, flatMinK, legendRows, regionLabelPoints, type FlatView, type RegionData } from "../shared/region.ts";
+import { FLAT_K_MAX, flatFit, flatMinK, regionLabelPoints, type FlatView, type RegionData } from "../shared/region.ts";
 import { paintLayerStack, type PaintLayer } from "../shared/raster.ts";
-import { hasContestedLayers, regionPaintLayers } from "../shared/region-paint.ts";
+import { hasContestedLayers, legendRowsFor, regionPaintLayers } from "../shared/region-paint.ts";
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
 import { TILE_BUDGET, TileCache, levelFor, tileRect, tilesAt, tileUrl } from "../shared/tiles.ts";
 import type { FlatStartContext, PreviewMessage } from "./contract.ts";
@@ -425,7 +425,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       const r = visible.of(whole);
       reg = r;
       spec = regionPaintLayers(r);
-      regionKey?.set(R.key ? legendRows(r) : [], r.legendTitle, R.key && hasContestedLayers(spec));
+      regionKey?.set(R.key ? legendRowsFor(r) : [], r.legendTitle, R.key && hasContestedLayers(spec));
       const pts = (R.label ?? r.label) ? regionLabelPoints(r, R.label === true) : [];
       labelAt = pts.map((p) => p.at);
       labels?.set(pts.map((p) => p.text));

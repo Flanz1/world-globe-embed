@@ -40,9 +40,9 @@ import {
 } from "three";
 import { BASE_DISTANCE, FOV_DEG, MAX_DISTANCE, MIN_DISTANCE, clamp, clampPadding, distanceForZoom, parseHex } from "../shared/params.ts";
 import { imageToGlobe, polygonsOf, type Position } from "../shared/geo.ts";
-import { legendRows, regionFit, regionLabelPoints, type RegionData } from "../shared/region.ts";
+import { regionFit, regionLabelPoints, type RegionData } from "../shared/region.ts";
 import { paintLayerStack, type PaintLayer } from "../shared/raster.ts";
-import { hasContestedLayers, regionPaintLayers } from "../shared/region-paint.ts";
+import { hasContestedLayers, legendRowsFor, regionPaintLayers } from "../shared/region-paint.ts";
 import { deviceLimit, deviceMemory, nextTier } from "../shared/tiers.ts";
 import { createGlobeTiles } from "./globe-tiles.ts";
 import type { PreviewMessage, StartContext } from "./contract.ts";
@@ -332,7 +332,7 @@ export async function start(ctx: StartContext): Promise<void> {
     const pts = (R?.label ?? vis.label) ? regionLabelPoints(vis, R?.label === true) : [];
     labelAt = pts.map((p) => p.at);
     labels?.set(pts.map((p) => p.text));
-    regionKey?.set(R?.key ? legendRows(vis) : [], vis.legendTitle, !!R?.key && hasContestedLayers(spec!));
+    regionKey?.set(R?.key ? legendRowsFor(vis) : [], vis.legendTitle, !!R?.key && hasContestedLayers(spec!));
   }
   const visible = makeVisibility();
   let spec: PaintLayer[] | null = null;

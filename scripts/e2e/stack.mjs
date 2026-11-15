@@ -4,7 +4,7 @@
  *
  *   npm run e2e:stack
  *
- * 1. A region with underlays (properties.under): they're drawn below it, each with a legend toggle named and
+ * 1. A region with underlays (properties.under): they're drawn over it, each with a legend toggle named and
  *    started on/off as set, under the set heading; toggling one redraws; under=0 leaves them out.
  * 2. ?regions=a,b: stacks the regions, a toggle each, no contest marks across regions.
  *

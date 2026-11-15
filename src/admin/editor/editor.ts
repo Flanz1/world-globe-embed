@@ -490,9 +490,9 @@ export function openEditor(o: EditorOptions): void {
   const opacityOut = h("output", {});
   const labelIn = h("input", { type: "checkbox", checked: hist.state.props.label, name: "label" });
   const borderIn = h("input", { type: "checkbox", checked: hist.state.props.nationalBorders === true, name: "national-borders" });
-  /* "Show under this region": other regions of the slot drawn below this one in its embed, each with a legend toggle. */
+  /* "Show over this region": other regions of the slot drawn below this one in its embed, each with a legend toggle. */
   const underList = h("div", { className: "ed-under-list" });
-  const underAdd = h("select", { name: "under-add", ariaLabel: "Add a region to show under this one" });
+  const underAdd = h("select", { name: "under-add", ariaLabel: "Add a region to show over this one" });
   const underClipIn = h("input", { type: "checkbox", checked: true, name: "under-clip" });
   const underTitleIn = h("input", { type: "text", maxLength: UNDER_TITLE_MAX, placeholder: "Layers", name: "under-title", ariaLabel: "Heading of the toggle list" });
   const ownToggleIn = h("input", { type: "checkbox", name: "own-toggle" });
@@ -500,7 +500,7 @@ export function openEditor(o: EditorOptions): void {
   const underBox = h(
     "fieldset",
     { className: "ed-under" },
-    h("legend", { textContent: "Show under this region" }),
+    h("legend", { textContent: "Show over this region" }),
     h("p", { className: "muted small", textContent: "Other regions of this slot (religion, culture, trade goods…) drawn under this one, each with a toggle in the embed's legend." }),
     underList,
     h("label", {}, "Add a region", underAdd),
@@ -1078,10 +1078,10 @@ export function openEditor(o: EditorOptions): void {
     return l;
   };
   let underBg: { key: string; canvas: HTMLCanvasElement } | null = null;
-  function drawUnder(p: Parts, offs: number[], viewKey: string): void {
+  function drawUnder(p: Parts, offs: number[], viewKey: string): boolean {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const layers = underOn().flatMap((e) => underPaint(e.id) ?? []);
-    if (!layers.length || !p.length) return;
+    if (!layers.length || !p.length) return false;
     const key = `${viewKey}|${underOn().map((e) => e.id).join(",")}`;
     if (!underBg || underBg.key !== key) {
       const c = underBg?.canvas ?? document.createElement("canvas");
@@ -1101,6 +1101,7 @@ export function openEditor(o: EditorOptions): void {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.drawImage(underBg.canvas, 0, 0);
     g.restore();
+    return true;
   }
   let bg: { key: string; img: HTMLImageElement | null; canvas: HTMLCanvasElement } | null = null;
   function render(): void {
@@ -1159,9 +1160,10 @@ export function openEditor(o: EditorOptions): void {
     const s = hist.state.props;
     const cs = clashState();
     syncClashList(cs);
-    drawUnder(p, offs, bgKey);
+    // The layers are shown over the region (as in the embed): it keeps its borders but gives up its fill.
+    const over = drawUnder(p, offs, bgKey);
     if (p.length) {
-      paintSpec(g, cs.spec, sx, sy, offs, { fillOpacity: simplifyPreview ? s.fillOpacity * 0.4 : s.fillOpacity, lineWidth: 2 }, { w, h: hh });
+      paintSpec(g, cs.spec, sx, sy, offs, { fillOpacity: simplifyPreview ? s.fillOpacity * 0.4 : s.fillOpacity, lineWidth: 2, noFill: over }, { w, h: hh });
       const sl = (hist.state.lines ?? [])[selLine];
       if (sl) {
         g.save();
