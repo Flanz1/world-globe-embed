@@ -101,6 +101,8 @@ export interface RegionProperties {
    * this region's outline unless underClip is false, with a toggle in the embed's legend. Bottom first.
    */
   under?: UnderEntry[];
+  /** Ids of pin maps (content/pinmaps.json) of this slot whose pins show on this region's embed. */
+  pinMaps?: string[];
   /** With under: false to show the underlays outside this region's outline too. Missing: cut to the outline. */
   underClip?: boolean;
   /** With under: heading of the toggle list in the embed (default "Layers"). */
@@ -184,6 +186,8 @@ export interface RegionIndexEntry {
   b: [number, number, number, number];
   /** The region's underlays (RegionProperties.under), only those that exist on this slot. */
   u?: UnderEntry[];
+  /** Ids of the pin maps (RegionProperties.pinMaps) that exist on this slot: their pins show unless the embed says otherwise. */
+  pm?: string[];
   /** underClip, when false. */
   uc?: false;
   /** underTitle and layerLabel, when set. */

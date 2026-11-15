@@ -1,5 +1,5 @@
 /**
- * Map pins in the embed, shared by the globe and flat viewers: ?pins=1 (or ?pins=battles,city) fetches
+ * Map pins in the embed, shared by the globe and flat viewers: ?pins=1 (or ?pins=holy-sites for one pin map) fetches
  * pins/<slot>.json and draws each pin as a small round marker on top of the map and the regions. A marker
  * shows its name on hover or focus; clicking it opens a card with the description and a link (normally to
  * the place's note in the Obsidian vault). Everything from the data is set with textContent or checked
@@ -40,18 +40,21 @@ const CSS = `
 `.replace(/\n/g, "");
 
 /** Fetches and draws this slot's pins if the page asked for them (?pins=…); null when it didn't or there is nothing to show. */
-export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: string, search = location.search): Promise<PinLayer | null> {
-  const sel = parsePinsParam(new URLSearchParams(search).get("pins"));
+/** `fallback` is what a region embed asks for by itself (the region's pin maps) when the URL has no ?pins=. */
+export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: string, search = location.search, fallback?: string): Promise<PinLayer | null> {
+  const sel = parsePinsParam(new URLSearchParams(search).get("pins") ?? fallback);
   // The admin preview page has no pins of its own.
   if (!sel || !PIN_ID.test(slug)) return null;
-  let all: PinData[] | null;
+  let file: ReturnType<typeof parsePinsFile>;
   try {
     const r = await fetch(new URL(`../../pins/${slug}.json`, location.href));
-    all = r.ok ? parsePinsFile(await r.json()) : null;
+    file = r.ok ? parsePinsFile(await r.json()) : null;
   } catch {
-    all = null;
+    file = null;
   }
-  const pins = (all ?? []).filter((p) => pinShown(sel, p));
+  const mapName = new Map((file?.maps ?? []).map((m) => [m.id, m.name]));
+  const labelOf = (p: PinData) => (p.pinMap && mapName.get(p.pinMap)) || "";
+  const pins = (file?.pins ?? []).filter((p) => pinShown(sel, p));
   if (!pins.length) return null;
 
   const style = document.createElement("style");
@@ -91,7 +94,7 @@ export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: s
     title.textContent = p.name;
     const kind = document.createElement("p");
     kind.className = "kind";
-    kind.textContent = p.category ? `${p.category} · ${kindInfo(p.kind).label}` : kindInfo(p.kind).label;
+    kind.textContent = labelOf(p) ? `${labelOf(p)} · ${kindInfo(p.kind).label}` : kindInfo(p.kind).label;
     const x = document.createElement("button");
     x.type = "button";
     x.className = "x";
@@ -134,7 +137,7 @@ export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: s
     b.className = "wpin";
     b.hidden = true;
     b.dataset.name = p.name;
-    b.setAttribute("aria-label", `${p.name}, ${p.category ? `${p.category}, ` : ""}${kindInfo(p.kind).label}`);
+    b.setAttribute("aria-label", `${p.name}, ${labelOf(p) ? `${labelOf(p)}, ` : ""}${kindInfo(p.kind).label}`);
     b.setAttribute("aria-expanded", "false");
     const bg = pinColor(p);
     b.style.background = bg;

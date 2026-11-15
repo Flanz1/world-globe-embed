@@ -9,6 +9,7 @@ import { checkLegend, checkParts, type RegionFeature } from "../../src/shared/re
 import { MAX_PINS_PER_SLOT, checkPin, type PinFeature } from "../../src/shared/pins.ts";
 import { checkAccess } from "../../src/shared/access.ts";
 import { checkCategories, type CategoriesFile } from "../../src/shared/categories.ts";
+import { checkPinMaps, type PinMapsFile } from "../../src/shared/pinmaps.ts";
 import { resolveLinked } from "../../src/shared/combine.ts";
 import { ROOT, contentPaths, type ContentPaths } from "./paths.ts";
 
@@ -24,6 +25,7 @@ const validateRegion = compile("region.schema.json");
 const validateAccess = compile("access.schema.json");
 const validateCategories = compile("categories.schema.json");
 const validatePin = compile("pin.schema.json");
+const validatePinMaps = compile("pinmaps.schema.json");
 
 function describe(file: string, errors: ErrorObject[] | null | undefined): string[] {
   // if/then/else failures are always accompanied by the specific error inside the branch.
@@ -57,6 +59,8 @@ export interface Content {
   regions?: Map<string, RegionFeature>;
   /** Pin id → pin (content/pins/). Optional like regions. */
   pins?: Map<string, PinFeature>;
+  /** Pin maps and their folders (content/pinmaps.json). Optional. */
+  pinMaps?: PinMapsFile;
 }
 
 export interface ValidationResult {
@@ -243,6 +247,35 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
   }
   for (const [slot, n] of perSlot) if (n > MAX_PINS_PER_SLOT) errors.push(`content/pins/: slot "${slot}" has ${n} pins; at most ${MAX_PINS_PER_SLOT} are allowed.`);
 
+  // Pin maps (optional): named sets of pins in folders. A pin or region naming one that's gone is only a warning (deleting a pin map leaves such ids behind).
+  let pinMaps: PinMapsFile | undefined;
+  const pinMapsFile = path.join(paths.content, "pinmaps.json");
+  if (existsSync(pinMapsFile)) {
+    try {
+      const data = readJson(pinMapsFile);
+      if (!validatePinMaps(data)) errors.push(...describe("content/pinmaps.json", validatePinMaps.errors));
+      else {
+        const bad = checkPinMaps(data);
+        errors.push(...bad.map((e) => `content/pinmaps.json: ${e}`));
+        if (!bad.length) pinMaps = data as PinMapsFile;
+        for (const m of (data as PinMapsFile).maps) if (slots && !slots.slots[m.slot]) errors.push(`content/pinmaps.json: the pin map "${m.id}" is on slot "${m.slot}", which doesn't exist in content/slots.json.`);
+      }
+    } catch (e) {
+      errors.push(`content/pinmaps.json: is not valid JSON (${(e as Error).message})`);
+    }
+  }
+  const mapsById = new Map((pinMaps?.maps ?? []).map((m) => [m.id, m]));
+  for (const pin of pins.values()) {
+    const id = pin.properties.pinMap;
+    if (id === undefined) continue;
+    const m = mapsById.get(id);
+    if (!m) warnings.push(`content/pins/${pin.id}.json: the pin map "${id}" doesn't exist, so the pin isn't in one.`);
+    else if (m.slot !== pin.properties.slot) warnings.push(`content/pins/${pin.id}.json: the pin is on slot "${pin.properties.slot}" but its pin map "${id}" is on slot "${m.slot}".`);
+  }
+  for (const [id, region] of regions)
+    for (const pm of region.properties.pinMaps ?? [])
+      if (mapsById.get(pm)?.slot !== region.properties.slot) warnings.push(`content/regions/${id}.json: the pin map "${pm}" doesn't exist on slot "${region.properties.slot}", so its pins aren't shown.`);
+
   // Who may use the admin page (optional: without it only the repository owner can sign in).
   const accessFile = path.join(paths.content, "access.json");
   if (existsSync(accessFile)) {
@@ -272,5 +305,5 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
     }
   }
 
-  return { content: errors.length || !slots ? null : { slots, maps, regions, pins }, errors, warnings };
+  return { content: errors.length || !slots ? null : { slots, maps, regions, pins, pinMaps }, errors, warnings };
 }

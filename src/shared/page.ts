@@ -144,11 +144,13 @@ function checkIndex(regions: Record<string, RegionIndexEntry>): Record<string, R
     if (!REGION_ID.test(id)) throw new Error(`region id "${id}" is not a valid id`);
     if (!finite(...e.c, e.z, ...e.b) || e.c.length !== 2 || e.b.length !== 4) throw new Error(`region "${id}": bad index numbers`);
     const u = (e.u ?? []).filter((x) => REGION_ID.test(x.id)).map((x) => ({ id: x.id, ...(typeof x.label === "string" ? { label: x.label } : {}), ...(typeof x.on === "boolean" ? { on: x.on } : {}) }));
+    const pm = (e.pm ?? []).filter((x) => typeof x === "string" && REGION_ID.test(x));
     out[id] = {
       c: [e.c[0], e.c[1]],
       z: e.z,
       b: [e.b[0], e.b[1], e.b[2], e.b[3]],
       ...(u.length ? { u } : {}),
+      ...(pm.length ? { pm } : {}),
       ...(u.length && e.uc === false ? { uc: false as const } : {}),
       ...(u.length && typeof e.ut === "string" ? { ut: e.ut } : {}),
       ...(u.length && typeof e.ul === "string" ? { ul: e.ul } : {}),

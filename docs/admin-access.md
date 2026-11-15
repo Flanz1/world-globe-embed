@@ -11,7 +11,7 @@ are enforced in the API (`src/shared/access.ts`, tested in `tests/admin-api.test
 | Permission | Lets someone |
 |---|---|
 | **Maps & slots** | open the Maps & slots tab: upload or replace map images, add slots, change slot settings |
-| **Create regions** | draw new regions, and edit or delete the regions they created; also add, rename, reorder and delete region categories, and sort any region into one (see below) |
+| **Create regions** | draw new regions, and edit or delete the regions they created; also add, rename, reorder and delete region categories, and sort any region into one (see below); place pins, and add, rename, move and delete pin maps and their folders (`content/pinmaps.json`, no owner, like region categories) |
 | **Edit others' regions** | change regions other people created |
 | **Delete others' regions** | delete regions other people created |
 | **Manage users** | open the Users tab and add or change people, but only with permissions they hold themselves, and never their own entry or the owner's |

@@ -325,3 +325,10 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
 .pn-cats { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; margin: 0 0 8px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .pn-cats legend { padding: 0 4px; font-size: 12px; color: var(--muted, inherit); }
 .pn-cats p { flex-basis: 100%; margin: 0; }
+.pinmap { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px 8px; display: grid; gap: 4px; }
+.pinmap-head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.pinmap-head .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.pinmap-head .actions button { padding: 3px 10px; font-size: 13px; }
+.pinmap.loose { border-style: dashed; }
+.ed-pinmaps { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; margin: 0; display: grid; gap: 4px; }
+.ed-pinmaps-list { display: grid; gap: 2px; }

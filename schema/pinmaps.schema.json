@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flanz1.github.io/world-globe-embed/schema/pinmaps.schema.json",
+  "title": "Pin maps and their folders",
+  "description": "Pin maps are named sets of map pins on one slot (\"Holy sites\", \"Battles\"); a pin joins one by naming its id in properties.pinMap. An embed shows one with ?pins=<id>, and a region can include some (properties.pinMaps) so their pins show on its embed. Folders sort the pin maps in the admin page's Pins tab and nest like the Regions tab's folders: a folder lists the ids of its pin maps in `regions`, and a pin map is in at most one folder. Edited from the admin page; the public embed only reads the names (bundled into pins/<slot>.json).",
+  "type": "object",
+  "required": ["folders", "maps"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "folders": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "regions"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+          "parent": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$", "description": "The id of the folder this one sits in. Absent at the top level." },
+          "createdBy": { "$ref": "#/$defs/account" },
+          "created": { "type": "string", "maxLength": 40, "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$" },
+          "regions": {
+            "type": "array",
+            "maxItems": 300,
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+            "description": "Ids of the pin maps in this folder (named `regions` so the folder code is shared with the Regions tab)."
+          }
+        }
+      }
+    },
+    "maps": {
+      "type": "array",
+      "maxItems": 300,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "slot"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$", "description": "Permanent id (a slug made from the name when it was created); what ?pins= uses." },
+          "name": { "type": "string", "minLength": 1, "maxLength": 60, "description": "What it is called; can be renamed." },
+          "slot": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$", "description": "The slot whose map its pins are on." }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "account": {
+      "type": "object",
+      "required": ["id", "login"],
+      "additionalProperties": false,
+      "properties": { "id": { "type": "integer", "minimum": 1 }, "login": { "type": "string", "maxLength": 39 } }
+    }
+  }
+}

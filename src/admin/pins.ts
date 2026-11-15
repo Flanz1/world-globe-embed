@@ -8,13 +8,15 @@
 import { escapeHtml } from "../shared/page.ts";
 import { stringifyCompact } from "../shared/json.ts";
 import { pinIcon, inkFor } from "../shared/pin-icons.ts";
-import { PIN_CATEGORY_MAX, PIN_DESCRIPTION_MAX, PIN_KINDS, PIN_NAME_MAX, PIN_ID, categoriesOf, checkPin, isPinKind, kindInfo, pinColor, pinPath, safeLink, type PinFeature } from "../shared/pins.ts";
+import { PIN_DESCRIPTION_MAX, PIN_KINDS, PIN_NAME_MAX, PIN_ID, checkPin, isPinKind, kindInfo, pinColor, pinPath, safeLink, type PinFeature } from "../shared/pins.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
 import { clamp } from "../shared/params.ts";
 import { $, SITE, h } from "./dom.ts";
 import type { GitHub } from "./github.ts";
 import { loadMapImage } from "./images.ts";
 import { confirmBox, modal } from "./region-dialogs.ts";
+import { canOrganise, initPinMaps, loadPinMaps, moveMapDialog, newFolder, newMap, pinMaps, removeMap, renameMap, renderTree } from "./pinmaps.ts";
+import { mapById, mapsOfSlot, type PinMap } from "../shared/pinmaps.ts";
 import { account, can, canDelete, canEdit, refusal } from "./session.ts";
 
 export interface PinsDeps {
@@ -45,6 +47,7 @@ export const pinEntries = (): PinEntry[] => entries;
 
 export async function loadPins(): Promise<void> {
   const gh = deps.gh();
+  await loadPinMaps().catch(() => {});
   const files = (await gh.listTree("content/pins")).filter((f) => f.type === "file" && f.name.endsWith(".json"));
   const loaded: PinEntry[] = [];
   let next = 0;
@@ -298,9 +301,8 @@ function renderForm(rebuild: boolean): void {
   }
   const name = h("input", { type: "text", maxLength: PIN_NAME_MAX, value: p.name, required: true, disabled: !ok, autocomplete: "off", ariaLabel: "Name" });
   const kind = h("select", { disabled: !ok, ariaLabel: "Kind" }, ...PIN_KINDS.map((k) => h("option", { value: k.id, textContent: k.label, selected: k.id === p.kind })));
-  const catList = h("datalist", { id: "pn-cats" }, ...categoriesOf(slotPins().map((e) => e.feature!.properties)).map((c) => h("option", { value: c.name })));
-  const category = h("input", { type: "text", maxLength: PIN_CATEGORY_MAX, value: p.category ?? "", disabled: !ok, autocomplete: "off", placeholder: "e.g. Holy sites, Battles, Cities", ariaLabel: "Category" });
-  category.setAttribute("list", "pn-cats");
+  const maps = mapsOfSlot(pinMaps(), slot);
+  const pinMap = h("select", { disabled: !ok, ariaLabel: "Pin map" }, h("option", { value: "", textContent: "None" }), ...maps.map((m) => h("option", { value: m.id, textContent: m.name, selected: m.id === p.pinMap })));
   const useColor = h("input", { type: "checkbox", checked: !!p.color, disabled: !ok, ariaLabel: "Use a custom colour" });
   const color = h("input", { type: "color", value: p.color && /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : kindInfo(p.kind).color, disabled: !ok || !p.color, ariaLabel: "Colour" });
   const desc = h("textarea", { rows: 3, maxLength: PIN_DESCRIPTION_MAX, value: p.description ?? "", disabled: !ok, ariaLabel: "Description" });
@@ -312,9 +314,8 @@ function renderForm(rebuild: boolean): void {
   const sync = () => {
     p.name = name.value;
     if (isPinKind(kind.value)) p.kind = kind.value;
-    const cat = category.value.replace(/\s+/g, " ").trim();
-    if (cat) p.category = cat;
-    else delete p.category;
+    if (pinMap.value) p.pinMap = pinMap.value;
+    else delete p.pinMap;
     color.disabled = !ok || !useColor.checked;
     if (useColor.checked) p.color = color.value;
     else delete p.color;
@@ -328,13 +329,13 @@ function renderForm(rebuild: boolean): void {
     updateButtons();
     redraw();
   };
-  for (const c of [name, kind, category, useColor, color, desc, link]) c.addEventListener("input", sync);
+  for (const c of [name, kind, pinMap, useColor, color, desc, link]) c.addEventListener("input", sync);
   const form = h(
     "form",
     { className: "pn-form" },
     h("label", {}, "Name", name),
     h("label", {}, "Kind (decides the icon)", kind),
-    h("label", {}, "Category (optional: lets an embed show only some pins)", category, catList),
+    h("label", {}, "Pin map (optional: an embed can show one pin map)", pinMap),
     h("div", { className: "pn-color" }, h("label", { className: "check" }, useColor, "Custom colour"), color),
     h("label", {}, `Description (optional, up to ${PIN_DESCRIPTION_MAX} characters)`, desc),
     h("label", {}, "Link to the note (optional)", link),
@@ -427,26 +428,70 @@ async function remove_(): Promise<void> {
 
 /* ── The list and the controls above it ── */
 
+/** One pin in the list. */
+function pinRow(e: PinEntry): HTMLElement {
+  const p = e.feature!.properties;
+  const sw = h("span", { className: "pn-sw" }, pinIcon(p.kind, 12));
+  sw.style.background = pinColor(p);
+  sw.style.color = inkFor(pinColor(p));
+  return h(
+    "button",
+    { type: "button", className: `pn-row${selected === e.id ? " on" : ""}`, onclick: () => (select(e.id), centreOn(e.feature!)) },
+    sw,
+    h("span", { className: "pn-name", textContent: p.name }),
+    h("span", { className: "muted small", textContent: kindInfo(p.kind).label }),
+  );
+}
+
+const pinMatches = (e: PinEntry, q: string): boolean => !q || e.feature!.properties.name.toLowerCase().includes(q) || e.id.includes(q) || e.feature!.properties.kind.includes(q);
+/** The pins of this slot that are in pin map `m` (null: in none, or in one that no longer exists). */
+const pinsIn = (m: PinMap | null): PinEntry[] => slotPins().filter((e) => (m ? e.feature!.properties.pinMap === m.id : !e.feature!.properties.pinMap || !mapById(pinMaps(), e.feature!.properties.pinMap)));
+
 function renderList(): void {
   const q = search.trim().toLowerCase();
-  const rows = slotPins().filter((e) => !q || e.feature!.properties.name.toLowerCase().includes(q) || e.id.includes(q) || e.feature!.properties.kind.includes(q) || (e.feature!.properties.category ?? "").toLowerCase().includes(q));
   const bad = entries.filter((e) => !e.feature);
-  el.count.textContent = `${slotPins().length} pin${slotPins().length === 1 ? "" : "s"} on this slot`;
+  const nMaps = mapsOfSlot(pinMaps(), slot).length;
+  el.count.textContent = `${slotPins().length} pin${slotPins().length === 1 ? "" : "s"} and ${nMaps} pin map${nMaps === 1 ? "" : "s"} on this slot`;
+  const ok = canOrganise();
+  const small = (text: string, action: string, onclick: () => void, why = "", cls = "ghost") => h("button", { type: "button", className: cls, textContent: text, onclick, disabled: !!why, title: why, dataset: { action } });
+  const mapBody = (m: PinMap | null): HTMLElement => {
+    const all = pinsIn(m);
+    const nameHit = !!m && !!q && m.name.toLowerCase().includes(q);
+    const rows = all.filter((e) => nameHit || pinMatches(e, q));
+    const why = ok ? "" : "You don't have permission to change pin maps.";
+    return h(
+      "section",
+      { className: `pinmap${m ? "" : " loose"}`, dataset: m ? { pinmap: m.id } : { pinmap: "" } },
+      h(
+        "div",
+        { className: "pinmap-head" },
+        h("strong", { textContent: m ? m.name : "Not in a pin map" }),
+        h("span", { className: "badge", textContent: String(all.length), title: `${all.length} pin${all.length === 1 ? "" : "s"}` }),
+        m
+          ? h(
+              "div",
+              { className: "actions" },
+              small("Embed code…", "embed-map", () => embedDialog(m.id)),
+              small("Move", "move-map", () => moveMapDialog(m), why),
+              small("Rename", "rename-map", () => renameMap(m), why),
+              small("Delete", "delete-map", () => void removeMap(m, all.length), why, "ghost danger"),
+            )
+          : null,
+      ),
+      ...rows.map(pinRow),
+      rows.length ? null : h("p", { className: "muted small", textContent: m ? (all.length ? "No pin matches." : "No pins yet. Pick this pin map in a pin's form to put it here.") : "Every pin is in a pin map." }),
+    );
+  };
+  const looseEmpty = !pinsIn(null).length;
+  const tree = renderTree({
+    slot,
+    mapBody: (m) => (m === null && looseEmpty ? h("span") : mapBody(m)),
+    filtering: !!q,
+    hasMatch: (m) => !!q && (m ? m.name.toLowerCase().includes(q) || pinsIn(m).some((e) => pinMatches(e, q)) : pinsIn(null).some((e) => pinMatches(e, q))),
+  });
   el.list.replaceChildren(
-    ...rows.map((e) => {
-      const p = e.feature!.properties;
-      const sw = h("span", { className: "pn-sw" }, pinIcon(p.kind, 12));
-      sw.style.background = pinColor(p);
-      sw.style.color = inkFor(pinColor(p));
-      return h(
-        "button",
-        { type: "button", className: `pn-row${selected === e.id ? " on" : ""}`, onclick: () => (select(e.id), centreOn(e.feature!)) },
-        sw,
-        h("span", { className: "pn-name", textContent: p.name }),
-        h("span", { className: "muted small", textContent: p.category ? `${p.category} · ${kindInfo(p.kind).label}` : kindInfo(p.kind).label }),
-      );
-    }),
-    ...(rows.length ? [] : [h("p", { className: "muted small", textContent: slotPins().length ? "No pin matches." : "No pins yet." })]),
+    ...tree,
+    ...(!tree.some((n) => n.textContent) && !slotPins().length && !nMaps ? [h("p", { className: "muted small", textContent: "No pins or pin maps yet. Add a pin map, then place pins and choose it in their form." })] : []),
     ...bad.map((e) => h("p", { className: "error small", textContent: `${e.path}: ${e.problem ?? "can't be used"}` })),
   );
 }
@@ -463,22 +508,25 @@ function centreOn(f: PinFeature): void {
 function syncControls(): void {
   const add = el.add as HTMLButtonElement;
   add.disabled = !can("regions") || !slotMap();
+  (el.addMap as HTMLButtonElement).disabled = !canOrganise() || !slot;
+  (el.addFolder as HTMLButtonElement).disabled = !canOrganise();
   add.setAttribute("aria-pressed", String(adding));
   add.textContent = adding ? "Click the map… (Esc to cancel)" : "Place a pin";
   (el.pane as HTMLElement).dataset.adding = String(adding);
 }
 
-function embedDialog(): void {
+/** Embed code for the slot's pins: all of them, or the ticked pin maps. `only` ticks one pin map to begin with. */
+function embedDialog(only?: string): void {
   const m = modal(`Embed "${slot}" with pins`, "embed-dlg");
-  const cats = categoriesOf(slotPins().map((e) => e.feature!.properties));
-  const all = h("input", { type: "checkbox", checked: true, ariaLabel: "All pins" });
-  const boxes = cats.map((c) => ({ slug: c.slug, box: h("input", { type: "checkbox", ariaLabel: c.name }) }));
+  const maps = mapsOfSlot(pinMaps(), slot);
+  const all = h("input", { type: "checkbox", checked: !only, ariaLabel: "All pins" });
+  const boxes = maps.map((x) => ({ id: x.id, box: h("input", { type: "checkbox", checked: x.id === only, ariaLabel: x.name }) }));
   const code = h("textarea", { className: "code", readOnly: true, rows: 5, spellcheck: false, ariaLabel: "Embed code" });
   const copied = h("span", { className: "ok small", role: "status" });
   const title = deps.slots().slots[slot]?.title ?? slot;
   const update = () => {
     const url = new URL(`v/${encodeURIComponent(slot)}/`, SITE);
-    const chosen = boxes.filter((b) => b.box.checked).map((b) => b.slug);
+    const chosen = boxes.filter((b) => b.box.checked).map((b) => b.id);
     url.searchParams.set("pins", all.checked || !chosen.length ? "1" : chosen.join(","));
     code.value =
       `<iframe src="${escapeHtml(url.href.replace(/%2C/gi, ","))}" width="100%" height="480" style="border:0;border-radius:8px;background:transparent" ` +
@@ -495,9 +543,9 @@ function embedDialog(): void {
       update();
     });
   m.body.append(
-    h("fieldset", { className: "pn-cats" }, h("legend", { textContent: "Show" }), h("label", { className: "check" }, all, "All pins"), ...cats.map((c, i) => h("label", { className: "check" }, boxes[i].box, c.name)), cats.length ? null : h("p", { className: "muted small", textContent: "Give pins a category to build embeds that show only some of them." })),
+    h("fieldset", { className: "pn-cats" }, h("legend", { textContent: "Show" }), h("label", { className: "check" }, all, "All pins"), ...maps.map((x, i) => h("label", { className: "check" }, boxes[i].box, x.name)), maps.length ? null : h("p", { className: "muted small", textContent: "Add a pin map and put pins in it to build embeds that show only some of them." })),
     code,
-    h("p", { className: "muted small", textContent: "The whole slot with its pins. To draw pins over a region, tick “Show map pins” in that region's embed code instead. New and changed pins show up in embeds after the next deploy." }),
+    h("p", { className: "muted small", textContent: "The slot with its pins. To show pin maps on a region, include them in that region (Show pin maps, in the editor) or tick “Show map pins” in its embed code. New and changed pins show up in embeds after the next deploy." }),
   );
   m.foot.append(
     copied,
@@ -619,6 +667,9 @@ function build(): void {
   const searchBox = h("input", { type: "search", placeholder: "Search pins", autocomplete: "off", ariaLabel: "Search pins" });
   const add = h("button", { type: "button", textContent: "Place a pin" });
   const embed = h("button", { type: "button", className: "ghost", textContent: "Embed code…" });
+  const addMap = h("button", { type: "button", className: "ghost", textContent: "+ Pin map", dataset: { action: "new-pinmap" } });
+  const addFolder = h("button", { type: "button", className: "ghost", textContent: "+ Folder", dataset: { action: "new-pinfolder" } });
+  Object.assign(el, { addMap, addFolder });
   const canvas = h("canvas", { className: "pn-canvas" });
   const layer = h("div", { className: "pn-layer" });
   const zoomIn = h("button", { type: "button", className: "ghost", textContent: "+", title: "Zoom in", ariaLabel: "Zoom in" });
@@ -634,8 +685,8 @@ function build(): void {
       "section",
       { className: "card" },
       h("h2", { textContent: "Map pins" }),
-      h("p", { className: "muted", textContent: "Mark cities, ruins, battle sites and other places on a slot's map. Embeds can show them on top of the map and the regions (add ?pins=1 to the embed address, or tick “Show map pins” in a region's embed code). A pin can link to its note in the vault." }),
-      h("div", { className: "row pn-tools" }, h("label", {}, "Slot", slotSel), h("label", { className: "grow" }, "Search", searchBox), add, embed),
+      h("p", { className: "muted", textContent: "Mark cities, ruins, battle sites and other places on a slot's map. Group pins into pin maps (“Holy sites”, “Battles”) and sort those into folders, like regions. An embed shows one pin map (?pins=holy-sites), or every pin (?pins=1), and a region can include pin maps so their pins show on its embed. A pin can link to its note in the vault." }),
+      h("div", { className: "row pn-tools" }, h("label", {}, "Slot", slotSel), h("label", { className: "grow" }, "Search", searchBox), add, embed, addMap, addFolder),
       h("div", { className: "pn-body" }, pane, h("div", { className: "pn-side" }, form, count, list)),
     ),
   );
@@ -665,7 +716,9 @@ function build(): void {
     syncControls();
     redraw();
   });
-  embed.addEventListener("click", embedDialog);
+  embed.addEventListener("click", () => embedDialog());
+  addMap.addEventListener("click", () => newMap(slot, null));
+  addFolder.addEventListener("click", () => newFolder(null));
   zoomIn.addEventListener("click", () => zoomAt(1.6, paneSize().w / 2, paneSize().h / 2));
   zoomOut.addEventListener("click", () => zoomAt(1 / 1.6, paneSize().w / 2, paneSize().h / 2));
   fitBtn.addEventListener("click", () => (fit(), redraw()));
@@ -701,4 +754,5 @@ export function renderPins(): void {
 
 export function initPins(d: PinsDeps): void {
   deps = d;
+  initPinMaps({ gh: d.gh, act: d.act, render: () => renderList() });
 }

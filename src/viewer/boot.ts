@@ -65,6 +65,8 @@ if (regionId !== null) {
   const entry = inIndex(regionId);
   // region=<id>: the region's own underlays go below it (under=0 leaves them out).
   const under = !stacked && !preview && entry?.u && q.get("under") !== "0" ? entry.u.filter((e) => e.id !== regionId && inIndex(e.id)) : [];
+  // A region that includes pin maps shows their pins unless the embed code says otherwise (?pins=0 turns them off).
+  if (!stacked && !preview && entry?.pm?.length && !q.has("pins")) cfg.pins = entry.pm.join(",");
   const ids = stacked ? stacked.filter(inIndex) : [...under.map((e) => e.id), regionId];
   if ((stacked ? ids.length > 0 : REGION_ID.test(regionId) && (entry || preview))) {
     const given = (k: string) => {
