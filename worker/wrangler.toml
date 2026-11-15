@@ -22,3 +22,11 @@ ADMIN_URLS = "https://editor.garmeley.com/admin/"
 [[kv_namespaces]]
 binding = "WAITING"
 id = "c8f164f05c0e444a93563e0cd54c7ee6"
+
+# Rate limit across all Worker instances (the code also counts per instance, so this is optional).
+# One key per caller address and endpoint group; the Worker answers 429 over the limit.
+[[unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "1001"
+simple = { limit = 900, period = 60 }

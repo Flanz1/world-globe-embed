@@ -161,7 +161,7 @@ export class MockGitHub {
     }
     if (method === "GET" && (m = /^\/git\/commits\/([0-9a-f]+)$/.exec(p.slice(base.length)))) {
       const c = this.commits.get(m[1]);
-      return c ? json(200, { sha: m[1], tree: { sha: c.tree }, parents: c.parent ? [{ sha: c.parent }] : [], author: { name: c.author } }) : json(404, { message: "Not Found" });
+      return c ? json(200, { sha: m[1], tree: { sha: c.tree }, parents: c.parent ? [{ sha: c.parent }] : [], author: { name: c.author, email: c.authorEmail } }) : json(404, { message: "Not Found" });
     }
     if (method === "GET" && (m = /^\/git\/trees\/([0-9a-z]+)$/.exec(p.slice(base.length)))) {
       const sub = this.subtrees.get(m[1]);
@@ -192,6 +192,7 @@ export class MockGitHub {
         tree: body.tree,
         parent: body.parents[0],
         author: body.author?.name ?? "e2e-user",
+        authorEmail: body.author?.email,
         date: new Date().toISOString(),
         changed: (this.trees.get(body.tree).changes ?? []).map((c) => c.path),
         changes: this.trees.get(body.tree).changes ?? [],

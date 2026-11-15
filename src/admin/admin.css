@@ -146,7 +146,7 @@ kbd { font: 12px ui-monospace, monospace; padding: 1px 5px; border: 1px solid va
 dialog.editor { width: calc(100vw - 16px); height: calc(100vh - 16px); max-width: none; max-height: none; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--fg); }
 dialog.editor[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
 .ed-toolbar { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--line); align-items: center; }
-.ed-toolbar button { padding: 3px 10px; font-size: 13px; }
+.ed-toolbar button { padding: 3px 8px; font-size: 13px; }
 .ed-toolbar button[aria-pressed="true"] { background: var(--accent); color: var(--card); }
 .ed-toolbar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
 .ed-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 34%); min-height: 0; }
@@ -266,3 +266,14 @@ button.tiny { padding: 1px 7px; font-size: 12px; }
 .rcard .rlinked { margin: 2px 0; }
 .ed-draft { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; background: var(--bg); }
 .ed-draft[hidden] { display: none; }
+
+/* Region history */
+dialog.history { width: min(940px, calc(100vw - 32px)); }
+.hist-grid { display: grid; grid-template-columns: minmax(220px, 300px) 1fr; gap: 14px; align-items: start; }
+.hist-list { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; max-height: 60vh; overflow: auto; }
+.hist-item { width: 100%; text-align: left; display: grid; gap: 2px; background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; color: var(--fg); cursor: pointer; }
+.hist-list li.on .hist-item { border-color: var(--accent, #e8590c); background: color-mix(in srgb, var(--accent, #e8590c) 12%, transparent); }
+.hist-side { display: grid; gap: 8px; }
+.hist-canvas { width: 100%; max-width: 520px; height: auto; aspect-ratio: 520 / 300; border-radius: 6px; background: var(--line); }
+.hist-dash { display: inline-block; width: 26px; border-top: 2px dashed #e8590c; vertical-align: middle; }
+@media (max-width: 700px) { .hist-grid { grid-template-columns: 1fr; } }

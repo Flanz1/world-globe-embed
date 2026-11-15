@@ -6,7 +6,7 @@ name: Admin API
 on:
   push:
     branches: [main]
-    paths: ["worker/**", "src/shared/access.ts", "schema/region.schema.json", "schema/access.schema.json", ".github/workflows/admin-api.yml"]
+    paths: ["worker/**", "src/shared/access.ts", "schema/*.schema.json", ".github/workflows/admin-api.yml"]
   workflow_dispatch:
 
 permissions:

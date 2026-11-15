@@ -202,21 +202,25 @@ export async function processImage(file: string, opts: ProcessOptions): Promise<
  * Big uploads arrive in parts (`<name>.part001`, … plus `<name>.parts.json` with the count, size and
  * SHA-256), because GitHub's API refuses single uploads of a few tens of MB. Joins each set back into
  * `<name>` and removes the parts. Returns joined file → manifest (for "who uploaded it"), and errors
- * for incomplete or corrupt sets, which are left alone.
+ * for incomplete or corrupt sets (their files are listed in `rejected`).
  */
-export function joinParts(paths: ContentPaths = contentPaths()): { joined: Map<string, string>; errors: string[] } {
+export function joinParts(paths: ContentPaths = contentPaths()): { joined: Map<string, string>; errors: string[]; rejected: string[] } {
   const joined = new Map<string, string>();
   const errors: string[] = [];
-  if (!existsSync(paths.incomingDir)) return { joined, errors };
+  /** Files of the sets that couldn't be joined (manifest and parts): the caller removes them so they don't block later uploads. */
+  const rejected: string[] = [];
+  if (!existsSync(paths.incomingDir)) return { joined, errors, rejected };
   const all = readdirSync(paths.incomingDir);
   for (const m of all.filter((f) => f.endsWith(".parts.json"))) {
     const name = m.slice(0, -".parts.json".length);
     const manifest = path.join(paths.incomingDir, m);
+    const setFiles = [manifest, ...all.filter((f) => f.startsWith(`${name}.part`) && /\.part\d{3}$/.test(f)).map((f) => path.join(paths.incomingDir, f))];
     let spec: { parts?: number; bytes?: number; sha256?: string };
     try {
       spec = JSON.parse(readFileSync(manifest, "utf8")) as typeof spec;
     } catch {
       errors.push(`${m}: is not valid JSON; upload the map again`);
+      rejected.push(...setFiles);
       continue;
     }
     const n = Number(spec.parts);
@@ -224,12 +228,14 @@ export function joinParts(paths: ContentPaths = contentPaths()): { joined: Map<s
     const missing = files.filter((f) => !all.includes(f));
     if (!Number.isInteger(n) || n < 1 || n > 999 || missing.length) {
       errors.push(`${name}: ${missing.length ? `parts ${missing.join(", ")} are missing` : "bad part count"}; upload the map again`);
+      rejected.push(...setFiles);
       continue;
     }
     const buf = Buffer.concat(files.map((f) => readFileSync(path.join(paths.incomingDir, f))));
     const sha = createHash("sha256").update(buf).digest("hex");
     if (buf.length !== spec.bytes || sha !== spec.sha256) {
       errors.push(`${name}: the joined parts don't match what was uploaded (${buf.length} bytes); upload the map again`);
+      rejected.push(...setFiles);
       continue;
     }
     const out = path.join(paths.incomingDir, name);
@@ -238,7 +244,7 @@ export function joinParts(paths: ContentPaths = contentPaths()): { joined: Map<s
     rmSync(manifest);
     joined.set(out, manifest);
   }
-  return { joined, errors };
+  return { joined, errors, rejected };
 }
 
 /** Image candidates in content/incoming (dotfiles and README are ignored). */

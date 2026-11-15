@@ -7,7 +7,7 @@
  * processed like an upload, which traces its coast. In the editor: the Coast button shows and is on;
  * a vertex dragged near the shore lands on the coastline; Ctrl+drag doesn't snap; the polygon tool
  * follows the coast between two clicks on it; a neighbouring region's vertex still wins over the coast; the
- * river and lake aren't coast; O turns coast snapping off.
+ * river and lake aren't coast; the Fill tool (B) traces the island out to its shore in one click; O turns coast snapping off.
  *
  * Exits non-zero if any check fails. Screenshots go to .e2e/coast/.
  */
@@ -232,6 +232,27 @@ await step(A, "rivers and lakes aren't coast", async () => {
   const l = s.parts[0][0].find((p) => p[1] > 1 && p[0] < -5.2);
   check(A, "nor by the lake", l && Math.hypot(l[0] - (-5.4), l[1] - 4) < 0.04, JSON.stringify(l));
   await undo();
+});
+
+await step(A, "the Fill tool traces the island out to its coast", async () => {
+  await call("setView", 0, 0, 14);
+  await page.waitForTimeout(150);
+  await page.locator("dialog.editor canvas.ed-canvas").focus();
+  await page.keyboard.press("b");
+  check(A, "B picks the Fill tool", (await page.getAttribute('dialog.editor button[data-tool="fill"]', "aria-pressed")) === "true");
+  await click(14, -10);
+  const s = await call("state");
+  const ring = s.parts[1]?.[0] ?? [];
+  // (The river mouth notches the shore at (20, 0); that stretch follows the notch.)
+  const worst = ring.length ? Math.max(...ring.filter((q) => !(q[0] > 18 && Math.abs(q[1]) < 1.5)).map(offShore)) : -1;
+  check(A, "one new part follows the shore all the way round", s.parts.length === 2 && ring.length >= 30 && worst < 0.2, `${s.parts.length} parts; ${ring.length} points; worst ${worst.toFixed(3)}° off the shore`);
+  await page.screenshot({ path: path.join(OUT, "editor-fill.png") });
+  await undo();
+  check(A, "Undo takes it back", (await call("state")).parts.length === 1);
+  // Open sea isn't closed in: nothing is added.
+  await click(-60, 40);
+  check(A, "open sea isn't filled", (await call("state")).parts.length === 1);
+  await page.keyboard.press("v");
 });
 
 await step(A, "O turns coast snapping off", async () => {
