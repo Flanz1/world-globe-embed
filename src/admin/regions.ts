@@ -374,21 +374,46 @@ function pinnable(el: HTMLElement, e: RegionEntry, k: Category, ordered: readonl
   const on = at >= 0;
   const ok = can("regions");
   const why = ok ? "" : "You don't have permission to change folders.";
-  const bar = el.querySelector(".actions");
-  const mk = (text: string, title: string, action: string, onclick: () => void, off = "") =>
-    h("button", { type: "button", className: "ghost", textContent: text, title: off || title, disabled: !!off, onclick, dataset: { action } });
-  if (on) {
-    el.classList.add("pinned");
-    el.querySelector(".rname")?.after(h("span", { className: "badge rpinned", textContent: "📌 pinned", title: "Pinned to the top of this folder" }));
-  }
-  bar?.append(
-    mk(on ? "Unpin" : "Pin", on ? "Take it off the top of this folder" : "Keep it at the top of this folder", on ? "unpin" : "pin", () => void pinRegion(k, e.id, !on), why),
-    ...(on
-      ? [
-          mk("↑", "Move this pin up", "pin-up", () => void reorderPin(k, e.id, pins[at - 1].id), why || (at === 0 ? "Already first" : "")),
-          mk("↓", "Move this pin down", "pin-down", () => void reorderPin(k, e.id, pins[at + 1].id, true), why || (at === pins.length - 1 ? "Already last" : "")),
-        ]
-      : []),
+  const icon = (text: string, title: string, action: string, onclick: () => void, off = "", cls = "") =>
+    h("button", { type: "button", className: `ghost rpin-btn ${cls}`.trim(), textContent: text, title: off || title, ariaLabel: title, disabled: !!off, onclick, dataset: { action } });
+  if (on) el.classList.add("pinned");
+  el.classList.add("has-pin");
+  // A pin icon in the card's top right corner (filled when pinned); a pinned card also has ↑ ↓ beside it.
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("width", "18");
+  svg.setAttribute("height", "18");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M16 3l5 5-3 1-3.5 3.5.5 4.5-1.5 1.5L10 14l-6 6-1-1 6-6-4.5-4.5L6 7.5l4.5.5L14 4.5z");
+  path.setAttribute("fill", on ? "currentColor" : "none");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "1.6");
+  path.setAttribute("stroke-linejoin", "round");
+  svg.append(path);
+  const pinBtn = h("button", {
+    type: "button",
+    className: `ghost rpin-btn rpin-toggle${on ? " on" : ""}`,
+    title: why || (on ? "Unpin: take it off the top of this folder" : "Pin: keep it at the top of this folder"),
+    ariaLabel: on ? "Unpin" : "Pin",
+    ariaPressed: String(on),
+    disabled: !!why,
+    onclick: () => void pinRegion(k, e.id, !on),
+    dataset: { action: on ? "unpin" : "pin" },
+  });
+  pinBtn.append(svg);
+  el.append(
+    h(
+      "div",
+      { className: "rpin-bar" },
+      ...(on
+        ? [
+            icon("↑", "Move this pin up", "pin-up", () => void reorderPin(k, e.id, pins[at - 1].id), why || (at === 0 ? "Already first" : "")),
+            icon("↓", "Move this pin down", "pin-down", () => void reorderPin(k, e.id, pins[at + 1].id, true), why || (at === pins.length - 1 ? "Already last" : "")),
+          ]
+        : []),
+      pinBtn,
+    ),
   );
   if (on && ok) {
     // Dropping another pinned card here puts it just before this one.
