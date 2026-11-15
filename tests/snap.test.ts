@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Position } from "../src/shared/geo.ts";
-import { carryLines, lineCarry, lineOwners, linePins, findSnap, followBorders, insertOnEdges, partRings, posKey, sharedEdges, snapRing, traceBetween, tracePath, vertexIndex, withGlued } from "../src/admin/editor/snap.ts";
+import { carryLines, lineCarry, lineOwners, linePins, findSnap, followBorders, insertOnEdges, partRings, posKey, sharedEdges, snapRing, type SnapRing, traceBetween, tracePath, vertexIndex, withGlued } from "../src/admin/editor/snap.ts";
 import type { Parts } from "../src/admin/editor/model.ts";
 
 // 1 degree = 10 px, square pixels.
@@ -218,5 +218,77 @@ describe("province borders follow their part", () => {
   it("only points on an outline are pinned; the rest of the same line stays free", () => {
     const mixed: Position[][] = [[[5, 0], [5, 5], [7, 4]]];
     expect(lineCarry(parts, mixed).pins.map((q) => q.k)).toEqual([0]);
+  });
+});
+
+describe("findSnap on big rings (spatial index)", () => {
+  /** Plain scan of every vertex, then every edge: what findSnap did before it had an index. */
+  function brute(ring: SnapRing, pos: [number, number], sc: { k: number; ky: number }, radius: number, skipV?: (v: number) => boolean) {
+    const near = (lon: number, to: number) => lon + 360 * Math.round((to - lon) / 360);
+    const pts = ring.pts;
+    let best: { d: number; at: number; kind: string; pos: [number, number] } | null = null;
+    pts.forEach((p, i) => {
+      if (skipV?.(i)) return;
+      const lon = near(p[0], pos[0]);
+      const d = Math.hypot((lon - pos[0]) * sc.k, (p[1] - pos[1]) * sc.k * sc.ky);
+      if (d <= (best?.d ?? radius)) best = { d, at: i, kind: "vertex", pos: [lon, p[1]] };
+    });
+    if (best) return best;
+    for (let i = 0; i < pts.length; i++) {
+      const j = (i + 1) % pts.length;
+      if (skipV?.(i) || skipV?.(j)) continue;
+      const [a, b] = [pts[i], pts[j]];
+      const sh = near((a[0] + b[0]) / 2, pos[0]) - (a[0] + b[0]) / 2;
+      const ax = (a[0] + sh - pos[0]) * sc.k;
+      const ay = (a[1] - pos[1]) * sc.k * sc.ky;
+      const dx = (b[0] - a[0]) * sc.k;
+      const dy = (b[1] - a[1]) * sc.k * sc.ky;
+      const len2 = dx * dx + dy * dy;
+      if (!len2) continue;
+      const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2));
+      const d = Math.hypot(ax + t * dx, ay + t * dy);
+      if (d <= (best?.d ?? radius) && t > 0 && t < 1) best = { d, at: i + t, kind: "edge", pos: [a[0] + sh + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])] };
+    }
+    return best;
+  }
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const wobbly = (n: number, cx: number, cy: number): [number, number][] =>
+    Array.from({ length: n }, (_, i) => {
+      const a = (i / n) * Math.PI * 2;
+      const r = 20 + 2 * Math.sin(a * 31) + rnd() * 0.3;
+      return [cx + r * Math.cos(a), cy + r * 0.8 * Math.sin(a)];
+    });
+
+  for (const [name, cx] of [["plain", 10], ["across the antimeridian", 175]] as const) {
+    it(`gives the same answer as a full scan (${name})`, () => {
+      const ring = snapRing(wobbly(800, cx, 5), { kind: "part", p: 0, r: 0 });
+      const sc = { k: 12, ky: 1.3 };
+      let hits = 0;
+      for (let q = 0; q < 600; q++) {
+        // Points around the outline: some on it, some well off.
+        const v = ring.pts[Math.floor(rnd() * ring.pts.length)];
+        const pos: [number, number] = [v[0] + (rnd() - 0.5) * 1.2 + (q % 3 === 0 ? 360 : 0), v[1] + (rnd() - 0.5) * 1.2];
+        const skip = q % 4 === 0 ? (i: number) => i % 7 === 0 : undefined;
+        const want = brute(ring, pos, sc, 10, skip);
+        const got = findSnap([ring], pos, sc, 10, undefined, skip ? (_, i) => skip(i) : undefined);
+        expect(got === null).toBe(want === null);
+        if (want && got) {
+          hits++;
+          expect(got.kind).toBe(want.kind);
+          expect(got.at).toBeCloseTo(want.at, 9);
+          expect(got.pos[0]).toBeCloseTo(want.pos[0], 9);
+          expect(got.pos[1]).toBeCloseTo(want.pos[1], 9);
+        }
+      }
+      expect(hits).toBeGreaterThan(100);
+    });
+  }
+
+  it("keeps the open end of a line out of reach of a closing edge", () => {
+    const pts = Array.from({ length: 200 }, (_, i) => [i * 0.1, Math.sin(i / 9)] as [number, number]);
+    const line = snapRing(pts, { kind: "line", l: 0 });
+    // Between the line's two ends: no edge joins them.
+    expect(findSnap([line], [10, 0.5 * Math.sin(199 / 9)], { k: 10, ky: 1 }, 3)?.kind ?? "none").not.toBe("edge");
   });
 });
