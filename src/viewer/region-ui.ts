@@ -2,7 +2,7 @@
  * Region embed UI shared by the globe and flat viewers: the view lock, the region label and the
  * "Region not found" note. Region strings are only ever set with textContent.
  */
-import type { LegendEntry } from "../shared/region.ts";
+import { mergeRegions, type LegendEntry, type RegionData } from "../shared/region.ts";
 
 export interface Lock {
   readonly locked: boolean;
@@ -105,7 +105,11 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
  * The region's legend: a colour swatch and a label per entry, top left, folded and unfolded with its
  * header button. Labels are set with textContent; colours are validated #rgb/#rrggbb before they get here.
  */
-export function makeLegend(stage: HTMLElement): { set(entries: readonly LegendEntry[], title: string, contested?: boolean): void } {
+export function makeLegend(stage: HTMLElement): {
+  set(entries: readonly LegendEntry[], title: string, contested?: boolean): void;
+  /** Stacked regions: a checkbox per region to show or hide it (set again to rebuild). */
+  layers(items: readonly { id: string; name: string }[], hidden: ReadonlySet<string>, onToggle: (id: string, show: boolean) => void, title?: string): void;
+} {
   const box = document.createElement("div");
   box.className = "rkey";
   box.hidden = true;
@@ -116,13 +120,18 @@ export function makeLegend(stage: HTMLElement): { set(entries: readonly LegendEn
   const list = document.createElement("ul");
   list.id = "rkey-list";
   head.setAttribute("aria-controls", list.id);
-  box.append(head, list);
+  const layerBox = document.createElement("div");
+  layerBox.className = "rlayers";
+  layerBox.hidden = true;
+  box.append(head, layerBox, list);
   stage.append(box);
+  let count = 0;
   let open = true;
   const apply = () => {
     head.setAttribute("aria-expanded", String(open));
     head.title = open ? "Hide legend" : "Show legend";
     list.hidden = !open;
+    layerBox.hidden = !open || !layerBox.childElementCount;
   };
   head.addEventListener("click", () => {
     open = !open;
@@ -132,6 +141,25 @@ export function makeLegend(stage: HTMLElement): { set(entries: readonly LegendEn
   for (const t of ["pointerdown", "wheel"] as const) box.addEventListener(t, (e) => e.stopPropagation());
   apply();
   return {
+    layers(items, hidden, onToggle, title) {
+      const boxes = items.map((it) => {
+        const label = document.createElement("label");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = !hidden.has(it.id);
+        cb.addEventListener("change", () => onToggle(it.id, cb.checked));
+        const t = document.createElement("span");
+        t.textContent = it.name;
+        label.append(cb, t);
+        return label;
+      });
+      const head = document.createElement("div");
+      head.className = "rlayers-head";
+      head.textContent = title?.trim() || "Layers";
+      layerBox.replaceChildren(...(boxes.length ? [head, ...boxes] : []));
+      apply();
+      box.hidden = !count && !boxes.length;
+    },
     set(entries, title, contested = false) {
       head.textContent = title || "Legend";
       const rows = entries.map((e) => {
@@ -155,7 +183,8 @@ export function makeLegend(stage: HTMLElement): { set(entries: readonly LegendEn
         rows.push(li);
       }
       list.replaceChildren(...rows);
-      box.hidden = !rows.length;
+      count = rows.length;
+      box.hidden = !count && layerBox.hidden;
     },
   };
 }
@@ -178,3 +207,54 @@ export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; pl
 }
 
 export const prefersReducedMotion = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * Stacked regions (?regions=a,b,c): which are shown. `of(r)` is the region to paint: r without the hidden
+ * ones, the same object for the same state (so painters can cache on it). The last one can't be hidden.
+ */
+export function makeVisibility(): { hidden: Set<string>; of(r: RegionData): RegionData } {
+  const hidden = new Set<string>();
+  let last: { r: RegionData; key: string; out: RegionData } | null = null;
+  return {
+    hidden,
+    of(r) {
+      if (!r.members || !hidden.size) return r;
+      const key = [...hidden].sort().join(",");
+      if (last && last.r === r && last.key === key) return last.out;
+      const shown = r.members.filter((m) => !hidden.has(m.id));
+      const out = shown.length ? mergeRegions(shown, r.clip) : r;
+      last = { r, key, out };
+      return out;
+    },
+  };
+}
+
+/**
+ * Stacked regions: the show/hide checkboxes in the legend, named by the region's own settings (`layers.names`,
+ * else the region's name or id) under `layers.title`. The last shown region stays on (its box snaps back).
+ */
+export function setupLayers(
+  legend: { layers: ReturnType<typeof makeLegend>["layers"] },
+  r: RegionData,
+  visible: ReturnType<typeof makeVisibility>,
+  redraw: () => void,
+  layers?: { names: Record<string, string>; title: string; hidden: string[] },
+): void {
+  const members = r.members;
+  if (!members) return;
+  const items = members.map((m) => ({ id: m.id, name: layers?.names[m.id]?.trim() || m.name || m.id }));
+  for (const id of layers?.hidden ?? []) visible.hidden.add(id);
+  const build = (): void =>
+    legend.layers(
+      items,
+      visible.hidden,
+      (id, show) => {
+        if (show) visible.hidden.delete(id);
+        else if (members.length - visible.hidden.size > 1) visible.hidden.add(id);
+        else return build();
+        redraw();
+      },
+      layers?.title,
+    );
+  build();
+}

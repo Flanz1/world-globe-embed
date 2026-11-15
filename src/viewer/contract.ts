@@ -54,6 +54,10 @@ export interface RegionContext {
   /** Show the region's legend, if it has one (key=0 hides it). */
   key: boolean;
   dim: boolean;
+  /** Stacked regions (?regions=): show the legend's show/hide boxes (toggle=0 hides them). */
+  toggle: boolean;
+  /** Several regions stacked: the legend's toggle names and heading, and the ones that start hidden. */
+  layers?: { names: Record<string, string>; title: string; hidden: string[] };
   /** Start locked on the selected position (lock=0 starts unlocked). */
   lock: boolean;
   /** lat/lon/zoom given explicitly in the URL; they override auto-fit. */

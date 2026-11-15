@@ -9,12 +9,12 @@
 import { clamp, clampPadding } from "../shared/params.ts";
 import { geometryBounds, globeToImage, polygonsOf, type Position } from "../shared/geo.ts";
 import { FLAT_K_MAX, flatFit, flatMinK, legendRows, regionLabelPoints, type FlatView, type RegionData } from "../shared/region.ts";
-import { paintSpec, type PaintSpec } from "../shared/raster.ts";
-import { hasContestedMarks, regionPaintSpec } from "../shared/region-paint.ts";
+import { paintLayerStack, type PaintLayer } from "../shared/raster.ts";
+import { hasContestedLayers, regionPaintLayers } from "../shared/region-paint.ts";
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
 import { TILE_BUDGET, TileCache, levelFor, tileRect, tilesAt, tileUrl } from "../shared/tiles.ts";
 import type { FlatStartContext, PreviewMessage } from "./contract.ts";
-import { RELOCK_MS, makeLabels, makeLegend, regionNote, setupLock, type Lock } from "./region-ui.ts";
+import { RELOCK_MS, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
 
 type Img = ImageBitmap | HTMLImageElement;
 
@@ -54,7 +54,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   let imgW = 0;
   let reg: RegionData | null = null;
   /** How to paint the region (colours, overlapping layers, borders), worked out once per region rather than per frame. */
-  let spec: PaintSpec | null = null;
+  let spec: PaintLayer[] | null = null;
   let labelAt: Position[] = [];
   let gridOn = cfg.grid;
   let lock: Lock | null = null;
@@ -126,8 +126,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     if (reg && spec) {
       // A region may unwrap up to 180° either side of its first vertex, so draw one copy more each way.
       const all = [offsets[0] - 360, ...offsets, offsets[offsets.length - 1] + 360];
-      paintSpec(g, spec, (lon) => sx(lon, w), (lat) => sy(lat, h), all, {
-        fillOpacity: reg.fillOpacity,
+      paintLayerStack(g, spec, (lon) => sx(lon, w), (lat) => sy(lat, h), all, {
         lineWidth: 1.2,
         dim: !!R?.dim,
       }, { w, h });
@@ -384,11 +383,15 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       pointers.clear();
       goHome(true);
     });
-    const setRegion = (r: RegionData) => {
+    const visible = makeVisibility();
+    let full: RegionData | null = null;
+    const setRegion = (whole: RegionData) => {
+      full = whole;
+      const r = visible.of(whole);
       reg = r;
-      spec = regionPaintSpec(r);
-      regionKey?.set(R.key ? legendRows(r) : [], r.legendTitle, R.key && hasContestedMarks(spec));
-      const pts = (R.label ?? r.label) ? regionLabelPoints(r) : [];
+      spec = regionPaintLayers(r);
+      regionKey?.set(R.key ? legendRows(r) : [], r.legendTitle, R.key && hasContestedLayers(spec));
+      const pts = (R.label ?? r.label) ? regionLabelPoints(r, R.label === true) : [];
       labelAt = pts.map((p) => p.at);
       labels?.set(pts.map((p) => p.text));
     };
@@ -404,6 +407,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
         lock?.remove();
         return schedule();
       }
+      if (R.toggle && regionKey) setupLayers(regionKey, r, visible, () => (setRegion(full!), schedule()), R.layers);
       setRegion(r);
       if (!R.fitted && !touched) fitTo(r, false);
       schedule();

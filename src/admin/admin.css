@@ -173,6 +173,12 @@ dialog.editor[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr
 .ed-colours { display: grid; gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
 .ed-colours > legend { padding: 0 4px; font-size: 13px; }
 .ed-colours > button { justify-self: start; }
+.ed-under { display: grid; gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.ed-under > legend { padding: 0 4px; font-size: 13px; }
+.ed-under-list { display: grid; gap: 6px; }
+.ed-under-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto auto auto auto; gap: 4px; align-items: center; }
+.ed-under-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-under-row .check { display: flex; align-items: center; gap: 4px; margin: 0; }
 .ed-fill { display: flex; align-items: center; gap: 8px; }
 /* Colour folders: one per colour, each holding its parts' rows. Shift/Ctrl+click picks rows, so no text selection there (inputs still select). */
 .ed-folders { display: grid; gap: 8px; user-select: none; -webkit-user-select: none; }

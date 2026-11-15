@@ -7,7 +7,7 @@
 import { regionBorders } from "./borders.ts";
 import { findClashes, prepare, type Prepared } from "./clash.ts";
 import { polygonsOf, type Position, type Ring } from "./geo.ts";
-import type { PaintSpec } from "./raster.ts";
+import type { PaintLayer, PaintSpec } from "./raster.ts";
 import { OWN_COLOUR, regionLayers, type RegionData } from "./region.ts";
 
 export type PaintInput = Pick<RegionData, "color" | "legend" | "parts" | "occupied" | "geometry" | "provinceBorders" | "nationalBorders">;
@@ -106,3 +106,18 @@ export function regionPaintSpec(r: PaintInput): PaintSpec {
 
 /** Whether the legend gets its "Contested" row: some parts of different colours overlap (occupied areas included). */
 export const hasContestedMarks = (spec: PaintSpec): boolean => spec.cells.length > 0;
+
+/** hasContestedMarks for stacked layers. */
+export const hasContestedLayers = (layers: readonly PaintLayer[]): boolean => layers.some((l) => hasContestedMarks(l.spec));
+
+/**
+ * What the embed paints: one layer per region, in drawing order (a lone region is one layer). Stacked regions
+ * (see mergeRegions) are each their own map: parts are only ever compared within a region, never across
+ * them. With `clip`, every layer but the top one is cut to the top region's outline.
+ */
+export function regionPaintLayers(r: PaintInput & { members?: RegionData[]; clip?: boolean; fillOpacity?: number }): PaintLayer[] {
+  if (!r.members) return [{ spec: regionPaintSpec(r), opacity: r.fillOpacity ?? 0.35 }];
+  const top = r.members[r.members.length - 1];
+  const clip = r.clip ? polygonsOf(top.geometry) : undefined;
+  return r.members.map((m, i) => ({ spec: regionPaintSpec(m), opacity: m.fillOpacity, ...(clip && i < r.members!.length - 1 ? { clip } : {}) }));
+}
