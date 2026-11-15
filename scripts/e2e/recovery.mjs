@@ -145,9 +145,12 @@ await step(A, "work is offered back after the tab is lost", async () => {
 });
 
 await step(A, "Discard throws the draft away", async () => {
-  // Still the draft from the previous step? That one was restored, so it is kept: reopen and discard it.
+  // Make a fresh draft. Don't rely on the previous step's: its Undo went back to the saved shape, so the
+  // editor removes that draft once its 800 ms timer fires, and whether that happens before the reopen is
+  // just timing (it fails under CI load).
+  await moveA();
   await openRegion("rec-a");
-  check(A, "the restored (still unsaved) work is offered again", (await ed.barText()) !== null);
+  check(A, "unsaved work is offered again", (await ed.barText()) !== null);
   await page.click("dialog.editor [data-draft=discard]");
   await page.waitForTimeout(300);
   check(A, "Discard keeps the saved shape and hides the bar", lon0(await ed.state()) === BASE && (await ed.barText()) === null);
