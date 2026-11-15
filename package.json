@@ -39,6 +39,7 @@
     "e2e:tiers": "node scripts/e2e/tiers.mjs",
     "e2e:tiles": "tsx scripts/e2e/tiles.mjs",
     "e2e:upload": "tsx scripts/e2e/upload.mjs",
+    "e2e:underlays": "tsx scripts/e2e/underlays.mjs",
     "e2e:stack": "tsx scripts/e2e/stack.mjs",
     "e2e:view": "tsx scripts/e2e/view.mjs",
     "e2e:ruler": "tsx scripts/e2e/ruler.mjs",
