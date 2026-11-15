@@ -11,8 +11,8 @@ are enforced in the API (`src/shared/access.ts`, tested in `tests/admin-api.test
 | Permission | Lets someone |
 |---|---|
 | **Maps & slots** | open the Maps & slots tab: upload or replace map images, add slots, change slot settings |
-| **Create regions** | draw new regions, and edit or delete the regions they created; also add region categories and rename, reorder or delete their own (see below) |
-| **Edit others' regions** | change regions other people created, and rename or delete other people's categories |
+| **Create regions** | draw new regions, and edit or delete the regions they created; also add, rename, reorder and delete region categories, and sort any region into one (see below) |
+| **Edit others' regions** | change regions other people created |
 | **Delete others' regions** | delete regions other people created |
 | **Manage users** | open the Users tab and add or change people, but only with permissions they hold themselves, and never their own entry or the owner's |
 
@@ -29,15 +29,14 @@ change belong to the owner until `npm run region-owners` gives them the account 
 
 The Regions tab can group regions into collapsible folders (**New category…**). Folders are saved in
 `content/categories.json` (checked against `schema/categories.schema.json`): an ordered list of
-`{ id, name, regions: [region ids], createdBy, created }`. A region is in at most one category; regions in none
+`{ id, name, regions: [region ids] }`. A region is in at most one category; regions in none
 show under **Uncategorized**, and with no categories at all the list is flat as before. Categories are for the
 admin page only: the public embed doesn't read them.
 
-They follow the region rules, with no extra permission:
+No extra permission is needed:
 
-- **Create regions** adds categories (saved with the creator, like regions) and renames or deletes your own. Anyone with it can reorder folders (the order is cosmetic).
-- **Edit others' regions** also renames and deletes other people's categories. Categories with no creator recorded belong to the owner.
-- Moving a region into or out of a category (its **Category** menu) needs the right to edit that region: your own, or anyone's with Edit others' regions. Deleting a category doesn't delete its regions; they become uncategorized.
+- Folders have no owner. **Create regions** is enough to add, rename, move, reorder and delete any folder and to put any region in any folder (its **Category** menu); the region files themselves don't change. Older folders may still carry a creator in the file; nothing reads it.
+- Deleting a category doesn't delete its regions; they become uncategorized.
 - Deleting a region leaves its id in `categories.json` until the next category change tidies it up (the build only warns about it).
 
 The API checks all of this on save, like the other rules.
@@ -45,6 +44,8 @@ The API checks all of this on save, like the other rules.
 ## Suggested changes
 
 Someone with "Create regions" who can't edit a region (they didn't create it and lack "Edit others' regions") sees **Suggest changes** on its card instead of Edit. It opens the normal editor; **Send suggestion** (with an optional note) stores their version, and nothing is written to the repository or the site.
+
+Someone who can edit a region (including editors) also has **Propose changes** on its card, to send changes for somebody else to approve: nobody can accept or decline their own proposal (they can withdraw it), so the final say is always another person who may edit that region.
 
 People who may edit that region (its creator, editors, admins, the owner) see it under **Suggestions to review** on the Regions tab. **Review** opens the editor on the suggested version with the current region drawn as a grey outline; **Accept suggestion** saves it as the reviewer, through the same permission checks as any save (the region's creator stays the same, the commit message names the suggester). **Decline** takes an optional reason. The sender sees the outcome under **Your suggestions**.
 
