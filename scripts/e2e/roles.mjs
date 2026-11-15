@@ -504,6 +504,18 @@ await step(K, "contributors and editors manage any folder and sort any region", 
   check(K, "she can move her own region and someone else's", !(await disabled(ann.page, '[data-region="landmark-disc"] [data-action="category"]')) && !(await disabled(ann.page, '[data-region="provinces"] [data-action="category"]')));
   await commits(ann.page, () => ann.page.selectOption('[data-region="landmark-disc"] [data-action="category"]', "kingdoms"));
   check(K, "her region goes into the owner's folder", (await inFolder(ann.page, "kingdoms")).includes("landmark-disc"), (await inFolder(ann.page, "kingdoms")).join());
+  // Pin to the top of a folder, and reorder the pins.
+  const kPins = () => cats().find((k) => k.id === "kingdoms")?.pinned;
+  await commits(ann.page, () => ann.page.click('[data-region="landmark-disc"] [data-action="pin"]'));
+  await commits(ann.page, () => ann.page.click('[data-region="provinces"] [data-action="pin"]'));
+  check(K, "Pin puts regions at the top of the folder, in the order pinned", JSON.stringify(kPins()) === '["landmark-disc","provinces"]' && (await inFolder(ann.page, "kingdoms")).join() === "landmark-disc,provinces", JSON.stringify([kPins(), await inFolder(ann.page, "kingdoms")]));
+  check(K, "the first pin can't go up, the last can't go down", (await disabled(ann.page, '[data-region="landmark-disc"] [data-action="pin-up"]')) && (await disabled(ann.page, '[data-region="provinces"] [data-action="pin-down"]')));
+  await commits(ann.page, () => ann.page.click('[data-region="provinces"] [data-action="pin-up"]'));
+  check(K, "↑ reorders the pins", JSON.stringify(kPins()) === '["provinces","landmark-disc"]' && (await inFolder(ann.page, "kingdoms")).join() === "provinces,landmark-disc", JSON.stringify([kPins(), await inFolder(ann.page, "kingdoms")]));
+  await commits(ann.page, () => ann.page.click('[data-region="provinces"] [data-action="unpin"]'));
+  check(K, "Unpin takes one off the top", JSON.stringify(kPins()) === '["landmark-disc"]');
+  await commits(ann.page, () => ann.page.click('[data-region="landmark-disc"] [data-action="unpin"]'));
+  check(K, "…and the list goes when the last pin does", kPins() === undefined);
   await addCategory(ann.page, "Ann's places");
   const mineCat = cats().find((k) => k.name === "Ann's places");
   check(K, "her new category has no creator", mineCat && mineCat.createdBy === undefined, JSON.stringify(mineCat));

@@ -8,10 +8,10 @@ import { LINKED_MAX, baseKey, combineRegions, combinedId, regionBases, resolveLi
 import { checkGeometry, geometryBounds, polygonsOf, vertexCount } from "../shared/geo.ts";
 import { paintSpec } from "../shared/raster.ts";
 import { REGION_COLOR, REGION_ID, copyId, flatFit, migrateZoneColours, normalizePartLegend, regionData, type RegionFeature } from "../shared/region.ts";
-import { childrenOf, moveTargets, pathName, placements, withDescendants, type Category } from "../shared/categories.ts";
+import { childrenOf, moveTargets, pathName, pinFirst, placements, withDescendants, type Category } from "../shared/categories.ts";
 import { paintSpecOf, regionClashes } from "../shared/region-paint.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
-import { categories, canAddCategory, initCategories, loadCategories, moveFolder, moveFolderTo, moveRegions, newCategory, remove as removeCategory, rename as renameCategory, shift as shiftCategory } from "./categories.ts";
+import { categories, canAddCategory, initCategories, loadCategories, moveFolder, moveFolderTo, moveRegions, newCategory, pin as pinRegion, reorderPin, remove as removeCategory, rename as renameCategory, shift as shiftCategory } from "./categories.ts";
 import { $, h } from "./dom.ts";
 import { hasPendingSaves, optimistic } from "./optimistic.ts";
 import { openEditor, type EditorOptions } from "./editor/editor.ts";
@@ -364,6 +364,54 @@ function dropTarget(el: HTMLElement, target: string | null): void {
   });
 }
 
+/**
+ * Adds the pin controls to a region card inside a real folder: Pin / Unpin for everyone who may sort regions,
+ * and, on a pinned card, ↑ ↓ (and dragging onto another pinned card) to change the order of the pins.
+ */
+function pinnable(el: HTMLElement, e: RegionEntry, k: Category, ordered: readonly RegionEntry[]): HTMLElement {
+  const pins = ordered.filter((x) => k.pinned?.includes(x.id));
+  const at = pins.findIndex((x) => x.id === e.id);
+  const on = at >= 0;
+  const ok = can("regions");
+  const why = ok ? "" : "You don't have permission to change folders.";
+  const bar = el.querySelector(".actions");
+  const mk = (text: string, title: string, action: string, onclick: () => void, off = "") =>
+    h("button", { type: "button", className: "ghost", textContent: text, title: off || title, disabled: !!off, onclick, dataset: { action } });
+  if (on) {
+    el.classList.add("pinned");
+    el.querySelector(".rname")?.after(h("span", { className: "badge rpinned", textContent: "📌 pinned", title: "Pinned to the top of this folder" }));
+  }
+  bar?.append(
+    mk(on ? "Unpin" : "Pin", on ? "Take it off the top of this folder" : "Keep it at the top of this folder", on ? "unpin" : "pin", () => void pinRegion(k, e.id, !on), why),
+    ...(on
+      ? [
+          mk("↑", "Move this pin up", "pin-up", () => void reorderPin(k, e.id, pins[at - 1].id), why || (at === 0 ? "Already first" : "")),
+          mk("↓", "Move this pin down", "pin-down", () => void reorderPin(k, e.id, pins[at + 1].id, true), why || (at === pins.length - 1 ? "Already last" : "")),
+        ]
+      : []),
+  );
+  if (on && ok) {
+    // Dropping another pinned card here puts it just before this one.
+    const can_drop = () => !!dragging && dragging.kind === "region" && dragging.id !== e.id && !!k.pinned?.includes(dragging.id) && pins.some((x) => x.id === dragging!.id);
+    el.addEventListener("dragover", (ev) => {
+      if (!can_drop()) return;
+      ev.preventDefault();
+      el.classList.add("drop");
+    });
+    el.addEventListener("dragleave", () => el.classList.remove("drop"));
+    el.addEventListener("drop", (ev) => {
+      if (!can_drop()) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      el.classList.remove("drop");
+      const d = dragging!;
+      dragging = null;
+      void reorderPin(k, d.id, e.id);
+    });
+  }
+  return el;
+}
+
 /** A subtree of folders: a header (open/close, name, count, and the buttons for whoever may change it) over its region cards and the folders inside it. */
 function folder(id: string, title: string, members: RegionEntry[], k: Category | null, pos: { first: boolean; last: boolean }, forceOpen: boolean, inner: HTMLElement[] = [], total = members.length): HTMLElement {
   const el = h("section", { className: "rfolder", dataset: { category: id } });
@@ -404,7 +452,8 @@ function folder(id: string, title: string, members: RegionEntry[], k: Category |
   }
   dropTarget(head, k ? id : null);
   const empty = !members.length && !inner.length;
-  el.append(head, h("div", { className: "rfolder-body" }, ...members.map(card), ...inner, ...(empty ? [h("p", { className: "muted small", textContent: k ? "This folder is empty. Drag a region here, or use a region's Folder menu." : "" })] : [])));
+  const ordered = k ? pinFirst(k, members) : members;
+  el.append(head, h("div", { className: "rfolder-body" }, ...ordered.map((e) => (k ? pinnable(card(e), e, k, ordered) : card(e))), ...inner, ...(empty ? [h("p", { className: "muted small", textContent: k ? "This folder is empty. Drag a region here, or use a region's Folder menu." : "" })] : [])));
   setFolderOpen(el, forceOpen || !collapsed.has(id));
   return el;
 }

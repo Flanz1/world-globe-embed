@@ -16,6 +16,9 @@ import {
   childrenOf,
   depthOf,
   moveCategory,
+  movePin,
+  pinFirst,
+  pinRegion,
   moveTargets,
   pathName,
   withDescendants,
@@ -146,6 +149,54 @@ describe("categories", () => {
     it("rejects a parent that doesn't exist or loops", () => {
       expect(checkCategories({ categories: [{ id: "x", name: "X", regions: [], parent: "nope" }] }).join()).toMatch(/parent must be/);
       expect(checkCategories({ categories: [{ id: "x", name: "X", regions: [], parent: "y" }, { id: "y", name: "Y", regions: [], parent: "x" }] }).join()).toMatch(/inside itself/);
+    });
+  });
+
+  describe("pinned regions", () => {
+    const f: CategoriesFile = { categories: [{ id: "k", name: "K", regions: ["a", "b", "c", "d"] }, { id: "s", name: "S", regions: ["e"] }] };
+    const pinned = (c: CategoriesFile, id = "k") => c.categories.find((k) => k.id === id)!.pinned;
+
+    it("pins in order, unpins, and drops the list when empty", () => {
+      const p = pinRegion(pinRegion(f, "k", "c", true), "k", "a", true);
+      expect(pinned(p)).toEqual(["c", "a"]);
+      expect(pinned(pinRegion(p, "k", "c", false))).toEqual(["a"]);
+      expect("pinned" in pinRegion(pinRegion(f, "k", "a", true), "k", "a", false).categories[0]).toBe(false);
+      expect(pinned(pinRegion(p, "k", "a", true))).toEqual(["c", "a"]); // pinning twice keeps one
+    });
+
+    it("only pins regions the folder holds", () => {
+      expect(pinRegion(f, "k", "e", true)).toEqual(f);
+      expect(pinRegion(f, "nope", "a", true)).toEqual(f);
+    });
+
+    it("reorders pins before or after another pin", () => {
+      const p = ["a", "b", "c"].reduce((c, r) => pinRegion(c, "k", r, true), f);
+      expect(pinned(movePin(p, "k", "c", "a"))).toEqual(["c", "a", "b"]);
+      expect(pinned(movePin(p, "k", "a", "c", true))).toEqual(["b", "c", "a"]);
+      expect(movePin(p, "k", "a", "d")).toEqual(p); // d isn't pinned
+    });
+
+    it("lists pinned regions first, then the others as given", () => {
+      const p = ["c", "a"].reduce((c, r) => pinRegion(c, "k", r, true), f);
+      expect(pinFirst(p.categories[0], [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }]).map((x) => x.id)).toEqual(["c", "a", "b", "d"]);
+      expect(pinFirst(null, [{ id: "b" }, { id: "a" }]).map((x) => x.id)).toEqual(["b", "a"]);
+    });
+
+    it("a region that leaves the folder, or is deleted, loses its pin", () => {
+      const p = ["a", "b"].reduce((c, r) => pinRegion(c, "k", r, true), f);
+      expect(pinned(assignRegions(p, ["a"], "s"))).toEqual(["b"]);
+      expect(pinned(assignRegions(p, ["a"], "s"), "s")).toBeUndefined();
+      expect(pinned(pruneRegions(p, new Set(["a", "c", "d", "e"])))).toEqual(["a"]);
+    });
+
+    it("rejects pins that aren't in the folder or repeat", () => {
+      expect(checkCategories({ categories: [{ id: "k", name: "K", regions: ["a"], pinned: ["z"] }] }).join()).toMatch(/isn't a region in this folder/);
+      expect(checkCategories({ categories: [{ id: "k", name: "K", regions: ["a"], pinned: ["a", "a"] }] }).join()).toMatch(/pinned twice/);
+      expect(checkCategories({ categories: [{ id: "k", name: "K", regions: ["a"], pinned: ["a"] }] })).toEqual([]);
+    });
+
+    it("pinning isn't a move: the diff stays empty", () => {
+      expect(diffCategories(f, pinRegion(f, "k", "a", true))).toMatchObject({ moved: [], added: [], removed: [], renamed: [] });
     });
   });
 });

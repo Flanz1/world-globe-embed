@@ -332,3 +332,8 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
 .pinmap.loose { border-style: dashed; }
 .ed-pinmaps { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; margin: 0; display: grid; gap: 4px; }
 .ed-pinmaps-list { display: grid; gap: 2px; }
+
+/* Regions pinned to the top of a folder. */
+.rcard.pinned { border-color: var(--accent, var(--line)); }
+.rcard.drop { outline: 2px dashed var(--accent, currentColor); outline-offset: 2px; }
+.rpinned { margin-left: 4px; }

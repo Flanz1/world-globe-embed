@@ -36,6 +36,7 @@ admin page only: the public embed doesn't read them.
 No extra permission is needed:
 
 - Folders have no owner. **Create regions** is enough to add, rename, move, reorder and delete any folder and to put any region in any folder (its **Category** menu); the region files themselves don't change. Older folders may still carry a creator in the file; nothing reads it.
+- A region card in a folder has **Pin**: it keeps the region at the top of the folder (saved as the folder's `pinned` list, in order). Pinned cards show ↑ ↓ (or drag one onto another pinned card) to reorder the pins; **Unpin** puts it back among the rest, which keep the list's sort. Moving or deleting a region drops its pin. Same permission as sorting: **Create regions**.
 - Deleting a category doesn't delete its regions; they become uncategorized.
 - Deleting a region leaves its id in `categories.json` until the next category change tidies it up (the build only warns about it).
 

@@ -27,6 +27,13 @@
             "description": "Who created the category. Without it, the category belongs to the repository owner."
           },
           "created": { "type": "string", "maxLength": 40, "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$" },
+          "pinned": {
+            "type": "array",
+            "maxItems": 5000,
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+            "description": "Regions of this category pinned to the top of the folder, in order. Each must also be listed in regions."
+          },
           "regions": {
             "type": "array",
             "maxItems": 5000,
