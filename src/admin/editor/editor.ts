@@ -495,6 +495,7 @@ export function openEditor(o: EditorOptions): void {
   const underAdd = h("select", { name: "under-add", ariaLabel: "Add a region to show under this one" });
   const underClipIn = h("input", { type: "checkbox", checked: true, name: "under-clip" });
   const underTitleIn = h("input", { type: "text", maxLength: UNDER_TITLE_MAX, placeholder: "Layers", name: "under-title", ariaLabel: "Heading of the toggle list" });
+  const ownToggleIn = h("input", { type: "checkbox", name: "own-toggle" });
   const layerLabelIn = h("input", { type: "text", maxLength: LEGEND_LABEL_MAX, placeholder: "This region", name: "layer-label", ariaLabel: "Name of this region's own toggle" });
   const underBox = h(
     "fieldset",
@@ -505,6 +506,7 @@ export function openEditor(o: EditorOptions): void {
     h("label", {}, "Add a region", underAdd),
     h("label", { className: "check", title: "Cut the underlays to this region's outline, so only what lies inside it shows." }, underClipIn, "Only show them inside this region"),
     h("label", {}, "Heading of the toggle list", underTitleIn),
+    h("label", { className: "check", title: "Add a toggle for this region itself to the legend, so readers can switch it off too. Off: the region is always shown." }, ownToggleIn, "Readers can switch this region off too"),
     h("label", {}, "Name of this region's own toggle", layerLabelIn),
   );
   /* "Show pin maps": pin maps of this slot whose pins show on this region's embed. */
@@ -1626,7 +1628,7 @@ export function openEditor(o: EditorOptions): void {
   function underFor(force = false): RegionMessage["under"] {
     const p = hist.state.props;
     const list = p.under ?? [];
-    const sig = JSON.stringify([list, p.underClip, p.underTitle, p.layerLabel]);
+    const sig = JSON.stringify([list, p.underClip, p.underTitle, p.layerLabel, p.ownToggle]);
     if (!force && sig === underSig) return undefined;
     underSig = sig;
     const regions = list.flatMap((e) => {
@@ -1639,6 +1641,7 @@ export function openEditor(o: EditorOptions): void {
       hidden: list.filter((e, i) => !(e.on ?? i === 0)).map((e) => e.id),
       names: { ...Object.fromEntries(list.map((e) => [e.id, e.label ?? ""])), [previewId()]: p.layerLabel ?? "" },
       title: p.underTitle ?? "",
+      own: p.ownToggle === true,
     };
   }
   const underData = (() => {
@@ -1768,7 +1771,9 @@ export function openEditor(o: EditorOptions): void {
     underClipIn.checked = p.underClip !== false;
     if (document.activeElement !== underTitleIn) underTitleIn.value = p.underTitle ?? "";
     if (document.activeElement !== layerLabelIn) layerLabelIn.value = p.layerLabel ?? "";
-    for (const el of [underClipIn, underTitleIn, layerLabelIn]) (el.closest("label") as HTMLElement).hidden = !list.length;
+    for (const el of [underClipIn, underTitleIn, ownToggleIn]) (el.closest("label") as HTMLElement).hidden = !list.length;
+    ownToggleIn.checked = p.ownToggle === true;
+    (layerLabelIn.closest("label") as HTMLElement).hidden = !list.length || p.ownToggle !== true;
   }
   let pinMapKey = "";
   function renderPinMapBox(): void {
@@ -1804,6 +1809,7 @@ export function openEditor(o: EditorOptions): void {
   });
   underClipIn.addEventListener("change", () => (setProp("underClip", underClipIn.checked, "Underlays inside only"), changed()));
   underTitleIn.addEventListener("input", () => (setProp("underTitle", underTitleIn.value.slice(0, UNDER_TITLE_MAX), "Toggle list heading"), typed()));
+  ownToggleIn.addEventListener("change", () => (setProp("ownToggle", ownToggleIn.checked, "Region's own toggle"), changed()));
   layerLabelIn.addEventListener("input", () => (setProp("layerLabel", layerLabelIn.value.slice(0, LEGEND_LABEL_MAX), "Own toggle name"), typed()));
   borderIn.addEventListener("change", () => (setProp("nationalBorders", borderIn.checked, "National borders"), changed()));
   descIn.addEventListener("input", () => (setProp("description", descIn.value, "Description"), changed("panel")));
@@ -3661,7 +3667,8 @@ export function openEditor(o: EditorOptions): void {
               under: props.under.map((e) => ({ id: e.id, ...(e.label?.trim() ? { label: e.label.trim().slice(0, LEGEND_LABEL_MAX) } : {}), ...(typeof e.on === "boolean" ? { on: e.on } : {}) })),
               ...(props.underClip === false ? { underClip: false } : {}),
               ...(props.underTitle?.trim() ? { underTitle: props.underTitle.trim().slice(0, UNDER_TITLE_MAX) } : {}),
-              ...(props.layerLabel?.trim() ? { layerLabel: props.layerLabel.trim().slice(0, LEGEND_LABEL_MAX) } : {}),
+              ...(props.ownToggle ? { ownToggle: true } : {}),
+              ...(props.ownToggle && props.layerLabel?.trim() ? { layerLabel: props.layerLabel.trim().slice(0, LEGEND_LABEL_MAX) } : {}),
             }
           : {}),
       },

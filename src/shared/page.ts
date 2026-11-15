@@ -154,6 +154,7 @@ function checkIndex(regions: Record<string, RegionIndexEntry>): Record<string, R
       ...(u.length && e.uc === false ? { uc: false as const } : {}),
       ...(u.length && typeof e.ut === "string" ? { ut: e.ut } : {}),
       ...(u.length && typeof e.ul === "string" ? { ul: e.ul } : {}),
+      ...(u.length && e.ot === true ? { ot: true as const } : {}),
     };
   }
   return out;

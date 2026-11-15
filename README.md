@@ -46,7 +46,7 @@ A region is an outline (a kingdom, a province, a battlefield) drawn on a slot's 
 
 ### Showing several regions in one embed
 
-- **Under a region (set in the editor).** In a region's side panel, **Show under this region** lists other regions of the slot (a religion map, culture, trade goods…) to draw below it. Each gets a toggle in the embed's legend with a name you choose and a switch for whether it starts shown (by default only the first one does). You also set the heading of the toggle list and the name of the region's own toggle. The underlays are cut to the region's outline, so only what lies inside it shows (untick **Only show them inside this region** to show them whole). `?under=0` leaves them out of one embed.
+- **Under a region (set in the editor).** In a region's side panel, **Show under this region** lists other regions of the slot (a religion map, culture, trade goods…) to draw below it. Each gets a toggle in the embed's legend with a name you choose and a switch for whether it starts shown (by default only the first one does). You also set the heading of the toggle list. The region itself is always shown; tick **Readers can switch this region off too** to give it a toggle as well (with a name of its own). The underlays are cut to the region's outline, so only what lies inside it shows (untick **Only show them inside this region** to show them whole). `?under=0` leaves them out of one embed.
 - **Any regions (URL).** `v/<slot>/?regions=a,b,c` stacks up to 12 regions of the slot, the last on top. Each is drawn as its own map: regions never mark each other as contested. `?toggle=0` hides the toggles.
 
 ### Drawing and editing a region

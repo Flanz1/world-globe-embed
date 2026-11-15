@@ -238,20 +238,22 @@ export function setupLayers(
   r: RegionData,
   visible: ReturnType<typeof makeVisibility>,
   redraw: () => void,
-  layers?: { names: Record<string, string>; title: string; hidden: string[] },
+  layers?: { names: Record<string, string>; title: string; hidden: string[]; own?: boolean },
 ): void {
   const members = r.members;
   if (!members) return legend.layers([], visible.hidden, () => {});
-  const items = members.map((m) => ({ id: m.id, name: layers?.names[m.id]?.trim() || m.name || m.id }));
+  // A region over its underlays (r.clip) is always shown, with no toggle, unless it's given one of its own (layers.own).
+  const top = r.clip && !layers?.own ? members[members.length - 1] : undefined;
+  const items = members.filter((m) => m !== top).map((m) => ({ id: m.id, name: layers?.names[m.id]?.trim() || m.name || m.id }));
   visible.hidden.clear();
-  for (const id of layers?.hidden ?? []) visible.hidden.add(id);
+  for (const id of layers?.hidden ?? []) if (id !== top?.id) visible.hidden.add(id);
   const build = (): void =>
     legend.layers(
       items,
       visible.hidden,
       (id, show) => {
         if (show) visible.hidden.delete(id);
-        else if (members.length - visible.hidden.size > 1) visible.hidden.add(id);
+        else if (top || members.length - visible.hidden.size > 1) visible.hidden.add(id);
         else return build();
         redraw();
       },

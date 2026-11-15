@@ -196,7 +196,8 @@
         },
         "underClip": { "type": "boolean", "description": "With under: false to show the underlays outside this region's outline too. Leave it out to cut them to the outline." },
         "underTitle": { "type": "string", "maxLength": 40, "description": "With under: heading of the toggle list in the embed. Defaults to \"Layers\"." },
-        "layerLabel": { "type": "string", "maxLength": 60, "description": "With under: this region's own toggle name in the legend. Defaults to its name, else its id." },
+        "ownToggle": { "type": "boolean", "description": "With under: true to give this region a toggle of its own in the legend, so readers can switch it off too. Leave it out for no toggle: the region is always shown." },
+        "layerLabel": { "type": "string", "maxLength": 60, "description": "With ownToggle: this region's toggle name in the legend. Defaults to its name, else its id." },
         "provinceBorders": {
           "type": "array",
           "maxItems": 500,

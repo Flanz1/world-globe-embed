@@ -114,9 +114,9 @@ await step(A, "adding an underlay", async () => {
 });
 
 await step(A, "preview", async () => {
-  await page.waitForFunction(() => [...document.querySelectorAll("iframe")].some((f) => f.contentDocument?.querySelectorAll(".rlayers label").length === 3), null, { timeout: 15000 }).catch(() => {});
+  await page.waitForFunction(() => [...document.querySelectorAll("iframe")].some((f) => f.contentDocument?.querySelectorAll(".rlayers label").length === 2), null, { timeout: 15000 }).catch(() => {});
   const labels = await pv().locator(".rlayers label span").allTextContents();
-  check(A, "the globe preview lists the toggles (2 underlays + the region)", labels.length === 3, labels.join(" | "));
+  check(A, "the globe preview lists a toggle per underlay (not the region)", labels.length === 2, labels.join(" | "));
   await page.fill(`${D} .ed-under-row:nth-of-type(1) input[type="text"]`, "Religion");
   await page.fill(`${D} input[name="under-title"]`, "Map layers");
   await page.waitForTimeout(900);
@@ -124,11 +124,16 @@ await step(A, "preview", async () => {
   check(A, "a name set in the editor reaches the preview", l2[0] === "Religion", l2.join(" | "));
   check(A, "…and the heading", (await pv().locator(".rlayers-head").textContent()) === "Map layers");
   const on = await pv().locator(".rlayers input").evaluateAll((e) => e.map((x) => x.checked));
-  check(A, "first underlay on, the second off, as the defaults say", JSON.stringify(on) === JSON.stringify([true, false, true]), JSON.stringify(on));
+  check(A, "first underlay on, the second off, as the defaults say", JSON.stringify(on) === JSON.stringify([true, false]), JSON.stringify(on));
   await page.locator(`${D} .ed-under-row`).nth(1).locator('input[type="checkbox"]').check();
   await page.waitForTimeout(700);
   const on2 = await pv().locator(".rlayers input").evaluateAll((e) => e.map((x) => x.checked));
   check(A, "switching 'On' in the editor shows it in the preview", on2[1] === true, JSON.stringify(on2));
+  await page.check(`${D} input[name="own-toggle"]`);
+  await page.fill(`${D} input[name="layer-label"]`, "Borders");
+  await page.waitForTimeout(900);
+  const l3 = await pv().locator(".rlayers label span").allTextContents();
+  check(A, "'Readers can switch this region off too' adds the region's own toggle", l3.length === 3 && l3.includes("Borders"), l3.join(" | "));
   await page.screenshot({ path: path.join(OUT, "editor-preview.png") });
 });
 
