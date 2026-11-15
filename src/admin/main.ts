@@ -10,7 +10,8 @@ import { GitHub, GitHubError, NotListed, type FileChange, type WorkflowRun } fro
 import { hasPendingSaves, initOptimistic, optimistic } from "./optimistic.ts";
 import { openPreview } from "./preview.ts";
 import { $, SITE, h } from "./dom.ts";
-import { initRegions, loadRegions, renderRegions, watchEditing } from "./regions.ts";
+import { initRegions, loadRegions, openRegionById, regionDisplayName, renderRegions, watchEditing } from "./regions.ts";
+import { initActivity, loadActivity } from "./activity.ts";
 import { PART_BYTES, prepareImage } from "./upload-image.ts";
 import { can, refusal, setMe } from "./session.ts";
 import { initUsers, loadUsers } from "./users.ts";
@@ -438,10 +439,10 @@ function wireNewSlot(): void {
 
 /* ── Tabs (kept in the URL hash so a reload stays on the same tab) ── */
 
-const TABS = ["maps", "regions", "users"] as const;
+const TABS = ["maps", "regions", "activity", "users"] as const;
 type Tab = (typeof TABS)[number];
 /** The tabs this person may open: Maps & slots and Users need their own permission. */
-const allowedTabs = (): Tab[] => TABS.filter((t) => t === "regions" || (t === "maps" ? can("maps") : can("users")));
+const allowedTabs = (): Tab[] => TABS.filter((t) => t === "regions" || t === "activity" || (t === "maps" ? can("maps") : can("users")));
 
 function showTab(name: Tab): void {
   const allowed = allowedTabs();
@@ -455,10 +456,11 @@ function showTab(name: Tab): void {
   }
   if (name === "regions") renderRegions();
   watchEditing(name === "regions");
+  if (name === "activity") void loadActivity();
   if (name === "users") void loadUsers();
 }
 
-const tabFromHash = (): Tab => (location.hash === "#regions" ? "regions" : location.hash === "#users" ? "users" : "maps");
+const tabFromHash = (): Tab => (location.hash === "#regions" ? "regions" : location.hash === "#activity" ? "activity" : location.hash === "#users" ? "users" : "maps");
 
 function wireTabs(): void {
   for (const t of TABS)
@@ -580,6 +582,7 @@ if (framed) {
   wireUpload();
   wireNewSlot();
   initOptimistic({ setCheck: (c) => { saveCheck = c; renderChecks(lastRuns); }, setStatus, committed: afterCommit, reload: loadAll });
+  initActivity({ gh: () => gh!, openRegion: openRegionById, regionName: regionDisplayName });
   initRegions({ gh: () => gh!, maps: () => maps, slots: () => slots, act, afterCommit });
   initUsers({ gh: () => gh!, act });
   wireTabs();

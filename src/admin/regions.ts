@@ -557,6 +557,24 @@ function overlayMeta(): EditorOptions["neighbourMeta"] {
   return { meta, categories: categories().categories.map((k) => ({ id: k.id, name: pathName(categories(), k.id), within: [...withDescendants(categories(), k.id)] })), meId: currentUser()?.id };
 }
 
+/** Opens a region from the Activity tab: in the editor when the person may edit it, else the Regions tab shows it. False if it no longer exists. */
+export function openRegionById(id: string): boolean {
+  const e = entries.find((x) => x.id === id);
+  if (!e) return false;
+  if (e.feature && canEdit(e.feature)) edit(e);
+  else {
+    location.hash = "#regions";
+    document.querySelector(`[data-region="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "center" });
+  }
+  return true;
+}
+
+/** A region's display name, or null when there is no such region (any more). */
+export function regionDisplayName(id: string): string | null {
+  const e = entries.find((x) => x.id === id);
+  return e ? (e.feature?.properties.name || id) : null;
+}
+
 function edit(e: RegionEntry): void {
   if (!e.feature || !canEdit(e.feature)) return;
   if (e.feature.properties.linked) return editLinked(e);

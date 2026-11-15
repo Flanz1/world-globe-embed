@@ -277,3 +277,11 @@ dialog.history { width: min(940px, calc(100vw - 32px)); }
 .hist-canvas { width: 100%; max-width: 520px; height: auto; aspect-ratio: 520 / 300; border-radius: 6px; background: var(--line); }
 .hist-dash { display: inline-block; width: 26px; border-top: 2px dashed #e8590c; vertical-align: middle; }
 @media (max-width: 700px) { .hist-grid { grid-template-columns: 1fr; } }
+
+/* ── Activity tab ── */
+.activity { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 4px; }
+.act-row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; border-bottom: 1px solid var(--line); padding: 6px 2px; }
+.act-text { min-width: 0; overflow-wrap: anywhere; }
+.act-row time { white-space: nowrap; }
+.act-gone { text-decoration: line-through; color: var(--muted, inherit); }
+button.link { background: none; border: 0; padding: 0; font: inherit; color: var(--accent, #4a8cff); text-decoration: underline; cursor: pointer; }

@@ -256,6 +256,12 @@ await step(E, "edits other people's regions, can't delete them", async () => {
   const r = regionOn("landmark-disc");
   check(E, "saved: creator unchanged, saver is the editor", r.properties.createdBy?.login === "carto-ann" && r.properties.updatedBy?.login === "drafter-bo", `${r.properties.createdBy?.login} / ${r.properties.updatedBy?.login}`);
   await page.click("dialog.editor .pv-head button.ghost");
+  await page.click("#tab-btn-activity");
+  await page.waitForSelector('#activity-list [data-open="landmark-disc"]', { timeout: 10000 });
+  const row = (await page.locator("#activity-list .act-row").first().innerText()).replace(/\s+/g, " ");
+  check(E, "Activity tab lists the save, newest first, with a link to the region", /saved landmark-disc/.test(row), row);
+  await page.click('#activity-list [data-open="landmark-disc"]');
+  check(E, "its region link opens the editor", await page.waitForSelector("dialog.editor[open]", { timeout: 10000 }).then(() => true, () => false));
   await ctx.close();
 });
 
