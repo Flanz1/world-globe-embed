@@ -190,8 +190,8 @@ await step(C, "tabs and buttons", async () => {
   await page.waitForSelector("#regions .rcard", { timeout: 15000 });
   check(C, "#users in the address still shows Regions", !(await visible(page, "#tab-users")) && (await visible(page, "#tab-regions")));
   check(C, "own region: Edit and Delete enabled", !(await disabled(page, '[data-region="landmark-disc"] [data-action="edit"]')) && !(await disabled(page, '[data-region="landmark-disc"] [data-action="delete"]')));
-  check(C, "someone else's region: Edit and Delete disabled", (await disabled(page, '[data-region="provinces"] [data-action="edit"]')) && (await disabled(page, '[data-region="provinces"] [data-action="delete"]')));
-  check(C, "…with the reason on hover", /created this region/.test((await page.getAttribute('[data-region="provinces"] [data-action="edit"]', "title")) ?? ""));
+  check(C, "someone else's region: Delete disabled, and Suggest changes instead of Edit", (await disabled(page, '[data-region="provinces"] [data-action="delete"]')) && (await page.locator('[data-region="provinces"] [data-action="edit"]').count()) === 0 && !(await disabled(page, '[data-region="provinces"] [data-action="suggest-changes"]')));
+  check(C, "…with the reason on hover", /created this region/.test((await page.getAttribute('[data-region="provinces"] [data-action="delete"]', "title")) ?? ""));
   check(C, "creator shown on the card", (await page.textContent('[data-region="landmark-disc"] .rcreator')) === "carto-ann" && (await page.textContent('[data-region="provinces"] .rcreator')) === "the owner");
   // Filter and sort by creator.
   await page.selectOption("#r-creator", "me");
@@ -575,6 +575,105 @@ await step(O, "owner sees everything; a removed person is locked out", async () 
   check(O, "a removed person's save is refused at once", r.status === 403, `${r.status} ${r.body.message}`);
   await bo.ctx.close();
   await ctx.close();
+});
+
+/* ═════════════ 6. Suggested changes ═════════════ */
+const G = "suggest";
+const sugCount = (page, list) => page.locator(`#suggestions [data-list="${list}"] [data-suggestion]`).count();
+await step(G, "a contributor suggests a change; the owner reviews, accepts and declines", async () => {
+  const ann = await open("carto-ann");
+  await ann.page.goto(`${ADMIN}#regions`);
+  await ann.page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  const headBefore = mock.refs.get("main");
+  await ann.page.click('[data-region="provinces"] [data-action="suggest-changes"]');
+  await ann.page.waitForSelector("dialog.editor[open]");
+  check(G, "the editor says it's a suggestion", /Suggest changes to provinces/.test((await ann.page.textContent("dialog.editor h2")) ?? "") && /Send suggestion/.test((await ann.page.textContent("dialog.editor .ed-save")) ?? ""));
+  // Nothing changed yet: sending is refused with a hint.
+  await ann.page.click("dialog.editor .ed-save");
+  await ann.page.waitForSelector("dialog.editor .ed-msg.error");
+  check(G, "an unchanged region can't be sent", /Change something first/.test((await ann.page.textContent("dialog.editor .ed-msg")) ?? ""));
+  // Change the colour, then send.
+  await ann.page.evaluate(() => {
+    const c = document.querySelector('dialog.editor input[name="color"]');
+    c.value = "#12ab34";
+    c.dispatchEvent(new Event("input", { bubbles: true }));
+    c.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await ann.page.click("dialog.editor .ed-save");
+  await ann.page.waitForSelector("dialog.small-dlg textarea");
+  await ann.page.fill("dialog.small-dlg textarea", "greener please");
+  await ann.page.click("dialog.small-dlg .dlg-foot button:not(.ghost)");
+  await waitFor(ann.page, async () => /Suggestion sent/.test((await ann.page.textContent("dialog.editor .ed-msg")) ?? ""));
+  check(G, "sent without touching the repository", /Suggestion sent/.test((await ann.page.textContent("dialog.editor .ed-msg")) ?? "") && mock.refs.get("main") === headBefore);
+  await ann.page.click("dialog.editor .pv-head button.ghost");
+  await waitFor(ann.page, async () => (await sugCount(ann.page, "mine")) === 1);
+  check(G, "the sender sees it under Your suggestions, waiting", (await sugCount(ann.page, "mine")) === 1 && /waiting/.test((await ann.page.textContent("#suggestions")) ?? ""));
+  await ann.page.screenshot({ path: path.join(OUT, "suggest-sender.png"), fullPage: true });
+
+  // Someone who may not edit provinces sees nothing; the owner sees it with Review and Decline.
+  const simon = await open("LoopSimon");
+  await simon.page.goto(`${ADMIN}#regions`);
+  await simon.page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  check(G, "a person who can't edit that region doesn't see the suggestion", (await sugCount(simon.page, "review")) === 0 && (await sugCount(simon.page, "mine")) === 0);
+  await simon.ctx.close();
+
+  const owner = await open("Flanz1");
+  await owner.page.goto(`${ADMIN}#regions`);
+  await owner.page.waitForSelector("#suggestions [data-list=\"review\"] [data-suggestion]", { timeout: 15000 });
+  check(G, "the owner sees it to review, with the note", /carto-ann suggests changes to provinces/.test((await owner.page.textContent("#suggestions")) ?? "") && /greener please/.test((await owner.page.textContent("#suggestions")) ?? ""));
+  check(G, "the region card shows a badge", /1 suggestion/.test((await owner.page.textContent('[data-region="provinces"]')) ?? ""));
+  await owner.page.click('#suggestions [data-action="review"]');
+  await owner.page.waitForSelector("dialog.editor[open]");
+  check(G, "Review opens the editor on the suggestion, with Accept and Decline", /Suggestion from carto-ann/.test((await owner.page.textContent("dialog.editor h2")) ?? "") && /Accept suggestion/.test((await owner.page.textContent("dialog.editor .ed-save")) ?? "") && (await owner.page.locator('dialog.editor [data-act="decline-suggestion"]').count()) === 1);
+  check(G, "the editor shows the suggestion and the note", /greener please/.test((await owner.page.textContent("dialog.editor .ed-msg")) ?? ""));
+  await owner.page.screenshot({ path: path.join(OUT, "suggest-review.png") });
+  const n = mock.log.length;
+  await owner.page.click("dialog.editor .ed-save");
+  await waitFor(owner.page, async () => mock.log.length > n);
+  const acc = regionOn("provinces");
+  check(G, "accepting saves the suggested version as the owner", acc.properties.color === "#12ab34" && acc.properties.updatedBy?.login === "Flanz1" && !acc.properties.createdBy, JSON.stringify([acc.properties.color, acc.properties.updatedBy, acc.properties.createdBy]));
+  check(G, "…in one commit that names the suggester", /carto-ann's suggestion for region provinces/.test(mock.commits.get(mock.refs.get("main")).message ?? ""));
+  await waitFor(owner.page, async () => (await sugCount(owner.page, "review")) === 0);
+  check(G, "…and the suggestion leaves the owner's list", (await sugCount(owner.page, "review")) === 0);
+  await owner.page.click("dialog.editor .pv-head button.ghost");
+  await waitFor(ann.page, async () => true);
+  await ann.page.reload();
+  await ann.page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await waitFor(ann.page, async () => /accepted by Flanz1/.test((await ann.page.textContent("#suggestions")) ?? ""));
+  check(G, "the sender sees it was accepted", /accepted by Flanz1/.test((await ann.page.textContent("#suggestions")) ?? ""));
+  await ann.page.click('#suggestions [data-action="clear"]');
+  await waitFor(ann.page, async () => (await sugCount(ann.page, "mine")) === 0);
+  check(G, "and can clear it away", (await sugCount(ann.page, "mine")) === 0);
+
+  // A second suggestion, declined with a reason.
+  await ann.page.click('[data-region="provinces"] [data-action="suggest-changes"]');
+  await ann.page.waitForSelector("dialog.editor[open]");
+  await ann.page.evaluate(() => {
+    const c = document.querySelector('dialog.editor input[name="color"]');
+    c.value = "#ff00ff";
+    c.dispatchEvent(new Event("input", { bubbles: true }));
+    c.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await ann.page.click("dialog.editor .ed-save");
+  await ann.page.waitForSelector("dialog.small-dlg textarea");
+  await ann.page.click("dialog.small-dlg .dlg-foot button:not(.ghost)");
+  await waitFor(ann.page, async () => /Suggestion sent/.test((await ann.page.textContent("dialog.editor .ed-msg")) ?? ""));
+  await ann.page.click("dialog.editor .pv-head button.ghost");
+  await owner.page.reload();
+  await owner.page.waitForSelector('#suggestions [data-list="review"] [data-suggestion]', { timeout: 15000 });
+  await owner.page.click('#suggestions [data-action="decline"]');
+  await owner.page.waitForSelector("dialog.small-dlg textarea");
+  await owner.page.fill("dialog.small-dlg textarea", "too pink");
+  await owner.page.click("dialog.small-dlg .dlg-foot button:not(.ghost)");
+  await waitFor(owner.page, async () => (await sugCount(owner.page, "review")) === 0);
+  check(G, "declining removes it from the owner's list and leaves the region alone", (await sugCount(owner.page, "review")) === 0 && regionOn("provinces").properties.color === "#12ab34");
+  await ann.page.reload();
+  await ann.page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await waitFor(ann.page, async () => /declined by Flanz1: too pink/.test((await ann.page.textContent("#suggestions")) ?? ""));
+  check(G, "the sender sees the decline and the reason", /declined by Flanz1: too pink/.test((await ann.page.textContent("#suggestions")) ?? ""));
+  check(G, "no page errors", ann.errors.length === 0 && owner.errors.length === 0, [...ann.errors, ...owner.errors].join(" | ") || "none");
+  await owner.ctx.close();
+  await ann.ctx.close();
 });
 
 await browser.close();

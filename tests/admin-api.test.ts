@@ -33,15 +33,18 @@ const PEM = privateKey.export({ type: "pkcs1", format: "pem" }).toString();
 class MemoryKV implements KV {
   data = new Map<string, unknown>();
   puts = 0;
-  async get(key: string) {
-    return this.data.has(key) ? "" : null;
-  }
-  async put(key: string, _v: string, opts?: { metadata?: unknown }) {
+  values = new Map<string, string>();
+  async put(key: string, value: string, opts?: { metadata?: unknown }) {
     this.puts++;
     this.data.set(key, opts?.metadata);
+    this.values.set(key, value);
+  }
+  async get(key: string) {
+    return this.values.get(key) ?? null;
   }
   async delete(key: string) {
     this.data.delete(key);
+    this.values.delete(key);
   }
   async list(opts?: { prefix?: string }) {
     return { keys: [...this.data].filter(([k]) => k.startsWith(opts?.prefix ?? "")).map(([name, metadata]) => ({ name, metadata })) };
@@ -702,5 +705,97 @@ describe("admin API hardening", () => {
     expect(await tryCommit(owner, [put("content/maps/globe-map.json", "{\"id\":\"globe-map\"}\n")])).toMatch(/doesn't match its schema/);
     expect(await tryCommit(owner, [put("content/maps/new-map.json", map("other-id"))])).toMatch(/must have the id "new-map"/);
     expect(await tryCommit(owner, [put("content/maps/new-map.json", map("new-map")), put("content/slots.json", JSON.stringify({ slots: { aerthos: { map: "new-map" } } }))])).toBeNull();
+  });
+});
+
+describe("suggested changes", () => {
+  const suggestion = (id: string, by: { id: number; login: string }, extra: Record<string, unknown> = {}) => JSON.parse(region(id, id === "ann-land" ? ANN : SIMON, by, extra));
+  const send = (gh: GitHub, id: string, by: { id: number; login: string }, note = "moved the border", extra: Record<string, unknown> = {}) => gh.suggest(id, suggestion(id, by, extra), note);
+
+  it("lets someone who can't edit a region suggest a change, and nothing reaches the repository", async () => {
+    const before = head();
+    const s = await send(await client(ANN), "simon-land", ANN, "moved the border", { color: "#112233" });
+    expect(s).toMatchObject({ id: `simon-land~${ANN.id}`, region: "simon-land", status: "pending", owner: SIMON.id, note: "moved the border" });
+    expect(head()).toBe(before);
+    expect(mock.read("main", "content/regions/simon-land.json")).toBe(region("simon-land", SIMON));
+  });
+
+  it("is seen by the sender and the people who may edit that region, not by others", async () => {
+    await send(await client(ANN), "simon-land", ANN);
+    expect((await (await client(ANN)).suggestions()).map((x) => x.id)).toEqual([`simon-land~${ANN.id}`]);
+    expect((await (await client(SIMON)).suggestions()).length).toBe(1); // the region's creator
+    expect((await (await client(BO)).suggestions()).length).toBe(1); // may edit others' regions
+    expect((await (await client(OWNER)).suggestions()).length).toBe(1);
+    expect((await (await client(MANAGER)).suggestions()).length).toBe(0);
+    expect((await (await client(MANAGER)).suggestion(`simon-land~${ANN.id}`).catch((e: Error) => e.message))).toMatch(/can't see/);
+    expect((await (await client(BO)).suggestion(`simon-land~${ANN.id}`)).feature.id).toBe("simon-land");
+  });
+
+  it("refuses suggestions for regions you can edit, missing regions, other ids, bad shapes and people without Create regions", async () => {
+    const ann = await client(ANN);
+    await expect(send(ann, "ann-land", ANN)).rejects.toThrow(/edit this region yourself/);
+    await expect(send(ann, "nowhere", ANN)).rejects.toThrow(/no region "nowhere"/);
+    await expect(ann.suggest("simon-land", suggestion("ann-land", ANN), "")).rejects.toThrow(/must have the id/);
+    await expect(ann.suggest("simon-land", { ...suggestion("simon-land", ANN), geometry: 5 }, "")).rejects.toThrow(/schema/);
+    await expect(ann.suggest("../x", suggestion("simon-land", ANN), "")).rejects.toThrow(/Bad region id/);
+    await expect(client(STRANGER)).rejects.toBeInstanceOf(NotListed);
+    const viewer = { id: 5009, login: "viewer" };
+    expect(await tryCommit(await client(OWNER), [put("content/access.json", JSON.stringify({ users: [...ACCESS.users, { ...viewer, permissions: ["maps"] }] }) + "\n")])).toBeNull();
+    await expect(send(await client(viewer), "simon-land", viewer)).rejects.toThrow(/permission to suggest/);
+  });
+
+  it("keeps one pending suggestion per person per region (sending again replaces it) and at most 15 waiting", async () => {
+    const ann = await client(ANN);
+    await send(ann, "simon-land", ANN, "first");
+    await send(ann, "simon-land", ANN, "second");
+    const list = await ann.suggestions();
+    expect(list.length).toBe(1);
+    expect(list[0].note).toBe("second");
+    const owner = await client(OWNER);
+    expect(await tryCommit(owner, [...Array.from({ length: 15 }, (_, i) => put(`content/regions/r${i}.json`, region(`r${i}`, SIMON, OWNER))), put("content/regions/one-more.json", region("one-more", SIMON, OWNER))])).toBeNull();
+    for (let i = 0; i < 14; i++) await send(ann, `r${i}`, ANN);
+    await expect(send(ann, "r14", ANN)).rejects.toThrow(/already have 15/);
+  });
+
+  it("lets only people who may edit the region accept or decline, once", async () => {
+    await send(await client(ANN), "simon-land", ANN);
+    const id = `simon-land~${ANN.id}`;
+    await expect((await client(ANN)).decideSuggestion(id, "accepted")).rejects.toThrow(/can't decide/);
+    await expect((await client(MANAGER)).decideSuggestion(id, "declined")).rejects.toThrow(/can't decide|can't see/);
+    await (await client(SIMON)).decideSuggestion(id, "declined", "keep the old border");
+    const after = (await (await client(ANN)).suggestions())[0];
+    expect(after).toMatchObject({ status: "declined", decidedBy: "LoopSimon", reason: "keep the old border" });
+    await expect((await client(OWNER)).decideSuggestion(id, "accepted")).rejects.toThrow(/already declined/);
+  });
+
+  it("is accepted by saving the region as the reviewer, which the normal permission checks allow", async () => {
+    await send(await client(ANN), "simon-land", ANN, "", { color: "#112233" });
+    const id = `simon-land~${ANN.id}`;
+    const simon = await client(SIMON);
+    const sug = await simon.suggestion(id);
+    // Same creator as the region, saved by the reviewer.
+    const feature = { ...sug.feature, properties: { ...sug.feature.properties, created: "2026-11-12T10:00:00Z", createdBy: SIMON, updatedBy: SIMON } };
+    expect(await tryCommit(simon, [put("content/regions/simon-land.json", JSON.stringify(feature) + "\n")])).toBeNull();
+    await simon.decideSuggestion(id, "accepted");
+    expect((await (await client(ANN)).suggestions())[0].status).toBe("accepted");
+    expect(JSON.parse(mock.read("main", "content/regions/simon-land.json")!).properties.color).toBe("#112233");
+  });
+
+  it("lets the sender withdraw, and the reviewer clear a decided one, but not a pending one", async () => {
+    const ann = await client(ANN);
+    await send(ann, "simon-land", ANN);
+    const id = `simon-land~${ANN.id}`;
+    await expect((await client(SIMON)).removeSuggestion(id)).rejects.toThrow(/Only the person who sent/);
+    await ann.removeSuggestion(id);
+    expect((await ann.suggestions()).length).toBe(0);
+    await send(ann, "simon-land", ANN);
+    await (await client(SIMON)).decideSuggestion(id, "declined");
+    await (await client(SIMON)).removeSuggestion(id);
+    expect((await ann.suggestions()).length).toBe(0);
+  });
+
+  it("answers 501 where there's no key-value store", async () => {
+    env.WAITING = undefined;
+    await expect((await client(ANN)).suggestions()).rejects.toThrow(/aren't set up/);
   });
 });

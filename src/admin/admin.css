@@ -292,3 +292,11 @@ dialog.history { width: min(940px, calc(100vw - 32px)); }
 .act-pager { justify-content: center; gap: 8px; align-items: center; }
 .act-gone { text-decoration: line-through; color: var(--muted, inherit); }
 button.link { background: none; border: 0; padding: 0; font: inherit; color: var(--accent, #4a8cff); text-decoration: underline; cursor: pointer; }
+
+/* Suggested changes (Regions tab) */
+.suggestions { margin: 0 0 1rem; padding: .75rem 1rem; border: 1px solid var(--line, #3a3f4b); border-radius: 8px; }
+.suggestions h3 { margin: 0 0 .5rem; font-size: 1rem; }
+.suggestions h3 + .sug-list { margin-bottom: .75rem; }
+.sug-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.sug-row { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; justify-content: space-between; }
+.sug-row .actions { display: flex; gap: .5rem; }

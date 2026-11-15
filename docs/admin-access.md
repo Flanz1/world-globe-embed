@@ -40,6 +40,14 @@ They follow the region rules, with no extra permission:
 
 The API checks all of this on save, like the other rules.
 
+## Suggested changes
+
+Someone with "Create regions" who can't edit a region (they didn't create it and lack "Edit others' regions") sees **Suggest changes** on its card instead of Edit. It opens the normal editor; **Send suggestion** (with an optional note) stores their version, and nothing is written to the repository or the site.
+
+People who may edit that region (its creator, editors, admins, the owner) see it under **Suggestions to review** on the Regions tab. **Review** opens the editor on the suggested version with the current region drawn as a grey outline; **Accept suggestion** saves it as the reviewer, through the same permission checks as any save (the region's creator stays the same, the commit message names the suggester). **Decline** takes an optional reason. The sender sees the outcome under **Your suggestions**.
+
+Suggestions are kept in Cloudflare KV (the `PROPOSALS` binding if present, otherwise the same namespace as the waiting list, keys starting `p:`), one pending suggestion per person per region (sending again replaces it), at most 15 waiting per person, up to 90 days; decided ones stay 30 days. Endpoints: `/proposals` (list, send), `/proposals/<id>` (read, withdraw), `/proposals/<id>/accepted|declined`.
+
 ## Adding someone
 
 1. **Users** tab → type their GitHub username → choose a preset → **Add person** → **Save changes**.

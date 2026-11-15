@@ -85,6 +85,28 @@ export interface Me {
   permissions: Permission[];
 }
 
+/** A suggested change to a region, as lists show it. */
+export interface SuggestionSummary {
+  /** `<region>~<proposer id>` */
+  id: string;
+  region: string;
+  by: { id: number; login: string };
+  at: string;
+  note: string;
+  /** Account id of the region's creator when it was sent. */
+  owner: number;
+  /** Blob SHA of the region file the suggestion started from. */
+  base: string;
+  status: "pending" | "accepted" | "declined";
+  decidedBy?: string;
+  decidedAt?: string;
+  reason?: string;
+}
+
+export interface Suggestion extends SuggestionSummary {
+  feature: import("../shared/region.ts").RegionFeature;
+}
+
 /** People who signed in but aren't on the list yet. */
 export interface Editing {
   id: number;
@@ -237,6 +259,28 @@ export class GitHub {
 
   async dismissWaiting(id: number): Promise<void> {
     await this.send(`/waiting/${id}`, { method: "DELETE" }, this.root);
+  }
+
+  /** Suggested changes (see worker/src/proposals.ts): the ones this person may see. */
+  async suggestions(): Promise<SuggestionSummary[]> {
+    return (await this.send<SuggestionSummary[]>("/proposals", {}, this.root)).data;
+  }
+
+  async suggestion(id: string): Promise<Suggestion> {
+    return (await this.send<Suggestion>(`/proposals/${encodeURIComponent(id)}`, {}, this.root)).data;
+  }
+
+  /** Sends (or replaces) one's own suggestion for a region. */
+  async suggest(region: string, feature: unknown, note: string): Promise<SuggestionSummary> {
+    return (await this.send<SuggestionSummary>("/proposals", { method: "POST", body: JSON.stringify({ region, feature, note }) }, this.root)).data;
+  }
+
+  async decideSuggestion(id: string, status: "accepted" | "declined", reason?: string): Promise<void> {
+    await this.send(`/proposals/${encodeURIComponent(id)}/${status}`, { method: "POST", body: JSON.stringify({ reason: reason ?? "" }) }, this.root);
+  }
+
+  async removeSuggestion(id: string): Promise<void> {
+    await this.send(`/proposals/${encodeURIComponent(id)}`, { method: "DELETE" }, this.root);
   }
 
   async readText(path: string): Promise<string> {

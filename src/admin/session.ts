@@ -23,6 +23,8 @@ const perms = () => (me ? new Set<Permission>(me.owner ? ["maps", "regions", "ed
 
 export const ownerOf = (f: RegionFeature | null | undefined) => regionOwner(f, OWNER_ID);
 export const canEdit = (f: RegionFeature | null | undefined) => !!me && canEditRegion(perms(), me.id, ownerOf(f));
+/** May this person decide suggestions for a region created by account `owner`? (The same as editing it.) */
+export const canEditCreatedBy = (owner: number) => !!me && canEditRegion(perms(), me.id, owner);
 export const canDelete = (f: RegionFeature | null | undefined) => !!me && canDeleteRegion(perms(), me.id, ownerOf(f));
 
 /**

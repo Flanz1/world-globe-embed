@@ -45,6 +45,21 @@ export function confirmBox(title: string, text: string, ok: string, cancel = "Ca
   });
 }
 
+/** Asks for a line of text (a note, a reason). Resolves to the text, or null when cancelled. */
+export function askText(title: string, text: string, ok: string, o: { placeholder?: string; max?: number; required?: boolean } = {}): Promise<string | null> {
+  return new Promise((resolve) => {
+    const m = modal(title);
+    let answer: string | null = null;
+    const box = h("textarea", { rows: 3, maxLength: o.max ?? 160, placeholder: o.placeholder ?? "", ariaLabel: title, name: "dialog-text" });
+    const go = h("button", { type: "button", textContent: ok, disabled: !!o.required, onclick: () => ((answer = box.value.trim()), m.close()) });
+    box.addEventListener("input", () => void (go.disabled = !!o.required && !box.value.trim()));
+    m.body.append(h("p", { textContent: text }), box);
+    m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), go);
+    m.dlg.addEventListener("close", () => resolve(answer));
+    box.focus();
+  });
+}
+
 /* ── Embed code ── */
 
 export interface EmbedTarget {
