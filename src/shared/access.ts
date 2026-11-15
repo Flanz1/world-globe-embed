@@ -8,6 +8,7 @@
  * every permission, whatever that file says, so nobody can lock them out.
  */
 
+import { checkPinMaps, PINMAPS_PATH, type PinMapsFile } from "./pinmaps.ts";
 import { CATEGORIES_PATH, checkCategories, diffCategories, placements, type CategoriesFile } from "./categories.ts";
 
 export const PERMISSIONS = ["maps", "regions", "editOthers", "deleteOthers", "users"] as const;
@@ -112,7 +113,7 @@ export const canDeleteRegion = (perms: ReadonlySet<Permission> | null, userId: n
   !!perms && (owner === userId ? perms.has("regions") : perms.has("deleteOthers"));
 
 /** What a path in the repository is, for the rules below. */
-export type PathKind = "region" | "pin" | "maps" | "access" | "categories" | "content" | "outside";
+export type PathKind = "region" | "pin" | "maps" | "access" | "categories" | "pinmaps" | "content" | "outside";
 const REGION_FILE = /^content\/regions\/([a-z0-9][a-z0-9-]{0,63})\.json$/;
 const PIN_FILE = /^content\/pins\/([a-z0-9][a-z0-9-]{0,63})\.json$/;
 
@@ -121,6 +122,7 @@ export function pathKind(path: string): PathKind {
   if (PIN_FILE.test(path)) return "pin";
   if (path === ACCESS_PATH) return "access";
   if (path === CATEGORIES_PATH) return "categories";
+  if (path === PINMAPS_PATH) return "pinmaps";
   if (path === "content/slots.json" || path.startsWith("content/maps/") || path.startsWith("content/incoming/")) return "maps";
   if (path.startsWith("content/")) return "content";
   return "outside";
@@ -175,6 +177,8 @@ export function checkChange(d: FileDiff, actor: Actor, ownerId: number): string 
       return checkPinChange(d, actor, ownerId);
     case "categories":
       return checkCategoriesChange(d, actor);
+    case "pinmaps":
+      return checkPinMapsChange(d, actor);
   }
 }
 
@@ -273,6 +277,19 @@ function checkAccessChange(d: FileDiff, actor: Actor, ownerId: number): string |
     if (lost.length) return `You can't take "${PERMISSION_LABELS[lost[0]].label}" from ${u.login}: you don't have it yourself.`;
   }
   return null;
+}
+
+/**
+ * pinmaps.json: pin maps and their folders have no owner, so anyone who may create regions can add, rename, move
+ * and delete any of them (the pin files themselves don't change). The file must be valid.
+ */
+function checkPinMapsChange(d: FileDiff, actor: Actor): string | null {
+  if (!actor.owner && !actor.permissions.has("regions")) return "You don't have permission to change pin maps.";
+  if (d.after === null) return null;
+  const parsed = parse(d.after) as PinMapsFile | undefined;
+  if (parsed === undefined) return `${d.path} isn't valid JSON.`;
+  const errs = checkPinMaps(parsed);
+  return errs.length ? `pinmaps.json: ${errs[0]}` : null;
 }
 
 /**

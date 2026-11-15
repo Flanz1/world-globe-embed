@@ -95,6 +95,8 @@ export interface MapMeta {
 
 /** What a generated slot page hands to the viewer (inlined as JSON). */
 export interface ViewerConfig extends ViewDefaults {
+  /** Default for ?pins= on a region embed: the region's pin maps (ids, comma separated). Set by the page, never by the slot. */
+  pins?: string;
   slug: string;
   title: string;
   /** Available textures, URLs relative to the slot page, smallest first. */

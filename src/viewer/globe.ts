@@ -401,7 +401,7 @@ export async function start(ctx: StartContext): Promise<void> {
       return { x: ((tmpV.x + 1) / 2) * stage.clientWidth, y: ((1 - tmpV.y) / 2) * stage.clientHeight, visible: facing };
     });
   }
-  void setupPins(stage, canvas, cfg.slug).then((l) => {
+  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins).then((l) => {
     pinLayer = l;
     invalidate();
   });
@@ -678,8 +678,17 @@ export async function start(ctx: StartContext): Promise<void> {
       }
       invalidate();
     });
+    let layerKey = "";
+    let layerRev = -1;
     R.subscribe?.((r, centre, focus) => {
       reg = r;
+      // The preview's underlays changed: new toggles.
+      const k = r.members?.map((m) => m.id).join(",") ?? "";
+      if (R.toggle && regionKey && (k !== layerKey || R.layers?.rev !== layerRev)) {
+        layerRev = R.layers?.rev ?? -1;
+        layerKey = k;
+        setupLayers(regionKey, r, visible, () => (drawRegion(), invalidate()), R.layers);
+      }
       drawRegion();
       if (centre) {
         fit(focus);

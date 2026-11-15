@@ -9,3 +9,4 @@ export const validateCategories: ValidateFn;
 export const validateSlots: ValidateFn;
 export const validateMap: ValidateFn;
 export const validatePin: ValidateFn;
+export const validatePinMaps: ValidateFn;

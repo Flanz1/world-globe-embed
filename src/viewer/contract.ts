@@ -40,6 +40,19 @@ export interface RegionMessage {
   centre?: boolean;
   /** With centre: face just this part (index into the region's polygons). */
   focus?: number;
+  /**
+   * The region's underlays (sent when they change, not with every update; an empty list removes them).
+   * Validated with parseRegionData on arrival.
+   */
+  under?: {
+    regions: RegionData[];
+    clip: boolean;
+    /** Ids that start hidden. */
+    hidden: string[];
+    /** Toggle names by region id (the edited region's own included); missing or empty: the id. */
+    names: Record<string, string>;
+    title: string;
+  };
 }
 
 export type { ViewMode } from "../shared/types.ts";
@@ -59,7 +72,7 @@ export interface RegionContext {
   /** Stacked regions (?regions=): show the legend's show/hide boxes (toggle=0 hides them). */
   toggle: boolean;
   /** Several regions stacked: the legend's toggle names and heading, and the ones that start hidden. */
-  layers?: { names: Record<string, string>; title: string; hidden: string[] };
+  layers?: { names: Record<string, string>; title: string; hidden: string[]; /** Preview only: counts the underlay settings received, so the viewer rebuilds the toggles when they change. */ rev?: number };
   /** Start locked on the selected position (lock=0 starts unlocked). */
   lock: boolean;
   /** lat/lon/zoom given explicitly in the URL; they override auto-fit. */
