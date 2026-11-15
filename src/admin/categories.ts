@@ -32,7 +32,7 @@ import { h } from "./dom.ts";
 import { hasPendingSaves, optimistic } from "./optimistic.ts";
 import { GitHubError, type GitHub } from "./github.ts";
 import { confirmBox, modal } from "./region-dialogs.ts";
-import { OWNER_ID, account, can, currentUser, refusal } from "./session.ts";
+import { can, refusal } from "./session.ts";
 
 export interface CategoriesDeps {
   gh: () => GitHub;
@@ -69,18 +69,7 @@ export async function loadCategories(): Promise<void> {
 /* ── Who may do what ── */
 
 export const canAddCategory = () => can("regions");
-/** Own categories with "Create regions", anyone's with "Edit others' regions"; categories with no creator belong to the owner. */
-export function canEditCategory(k: Category): boolean {
-  const me = currentUser();
-  if (!me) return false;
-  if (me.owner || can("editOthers")) return true;
-  return can("regions") && (k.createdBy?.id ?? OWNER_ID) === me.id;
-}
-export const creatorOf = (k: Category) => k.createdBy?.login ?? "the owner";
-
 /* ── Saving ── */
-
-const stamp = () => new Date().toISOString().replace(/\.\d+Z$/, "Z");
 
 /**
  * Applies the change on screen at once and commits it in the background (see optimistic.ts). The commit
@@ -166,17 +155,17 @@ function askName(title: string, ok: string, initial: string, except: string | un
 export function newCategory(parent: string | null = null): void {
   if (!canAddCategory()) return;
   const where = parent ? ` in ${pathName(current, parent)}` : "";
-  askName(parent ? "New subfolder" : "New folder", "Add folder", "", undefined, parent, (name) => void save(`Add category ${name}${where}`, (c) => addCategory(c, name, account(), stamp(), parent).file));
+  askName(parent ? "New subfolder" : "New folder", "Add folder", "", undefined, parent, (name) => void save(`Add category ${name}${where}`, (c) => addCategory(c, name, parent).file));
 }
 
 export function rename(k: Category): void {
-  if (!canEditCategory(k)) return;
+  if (!canAddCategory()) return;
   askName("Rename folder", "Rename", k.name, k.id, parentOf(current, k.id), (name) => void save(`Rename category ${k.name} to ${name}`, (c) => renameCategory(c, k.id, name)));
 }
 
 /** Asks where to move a folder: the top level or another folder (not itself or what's in it). */
 export function moveFolder(k: Category): void {
-  if (!canEditCategory(k)) return;
+  if (!canAddCategory()) return;
   const m = modal(`Move folder "${k.name}"`);
   const here = parentOf(current, k.id) ?? "";
   const sel = h(
@@ -203,7 +192,7 @@ export function moveFolder(k: Category): void {
 }
 
 export async function remove(k: Category): Promise<void> {
-  if (!canEditCategory(k)) return;
+  if (!canAddCategory()) return;
   const n = k.regions.filter((r) => deps.regionIds().has(r)).length;
   const sub = childrenOf(current, k.id).length;
   const parts = [`"${k.name}" will be deleted.`];

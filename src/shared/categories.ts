@@ -34,7 +34,7 @@ export interface Category {
   regions: string[];
   /** The folder this one sits in; absent at the top level. */
   parent?: string;
-  /** Who created it (stamped by the admin page, verified by the API). Older or hand-made categories belong to the repository owner. */
+  /** Folders have no owner. Only older folders carry this, and nothing reads it. */
   createdBy?: Creator;
   created?: string;
 }
@@ -228,11 +228,11 @@ export function nameProblem(c: CategoriesFile, name: string, except?: string, pa
 
 const copy = (c: CategoriesFile): CategoriesFile => ({ ...c, categories: c.categories.map((k) => ({ ...k, regions: [...k.regions] })) });
 
-export function addCategory(c: CategoriesFile, name: string, by: Creator, now: string, parent: string | null = null): { file: CategoriesFile; id: string } {
+export function addCategory(c: CategoriesFile, name: string, parent: string | null = null): { file: CategoriesFile; id: string } {
   const file = copy(c);
   const id = newCategoryId(cleanName(name), new Set(file.categories.map((k) => k.id)));
   const inside = parent && file.categories.some((k) => k.id === parent) ? { parent } : {};
-  file.categories.push({ id, name: cleanName(name), regions: [], ...inside, createdBy: { id: by.id, login: by.login }, created: now });
+  file.categories.push({ id, name: cleanName(name), regions: [], ...inside });
   return { file, id };
 }
 

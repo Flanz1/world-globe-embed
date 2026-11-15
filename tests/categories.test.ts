@@ -23,7 +23,6 @@ import {
   type CategoriesFile,
 } from "../src/shared/categories.ts";
 
-const ME = { id: 1, login: "me" };
 const start: CategoriesFile = { categories: [{ id: "kingdoms", name: "Kingdoms", regions: ["a", "b"] }, { id: "seas", name: "Seas", regions: ["c"] }] };
 
 describe("categories", () => {
@@ -35,9 +34,9 @@ describe("categories", () => {
   });
 
   it("adds, renames, reorders and deletes", () => {
-    const { file, id } = addCategory(start, "  Free   Cities ", ME, "2026-11-12T10:00:00Z");
+    const { file, id } = addCategory(start, "  Free   Cities ");
     expect(id).toBe("free-cities");
-    expect(file.categories[2]).toEqual({ id, name: "Free Cities", regions: [], createdBy: ME, created: "2026-11-12T10:00:00Z" });
+    expect(file.categories[2]).toEqual({ id, name: "Free Cities", regions: [] });
     expect(renameCategory(file, "seas", "Oceans").categories[1].name).toBe("Oceans");
     expect(shiftCategory(file, "seas", -1).categories.map((k) => k.id)).toEqual(["seas", "kingdoms", "free-cities"]);
     expect(shiftCategory(file, "kingdoms", -1)).toEqual(file); // already first
@@ -106,7 +105,7 @@ describe("categories", () => {
     });
 
     it("adds a subfolder and lets siblings in different folders share a name", () => {
-      const { file, id } = addCategory(nested, "Cities", ME, "2026-11-13T10:00:00Z", "seas");
+      const { file, id } = addCategory(nested, "Cities", "seas");
       expect(file.categories.find((k) => k.id === id)).toMatchObject({ name: "Cities", parent: "seas" });
       expect(nameProblem(nested, "Cities", undefined, "seas")).toBeNull();
       expect(nameProblem(nested, "cities", undefined, "kingdoms")).toMatch(/already a folder/);
@@ -124,7 +123,7 @@ describe("categories", () => {
       let deep = nested;
       for (let i = 0; i < MAX_DEPTH + 2; i++) {
         const parent = deep.categories[deep.categories.length - 1].id;
-        deep = addCategory(deep, `Deep ${i}`, ME, "2026-11-13T10:00:00Z", parent).file;
+        deep = addCategory(deep, `Deep ${i}`, parent).file;
       }
       expect(checkCategories(deep).join()).toMatch(/levels deep/);
     });
