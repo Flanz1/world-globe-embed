@@ -32,6 +32,8 @@ export interface Category {
   id: string;
   name: string;
   regions: string[];
+  /** Regions of this folder pinned to its top, in the order they show there. Always a subset of `regions`. */
+  pinned?: string[];
   /** The folder this one sits in; absent at the top level. */
   parent?: string;
   /** Folders have no owner. Only older folders carry this, and nothing reads it. */
@@ -77,6 +79,17 @@ export function checkCategories(c: unknown): string[] {
     if (!Array.isArray(k.regions)) {
       errs.push(`${where}.regions must be a list.`);
       continue;
+    }
+    if (k.pinned !== undefined) {
+      if (!Array.isArray(k.pinned)) errs.push(`${where}.pinned must be a list.`);
+      else {
+        const seen = new Set<string>();
+        for (const r of k.pinned) {
+          if (typeof r !== "string" || !k.regions.includes(r)) errs.push(`${where}.pinned: "${String(r)}" isn't a region in this folder.`);
+          else if (seen.has(r)) errs.push(`${where}.pinned: "${r}" is pinned twice.`);
+          else seen.add(r);
+        }
+      }
     }
     for (const r of k.regions) {
       if (typeof r !== "string") continue;
@@ -226,7 +239,7 @@ export function nameProblem(c: CategoriesFile, name: string, except?: string, pa
 
 /* ── Edits. Each takes the file as it is now and returns the new one; the admin page applies them to a fresh copy at commit time. ── */
 
-const copy = (c: CategoriesFile): CategoriesFile => ({ ...c, categories: c.categories.map((k) => ({ ...k, regions: [...k.regions] })) });
+const copy = (c: CategoriesFile): CategoriesFile => ({ ...c, categories: c.categories.map((k) => ({ ...k, regions: [...k.regions], ...(k.pinned ? { pinned: [...k.pinned] } : {}) })) });
 
 export function addCategory(c: CategoriesFile, name: string, parent: string | null = null): { file: CategoriesFile; id: string } {
   const file = copy(c);
@@ -289,7 +302,10 @@ export function removeCategory(c: CategoriesFile, id: string): CategoriesFile {
 export function assignRegions(c: CategoriesFile, regionIds: readonly string[], categoryId: string | null): CategoriesFile {
   const file = copy(c);
   const set = new Set(regionIds);
-  for (const k of file.categories) k.regions = k.regions.filter((r) => !set.has(r));
+  for (const k of file.categories) {
+    k.regions = k.regions.filter((r) => !set.has(r));
+    tidyPins(k);
+  }
   const into = file.categories.find((k) => k.id === categoryId);
   if (into) into.regions.push(...regionIds.filter((r, i) => regionIds.indexOf(r) === i).sort());
   if (into) into.regions.sort();
@@ -299,7 +315,48 @@ export function assignRegions(c: CategoriesFile, regionIds: readonly string[], c
 /** Drops region ids that no longer exist. */
 export function pruneRegions(c: CategoriesFile, exists: ReadonlySet<string>): CategoriesFile {
   const file = copy(c);
-  for (const k of file.categories) k.regions = k.regions.filter((r) => exists.has(r));
+  for (const k of file.categories) {
+    k.regions = k.regions.filter((r) => exists.has(r));
+    tidyPins(k);
+  }
+  return file;
+}
+
+/** Keeps a folder's pins to regions it still holds (and drops an empty list). */
+function tidyPins(k: Category): void {
+  if (!k.pinned) return;
+  const here = new Set(k.regions);
+  k.pinned = k.pinned.filter((r, i) => here.has(r) && k.pinned!.indexOf(r) === i);
+  if (!k.pinned.length) delete k.pinned;
+}
+
+/** The folder's regions in display order: pinned ones first, in their pinned order, then the rest in the order given. */
+export function pinFirst<T extends { id: string }>(k: Pick<Category, "pinned"> | null | undefined, items: readonly T[]): T[] {
+  const rank = new Map((k?.pinned ?? []).map((r, i) => [r, i]));
+  const pinned = items.filter((x) => rank.has(x.id)).sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
+  return [...pinned, ...items.filter((x) => !rank.has(x.id))];
+}
+
+/** Pins a region of the folder to its top (as the last pin) or unpins it. */
+export function pinRegion(c: CategoriesFile, categoryId: string, regionId: string, on: boolean): CategoriesFile {
+  const file = copy(c);
+  const k = file.categories.find((x) => x.id === categoryId);
+  if (!k || !k.regions.includes(regionId)) return file;
+  const pins = (k.pinned ?? []).filter((r) => r !== regionId);
+  if (on) pins.push(regionId);
+  if (pins.length) k.pinned = pins;
+  else delete k.pinned;
+  return file;
+}
+
+/** Reorders the pins: puts pinned region `id` just before (or after) pinned region `other`. */
+export function movePin(c: CategoriesFile, categoryId: string, id: string, other: string, after = false): CategoriesFile {
+  const file = copy(c);
+  const k = file.categories.find((x) => x.id === categoryId);
+  if (!k?.pinned || id === other || !k.pinned.includes(id) || !k.pinned.includes(other)) return file;
+  const pins = k.pinned.filter((r) => r !== id);
+  pins.splice(pins.indexOf(other) + (after ? 1 : 0), 0, id);
+  k.pinned = pins;
   return file;
 }
 

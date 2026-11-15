@@ -11,6 +11,8 @@ import {
   addCategory,
   childrenOf,
   moveCategory,
+  movePin,
+  pinRegion,
   moveTargets,
   pathName,
   parentOf,
@@ -115,6 +117,13 @@ export function moveFolderTo(k: Category, parent: string | null): Promise<void> 
   const to = parent ? pathName(current, parent) : "the top level";
   return save(`Move category ${k.name} to ${to}`, (c) => moveCategory(c, k.id, parent));
 }
+
+export const pin = (k: Category, regionId: string, on: boolean): Promise<void> =>
+  save(`${on ? "Pin" : "Unpin"} region ${regionId} ${on ? "to the top of" : "in"} category ${k.name}`, (c) => pinRegion(c, k.id, regionId, on));
+
+/** Puts pinned region `id` before (or after) pinned region `other`. */
+export const reorderPin = (k: Category, id: string, other: string, after = false): Promise<void> =>
+  save(`Reorder pinned regions in category ${k.name}`, (c) => movePin(c, k.id, id, other, after));
 
 export const placementOf = (regionId: string): string | null => placements(current).get(regionId) ?? null;
 

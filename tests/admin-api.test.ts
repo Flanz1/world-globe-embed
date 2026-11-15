@@ -431,6 +431,17 @@ describe("admin API categories", () => {
     expect(await tryCommit(ann, [write([cat("a", undefined, ["ann-land"])])])).toBeNull();
   });
 
+  it("anyone who can create regions pins and reorders regions in a folder; bad pins are refused", async () => {
+    const pins = (pinned: string[]) => ({ ...cat("a", undefined, ["ann-land", "simon-land", "old-land"]), pinned });
+    seed([cat("a", undefined, ["ann-land", "simon-land", "old-land"])]);
+    const ann = await client(ANN);
+    expect(await tryCommit(ann, [write([pins(["simon-land"])])])).toBeNull(); // someone else's region
+    expect(await tryCommit(ann, [write([pins(["simon-land", "ann-land"])])])).toBeNull();
+    expect(await tryCommit(ann, [write([pins(["ann-land", "simon-land"])])])).toBeNull();
+    expect((JSON.parse(mock.read("main", CATS)!) as CategoriesFile).categories[0].pinned).toEqual(["ann-land", "simon-land"]);
+    expect(await tryCommit(ann, [write([pins(["nope"])])])).toMatch(/isn't a region in this folder/);
+  });
+
   it("deleting a category sends its regions to Uncategorized", async () => {
     seed([cat("mine", undefined, ["simon-land", "ann-land"])]);
     expect(await tryCommit(await client(ANN), [write([])])).toBeNull();
