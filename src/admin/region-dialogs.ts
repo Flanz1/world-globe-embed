@@ -159,8 +159,8 @@ export function previewUrl(slot: Slot, q: Record<string, string>): string {
 }
 
 /** Sends a region to a same-origin preview iframe, always with an explicit target origin. */
-export function sendRegion(frame: HTMLIFrameElement, region: RegionData, centre = false, focus?: number): void {
-  const msg: RegionMessage = { type: "wge-region", region, ...(centre ? { centre } : {}), ...(centre && focus !== undefined && focus >= 0 ? { focus } : {}) };
+export function sendRegion(frame: HTMLIFrameElement, region: RegionData, centre = false, focus?: number, under?: RegionMessage["under"]): void {
+  const msg: RegionMessage = { type: "wge-region", region, ...(under ? { under } : {}), ...(centre ? { centre } : {}), ...(centre && focus !== undefined && focus >= 0 ? { focus } : {}) };
   frame.contentWindow?.postMessage(msg, SITE.origin);
 }
 

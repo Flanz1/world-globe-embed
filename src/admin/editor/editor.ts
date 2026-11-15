@@ -28,8 +28,8 @@ import {
 } from "../../shared/geo.ts";
 import { findClashes, prepare, type Prepared } from "../../shared/clash.ts";
 import { formatArea, sphereAreaKm2, validRadius } from "../../shared/measure.ts";
-import { paintSpec, traceGeometry, traceRing } from "../../shared/raster.ts";
-import { paintSpecOf, partColours, type Clashes } from "../../shared/region-paint.ts";
+import { paintLayerStack, paintSpec, traceGeometry, traceRing, type PaintLayer } from "../../shared/raster.ts";
+import { paintSpecOf, partColours, regionPaintLayers, type Clashes } from "../../shared/region-paint.ts";
 import {
   LEGEND_LABEL_MAX,
   LEGEND_MAX,
@@ -48,6 +48,7 @@ import {
   normalizePartLocked,
   PART_LABEL_MAX,
   PROVINCE_BORDER_MAX,
+  regionData,
   slugify,
   uniqueId,
   type RegionData,
@@ -64,6 +65,7 @@ import { loadMapImage } from "../images.ts";
 import { SITE } from "../dom.ts";
 import { createOverlayFilter, type OverlayCategory, type OverlayMeta } from "./overlay-filter.ts";
 import { TILE_BUDGET, TILE_LEVELS, TileCache, levelFor, tileRect, tilesAt, tileUrl, type TileLevel } from "../../shared/tiles.ts";
+import type { RegionMessage } from "../../viewer/contract.ts";
 import { alertBox, askText, confirmBox, modal, openEmbedDialog, previewUrl, sendRegion } from "../region-dialogs.ts";
 import { regionPath, serialize, stamp } from "../regions.ts";
 import { account, currentUser } from "../session.ts";
@@ -1060,6 +1062,44 @@ export function openEditor(o: EditorOptions): void {
     clashList.replaceChildren(...rows);
   }
 
+  /* ── Underlays: the regions shown under this one, cut to its outline, painted under it (its own offscreen layer, repainted only when the view or the underlays change) ── */
+  const underLayerCache = new Map<string, PaintLayer>();
+  const underOn = (): UnderEntry[] => (hist.state.props.under ?? []).filter((e, i) => e.on ?? i === 0);
+  const underPaint = (id: string): PaintLayer | null => {
+    let l = underLayerCache.get(id);
+    if (!l) {
+      const n = neighbours.find((x) => x.id === id);
+      if (!n) return null;
+      l = regionPaintLayers(regionData(n))[0];
+      underLayerCache.set(id, l);
+    }
+    return l;
+  };
+  let underBg: { key: string; canvas: HTMLCanvasElement } | null = null;
+  function drawUnder(p: Parts, offs: number[], viewKey: string): void {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const layers = underOn().flatMap((e) => underPaint(e.id) ?? []);
+    if (!layers.length || !p.length) return;
+    const key = `${viewKey}|${underOn().map((e) => e.id).join(",")}`;
+    if (!underBg || underBg.key !== key) {
+      const c = underBg?.canvas ?? document.createElement("canvas");
+      c.width = canvas.width;
+      c.height = canvas.height;
+      const u = c.getContext("2d")!;
+      u.setTransform(dpr, 0, 0, dpr, 0, 0);
+      paintLayerStack(u, layers, sx, sy, offs, { lineWidth: 2 }, { w: canvas.width / dpr, h: canvas.height / dpr });
+      underBg = { key, canvas: c };
+    }
+    g.save();
+    if (hist.state.props.underClip !== false) {
+      g.beginPath();
+      traceGeometry(g, asGeometry(p), sx, sy, offs);
+      g.clip("evenodd");
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.drawImage(underBg.canvas, 0, 0);
+    g.restore();
+  }
   let bg: { key: string; img: HTMLImageElement | null; canvas: HTMLCanvasElement } | null = null;
   function render(): void {
     raf = 0;
@@ -1117,6 +1157,7 @@ export function openEditor(o: EditorOptions): void {
     const s = hist.state.props;
     const cs = clashState();
     syncClashList(cs);
+    drawUnder(p, offs, bgKey);
     if (p.length) {
       paintSpec(g, cs.spec, sx, sy, offs, { fillOpacity: simplifyPreview ? s.fillOpacity * 0.4 : s.fillOpacity, lineWidth: 2 }, { w, h: hh });
       const sl = (hist.state.lines ?? [])[selLine];
@@ -1580,15 +1621,39 @@ export function openEditor(o: EditorOptions): void {
   let lastSent = -1;
   /** While dragging, the globe updates only once the pointer rests this long (and again on drop). */
   const PREVIEW_REST_MS = 300;
+  /** The underlays for the globe preview, only when they changed since the last send (the regions can be big). */
+  let underSig = "";
+  function underFor(force = false): RegionMessage["under"] {
+    const p = hist.state.props;
+    const list = p.under ?? [];
+    const sig = JSON.stringify([list, p.underClip, p.underTitle, p.layerLabel]);
+    if (!force && sig === underSig) return undefined;
+    underSig = sig;
+    const regions = list.flatMap((e) => {
+      const n = neighbours.find((x) => x.id === e.id);
+      return n ? [underData(n)] : [];
+    });
+    return {
+      regions,
+      clip: p.underClip !== false,
+      hidden: list.filter((e, i) => !(e.on ?? i === 0)).map((e) => e.id),
+      names: { ...Object.fromEntries(list.map((e) => [e.id, e.label ?? ""])), [previewId()]: p.layerLabel ?? "" },
+      title: p.underTitle ?? "",
+    };
+  }
+  const underData = (() => {
+    const cache = new Map<string, RegionData>();
+    return (n: RegionFeature): RegionData => cache.get(n.id) ?? (cache.set(n.id, regionData(n)), cache.get(n.id)!);
+  })();
   function sendPreview(centre = false, focus?: number): void {
-    if (centre) return sendRegion(frameEl, regionNow(), true, focus);
+    if (centre) return sendRegion(frameEl, regionNow(), true, focus, underFor());
     if (lastSent === hist.version) return;
     const send = () => {
       previewRaf = 0;
       previewTimer = 0;
       if (lastSent === hist.version) return;
       lastSent = hist.version;
-      sendRegion(frameEl, regionNow());
+      sendRegion(frameEl, regionNow(), false, undefined, underFor());
     };
     if (hist.dragging) {
       // Every globe update repaints the region onto the globe's large overlay texture and uploads it to the GPU.
@@ -1605,7 +1670,7 @@ export function openEditor(o: EditorOptions): void {
   }
   frameEl.addEventListener("load", () => {
     lastSent = -1;
-    sendRegion(frameEl, regionNow(), true);
+    sendRegion(frameEl, regionNow(), true, undefined, underFor(true));
   });
   frameEl.src = previewUrl(slot, { region: previewId(), lock: "0" });
 
@@ -1668,14 +1733,14 @@ export function openEditor(o: EditorOptions): void {
           const onIn = h("input", { type: "checkbox", checked: e.on ?? i === 0, ariaLabel: `${e.id} starts shown` });
           onIn.addEventListener("change", () => {
             setUnder((hist.state.props.under ?? []).map((x, j) => (j === i ? { ...x, on: onIn.checked } : x)), "Toggle starts shown");
-            changed("panel");
+            changed();
           });
           const move = (d: -1 | 1) => () => {
             const cur = [...(hist.state.props.under ?? [])];
             if (i + d < 0 || i + d >= cur.length) return;
             [cur[i], cur[i + d]] = [cur[i + d], cur[i]];
             setUnder(cur, "Underlay order");
-            changed("panel");
+            changed();
           };
           return h(
             "div",
@@ -1687,7 +1752,7 @@ export function openEditor(o: EditorOptions): void {
             btn("↓", "Move up a layer (drawn higher)", move(1)),
             btn("Remove", "Stop showing this region under this one", () => {
               setUnder((hist.state.props.under ?? []).filter((_, j) => j !== i), "Remove underlay");
-              changed("panel");
+              changed();
             }),
           );
         }),
@@ -1735,9 +1800,9 @@ export function openEditor(o: EditorOptions): void {
     if (!underAdd.value) return;
     setUnder([...(hist.state.props.under ?? []), { id: underAdd.value }], "Add underlay");
     underAdd.value = "";
-    changed("panel");
+    changed();
   });
-  underClipIn.addEventListener("change", () => (setProp("underClip", underClipIn.checked, "Underlays inside only"), changed("panel")));
+  underClipIn.addEventListener("change", () => (setProp("underClip", underClipIn.checked, "Underlays inside only"), changed()));
   underTitleIn.addEventListener("input", () => (setProp("underTitle", underTitleIn.value.slice(0, UNDER_TITLE_MAX), "Toggle list heading"), typed()));
   layerLabelIn.addEventListener("input", () => (setProp("layerLabel", layerLabelIn.value.slice(0, LEGEND_LABEL_MAX), "Own toggle name"), typed()));
   borderIn.addEventListener("change", () => (setProp("nationalBorders", borderIn.checked, "National borders"), changed()));

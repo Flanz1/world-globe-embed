@@ -75,6 +75,7 @@ if (regionId !== null) {
     };
     const explicit = { lat: given("lat"), lon: given("lon"), zoom: given("zoom") };
     const label = q.get("label");
+    const previewLayers: NonNullable<RegionContext["layers"]> = { names: {}, title: "", hidden: [] };
     let subscribe: RegionContext["subscribe"];
     let regionData: Promise<RegionData | null>;
     if (preview) {
@@ -82,10 +83,23 @@ if (regionId !== null) {
       const subs: ((r: RegionData, centre: boolean, focus: number) => void)[] = [];
       let first: (r: RegionData) => void = () => {};
       regionData = new Promise((res) => (first = res));
+      // The edited region's underlays (RegionMessage.under), kept between messages.
+      let under: { regions: RegionData[]; clip: boolean } = { regions: [], clip: true };
       window.addEventListener("message", (e: MessageEvent) => {
         if (e.origin !== location.origin || e.source !== window.parent || e.data?.type !== "wge-region") return;
-        const r = parseRegionData(e.data.region);
-        if (!r) return;
+        const own = parseRegionData(e.data.region);
+        if (!own) return;
+        const u = e.data.under;
+        if (u && typeof u === "object") {
+          under = { regions: (Array.isArray(u.regions) ? u.regions.slice(0, 8) : []).map((x: unknown) => parseRegionData(x)).filter((x: RegionData | null): x is RegionData => !!x), clip: u.clip !== false };
+          const names: Record<string, string> = {};
+          if (u.names && typeof u.names === "object") for (const [k, v] of Object.entries(u.names)) if (typeof v === "string") names[k] = v.slice(0, 60);
+          previewLayers.names = names;
+          previewLayers.title = typeof u.title === "string" ? u.title.slice(0, 40) : "";
+          previewLayers.rev = (previewLayers.rev ?? 0) + 1;
+          previewLayers.hidden = Array.isArray(u.hidden) ? u.hidden.filter((x: unknown): x is string => typeof x === "string") : [];
+        }
+        const r = under.regions.length ? mergeRegions([...under.regions, own], under.clip) : own;
         first(r);
         const f = e.data.focus;
         const focus = typeof f === "number" && Number.isInteger(f) && f >= 0 && f < 1000 ? f : -1;
@@ -125,6 +139,7 @@ if (regionId !== null) {
       explicit,
       // Stacked regions (?regions=) are framed once they've loaded; until then the poster faces the first (or the union, flat). A region with underlays is framed by itself, from the index.
       fitted: (ids.length === 1 || under.length > 0) && !!entry,
+      ...(preview ? { layers: previewLayers } : {}),
       ...(ids.length > 1
         ? {
             layers: {
