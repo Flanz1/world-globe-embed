@@ -111,7 +111,10 @@ export function setupRuler(cfg: { radius: number; controls: boolean }, host: Rul
     draw();
   }
 
+  let painted = false;
   function draw(): void {
+    // Nothing to show and nothing left over from before: leave the canvas (and the layout) alone.
+    if (!painted && (!on || !pts.length)) return;
     const w = Math.max(1, host.stage.clientWidth);
     const h = Math.max(1, host.stage.clientHeight);
     const d = Math.min(window.devicePixelRatio || 1, 2);
@@ -122,7 +125,8 @@ export function setupRuler(cfg: { radius: number; controls: boolean }, host: Rul
     const g = cv.getContext("2d")!;
     g.setTransform(d, 0, 0, d, 0, 0);
     g.clearRect(0, 0, w, h);
-    if (!on || !pts.length) return;
+    painted = on && pts.length > 0;
+    if (!painted) return;
     const closed = mode === "area" && pts.length >= 3;
     // The outline: every leg as a great circle, so it bends the way a real route does.
     const trace: { x: number; y: number; ok: boolean }[][] = [];
