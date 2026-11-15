@@ -52,6 +52,99 @@ export function snapRing(pts: Position[], src: SnapRing["src"]): SnapRing {
 /** The region's own rings as snap rings. */
 export const partRings = (parts: Parts): SnapRing[] => parts.flatMap((rings, p) => rings.map((pts, r) => snapRing(pts, { kind: "part", p, r })));
 
+/* ── Spatial index: findSnap on a big ring looks only at the edges near the pointer ── */
+
+/** Rings with fewer vertices than this are scanned linearly (an index costs more than it saves). */
+const INDEX_MIN = 64;
+
+/**
+ * A uniform grid over a ring's bounding box: each cell lists the edges whose own box touches it
+ * (CSR layout: `start[c]..start[c+1]` index into `items`). Built once per ring and kept in a WeakMap,
+ * so it lives exactly as long as the ring; rings are never mutated (an edit makes new ones).
+ */
+interface RingGrid {
+  nx: number;
+  ny: number;
+  cw: number;
+  ch: number;
+  start: Uint32Array;
+  items: Uint32Array;
+  /** Per-edge "seen in this query" stamps, so an edge in several cells is tested once. */
+  stamp: Uint32Array;
+  query: number;
+}
+
+const grids = new WeakMap<SnapRing, RingGrid | null>();
+
+function gridOf(ring: SnapRing): RingGrid | null {
+  const hit = grids.get(ring);
+  if (hit !== undefined) return hit;
+  const pts = ring.pts;
+  const n = pts.length;
+  const [w, s, e, nn] = ring.box;
+  // A ring wider than half the world could meet the pointer in two copies at once: keep the plain scan for those.
+  if (n < INDEX_MIN || e - w >= 180) {
+    grids.set(ring, null);
+    return null;
+  }
+  const open = ring.src.kind === "line";
+  const edges = open ? n - 1 : n;
+  const cells = Math.max(1, Math.ceil(edges / 2));
+  const bw = Math.max(e - w, 1e-9);
+  const bh = Math.max(nn - s, 1e-9);
+  const nx = Math.max(1, Math.min(1024, Math.round(Math.sqrt((cells * bw) / bh))));
+  const ny = Math.max(1, Math.min(1024, Math.round(cells / nx)));
+  const cw = bw / nx;
+  const ch = bh / ny;
+  const cx = (x: number) => Math.min(nx - 1, Math.max(0, Math.floor((x - w) / cw)));
+  const cy = (y: number) => Math.min(ny - 1, Math.max(0, Math.floor((y - s) / ch)));
+  const count = new Uint32Array(nx * ny + 1);
+  const spans = new Int32Array(edges * 4);
+  for (let i = 0; i < edges; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % n];
+    const x0 = cx(Math.min(a[0], b[0]));
+    const x1 = cx(Math.max(a[0], b[0]));
+    const y0 = cy(Math.min(a[1], b[1]));
+    const y1 = cy(Math.max(a[1], b[1]));
+    spans.set([x0, x1, y0, y1], i * 4);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) count[y * nx + x + 1]++;
+  }
+  for (let c = 0; c < nx * ny; c++) count[c + 1] += count[c];
+  const items = new Uint32Array(count[nx * ny]);
+  const fill = count.slice(0, nx * ny);
+  for (let i = 0; i < edges; i++) {
+    const [x0, x1, y0, y1] = [spans[i * 4], spans[i * 4 + 1], spans[i * 4 + 2], spans[i * 4 + 3]];
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) items[fill[y * nx + x]++] = i;
+  }
+  const g: RingGrid = { nx, ny, cw, ch, start: count, items, stamp: new Uint32Array(edges), query: 0 };
+  grids.set(ring, g);
+  return g;
+}
+
+/** The edge numbers of `ring` that may lie within the window (lon/lat bounds in the ring's own copy), each once. */
+function edgesNear(ring: SnapRing, g: RingGrid, x0: number, y0: number, x1: number, y1: number): number[] {
+  const [w, s] = ring.box;
+  const out: number[] = [];
+  const cx0 = Math.max(0, Math.floor((x0 - w) / g.cw));
+  const cx1 = Math.min(g.nx - 1, Math.floor((x1 - w) / g.cw));
+  const cy0 = Math.max(0, Math.floor((y0 - s) / g.ch));
+  const cy1 = Math.min(g.ny - 1, Math.floor((y1 - s) / g.ch));
+  if (cx0 > cx1 || cy0 > cy1) return out;
+  const q = ++g.query;
+  for (let y = cy0; y <= cy1; y++)
+    for (let x = cx0; x <= cx1; x++) {
+      const c = y * g.nx + x;
+      for (let k = g.start[c]; k < g.start[c + 1]; k++) {
+        const e = g.items[k];
+        if (g.stamp[e] === q) continue;
+        g.stamp[e] = q;
+        out.push(e);
+      }
+    }
+  return out;
+}
+
 /**
  * The nearest vertex within `radius` pixels of `pos`, else the nearest point on a line within `radius`,
  * else null. `skipRing(i)` leaves ring i out; `skipVertex(i, v)` leaves out vertex v of ring i and the
@@ -79,26 +172,55 @@ export function findSnap(
     if (pos[0] < w + shift - rx || pos[0] > e + shift + rx) return;
     near.push({ ri, shift });
   });
-  for (const { ri } of near) {
+  // Per ring, the edges that can be within reach: all of them for a small ring, the grid's for a big one.
+  const cand = near.map(({ ri, shift }) => {
+    const ring = rings[ri];
+    const g = gridOf(ring);
+    return g ? edgesNear(ring, g, pos[0] - shift - rx, pos[1] - ry, pos[0] - shift + rx, pos[1] + ry) : null;
+  });
+  // Equal distances go to the later vertex or edge, as the linear scan always did.
+  let bestRi = -1;
+  let bestI = -1;
+  const better = (d: number, ri: number, i: number) => d < bestD || (d === bestD && (best === null ? d <= radius : ri > bestRi || (ri === bestRi && i > bestI)));
+  const tryVertex = (ri: number, pts: Position[], i: number) => {
+    if (skipVertex?.(ri, i)) return;
+    const lon = nearest(pts[i][0], pos[0]);
+    const d = Math.hypot((lon - pos[0]) * sc.k, (pts[i][1] - pos[1]) * sc.k * sc.ky);
+    if (better(d, ri, i)) {
+      bestD = d;
+      bestRi = ri;
+      bestI = i;
+      best = { pos: [lon, pts[i][1]], ring: ri, at: i, kind: "vertex" };
+    }
+  };
+  near.forEach(({ ri }, ni) => {
     const pts = rings[ri].pts;
-    for (let i = 0; i < pts.length; i++) {
-      if (skipVertex?.(ri, i)) continue;
-      const lon = nearest(pts[i][0], pos[0]);
-      const d = Math.hypot((lon - pos[0]) * sc.k, (pts[i][1] - pos[1]) * sc.k * sc.ky);
-      if (d <= bestD) {
-        bestD = d;
-        best = { pos: [lon, pts[i][1]], ring: ri, at: i, kind: "vertex" };
+    const list = cand[ni];
+    if (!list) for (let i = 0; i < pts.length; i++) tryVertex(ri, pts, i);
+    else {
+      // Every vertex in reach is an end of some candidate edge (or of one next to it).
+      const seen = new Set<number>();
+      for (const e of list) {
+        for (const i of [e, (e + 1) % pts.length]) {
+          if (seen.has(i)) continue;
+          seen.add(i);
+          tryVertex(ri, pts, i);
+        }
       }
     }
-  }
+  });
   if (best) return best;
-  for (const { ri } of near) {
+  bestD = radius;
+  bestRi = -1;
+  bestI = -1;
+  near.forEach(({ ri }, ni) => {
     const pts = rings[ri].pts;
     const n = pts.length;
     const last = rings[ri].src.kind === "line" ? n - 1 : n;
-    for (let i = 0; i < last; i++) {
+    const list = cand[ni];
+    const each = (i: number) => {
       const j = (i + 1) % n;
-      if (skipVertex?.(ri, i) || skipVertex?.(ri, j)) continue;
+      if (skipVertex?.(ri, i) || skipVertex?.(ri, j)) return;
       const a = pts[i];
       const b = pts[j];
       // The copy of this line nearest the point (the ring is unwrapped, so a and b are continuous).
@@ -110,15 +232,19 @@ export function findSnap(
       const dx = bx - ax;
       const dy = by - ay;
       const len2 = dx * dx + dy * dy;
-      if (!len2) continue;
+      if (!len2) return;
       const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2));
       const d = Math.hypot(ax + t * dx, ay + t * dy);
-      if (d <= bestD && t > 0 && t < 1) {
+      if (t > 0 && t < 1 && better(d, ri, i)) {
         bestD = d;
+        bestRi = ri;
+        bestI = i;
         best = { pos: [a[0] + sh + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])], ring: ri, at: i + t, kind: "edge" };
       }
-    }
-  }
+    };
+    if (list) for (const i of list) each(i);
+    else for (let i = 0; i < last; i++) each(i);
+  });
   return best;
 }
 
