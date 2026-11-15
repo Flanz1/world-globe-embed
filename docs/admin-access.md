@@ -18,6 +18,8 @@ are enforced in the API (`src/shared/access.ts`, tested in `tests/admin-api.test
 
 The presets are shortcuts. **Contributor** gives Create regions. **Editor** gives Create regions and Edit others' regions. **Admin** gives everything. The repository owner (`OWNER_ID` in `worker/wrangler.toml`) can always do everything, whatever `access.json` says. Nobody else gets Maps & slots unless it's ticked for them.
 
+Map pins (the Pins tab, `content/pins/<id>.json`) follow the same rules as regions: Create regions places pins and edits or deletes your own, Edit others' regions edits anyone's, Delete others' regions deletes anyone's. A pin records `createdBy` and `updatedBy` just like a region does.
+
 Every region records who created it (`createdBy`), when (`created`) and who saved it last (`updatedBy`).
 The API fills nothing in by itself. It checks those fields instead: a new region must name the person
 saving it as its creator, and only the owner or an admin (anyone with Manage users) can change a region's creator, with the Transfer button on the region's card. Regions from before this

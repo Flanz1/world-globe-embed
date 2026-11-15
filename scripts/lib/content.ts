@@ -6,6 +6,7 @@ import { Ajv2020, type ErrorObject } from "ajv/dist/2020.js";
 import type { MapMeta, SlotsFile } from "../../src/shared/types.ts";
 import { checkGeometry } from "../../src/shared/geo.ts";
 import { checkLegend, checkParts, type RegionFeature } from "../../src/shared/region.ts";
+import { MAX_PINS_PER_SLOT, checkPin, type PinFeature } from "../../src/shared/pins.ts";
 import { checkAccess } from "../../src/shared/access.ts";
 import { checkCategories, type CategoriesFile } from "../../src/shared/categories.ts";
 import { resolveLinked } from "../../src/shared/combine.ts";
@@ -22,6 +23,7 @@ const validateMap = compile("map.schema.json");
 const validateRegion = compile("region.schema.json");
 const validateAccess = compile("access.schema.json");
 const validateCategories = compile("categories.schema.json");
+const validatePin = compile("pin.schema.json");
 
 function describe(file: string, errors: ErrorObject[] | null | undefined): string[] {
   // if/then/else failures are always accompanied by the specific error inside the branch.
@@ -53,6 +55,8 @@ export interface Content {
   maps: Map<string, MapMeta>;
   /** Region id → region. Optional so older callers (and tests) that build Content by hand still work. */
   regions?: Map<string, RegionFeature>;
+  /** Pin id → pin (content/pins/). Optional like regions. */
+  pins?: Map<string, PinFeature>;
 }
 
 export interface ValidationResult {
@@ -72,6 +76,7 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
   const warnings: string[] = [];
   const maps = new Map<string, MapMeta>();
   const regions = new Map<string, RegionFeature>();
+  const pins = new Map<string, PinFeature>();
 
   const mapFiles = existsSync(paths.mapsDir) ? readdirSync(paths.mapsDir).filter((f) => f.endsWith(".json")) : [];
   for (const f of mapFiles) {
@@ -196,6 +201,48 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
     }
   }
 
+  // Map pins (optional): a bad pin is a build error, like a bad region, so a typo never silently drops a place.
+  const pinFiles = existsSync(paths.pinsDir) ? readdirSync(paths.pinsDir).filter((f) => f.endsWith(".json")).sort() : [];
+  const perSlot = new Map<string, number>();
+  for (const f of pinFiles) {
+    const rel = `content/pins/${f}`;
+    let data: unknown;
+    try {
+      data = readJson(path.join(paths.pinsDir, f));
+    } catch (e) {
+      errors.push(`${rel}: is not valid JSON (${(e as Error).message})`);
+      continue;
+    }
+    if (!validatePin(data)) {
+      errors.push(...describe(rel, validatePin.errors));
+      continue;
+    }
+    const pin = data as PinFeature;
+    const stem = f.slice(0, -5);
+    let ok = true;
+    if (pin.id !== stem) {
+      errors.push(`${rel}: "id" is "${pin.id}" but the file is named "${stem}.json". The id is permanent, so rename the file, not the id`);
+      ok = false;
+    }
+    const bad = checkPin(pin, rel);
+    if (bad.length) {
+      errors.push(...bad);
+      ok = false;
+    }
+    if (slots && !slots.slots[pin.properties.slot]) {
+      const known = Object.keys(slots.slots).sort();
+      errors.push(`${rel}: slot "${pin.properties.slot}" doesn't exist in content/slots.json.${hintFor(pin.properties.slot, known)} Known slots: ${known.join(", ")}.`);
+      ok = false;
+    }
+    if (slots && ok && slots.slots[pin.properties.slot]?.map !== pin.properties.map)
+      warnings.push(`${rel}: pin "${pin.id}" was placed on map "${pin.properties.map}", but slot "${pin.properties.slot}" now shows map "${slots.slots[pin.properties.slot]?.map}". Check that it still lines up.`);
+    if (ok) {
+      pins.set(pin.id, pin);
+      perSlot.set(pin.properties.slot, (perSlot.get(pin.properties.slot) ?? 0) + 1);
+    }
+  }
+  for (const [slot, n] of perSlot) if (n > MAX_PINS_PER_SLOT) errors.push(`content/pins/: slot "${slot}" has ${n} pins; at most ${MAX_PINS_PER_SLOT} are allowed.`);
+
   // Who may use the admin page (optional: without it only the repository owner can sign in).
   const accessFile = path.join(paths.content, "access.json");
   if (existsSync(accessFile)) {
@@ -225,5 +272,5 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
     }
   }
 
-  return { content: errors.length || !slots ? null : { slots, maps, regions }, errors, warnings };
+  return { content: errors.length || !slots ? null : { slots, maps, regions, pins }, errors, warnings };
 }

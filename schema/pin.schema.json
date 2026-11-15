@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flanz1.github.io/world-globe-embed/schema/pin.schema.json",
+  "title": "Map pin",
+  "description": "One place (a city, ruin, battle site…) marked on a map: a GeoJSON Point Feature (RFC 7946) stored as content/pins/<id>.json. COORDINATES ARE [lon, lat] IN THE MAP IMAGE'S OWN FRAME, exactly like regions (lon = x / width * 360 - 180, lat = 90 - y / height * 180), so a pin stays on the same spot of the land when the slot's pole padding or prime meridian shift change. The id is permanent (embeds can point at it). Embeds draw pins on top of regions when asked with ?pins=1 (all pins of the slot) or ?pins=city,battle (only those kinds).",
+  "type": "object",
+  "required": ["type", "id", "properties", "geometry"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "type": { "const": "Feature" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$", "description": "Permanent id; must match the file name." },
+    "properties": {
+      "type": "object",
+      "required": ["slot", "map", "name", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "slot": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$", "description": "Slot (in content/slots.json) whose embeds show this pin." },
+        "map": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$", "description": "Map id the pin was placed on." },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80, "description": "Display name (plain text)." },
+        "kind": {
+          "enum": ["city", "town", "fortress", "port", "temple", "ruin", "battle", "landmark", "mountain", "other"],
+          "description": "What sort of place it is; decides the icon."
+        },
+        "color": { "type": "string", "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", "description": "Optional marker colour, #rgb or #rrggbb. Leave it out for the kind's own colour." },
+        "description": { "type": "string", "maxLength": 300, "description": "Optional short plain-text description, shown when the marker is opened." },
+        "link": { "type": "string", "maxLength": 400, "pattern": "^https://[^\\s\"'<>]+$", "description": "Optional https link, normally the place's note in the Obsidian vault. Opens in a new tab." },
+        "createdBy": { "$ref": "#/$defs/account", "description": "Who placed the pin: they (and anyone allowed to edit others' regions) can change it." },
+        "created": { "type": "string", "maxLength": 40, "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$" },
+        "updatedBy": { "$ref": "#/$defs/account", "description": "Who saved this version." },
+        "updated": { "type": "string", "maxLength": 40, "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$" }
+      }
+    },
+    "geometry": {
+      "type": "object",
+      "required": ["type", "coordinates"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "Point" },
+        "coordinates": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            { "type": "number", "minimum": -180, "maximum": 180 },
+            { "type": "number", "minimum": -90, "maximum": 90 }
+          ],
+          "description": "[lon, lat] in the map image's frame."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "account": {
+      "type": "object",
+      "required": ["id", "login"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "integer", "minimum": 1, "description": "GitHub account id (permanent, survives a rename)." },
+        "login": { "type": "string", "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$", "description": "GitHub username when saved." }
+      }
+    }
+  }
+}

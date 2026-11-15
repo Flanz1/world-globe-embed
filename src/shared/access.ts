@@ -112,11 +112,13 @@ export const canDeleteRegion = (perms: ReadonlySet<Permission> | null, userId: n
   !!perms && (owner === userId ? perms.has("regions") : perms.has("deleteOthers"));
 
 /** What a path in the repository is, for the rules below. */
-export type PathKind = "region" | "maps" | "access" | "categories" | "content" | "outside";
+export type PathKind = "region" | "pin" | "maps" | "access" | "categories" | "content" | "outside";
 const REGION_FILE = /^content\/regions\/([a-z0-9][a-z0-9-]{0,63})\.json$/;
+const PIN_FILE = /^content\/pins\/([a-z0-9][a-z0-9-]{0,63})\.json$/;
 
 export function pathKind(path: string): PathKind {
   if (REGION_FILE.test(path)) return "region";
+  if (PIN_FILE.test(path)) return "pin";
   if (path === ACCESS_PATH) return "access";
   if (path === CATEGORIES_PATH) return "categories";
   if (path === "content/slots.json" || path.startsWith("content/maps/") || path.startsWith("content/incoming/")) return "maps";
@@ -169,6 +171,8 @@ export function checkChange(d: FileDiff, actor: Actor, ownerId: number): string 
       return checkAccessChange(d, actor, ownerId);
     case "region":
       return checkRegionChange(d, actor, ownerId);
+    case "pin":
+      return checkPinChange(d, actor, ownerId);
     case "categories":
       return checkCategoriesChange(d, actor, ownerId);
   }
@@ -203,6 +207,37 @@ function checkRegionChange(d: FileDiff, actor: Actor, ownerId: number): string |
   if (!actor.owner && !canEditRegion(actor.permissions, actor.id, owner))
     return mine ? "You don't have permission to edit regions." : `You can't edit "${id}": someone else created it.`;
   if (transfer && !mayTransfer) return `Only the repository owner or an admin can change who created "${id}".`;
+  return null;
+}
+
+/**
+ * Map pins follow the region rules: "Create regions" lets someone place pins and change or delete their own;
+ * "Edit others' regions" changes anyone's, "Delete others' regions" deletes anyone's. Who created a pin
+ * can only be set when it is placed (and by the repository owner, who may record someone else).
+ */
+function checkPinChange(d: FileDiff, actor: Actor, ownerId: number): string | null {
+  const id = PIN_FILE.exec(d.path)![1];
+  const before = d.before === null ? null : (parse(d.before) as RegionLike | undefined);
+  const after = d.after === null ? null : (parse(d.after) as RegionLike | undefined);
+  if (after === undefined) return `${d.path} isn't valid JSON.`;
+  const owner = regionOwner(before ?? null, ownerId);
+  const mine = owner === actor.id;
+  if (!after) {
+    if (actor.owner || canDeleteRegion(actor.permissions, actor.id, owner)) return null;
+    return mine ? "You don't have permission to delete pins." : `You can't delete the pin "${id}": someone else placed it.`;
+  }
+  if (after.id !== id) return `The pin in ${d.path} must have the id "${id}".`;
+  const updatedBy = after.properties?.updatedBy;
+  if (!updatedBy || updatedBy.id !== actor.id || updatedBy.login !== actor.login) return `The pin "${id}" must be saved with updatedBy set to you (${actor.login}).`;
+  if (!before) {
+    if (!actor.owner && !actor.permissions.has("regions")) return "You don't have permission to place pins.";
+    const c = after.properties?.createdBy;
+    if (actor.owner && c) return null;
+    if (!c || c.id !== actor.id || c.login !== actor.login) return `The new pin "${id}" must have createdBy set to you (${actor.login}).`;
+    return null;
+  }
+  if (!actor.owner && !canEditRegion(actor.permissions, actor.id, owner)) return mine ? "You don't have permission to edit pins." : `You can't edit the pin "${id}": someone else placed it.`;
+  if (!actor.owner && !same(before.properties?.createdBy, after.properties?.createdBy)) return `Only the repository owner can change who placed "${id}".`;
   return null;
 }
 

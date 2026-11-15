@@ -48,6 +48,7 @@ import { createGlobeTiles } from "./globe-tiles.ts";
 import type { PreviewMessage, StartContext } from "./contract.ts";
 import { setupRuler } from "./ruler.ts";
 import { RELOCK_MS, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
+import { setupPins, type PinLayer } from "./pins.ts";
 
 const DEG = Math.PI / 180;
 /** Auto-spin speed in radians per second (about 2 minutes per turn, like the desktop app). */
@@ -387,6 +388,24 @@ export async function start(ctx: StartContext): Promise<void> {
     },
   });
 
+  /** Map pins (?pins=…): markers placed like the labels, on the far side of the globe hidden. */
+  let pinLayer: PinLayer | null = null;
+  function placePins(): void {
+    pinLayer?.place((at) => {
+      const [lon, lat] = imageToGlobe(at, { north: pad.north, south: pad.south, shift });
+      const c = Math.cos(lat * DEG);
+      tmpV.set(OVERLAY_R * c * Math.cos(lon * DEG), OVERLAY_R * Math.sin(lat * DEG), -OVERLAY_R * c * Math.sin(lon * DEG));
+      tmpV.applyQuaternion(world.quaternion);
+      const facing = tmpV.z / OVERLAY_R > 1 / view.distance + 0.04;
+      tmpV.project(camera);
+      return { x: ((tmpV.x + 1) / 2) * stage.clientWidth, y: ((1 - tmpV.y) / 2) * stage.clientHeight, visible: facing };
+    });
+  }
+  void setupPins(stage, canvas, cfg.slug).then((l) => {
+    pinLayer = l;
+    invalidate();
+  });
+
   /* ── View state ── */
   const view = { yaw: 0, pitch: 0, distance: BASE_DISTANCE };
   /** Short ease back to the selected position when the view is re-locked. */
@@ -491,6 +510,7 @@ export async function start(ctx: StartContext): Promise<void> {
       renderer.render(scene, camera);
       placeLabel();
       ruler.redraw();
+      placePins();
       dirty = false;
       // The view moved: once it settles, see whether it needs a sharper texture or other tiles.
       if (!spinning && !fade) onZoom();

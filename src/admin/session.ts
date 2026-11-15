@@ -4,7 +4,6 @@
  */
 import { canDeleteRegion, canEditRegion, canTransferRegions, checkChange, regionOwner, type Account, type FileDiff, type Permission } from "../shared/access.ts";
 import type { Me } from "./github.ts";
-import type { RegionFeature } from "../shared/region.ts";
 
 /** The repository owner's GitHub account id: owns regions saved before regions had owners. Set from the build (VITE_OWNER_ID). */
 export const OWNER_ID = Number(import.meta.env.VITE_OWNER_ID ?? 45669787) || 45669787;
@@ -21,11 +20,13 @@ export function can(p: Permission): boolean {
 
 const perms = () => (me ? new Set<Permission>(me.owner ? ["maps", "regions", "editOthers", "deleteOthers", "users"] : me.permissions) : null);
 
-export const ownerOf = (f: RegionFeature | null | undefined) => regionOwner(f, OWNER_ID);
-export const canEdit = (f: RegionFeature | null | undefined) => !!me && canEditRegion(perms(), me.id, ownerOf(f));
+/** Whatever has a `properties.createdBy`: a region or a map pin. */
+type Owned = { properties?: { createdBy?: Account } } | null | undefined;
+export const ownerOf = (f: Owned) => regionOwner(f, OWNER_ID);
+export const canEdit = (f: Owned) => !!me && canEditRegion(perms(), me.id, ownerOf(f));
 /** May this person decide suggestions for a region created by account `owner`? (The same as editing it.) */
 export const canEditCreatedBy = (owner: number) => !!me && canEditRegion(perms(), me.id, owner);
-export const canDelete = (f: RegionFeature | null | undefined) => !!me && canDeleteRegion(perms(), me.id, ownerOf(f));
+export const canDelete = (f: Owned) => !!me && canDeleteRegion(perms(), me.id, ownerOf(f));
 
 /**
  * Runs the admin API's own permission check (checkChange) on a change before it is shown or sent, so a

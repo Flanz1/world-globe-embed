@@ -16,7 +16,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ALL = ["layers", "regions", "snap", "merge", "coast", "cut", "locks", "recovery", "ring-select", "tiles", "tiers", "view", "stack", "ruler", "upload", "roles", "live", "live-many"];
+export const ALL = ["layers", "regions", "snap", "merge", "coast", "cut", "locks", "recovery", "ring-select", "tiles", "tiers", "view", "stack", "ruler", "pins", "upload", "roles", "live", "live-many"];
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const ADMIN = ["src/admin/main.ts"];
@@ -28,6 +28,8 @@ const WORKER = ["worker/src/handler.ts"];
  * categories): changes there don't select them. Roots keep the path from the entry; these are cut.
  */
 const EDITOR_CUT = ["src/admin/regions.ts", "src/admin/session.ts", "src/admin/categories.ts", "src/admin/github.ts", "src/shared/access.ts", "src/shared/categories.ts"];
+/** The pins suite loads the admin page but only tests the Pins tab: sign-in, permissions and the API are the roles suite's. */
+const PINS_CUT = ["src/admin/session.ts", "src/admin/github.ts", "src/shared/access.ts", "src/shared/categories.ts"];
 /** Entry files each suite exercises. Editor suites cut the graph at EDITOR_CUT. */
 export const SUITE_ROOTS = {
   regions: [...ADMIN, ...VIEWER],
@@ -46,6 +48,7 @@ export const SUITE_ROOTS = {
   view: VIEWER,
   stack: VIEWER,
   ruler: ["src/admin/preview.ts", ...VIEWER],
+  pins: [...VIEWER, "src/viewer/pins.ts", "src/admin/pins.ts"],
   tiers: [...VIEWER, "src/shared/tiers.ts"],
   tiles: [...VIEWER, "src/shared/tiers.ts", "src/shared/tiles.ts", "src/shared/raster.ts"],
 };
@@ -86,7 +89,7 @@ function importGraph() {
       outdir: "out",
       platform: "browser",
       packages: "external",
-      external: EDITOR_SUITES.has(suite) ? EDITOR_CUT.map((f) => path.join(ROOT, f)) : [],
+      external: (EDITOR_SUITES.has(suite) ? EDITOR_CUT : suite === "pins" ? PINS_CUT : []).map((f) => path.join(ROOT, f)),
       logLevel: "silent",
       loader: { ".css": "empty" },
       define: { "import.meta.env": "{}" },

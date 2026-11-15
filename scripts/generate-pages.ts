@@ -5,7 +5,7 @@ import { gzipSync } from "node:zlib";
 import { buildBoot } from "./lib/build-boot.ts";
 import { loadContent } from "./lib/content.ts";
 import { renderLanding } from "./lib/landing.ts";
-import { generatePreviewPage, generateRegionFiles, generateSlotPages, type ViewerModules } from "./lib/pages.ts";
+import { generatePinFiles, generatePreviewPage, generateRegionFiles, generateSlotPages, type ViewerModules } from "./lib/pages.ts";
 import { ROOT } from "./lib/paths.ts";
 
 interface ManifestChunk {
@@ -60,6 +60,12 @@ for (const r of regionFiles) {
   mkdirSync(path.dirname(out), { recursive: true });
   writeFileSync(out, r.json);
 }
+const pinFiles = generatePinFiles(content);
+for (const f of pinFiles) {
+  const out = path.join(dist, f.path);
+  mkdirSync(path.dirname(out), { recursive: true });
+  writeFileSync(out, f.json);
+}
 writeFileSync(path.join(dist, "index.html"), renderLanding(content));
 writeFileSync(path.join(dist, "robots.txt"), "User-agent: *\nDisallow: /admin/\nDisallow: /preview/\n");
 rmSync(path.join(dist, ".vite"), { recursive: true, force: true });
@@ -80,6 +86,7 @@ console.log(`Viewer JS (Three.js + globe): ${kb(viewerGz)} gzipped (${viewerFile
 console.log(`Total globe path JS: ${kb(viewerGz + bootGz)} gzipped`);
 console.log(`Flat viewer JS (no Three.js): ${kb(flatGz)} gzipped (${flatFiles.join(", ")})`);
 console.log(`Total flat path JS: ${kb(flatGz + bootGz)} gzipped`);
+if (pinFiles.length) console.log(`Pins: ${pinFiles.length} file(s): ${pinFiles.map((f) => `${f.path} (${kb(f.json.length)})`).join(", ")}`);
 if (regionFiles.length) {
   const sizes = regionFiles.map((r) => r.json.length).sort((a, b) => a - b);
   const mid = regionFiles.find((r) => r.json.length === sizes[Math.floor(sizes.length / 2)])!;
