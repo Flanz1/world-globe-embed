@@ -1,0 +1,28 @@
+{
+  "$schema": "../../schema/pin.schema.json",
+  "type": "Feature",
+  "id": "vimgalab-monsis",
+  "properties": {
+    "slot": "inara",
+    "map": "globe-map",
+    "name": "Vimgalab-Monsis",
+    "kind": "temple",
+    "color": "#611f1f",
+    "description": "The Vimgalab Monsis is the largest single religious complex in the entire world and one fo the five Holy Sites of Zuhurism. Literally Meaning \"Exalted Height\" in old pagri it is the eastern centre of the faith.",
+    "link": "https://publish.obsidian.md/garmeley/Cities%2C+Locations+%26+Wonders/Great+Wonders/Vimgalab+Monsis",
+    "updatedBy": {
+      "id": 138310181,
+      "login": "LoopSimon"
+    },
+    "updated": "2026-11-15T11:22:36Z",
+    "createdBy": {
+      "id": 138310181,
+      "login": "LoopSimon"
+    },
+    "created": "2026-11-15T11:22:36Z"
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [37.1963, 29.906]
+  }
+}
