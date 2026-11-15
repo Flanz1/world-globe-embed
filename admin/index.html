@@ -87,6 +87,7 @@
         <div class="row r-new-row">
           <label>New region on slot <select id="r-new-slot"></select></label>
           <button type="button" class="r-new">New region</button>
+          <button type="button" id="r-trash" class="ghost r-trash" title="Regions and pins deleted in the last 3 days, with a Restore button">Recently deleted…</button>
         </div>
         <div id="regions-tools" class="row r-tools" hidden>
           <label class="grow">Search <input id="r-search" type="search" placeholder="Name, id or creator" autocomplete="off"></label>
@@ -95,7 +96,6 @@
           <label>Sort <select id="r-sort"><option value="name">Id</option><option value="updated">Last updated</option><option value="created">Newest first</option><option value="creator">Creator</option></select></label>
           <button type="button" id="r-combine" class="ghost" title="Copy several regions into one new region">Combine regions…</button>
           <button type="button" id="r-new-category" class="ghost" title="Add a folder to sort regions into">New folder…</button>
-          <button type="button" id="r-trash" class="ghost" title="Regions and pins deleted in the last 3 days, with a Restore button">Recently deleted…</button>
         </div>
         <div id="regions-empty" class="empty" hidden>
           <p><strong>No regions yet.</strong> A region is a named, coloured area on a map: a country, a province, a kingdom. You draw it here on the flat map, and each region gets its own embed code, which shows it highlighted on the globe (or on the flat map) in an Obsidian note.</p>

@@ -69,6 +69,7 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .55); }
 .grow { flex: 1 1 200px; }
 .r-tools { margin: 10px 0; }
 .r-new-row { margin-bottom: 6px; }
+.r-new-row .r-trash { margin-left: auto; }
 .empty { padding: 12px; border: 1px dashed var(--line); border-radius: 8px; margin-top: 10px; }
 .empty p { margin-top: 0; }
 
