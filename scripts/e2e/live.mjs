@@ -262,6 +262,25 @@ await step(E, "linked combined region", async () => {
   check(E, "a change in the linked region is saved into its region (and the snapshot)", c.length === 1 && JSON.stringify(changedPaths(c)) === JSON.stringify(["content/regions/live-c.json", "content/regions/live-link.json"]) && read("live-c").properties.partLabels[0] === "C from link" && read("live-link").properties.partLabels.includes("C from link"), JSON.stringify(c));
   await page.click("dialog.editor .pv-head button.ghost");
 
+  // The linked region names its legend itself: only its own file changes, the regions keep their names.
+  await page.click('[data-region="live-link"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open]");
+  await page.waitForTimeout(600);
+  await page.fill('dialog.editor input[name="legend-title"]', "Combined peoples");
+  await page.fill('dialog.editor .ed-folder[data-key="0"] .ed-folder-head input[type="text"]', "Highlands");
+  c = await saveAndWait();
+  const named = read("live-link").properties;
+  check(E, "renaming in a linked region writes only its own file", c.length === 1 && JSON.stringify(changedPaths(c)) === JSON.stringify(["content/regions/live-link.json"]), JSON.stringify(c));
+  check(E, "the linked region has its own heading and colour name", named.legendTitle === "Combined peoples" && named.legend?.some((e) => e.label === "Highlands") && named.linkedNames?.legendTitle === "Combined peoples", JSON.stringify(named));
+  check(E, "its regions keep their legend names", read("live-a").properties.legend?.[0]?.label === "Hills" && !read("live-a").properties.legendTitle, JSON.stringify(read("live-a").properties));
+  await page.click("dialog.editor .pv-head button.ghost");
+  await page.click('[data-region="live-link"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open]");
+  await page.waitForTimeout(600);
+  check(E, "reopening shows the names", (await page.inputValue('dialog.editor input[name="legend-title"]')) === "Combined peoples" && (await page.inputValue('dialog.editor .ed-folder[data-key="0"] .ed-folder-head input[type="text"]')) === "Highlands");
+  check(E, "nothing to save after reopening", (await saveAndWait()).length === 0, await ed.msg());
+  await page.click("dialog.editor .pv-head button.ghost");
+
   // Editing one of its regions on its own changes the linked region.
   await page.waitForSelector('#regions .rcard[data-region="live-a"]');
   await page.click('[data-region="live-a"] [data-action="edit"]');

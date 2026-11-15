@@ -72,7 +72,7 @@ import { account, currentUser } from "../session.ts";
 import { editingNote, startPresence } from "./presence.ts";
 import { combineKind, combineParts, extendPart, type MergeResult } from "./merge.ts";
 import { LINKED_MAX, combineRegions } from "../../shared/combine.ts";
-import { MAX_LIVE, liveState, ownEntry, previewLegend, removeLiveEntry, splitLive, type LiveSource } from "./live.ts";
+import { MAX_LIVE, applyLinkedNames, linkedNamesOf, liveState, ownEntry, previewLegend, removeLiveEntry, revertLinkedNames, splitLive, type LiveSource } from "./live.ts";
 import {
   History,
   addPart,
@@ -352,18 +352,22 @@ export function openEditor(o: EditorOptions): void {
   const live = o.live?.sources.length ? o.live.sources.map((x) => ({ id: x.id, sha: x.sha, feature: x.feature })) : null;
   const link = o.live?.link ? { ...o.live.link } : null;
   const liveMax = link ? LINKED_MAX : MAX_LIVE;
-  const liveSources: LiveSource[] = live ? live.map((x) => ({ id: x.id, state: stateOf(x.feature) })) : [];
+  const liveSources: LiveSource[] = live ? live.map((x) => ({ id: x.id, state: stateOf(x.feature), name: x.feature.properties.name })) : [];
   const legendCap = live ? 1000 : LEGEND_MAX;
   /** Vertex limit for the editor's parts: per region, so editing together the save checks each region instead. */
   const vertexCap = live ? MAX_VERTICES * live.length : MAX_VERTICES;
   /** Live: the region new parts go to (the "New parts go to" menu); a colour folder's + Part uses the folder's region. */
   let newOwner = live ? live[0].id : "";
   let newPartOwner: string | null = null;
-  const hist = new History(live ? liveState(o.live!.sources.map((x, i) => (x.current ? { id: x.id, state: x.current } : liveSources[i]))) : stateOf(o.feature));
+  /** A linked region has legend names of its own (shared/combine.ts LinkedNames): they never change the linked regions. */
+  const withNames = (s: EditorState): EditorState => (link ? applyLinkedNames(s, liveSources, link.feature.properties.linkedNames) : s);
+  /** The state as it splits back into the regions: a linked region's own names stay out of them. */
+  const splitNow = () => splitLive(link ? revertLinkedNames(hist.state, liveSources) : hist.state, liveSources);
+  const hist = new History(live ? withNames(liveState(o.live!.sources.map((x, i) => (x.current ? { id: x.id, state: x.current, name: x.feature.properties.name } : liveSources[i])))) : stateOf(o.feature));
   let id = o.feature?.id ?? uniqueId("region", o.takenIds);
   let sha = o.sha;
   let isNew = o.isNew;
-  let saved = isNew ? "" : JSON.stringify(live ? liveState(liveSources) : hist.state);
+  let saved = isNew ? "" : JSON.stringify(live ? withNames(liveState(liveSources)) : hist.state);
   const dirty = () => JSON.stringify(hist.state) !== saved;
 
   /* ── Crash recovery: a local copy of unsaved work (draft.ts) ── */
@@ -641,7 +645,7 @@ export function openEditor(o: EditorOptions): void {
   document.body.append(dlg);
   if (live) {
     // Editing together: settings that belong to one region stay as each region has them, so they're not shown.
-    for (const el of [idIn, opacityIn, labelIn, borderIn, descIn, keyTitleIn]) (el.closest("label") as HTMLElement).hidden = true;
+    for (const el of link ? [idIn, opacityIn, labelIn, borderIn, descIn] : [idIn, opacityIn, labelIn, borderIn, descIn, keyTitleIn]) (el.closest("label") as HTMLElement).hidden = true;
     underBox.hidden = true;
     pinMapBox.hidden = true;
     for (const act of ["province-border", "embed"]) (dlg.querySelector(`button[data-act="${act}"]`) as HTMLElement).hidden = true;
@@ -655,7 +659,7 @@ export function openEditor(o: EditorOptions): void {
       h(
         "p",
         { className: "muted small ed-live-note" },
-        `Editing ${live.length} regions together: ${live.map((x) => x.id).join(", ")}. Each part belongs to one of them (its Region menu in the Parts list), and Save writes every region that changed, in one commit. Each region keeps its own fill, description, legend title and province borders.`,
+        `Editing ${live.length} regions together: ${live.map((x) => x.id).join(", ")}. Each part belongs to one of them (its Region menu in the Parts list), and Save writes every region that changed, in one commit. Each region keeps its own fill, description${link ? "" : ", legend title"} and province borders.${link ? " The legend heading and the colour names you set here belong to the linked region only: the regions keep theirs." : ""}`,
       ),
       h("label", {}, "New parts go to", ownerIn),
       h("div", { className: "row" }, btn("Regions…", "Add regions to this view or take them out", () => openLiveRegions(), "live-regions")),
@@ -3746,7 +3750,7 @@ export function openEditor(o: EditorOptions): void {
   };
   /** Live: what each region's file is as saved (in editor form), by id. */
   const baseline = new Map<string, string>(live ? splitLive(liveState(liveSources), liveSources).map((x) => [x.id, coreText(x)]) : []);
-  const liveChanged = () => splitLive(hist.state, liveSources).filter((x) => coreText(x) !== baseline.get(x.id));
+  const liveChanged = () => splitNow().filter((x) => coreText(x) !== baseline.get(x.id));
 
   async function saveLive(): Promise<void> {
     if (!live) return;
@@ -3777,7 +3781,8 @@ export function openEditor(o: EditorOptions): void {
     if (link) {
       if (!link.sha && o.takenIds.has(link.id)) return setMsg(`The id "${link.id}" is taken. Close and pick another one.`, "error");
       const now = live.map((x) => files.find((f) => f.src === x)?.feature ?? x.feature);
-      const r = combineRegions(now, { id: link.id, base: { slot: slotName, map: slot.map } }, 1);
+      const names = linkedNamesOf(hist.state, liveSources);
+      const r = combineRegions(now, { id: link.id, base: { slot: slotName, map: slot.map } }, 1, names);
       if (!r.feature) {
         // A linked region that already exists keeps its old snapshot (it's rebuilt from the regions when it's read), so the regions themselves still save.
         if (!link.sha) return setMsg(`The linked region ${link.id} can't be made from these: ${r.errors[0]}`, "error");
@@ -3785,7 +3790,7 @@ export function openEditor(o: EditorOptions): void {
       } else {
         const lp = link.feature.properties;
         const made = link.sha && lp.createdBy ? { ...(lp.created ? { created: lp.created } : {}), createdBy: lp.createdBy } : { created: stamp(), createdBy: account() };
-        const core: RegionFeature = { ...r.feature, properties: { ...r.feature.properties, linked: live.map((x) => x.id), ...made } };
+        const core: RegionFeature = { ...r.feature, properties: { ...r.feature.properties, linked: live.map((x) => x.id), ...(names ? { linkedNames: names } : {}), ...made } };
         const strip = (f: RegionFeature) => {
           const rest = { ...f.properties };
           delete rest.updated;
@@ -3865,6 +3870,13 @@ export function openEditor(o: EditorOptions): void {
     draftHold = true;
     window.clearTimeout(draftTimer);
     void clearDraft(draftName);
+    // Names of the linked region's own that haven't been saved yet come along.
+    if (link) {
+      const names = linkedNamesOf(hist.state, liveSources);
+      const props = { ...link.feature.properties };
+      delete props.linkedNames;
+      link.feature = { ...link.feature, properties: { ...props, ...(names ? { linkedNames: names } : {}) } };
+    }
     close();
     const ids = new Set(sources.map((x) => x.id));
     openEditor({ ...o, feature: sources[0].feature, sha: sources[0].sha, neighbours: o.live.neighboursFor(ids), live: { ...o.live, sources, view: { ...view }, ...(link ? { link } : {}) } });
@@ -3934,7 +3946,7 @@ export function openEditor(o: EditorOptions): void {
       const ids = picked();
       if (!ids.length || ids.length > liveMax) return;
       // Unsaved changes of the regions that stay come along: the editor reopens from each one's current state.
-      const now = new Map(splitLive(hist.state, liveSources).map((x) => [x.id, x]));
+      const now = new Map(splitNow().map((x) => [x.id, x]));
       const sources = ids.map((rid) => {
         const had = live!.find((x) => x.id === rid);
         if (had) return { id: rid, sha: had.sha, feature: had.feature, ...(changedIds.has(rid) ? { current: now.get(rid)!.state } : {}) };

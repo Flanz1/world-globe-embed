@@ -9,7 +9,8 @@
  * that ends up using a colour from another region (or a new one) gets that colour added to its own
  * region's legend.
  */
-import { LEGEND_LABEL_MAX, LEGEND_MAX, OWN_COLOUR } from "../../shared/region.ts";
+import { LEGEND_LABEL_MAX, LEGEND_MAX, LEGEND_TITLE_MAX, OWN_COLOUR, REGION_COLOR, type LinkedNames } from "../../shared/region.ts";
+import { ownLabel } from "../../shared/combine.ts";
 import { MAX_MOVED_PER_COMMIT } from "../../shared/categories.ts";
 import { cloneState, OCCUPIED, type EditorLegendEntry, type EditorState } from "./model.ts";
 
@@ -20,6 +21,8 @@ export interface LiveSource {
   id: string;
   /** The region as saved, in editor form (model.ts stateOf). */
   state: EditorState;
+  /** The region's name (its legend label when its own colour has no label). */
+  name?: string;
 }
 
 /** The regions' parts in one state: the sources in order, each one's parts in its own order. */
@@ -81,6 +84,73 @@ export function removeLiveEntry(s: EditorState, k: number): EditorState {
     return own >= 0 ? own : OWN_COLOUR;
   });
   return next;
+}
+
+const hex6 = (c: string) => (c.length === 4 ? `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}` : c).toLowerCase();
+
+/** The label a live legend entry has in an unrenamed live state (liveState). */
+function liveLabel(e: EditorLegendEntry, src: LiveSource): string | null {
+  if (e.own) return src.state.props.colorLabel || src.id;
+  return e.srcIdx !== undefined ? (src.state.props.legend[e.srcIdx]?.label ?? null) : null;
+}
+
+/**
+ * Where a live legend entry came from: the label the combined legend gives it before any linked-region
+ * renaming (the key of LinkedNames.legend), and its label in an unrenamed live state. Null for an entry
+ * added while editing.
+ */
+function origin(e: EditorLegendEntry, sources: readonly LiveSource[]): { from: string; plain: string } | null {
+  const src = sources.find((x) => x.id === e.src);
+  const plain = src ? liveLabel(e, src) : null;
+  if (!src || plain === null) return null;
+  return { from: (e.own ? ownLabel({ colorLabel: src.state.props.colorLabel, name: src.name }, src.id) : plain).slice(0, LEGEND_LABEL_MAX), plain };
+}
+
+/** The heading the linked regions give the combined legend (the first one with a heading). */
+const sourceTitle = (sources: readonly LiveSource[]) => sources.map((x) => x.state.props.legendTitle.trim()).find((t) => t) ?? "";
+
+/** A live state with a linked region's own names applied: renamed colours, own-colour label and legend heading. */
+export function applyLinkedNames(s: EditorState, sources: readonly LiveSource[], names: LinkedNames | undefined): EditorState {
+  if (!names) return s;
+  const next = cloneState(s);
+  for (const e of next.props.legend) {
+    const o = origin(e, sources);
+    const hit = o && names.legend?.find((n) => n.from === o.from && hex6(n.color) === hex6(e.color));
+    if (hit) e.label = hit.label;
+  }
+  if (names.colorLabel !== undefined) next.props.colorLabel = names.colorLabel;
+  if (names.legendTitle !== undefined) next.props.legendTitle = names.legendTitle;
+  return next;
+}
+
+/** A live state with every source colour's label put back as its source region has it, so a save leaves the linked regions' names alone. */
+export function revertLinkedNames(s: EditorState, sources: readonly LiveSource[]): EditorState {
+  const next = cloneState(s);
+  for (const e of next.props.legend) {
+    const o = origin(e, sources);
+    if (o) e.label = o.plain;
+  }
+  next.props.colorLabel = sources[0].state.props.colorLabel;
+  next.props.legendTitle = sources[0].state.props.legendTitle;
+  return next;
+}
+
+/** The names a linked region keeps of its own: whatever the live state names differently from its source regions. */
+export function linkedNamesOf(s: EditorState, sources: readonly LiveSource[]): LinkedNames | undefined {
+  const out: LinkedNames = {};
+  const legend: NonNullable<LinkedNames["legend"]> = [];
+  for (const e of s.props.legend) {
+    const o = origin(e, sources);
+    if (!o || e.label === o.plain || !REGION_COLOR.test(e.color)) continue;
+    const entry = { color: hex6(e.color), from: o.from, label: e.label.slice(0, LEGEND_LABEL_MAX) };
+    const at = legend.findIndex((x) => x.color === entry.color && x.from === entry.from);
+    if (at >= 0) legend[at] = entry;
+    else legend.push(entry);
+  }
+  if (legend.length) out.legend = legend;
+  if (s.props.colorLabel.trim() !== sources[0].state.props.colorLabel.trim()) out.colorLabel = s.props.colorLabel.trim().slice(0, LEGEND_LABEL_MAX);
+  if (s.props.legendTitle.trim() !== sourceTitle(sources)) out.legendTitle = s.props.legendTitle.trim().slice(0, LEGEND_TITLE_MAX);
+  return Object.keys(out).length ? out : undefined;
 }
 
 export interface LiveSplit {

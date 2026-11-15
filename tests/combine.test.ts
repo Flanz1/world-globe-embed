@@ -190,4 +190,37 @@ describe("resolveLinked", () => {
     expect(polygonsOf(r.feature!.geometry)).toHaveLength(1);
     expect(resolveLinked(link(["gone"]), lookup({})).feature).toBeNull();
   });
+
+  describe("its own legend names", () => {
+    const x = region("x", { colorLabel: "Realm", legendTitle: "Realms", legend: [{ label: "Elves", color: "#00ff00" }], partLegend: [0], partLabels: ["X"] }, [square(0, 0)]);
+    const y = region("y", { name: "Why", color: "#2e86c1", legend: [{ label: "Elves", color: "#00ff00" }], partLegend: [0, -1], partLabels: ["Y", "Y2"] }, [square(10, 0), square(14, 0)]);
+    const names = { legendTitle: "Combined", colorLabel: "Main", legend: [{ color: "#00FF00", from: "Elves", label: "Wood folk" }, { color: "#2e86c1", from: "Why", label: "Sea people" }] };
+
+    it("renames the legend, the first own colour and the heading without touching the sources", () => {
+      const f = { ...region("xy", { linked: ["x", "y"], linkedNames: names }, [square(50, 50)]) };
+      const r = resolveLinked(f, lookup({ x, y }));
+      expect(r.feature!.properties).toMatchObject({ legendTitle: "Combined", colorLabel: "Main", linkedNames: names });
+      expect(r.feature!.properties.legend).toEqual([
+        { label: "Wood folk", color: "#00ff00" },
+        { label: "Sea people", color: "#2e86c1" },
+      ]);
+      expect(validate(r.feature)).toBe(true);
+      expect(x.properties.legend![0].label).toBe("Elves");
+      expect(x.properties.legendTitle).toBe("Realms");
+    });
+
+    it("follows the sources where nothing is renamed, and an empty heading removes it", () => {
+      const plain = resolveLinked(region("xy", { linked: ["x", "y"] }, [square(50, 50)]), lookup({ x, y })).feature!.properties;
+      expect(plain).toMatchObject({ legendTitle: "Realms", colorLabel: "Realm" });
+      expect(plain.legend).toEqual([{ label: "Elves", color: "#00ff00" }, { label: "Why", color: "#2e86c1" }]);
+      const none = resolveLinked(region("xy", { linked: ["x", "y"], linkedNames: { legendTitle: "" } }, [square(50, 50)]), lookup({ x, y })).feature!.properties;
+      expect(none.legendTitle).toBeUndefined();
+    });
+
+    it("ignores a rename whose source label has changed", () => {
+      const x2 = region("x", { legend: [{ label: "Elf kin", color: "#00ff00" }], partLegend: [0], partLabels: ["X"] }, [square(0, 0)]);
+      const r = resolveLinked(region("xy", { linked: ["x"], linkedNames: { legend: [{ color: "#00ff00", from: "Elves", label: "Wood folk" }] } }, [square(50, 50)]), lookup({ x: x2 }));
+      expect(r.feature!.properties.legend).toEqual([{ label: "Elf kin", color: "#00ff00" }]);
+    });
+  });
 });
