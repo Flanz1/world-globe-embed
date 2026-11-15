@@ -1,3 +1,4 @@
+// e2e-suite: roots=EDITOR weight=4
 /**
  * Browser checks for locked parts in the region editor, in headless Chromium.
  *

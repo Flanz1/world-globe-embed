@@ -43,6 +43,7 @@
     "e2e:view": "tsx scripts/e2e/view.mjs",
     "region-owners": "tsx scripts/region-owners.ts",
     "worker:validators": "tsx scripts/build-worker-validators.ts",
+    "preflight": "tsx scripts/preflight.mjs",
     "e2e:roles": "tsx scripts/e2e/roles.mjs"
   },
   "dependencies": {

@@ -1,3 +1,4 @@
+// e2e-suite: roots=EDITOR,VIEWER weight=9
 /**
  * Browser checks for layered parts and colour folders, in headless Chromium.
  *

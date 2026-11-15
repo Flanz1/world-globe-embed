@@ -1,3 +1,4 @@
+// e2e-suite: roots=EDITOR weight=3
 /**
  * Browser checks for selecting a whole ring by clicking its line in the region editor, in headless Chromium.
  *

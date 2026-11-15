@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { select, ALL } from "../scripts/e2e/select.mjs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { select, ALL, GROUPS, readSuites } from "../scripts/e2e/select.mjs";
+
+const E2E = path.resolve(import.meta.dirname, "../scripts/e2e");
 
 describe("e2e suite selection", () => {
   it("runs nothing for docs, tests and content", () => {
     expect(select(["README.md", "docs/x.md", "tests/a.test.ts", "content/regions/a.json"])).toEqual([]);
   });
   it("a Regions tab / categories change runs only the admin-page suites", () => {
-    expect(select(["src/admin/regions.ts", "src/admin/categories.ts", "src/shared/categories.ts", "src/admin/admin.css", "admin/index.html", "schema/categories.schema.json", "worker/src/handler.ts", "scripts/lib/content.ts"])).toEqual(["regions", "roles", "live", "live-many"]);
+    expect(select(["src/admin/regions.ts", "src/admin/categories.ts", "src/shared/categories.ts", "src/admin/admin.css", "admin/index.html", "schema/categories.schema.json", "worker/src/handler.ts", "scripts/lib/content.ts"])).toEqual(ALL.filter((x) => ["regions", "roles", "live", "live-many"].includes(x)));
   });
   it("an editor change runs the editor suites", () => {
     const s = select(["src/admin/editor/snap.ts"]);
@@ -24,5 +28,32 @@ describe("e2e suite selection", () => {
     expect(select(["scripts/e2e/locks.mjs"])).toEqual(["locks"]);
     expect(select(["scripts/e2e/fixture.mjs"])).toEqual(ALL);
     expect(select(["scripts/e2e/select.mjs", "tests/e2e-select.test.ts"])).toEqual([]);
+  });
+});
+
+describe("e2e suite registry (the header line of each scripts/e2e/<name>.mjs)", () => {
+  it("finds the suites, slowest first", () => {
+    for (const s of ["layers", "regions", "roles", "view", "recovery"]) expect(ALL).toContain(s);
+    const w = readSuites().map((s) => s.weight);
+    expect(w).toEqual([...w].sort((a, b) => b - a));
+  });
+  it("every root a suite names exists", () => {
+    for (const s of readSuites()) {
+      expect(s.roots.length, `${s.name} names no roots`).toBeGreaterThan(0);
+      for (const r of s.roots) expect(existsSync(path.resolve(E2E, "../..", r)), `${s.name}: ${r}`).toBe(true);
+    }
+  });
+  it("header tokens are group names or paths", () => {
+    for (const file of readdirSync(E2E).filter((f) => f.endsWith(".mjs"))) {
+      const h = /^\/\/ e2e-suite: roots=(\S+)/.exec(readFileSync(path.join(E2E, file), "utf8"));
+      if (h) for (const t of h[1].split(",")) expect(t in GROUPS || t.includes("/"), `${file}: unknown group ${t}`).toBe(true);
+    }
+  });
+  it("a browser check without a header is marked as a hand-run tool, not forgotten", () => {
+    for (const file of readdirSync(E2E).filter((f) => f.endsWith(".mjs") && f !== "fixture.mjs")) {
+      const src = readFileSync(path.join(E2E, file), "utf8");
+      if (!/makeFixture\(/.test(src)) continue;
+      expect(/^\/\/ e2e-(suite|tool):/.test(src), `${file}: add a "// e2e-suite: roots=..." first line (or "// e2e-tool:" if it is run by hand)`).toBe(true);
+    }
   });
 });

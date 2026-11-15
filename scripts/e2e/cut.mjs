@@ -1,3 +1,4 @@
+// e2e-suite: roots=EDITOR weight=4
 /**
  * Browser checks for the editor's Cut and Split tools, in headless Chromium.
  *

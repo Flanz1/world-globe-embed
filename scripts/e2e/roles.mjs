@@ -1,3 +1,4 @@
+// e2e-suite: roots=ADMIN,WORKER weight=1
 /**
  * Browser checks for contributor roles: GitHub sign-in, what each kind of person sees on the admin page,
  * the Users tab and its waiting list, region creators (filter, sort, and who saves what), and that the

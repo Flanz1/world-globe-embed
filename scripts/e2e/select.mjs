@@ -3,8 +3,8 @@
  *
  *   node scripts/e2e/select.mjs [base-ref]     prints suite names (space separated), or nothing
  *
- * TypeScript under src/ and worker/ is matched through the import graph: each suite lists the entry
- * files its page or process loads (SUITE_ROOTS), and a changed file selects every suite whose
+ * TypeScript under src/ and worker/ is matched through the import graph: each suite's header names the
+ * entry files its page or process loads (see readSuites), and a changed file selects every suite whose
  * entries import it, directly or not. So a change to the Regions tab selects the suites that load
  * the whole admin page (regions, roles), not the editor suites that only open the editor.
  * Other files (CSS, build scripts, schema, the suites themselves) have the rules in RULES.
@@ -12,42 +12,61 @@
  * The full suite runs nightly (e2e.yml), which covers what this leaves out.
  */
 import { execFileSync } from "node:child_process";
+import { readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ALL = ["layers", "regions", "snap", "merge", "coast", "cut", "locks", "recovery", "ring-select", "tiles", "tiers", "view", "stack", "upload", "roles", "live", "live-many"];
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const HERE = path.join(ROOT, "scripts/e2e");
 
-const ADMIN = ["src/admin/main.ts"];
-const EDITOR = ["src/admin/editor/editor.ts"];
-const VIEWER = ["src/viewer/boot.ts", "src/viewer/globe.ts", "src/viewer/flat.ts", "src/viewer/region-ui.ts"];
-const WORKER = ["worker/src/handler.ts"];
+/** Shorthands a suite header may use for groups of entry files. */
+export const GROUPS = {
+  ADMIN: ["src/admin/main.ts"],
+  EDITOR: ["src/admin/editor/editor.ts"],
+  VIEWER: ["src/viewer/boot.ts", "src/viewer/globe.ts", "src/viewer/flat.ts", "src/viewer/region-ui.ts"],
+  WORKER: ["worker/src/handler.ts"],
+};
 /**
  * Files the editor imports but that the editor suites don't test (the Regions tab, sign-in session,
  * categories): changes there don't select them. Roots keep the path from the entry; these are cut.
  */
 const EDITOR_CUT = ["src/admin/regions.ts", "src/admin/session.ts", "src/admin/categories.ts", "src/admin/github.ts", "src/shared/access.ts", "src/shared/categories.ts"];
+
+/**
+ * The suite registry. A suite is any scripts/e2e/<name>.mjs whose first line is a header like
+ *
+ *   // e2e-suite: roots=EDITOR,VIEWER,src/shared/tiers.ts weight=5
+ *
+ * roots: the entry files its page or process loads (GROUPS names or repo paths). A suite whose roots
+ *        include EDITOR is an editor suite: the import graph is cut at EDITOR_CUT for it.
+ * weight: optional rough runtime (higher = slower, default 1); the runner starts slow suites first.
+ *
+ * Adding a suite is just adding its file with the header: no shared list to edit, so parallel
+ * branches that each add a suite don't conflict here.
+ */
+export function readSuites(dir = HERE) {
+  const suites = [];
+  for (const file of readdirSync(dir).sort()) {
+    const m = /^([\w-]+)\.mjs$/.exec(file);
+    if (!m) continue;
+    const first = readFileSync(path.join(dir, file), "utf8").split("\n", 1)[0];
+    const h = /^\/\/ e2e-suite:(.*)$/.exec(first);
+    if (!h) continue;
+    const attrs = Object.fromEntries([...h[1].matchAll(/(\w+)=(\S+)/g)].map((a) => [a[1], a[2]]));
+    const tokens = (attrs.roots ?? "").split(",").filter(Boolean);
+    const roots = tokens.flatMap((t) => GROUPS[t] ?? [t]);
+    suites.push({ name: m[1], roots, editor: tokens.includes("EDITOR"), weight: Number(attrs.weight) || 1 });
+  }
+  return suites.sort((a, b) => b.weight - a.weight || a.name.localeCompare(b.name));
+}
+
+const SUITES = readSuites();
+/** Every suite, slowest first. */
+export const ALL = SUITES.map((s) => s.name);
 /** Entry files each suite exercises. Editor suites cut the graph at EDITOR_CUT. */
-export const SUITE_ROOTS = {
-  regions: [...ADMIN, ...VIEWER],
-  roles: [...ADMIN, ...WORKER],
-  live: ADMIN,
-  "live-many": ADMIN,
-  upload: ["src/admin/upload-image.ts", "src/admin/images.ts"],
-  cut: EDITOR,
-  merge: EDITOR,
-  locks: EDITOR,
-  recovery: EDITOR,
-  coast: EDITOR,
-  "ring-select": EDITOR,
-  snap: [...EDITOR, ...VIEWER],
-  layers: [...EDITOR, ...VIEWER],
-  view: VIEWER,
-  stack: VIEWER,
-  tiers: [...VIEWER, "src/shared/tiers.ts"],
-  tiles: [...VIEWER, "src/shared/tiers.ts", "src/shared/tiles.ts", "src/shared/raster.ts"],
-};
+export const SUITE_ROOTS = Object.fromEntries(SUITES.map((s) => [s.name, s.roots]));
+const EDITOR_SUITES = new Set(SUITES.filter((s) => s.editor).map((s) => s.name));
 
 /** [pattern, suites | (match) => suites]; first match wins. [] = no e2e needed. */
 const RULES = [
@@ -58,7 +77,7 @@ const RULES = [
   [/^scripts\/e2e\/(fixture|ports|mock-github|admin-api)\.(mjs|d\.mts)$/, ALL],
   [/^scripts\/e2e\/([\w-]+)\.mjs$/, (m) => (ALL.includes(m[1]) ? [m[1]] : [])],
   [/^(package(-lock)?\.json|vite\.config\.ts|tsconfig\.json|eslint\.config\.js)$/, ALL],
-  [/^src\/admin\/editor\/.*\.css$/, ["cut", "merge", "locks", "recovery", "coast", "ring-select", "snap", "layers"]],
+  [/^src\/admin\/editor\/.*\.css$/, () => [...EDITOR_SUITES]],
   [/^(src\/admin\/.*\.css|admin\/.*)$/, ["regions", "roles"]],
   [/^src\/(viewer|shared)\/.*\.css$/, ["view", "regions"]],
   [/^(schema\/|scripts\/build-worker-validators)/, ["regions", "roles"]],
@@ -67,8 +86,6 @@ const RULES = [
   // Build and page generation: every suite builds a fixture, and `regions` covers the admin and embed pages.
   [/^scripts\//, ["regions"]],
 ];
-
-const EDITOR_SUITES = new Set(["cut", "merge", "locks", "recovery", "coast", "ring-select", "snap", "layers"]);
 
 let graph;
 /** suite → Set of repo-relative files its entries import. Built once with esbuild. */

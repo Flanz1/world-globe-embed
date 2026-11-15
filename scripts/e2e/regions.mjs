@@ -1,3 +1,4 @@
+// e2e-suite: roots=ADMIN,VIEWER weight=8
 /**
  * Browser checks for regions, in headless Chromium (system Playwright, like `npm run measure`).
  *

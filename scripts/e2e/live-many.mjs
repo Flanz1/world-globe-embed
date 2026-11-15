@@ -1,3 +1,4 @@
+// e2e-suite: roots=ADMIN weight=1
 /**
  * Browser checks for saving lots of regions at once from "Edit together" / a linked combined region, in
  * headless Chromium, signed in as an editor (not the owner), against the real admin API in front of the

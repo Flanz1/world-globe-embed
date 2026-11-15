@@ -1,3 +1,4 @@
+// e2e-suite: roots=EDITOR weight=3
 /**
  * Browser checks for crash recovery of unsaved work in the region editor, in headless Chromium.
  *
