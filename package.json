@@ -29,6 +29,7 @@
     "e2e:layers": "tsx scripts/e2e/layers.mjs",
     "e2e:cut": "tsx scripts/e2e/cut.mjs",
     "e2e:locks": "tsx scripts/e2e/locks.mjs",
+    "e2e:recovery": "tsx scripts/e2e/recovery.mjs",
     "e2e:merge": "tsx scripts/e2e/merge.mjs",
     "e2e:live": "tsx scripts/e2e/live.mjs",
     "e2e:live-many": "tsx scripts/e2e/live-many.mjs",

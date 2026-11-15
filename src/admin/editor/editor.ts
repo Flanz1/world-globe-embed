@@ -113,6 +113,7 @@ import {
   type RingProblem,
   type VRef,
 } from "./model.ts";
+import { clearDraft, draftKey, loadDraft, saveDraft, type Draft } from "./draft.ts";
 import { Coast, loadCoast, thinTrace } from "./coast.ts";
 import { fillArea, type Barrier } from "./fill.ts";
 import { carryLines, posKey, findSnap, followBorders, lineCarry, type LineCarry, insertOnEdges, partRings, sharedEdges, snapRing, traceBetween, vertexIndex, withGlued, type Snap, type SnapRing } from "./snap.ts";
@@ -174,6 +175,9 @@ const EXTEND_GAP_PX = 12;
 const COAST_PREF = "wge.editor.coast";
 /** The map's coastline, drawn while coast snapping is on. */
 const COAST_COLOUR = "rgba(255,196,64,.8)";
+
+/** How long after the last change the local draft is written (a closed tab flushes it at once). */
+const DRAFT_DELAY_MS = 800;
 
 /** Git's blob SHA-1 of a text file, to know the file's SHA after our own commit without asking GitHub. */
 async function gitBlobSha(text: string): Promise<string> {
@@ -333,6 +337,70 @@ export function openEditor(o: EditorOptions): void {
   let saved = isNew ? "" : JSON.stringify(live ? liveState(liveSources) : hist.state);
   const dirty = () => JSON.stringify(hist.state) !== saved;
 
+  /* ── Crash recovery: a local copy of unsaved work (draft.ts) ── */
+  const draftId = live ? `live:${live.map((x) => x.id).sort().join(",")}${link ? `|link:${link.id}` : ""}` : isNew ? `new:${slotName}` : `region:${id}`;
+  const draftName = draftKey(o.gh.branch, account().login, draftId);
+  /** True until the stored draft has been looked at and answered, so a new edit can't overwrite it unseen. */
+  let draftHold = true;
+  let draftTimer = 0;
+  const draftBar = h("div", { className: "ed-draft", hidden: true, role: "status", dataset: { draft: "bar" } });
+  const draftShas = (): Draft["shas"] => (live ? { ...Object.fromEntries(live.map((x) => [x.id, x.sha])), ...(link ? { [`link:${link.id}`]: link.sha } : {}) } : isNew ? {} : { [id]: sha });
+  async function draftWrite(): Promise<void> {
+    draftTimer = 0;
+    if (draftHold) return;
+    if (!dirty() || (isNew && !hist.state.parts.length)) return clearDraft(draftName);
+    await saveDraft(draftName, { v: 1, at: Date.now(), shas: draftShas(), state: hist.state, ...(isNew ? { id } : {}) });
+  }
+  /** Writes the draft soon after a change, or removes it when nothing is unsaved. */
+  function draftSync(now = false): void {
+    if (draftHold) return;
+    window.clearTimeout(draftTimer);
+    if (now) void draftWrite();
+    else draftTimer = window.setTimeout(() => void draftWrite(), DRAFT_DELAY_MS);
+  }
+  const draftFlush = () => {
+    if (draftTimer) draftSync(true);
+  };
+  const onHide = () => {
+    if (document.visibilityState === "hidden") draftFlush();
+  };
+  document.addEventListener("visibilitychange", onHide);
+  window.addEventListener("pagehide", draftFlush);
+  async function draftOffer(): Promise<void> {
+    const d = await loadDraft(draftName);
+    if (!d) {
+      draftHold = false;
+      return draftSync();
+    }
+    const now = draftShas();
+    const stale = Object.keys(now).some((k) => k in d.shas && d.shas[k] !== now[k]);
+    const done = (restore: boolean) => {
+      draftHold = false;
+      draftBar.hidden = true;
+      if (restore) {
+        hist.apply("Restore unsaved work", d.state as EditorState);
+        if (isNew && d.id && REGION_ID.test(d.id)) {
+          id = d.id;
+          idIn.value = id;
+        }
+        changed();
+        setMsg("Restored your unsaved work. Undo (Ctrl+Z) goes back to the saved version.", "ok");
+      } else {
+        void clearDraft(draftName).then(() => draftSync());
+        return;
+      }
+      draftSync(true);
+    };
+    draftBar.replaceChildren(
+      h("span", { textContent: `Unsaved work from ${new Date(d.at).toLocaleString()} was kept after the editor closed.${stale ? " The region changed on GitHub since then; restoring replaces those changes when you save (undo brings them back)." : ""}` }),
+      h("span", { className: "row" },
+        h("button", { type: "button", textContent: "Restore", dataset: { draft: "restore" }, onclick: () => done(true) }),
+        h("button", { type: "button", className: "ghost", textContent: "Discard", dataset: { draft: "discard" }, onclick: () => done(false) }),
+      ),
+    );
+    draftBar.hidden = false;
+  }
+
   /* ── DOM ── */
   const canvas = h("canvas", { className: "ed-canvas", tabIndex: 0, ariaLabel: "Flat map: draw and edit the region here" });
   const mainCtx = canvas.getContext("2d")!;
@@ -490,6 +558,7 @@ export function openEditor(o: EditorOptions): void {
         { className: "ed-side" },
         frameEl,
         h("div", { className: "row" }, btn("Centre on region", "Turn the globe preview to face the region", () => sendPreview(true), "centre"), btn("Embed code…", "Copy the iframe code for this region", () => embed(), "embed")),
+        draftBar,
         editingBanner,
         msg,
         h("label", {}, "Id (permanent; embeds use it)", idIn),
@@ -1988,6 +2057,7 @@ export function openEditor(o: EditorOptions): void {
   }
   /** After any state change: redraw, update the panel and the globe. */
   function changed(only?: "panel"): void {
+    draftSync();
     if (only === "panel") {
       // An edit that neither moves nor recolours anything (the description): skip the map redraw and the globe update.
       if (combine && combine.version !== hist.version) closeCombine(true);
@@ -3493,6 +3563,7 @@ export function openEditor(o: EditorOptions): void {
       isNew = false;
       o.takenIds.add(id);
       saved = JSON.stringify(hist.state);
+      draftSync(true);
       setMsg(`Saved in commit ${commitSha.slice(0, 7)} to ${o.gh.branch}.`, "ok");
       syncPanel();
       void o.afterCommit(commitSha);
@@ -3607,6 +3678,7 @@ export function openEditor(o: EditorOptions): void {
         done += chunk.length;
       }
       saved = JSON.stringify(hist.state);
+      draftSync(true);
       void o.afterCommit(lastSha);
       setMsg(`Saved ${ids.length > 6 ? `${ids.length} regions` : ids.join(", ")} in ${chunks.length > 1 ? `${chunks.length} commits` : `commit ${lastSha.slice(0, 7)}`} to ${o.gh.branch}.${linkWarning}`, linkWarning ? "error" : "ok");
       syncPanel();
@@ -3627,6 +3699,10 @@ export function openEditor(o: EditorOptions): void {
   /** Opens the editor again on another set of regions, keeping unsaved changes of the ones that stay. */
   function reopen(sources: NonNullable<EditorOptions["live"]>["sources"]): void {
     if (!o.live) return;
+    // The new editor (other set of regions) keeps its own draft; this set's is stale.
+    draftHold = true;
+    window.clearTimeout(draftTimer);
+    void clearDraft(draftName);
     close();
     const ids = new Set(sources.map((x) => x.id));
     openEditor({ ...o, feature: sources[0].feature, sha: sources[0].sha, neighbours: o.live.neighboursFor(ids), live: { ...o.live, sources, view: { ...view }, ...(link ? { link } : {}) } });
@@ -3733,6 +3809,7 @@ export function openEditor(o: EditorOptions): void {
       creator = { ...(fresh.properties.created ? { created: fresh.properties.created } : {}), ...(fresh.properties.createdBy ? { createdBy: fresh.properties.createdBy } : {}) };
       hist.apply("Reload from GitHub", stateOf(fresh, hist.state.props.color));
       saved = JSON.stringify(hist.state);
+      draftSync(true);
       setMsg("Reloaded the latest version from GitHub.", "ok");
       changed();
     } catch (e) {
@@ -3759,10 +3836,17 @@ export function openEditor(o: EditorOptions): void {
   window.addEventListener("beforeunload", beforeUnload);
   async function tryClose(): Promise<void> {
     if (dirty() && !(await confirmBox("Unsaved changes", "Close the editor and lose the changes you haven't saved?", "Discard changes", "Keep editing"))) return;
+    // Closed on purpose (saved, or discarded): nothing to recover. (A crash or a closed tab never gets here, so the draft stays.)
+    draftHold = true;
+    window.clearTimeout(draftTimer);
+    await clearDraft(draftName);
     close();
   }
   function close(): void {
     window.removeEventListener("beforeunload", beforeUnload);
+    window.removeEventListener("pagehide", draftFlush);
+    document.removeEventListener("visibilitychange", onHide);
+    draftFlush();
     presence.stop();
     ro.disconnect();
     frameEl.src = "about:blank";
@@ -3789,6 +3873,7 @@ export function openEditor(o: EditorOptions): void {
   setTool(parts().length ? "select" : "freehand");
   syncPanel();
   canvas.focus();
+  void draftOffer();
   // Test hook: lets the browser tests read the editor's state; exposes nothing the page doesn't already have.
   (dlg as HTMLDialogElement & { wgeEditor?: unknown }).wgeEditor = {
     state: () => hist.state,
