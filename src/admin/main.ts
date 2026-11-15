@@ -489,15 +489,34 @@ function showBranch(client: GitHub): void {
 function signInWithGitHub(): void {
   // The admin API sends people back here with #session=… (or #signin-error=…). Only this page's address is accepted.
   const back = location.origin + location.pathname;
-  location.href = `${ADMIN_API}/auth/login?return=${encodeURIComponent(back)}`;
+  // A random value for this tab: the session is only accepted back with the same value, so a #session= link from elsewhere signs nobody in.
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  const nonce = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  try {
+    sessionStorage.setItem(NONCE_KEY, nonce);
+  } catch {
+    /* Without sessionStorage sign-in can't be bound to this tab; takeFragment then refuses it. */
+  }
+  location.href = `${ADMIN_API}/auth/login?return=${encodeURIComponent(back)}&nonce=${nonce}`;
 }
+
+const NONCE_KEY = "wge-admin-signin-nonce";
 
 /** What the sign-in left in the address: a session, or why it failed. The fragment is removed right away. */
 function takeFragment(): { session?: string; error?: string } {
-  const m = /^#(session|signin-error)=([^&]*)$/.exec(location.hash);
+  const m = /^#(session|signin-error)=([^&]*)(?:&nonce=([A-Za-z0-9_-]*))?$/.exec(location.hash);
   if (!m) return {};
   history.replaceState(null, "", location.pathname + location.search);
-  return m[1] === "session" ? { session: m[2] } : { error: decodeURIComponent(m[2]) };
+  let mine: string | null = null;
+  try {
+    mine = sessionStorage.getItem(NONCE_KEY);
+    sessionStorage.removeItem(NONCE_KEY);
+  } catch {
+    /* no storage */
+  }
+  if (m[1] === "signin-error") return { error: decodeURIComponent(m[2]) };
+  if (!mine || m[3] !== mine) return { error: "That sign-in didn't start on this page, so it was ignored. Sign in again." };
+  return { session: m[2] };
 }
 
 function showSignIn(error = ""): void {

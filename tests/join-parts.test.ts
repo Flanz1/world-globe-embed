@@ -48,6 +48,6 @@ describe("joinParts", () => {
   });
 
   it("does nothing without an incoming folder", () => {
-    expect(joinParts(contentPaths(mkdtempSync(path.join(tmpdir(), "wge-j-"))))).toEqual({ joined: new Map(), errors: [] });
+    expect(joinParts(contentPaths(mkdtempSync(path.join(tmpdir(), "wge-j-"))))).toEqual({ joined: new Map(), errors: [], rejected: [] });
   });
 });

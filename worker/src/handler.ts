@@ -16,9 +16,11 @@ import { diffCategories, MAX_MOVED_PER_COMMIT, regionsPerCommit, type Categories
 import { ACCESS_PATH, PERMISSIONS, checkChange, pathKind, permissionsOf, regionOwner, type AccessFile, type Actor, type FileDiff, type Permission } from "../../src/shared/access.ts";
 import { HISTORY_MAX_LIMIT, HISTORY_MAX_WITH_FILES, type HistoryEntry, type HistoryPage } from "../../src/shared/history.ts";
 import { appJwt, nonce, sign, verify } from "./crypto.ts";
-import { validateAccess, validateCategories, validateRegion, type ValidateFn } from "./generated/validators.js";
+import { validateAccess, validateCategories, validateMap, validateRegion, validateSlots, type ValidateFn } from "./generated/validators.js";
+import { rateLimited, type RateLimiter } from "./ratelimit.ts";
 
 export interface KV {
+  get(key: string): Promise<string | null>;
   put(key: string, value: string, opts?: { expirationTtl?: number; metadata?: unknown }): Promise<void>;
   delete(key: string): Promise<void>;
   list(opts?: { prefix?: string; limit?: number }): Promise<{ keys: { name: string; metadata?: unknown }[] }>;
@@ -41,6 +43,8 @@ export interface Env {
   SESSION_KEY: string;
   /** People who signed in but aren't on the list yet, shown in the Users tab. Optional. */
   WAITING?: KV;
+  /** Cloudflare rate-limiting binding (wrangler.toml). Optional: each Worker instance also counts on its own. */
+  RATE_LIMITER?: RateLimiter;
 }
 
 export type Upstream = (url: string, init?: RequestInit) => Promise<Response>;
@@ -229,6 +233,8 @@ async function session(req: Request, env: Env): Promise<Session> {
 async function noteWaiting(env: Env, s: { id: number; login: string }): Promise<void> {
   if (!env.WAITING) return;
   try {
+    // KV's free plan allows 1,000 writes a day: only write for someone who isn't on the list yet.
+    if ((await env.WAITING.get(`w:${s.id}`)) !== null) return;
     await env.WAITING.put(`w:${s.id}`, "", { expirationTtl: WAITING_DAYS * 86400, metadata: { id: s.id, login: s.login, at: new Date().toISOString() } });
   } catch {
     /* The waiting list is a convenience; never fail sign-in over it. */
@@ -236,15 +242,19 @@ async function noteWaiting(env: Env, s: { id: number; login: string }): Promise<
 }
 
 /** A signed-in person who is on the list (or the owner). */
-async function listedActor(req: Request, env: Env, up: Upstream): Promise<Actor> {
+async function listedActor(req: Request, env: Env, up: Upstream, opts: { noteWaiting?: boolean } = {}): Promise<Actor> {
   const s = await session(req, env);
   const actor = actorOf(s, await cachedAccess(env, up), env);
   if (!actor) {
-    await noteWaiting(env, s);
+    // Only the page's own sign-in check (/session) puts someone on the waiting list, not every refused request.
+    if (opts.noteWaiting) await noteWaiting(env, s);
     throw new HttpError(403, `${s.login} isn't on the admin list yet. Ask the site's owner to add you in the Users tab.`, { notListed: true, login: s.login });
   }
   return actor;
 }
+
+/** The address GitHub links to a person's account; commits made through the API carry it as their author. */
+const noreplyEmail = (a: { id: number; login: string }) => `${a.id}+${a.login}@users.noreply.github.com`;
 
 const WRITE_PERMS: Permission[] = ["maps", "regions", "editOthers", "deleteOthers", "users"];
 const canWriteAnything = (a: Actor) => a.owner || WRITE_PERMS.some((p) => a.permissions.has(p));
@@ -255,7 +265,10 @@ async function authLogin(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const ret = url.searchParams.get("return") ?? "";
   if (!returnAllowed(ret, env)) return new Response("This sign-in link doesn't come from the admin page.", { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });
-  const state = await sign({ r: ret, n: nonce(), exp: Math.floor(Date.now() / 1000) + 600 }, env.SESSION_KEY);
+  // The admin page keeps a random value for this tab and gets it back with the session, so a session link from somewhere else is refused.
+  const tab = url.searchParams.get("nonce") ?? "";
+  if (!/^[A-Za-z0-9_-]{16,64}$/.test(tab)) return new Response("This sign-in link doesn't come from the admin page.", { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  const state = await sign({ r: ret, n: nonce(), c: tab, exp: Math.floor(Date.now() / 1000) + 600 }, env.SESSION_KEY);
   const to = new URL(`${WEB}/login/oauth/authorize`);
   to.searchParams.set("client_id", env.APP_CLIENT_ID);
   to.searchParams.set("redirect_uri", new URL("/auth/callback", url).href);
@@ -266,9 +279,9 @@ async function authLogin(req: Request, env: Env): Promise<Response> {
 
 async function authCallback(req: Request, env: Env, up: Upstream): Promise<Response> {
   const url = new URL(req.url);
-  const st = await verify<{ r: string; exp: number }>(url.searchParams.get("state") ?? "", env.SESSION_KEY);
+  const st = await verify<{ r: string; c?: string; exp: number }>(url.searchParams.get("state") ?? "", env.SESSION_KEY);
   if (!st || !returnAllowed(st.r, env)) return new Response("This sign-in link has expired. Go back to the admin page and sign in again.", { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });
-  const back = (fragment: string) => new Response(null, { status: 302, headers: { Location: `${st.r.split("#")[0]}#${fragment}`, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+  const back = (fragment: string) => new Response(null, { status: 302, headers: { Location: `${st.r.split("#")[0]}#${fragment}&nonce=${st.c ?? ""}`, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
   const code = url.searchParams.get("code");
   if (!code) return back(`signin-error=${encodeURIComponent("GitHub sign-in was cancelled.")}`);
   const tok = await up(`${WEB}/login/oauth/access_token`, {
@@ -333,7 +346,7 @@ async function history(req: Request, env: Env, up: Upstream, url: URL): Promise<
 /* ── Session info, users, waiting list ── */
 
 async function sessionInfo(req: Request, env: Env, up: Upstream): Promise<Response> {
-  const a = await listedActor(req, env, up);
+  const a = await listedActor(req, env, up, { noteWaiting: true });
   return json(200, { id: a.id, login: a.login, owner: a.owner, permissions: PERMISSIONS.filter((p) => a.owner || a.permissions.has(p)), repo: env.REPO, branch: branchOf(env) });
 }
 
@@ -501,6 +514,29 @@ async function regionOwners(env: Env, up: Upstream, ref: string, ids: string[]):
   return out;
 }
 
+const MAP_FILE = /^content\/maps\/([^/]+)\.json$/;
+/** A map or slots file that doesn't match its schema fails `npm run validate`, which holds up every deploy after it: refuse it here. */
+async function checkMapsFile(env: Env, up: Upstream, path: string, blob: string, commitSha: string): Promise<string | null> {
+  const m = MAP_FILE.exec(path);
+  if (path !== "content/slots.json" && !m) return null;
+  let data: unknown;
+  try {
+    data = JSON.parse(await blobText(env, up, blob));
+  } catch {
+    return `${path} isn't valid JSON.`;
+  }
+  const bad = schemaError(m ? validateMap : validateSlots, data, path);
+  if (bad) return bad;
+  if (m) return (data as { id?: string }).id === m[1] ? null : `The map in ${path} must have the id "${m[1]}".`;
+  // Every slot has to show a map that exists in the commit.
+  const maps = new Set<string>();
+  const r = await gh(env, up, `${repoPath(env)}/contents/content/maps?ref=${encodeURIComponent(commitSha)}`);
+  if (!r.ok) return null; // Can't list the maps (a folder over 1,000 files, or GitHub is unwell): the deploy's own validation is the backstop.
+  for (const f of await readJson<{ name: string }[]>(r)) if (f.name.endsWith(".json")) maps.add(f.name.slice(0, -5));
+  for (const [slug, slot] of Object.entries((data as { slots: Record<string, { map: string }> }).slots)) if (!maps.has(slot.map)) return `Slot "${slug}" points at the map "${slot.map}", which doesn't exist.`;
+  return null;
+}
+
 /** Checks a commit the admin page wants to put on the branch; returns the reasons it's refused (empty = fine). */
 export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentSha: string, commitSha: string): Promise<string[]> {
   const [parent, next] = await Promise.all([
@@ -547,6 +583,10 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
     if (why) {
       problems.push(why);
       continue;
+    }
+    if (kind === "maps" && c.after !== null) {
+      const err = await checkMapsFile(env, up, c.path, c.after, commitSha);
+      if (err) problems.push(err);
     }
     if (d.after !== null && (kind === "region" || kind === "access" || kind === "categories")) {
       let data: unknown;
@@ -625,7 +665,7 @@ async function proxy(req: Request, env: Env, up: Upstream, path: string, url: UR
     const parents = body.parents;
     if (typeof body.message !== "string" || typeof body.tree !== "string" || !Array.isArray(parents) || parents.length !== 1 || typeof parents[0] !== "string")
       throw new HttpError(422, "Bad commit.");
-    const author = { name: actor.login, email: `${actor.id}+${actor.login}@users.noreply.github.com` };
+    const author = { name: actor.login, email: noreplyEmail(actor) };
     return pass(await gh(env, up, `${base}/git/commits`, { method: "POST", body: JSON.stringify({ message: body.message.slice(0, 2000), tree: body.tree, parents, author }) }));
   }
   if (method === "PATCH" && (m = /^\/git\/refs\/heads\/([A-Za-z0-9._/-]{1,200})$/.exec(rest))) {
@@ -634,9 +674,11 @@ async function proxy(req: Request, env: Env, up: Upstream, path: string, url: UR
     const body = await readJson<{ sha?: unknown; force?: unknown }>(req);
     if (typeof body.sha !== "string" || !/^[0-9a-f]{40}$/.test(body.sha) || body.force) throw new HttpError(422, "Bad branch update.");
     const head = (await ghJson<{ object: { sha: string } }>(env, up, `${base}/git/ref/heads/${branch}`)).object.sha;
-    const commit = await ghJson<{ parents?: { sha: string }[] }>(env, up, `${base}/git/commits/${body.sha}`);
+    const commit = await ghJson<{ parents?: { sha: string }[]; author?: { email?: string } }>(env, up, `${base}/git/commits/${body.sha}`);
     // Same answer GitHub gives, so the admin page rebuilds its commit on the new head and tries again.
     if (commit.parents?.length !== 1 || commit.parents[0].sha !== head) throw new HttpError(422, "Update is not a fast forward");
+    // The commit must be credited to the person moving the branch (the API itself wrote it that way in POST /git/commits), not to someone else.
+    if (commit.author?.email?.toLowerCase() !== noreplyEmail(actor).toLowerCase()) throw new HttpError(403, "That commit isn't credited to you, so it can't be put on the branch.");
     // Permissions as of the commit being built on, read fresh (not from the cache).
     const fresh = actorOf({ id: actor.id, login: actor.login, exp: 0 }, await loadAccess(env, up, head), env);
     if (!fresh) throw new HttpError(403, `${actor.login} isn't on the admin list any more.`);
@@ -665,6 +707,8 @@ export async function handle(req: Request, env: Env, up: Upstream): Promise<Resp
     });
   const url = new URL(req.url);
   const p = url.pathname;
+  if (await rateLimited(req.headers.get("CF-Connecting-IP"), p, env.RATE_LIMITER))
+    return withCors(json(429, { message: "Too many requests. Wait a minute and try again." }, { "Retry-After": "60" }));
   try {
     if (!env.SESSION_KEY || env.SESSION_KEY.length < 32) throw new HttpError(500, "The admin API isn't set up yet (SESSION_KEY is missing or too short).");
     if (req.method === "GET" && p === "/auth/login") return await authLogin(req, env);

@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { GitHub, GitHubError, NotListed, mapLimit, retrying, type FileChange } from "../src/admin/github.ts";
+import { resetRateLimits } from "../worker/src/ratelimit.ts";
 import { EDITING_SECONDS, handle, resetCaches, returnAllowed, type Env, type KV } from "../worker/src/handler.ts";
 import { appJwt, fromB64url, sign, verify } from "../worker/src/crypto.ts";
 import { MockGitHub, mockFetch } from "../scripts/e2e/mock-github.mjs";
@@ -31,7 +32,12 @@ const PEM = privateKey.export({ type: "pkcs1", format: "pem" }).toString();
 
 class MemoryKV implements KV {
   data = new Map<string, unknown>();
+  puts = 0;
+  async get(key: string) {
+    return this.data.has(key) ? "" : null;
+  }
   async put(key: string, _v: string, opts?: { metadata?: unknown }) {
+    this.puts++;
     this.data.set(key, opts?.metadata);
   }
   async delete(key: string) {
@@ -99,6 +105,7 @@ const KEY = "k".repeat(40);
 
 beforeEach(() => {
   resetCaches();
+  resetRateLimits();
   mock = new MockGitHub({ root: fixture(), branches: ["main"] });
   kv = new MemoryKV();
   env = {
@@ -142,6 +149,8 @@ async function tryCommit(gh: GitHub, changes: FileChange[]): Promise<string | nu
 const put = (p: string, content: string): FileChange => ({ path: p, content });
 const del = (p: string): FileChange => ({ path: p, content: "", delete: true });
 
+const bearer = async (a: { id: number; login: string }) => ({ Authorization: `Bearer ${await session(a)}` });
+
 describe("admin API sign-in", () => {
   it("only sends sessions back to the admin page", () => {
     expect(returnAllowed(ADMIN, env)).toBe(true);
@@ -157,7 +166,9 @@ describe("admin API sign-in", () => {
   it("signs in through GitHub and hands the admin page a session for that account", async () => {
     const bad = await call(`${API}/auth/login?return=${encodeURIComponent("https://evil.example/")}`);
     expect(bad.status).toBe(400);
-    const start = await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}`);
+    const NONCE = "n".repeat(24);
+    expect((await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}`)).status).toBe(400);
+    const start = await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}&nonce=${NONCE}`);
     expect(start.status).toBe(302);
     const to = new URL(start.headers.get("Location")!);
     expect(to.origin + to.pathname).toBe("https://github.com/login/oauth/authorize");
@@ -172,7 +183,8 @@ describe("admin API sign-in", () => {
     expect(back.status).toBe(302);
     const loc = back.headers.get("Location")!;
     expect(loc.startsWith(`${ADMIN}#session=`)).toBe(true);
-    const token = loc.split("#session=")[1];
+    expect(loc.endsWith(`&nonce=${NONCE}`)).toBe(true);
+    const token = loc.split("#session=")[1].split("&")[0];
     const s = await verify<{ id: number; login: string; exp: number }>(token, KEY);
     expect(s).toMatchObject(ANN);
     expect(s!.exp - Date.now() / 1000).toBeLessThanOrEqual(12 * 3600 + 5);
@@ -193,6 +205,8 @@ describe("admin API sign-in", () => {
 
   it("puts people who aren't on the list on the waiting list, which only user managers see", async () => {
     await expect(client(STRANGER)).rejects.toBeInstanceOf(NotListed);
+    // The page asks /session and the repo in parallel and gives up on the first refusal; let /session finish.
+    await call(`${API}/session`, { headers: await bearer(STRANGER) });
     expect([...kv.data.values()]).toEqual([expect.objectContaining({ id: STRANGER.id, login: STRANGER.login })]);
     // Not listed means no reads or writes either.
     const r = await call(`${API}/gh/repos/${REPO}/contents/content/slots.json`, { headers: { Authorization: `Bearer ${await session(STRANGER)}` } });
@@ -633,5 +647,60 @@ describe("admin API big saves", () => {
     tries = 0;
     await expect(retrying(async () => (tries++, Promise.reject(new GitHubError(403, "No permission"))), 3, 1)).rejects.toThrow("No permission");
     expect(tries).toBe(1);
+  });
+});
+
+describe("admin API hardening", () => {
+  it("writes the waiting list once per person, and only from /session", async () => {
+    await call(`${API}/gh/repos/${REPO}/contents/content/slots.json`, { headers: await bearer(STRANGER) });
+    expect(kv.puts).toBe(0);
+    for (let i = 0; i < 5; i++) expect((await call(`${API}/session`, { headers: await bearer(STRANGER) })).status).toBe(403);
+    expect(kv.puts).toBe(1);
+  });
+
+  it("answers 429 when one address asks too much, and counts sign-in apart", async () => {
+    const ip = { "CF-Connecting-IP": "203.0.113.9" };
+    for (let i = 0; i < 20; i++) expect((await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}&nonce=${"n".repeat(24)}`, { headers: ip })).status).toBe(302);
+    const r = await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}&nonce=${"n".repeat(24)}`, { headers: ip });
+    expect(r.status).toBe(429);
+    expect(r.headers.get("Retry-After")).toBe("60");
+    // Other addresses and the rest of the API are unaffected.
+    expect((await call(`${API}/`, { headers: ip })).status).toBe(200);
+    expect((await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}&nonce=${"n".repeat(24)}`, { headers: { "CF-Connecting-IP": "203.0.113.10" } })).status).toBe(302);
+  });
+
+  it("uses the Cloudflare limiter when there is one", async () => {
+    env.RATE_LIMITER = { limit: async () => ({ success: false }) };
+    expect((await call(`${API}/`, { headers: { "CF-Connecting-IP": "203.0.113.11" } })).status).toBe(429);
+  });
+
+  it("only moves the branch to a commit credited to the person asking", async () => {
+    const ann = await bearer(ANN);
+    const api = `${API}/gh/repos/${REPO}/git`;
+    const mk = async (hdr: Record<string, string>) => {
+      const blob = await (await call(`${api}/blobs`, { method: "POST", headers: hdr, body: JSON.stringify({ content: region("author-test", ANN), encoding: "utf-8" }) })).json();
+      const base = (await (await call(`${api}/commits/${head()}`, { headers: hdr })).json()).tree.sha;
+      const tree = await (await call(`${api}/trees`, { method: "POST", headers: hdr, body: JSON.stringify({ base_tree: base, tree: [{ path: "content/regions/author-test.json", mode: "100644", type: "blob", sha: blob.sha }] }) })).json();
+      return (await (await call(`${api}/commits`, { method: "POST", headers: hdr, body: JSON.stringify({ message: "x", tree: tree.sha, parents: [head()] }) })).json()).sha as string;
+    };
+    const sha = await mk(ann);
+    // Someone else (the owner, who may change anything) can't move the branch to Ann's commit.
+    const stolen = await call(`${api}/refs/heads/main`, { method: "PATCH", headers: await bearer(OWNER), body: JSON.stringify({ sha }) });
+    expect(stolen.status).toBe(403);
+    expect((await stolen.json()).message).toMatch(/isn't credited to you/);
+    const ok = await call(`${api}/refs/heads/main`, { method: "PATCH", headers: ann, body: JSON.stringify({ sha }) });
+    expect(ok.status).toBe(200);
+  });
+
+  it("refuses slots and map files that fail their schemas or point nowhere", async () => {
+    const owner = await client(OWNER);
+    const map = (id: string, extra: Record<string, unknown> = {}) =>
+      JSON.stringify({ id, name: "A map", uploadedBy: "x", date: "2026-11-01T10:00:00Z", aspect: 2, width: 2048, height: 1024, hash: "0123456789ab", sizes: { "1024": "maps/x/0123456789ab-1024.webp" }, lqip: "data:image/webp;base64,AAAA", ...extra });
+    expect(await tryCommit(owner, [put("content/slots.json", "{ nope")])).toMatch(/isn't valid JSON/);
+    expect(await tryCommit(owner, [put("content/slots.json", JSON.stringify({ slots: { aerthos: { map: "globe-map", bogus: 1 } } }))])).toMatch(/doesn't match its schema/);
+    expect(await tryCommit(owner, [put("content/slots.json", JSON.stringify({ slots: { aerthos: { map: "no-such-map" } } }))])).toMatch(/doesn't exist/);
+    expect(await tryCommit(owner, [put("content/maps/globe-map.json", "{\"id\":\"globe-map\"}\n")])).toMatch(/doesn't match its schema/);
+    expect(await tryCommit(owner, [put("content/maps/new-map.json", map("other-id"))])).toMatch(/must have the id "new-map"/);
+    expect(await tryCommit(owner, [put("content/maps/new-map.json", map("new-map")), put("content/slots.json", JSON.stringify({ slots: { aerthos: { map: "new-map" } } }))])).toBeNull();
   });
 });
