@@ -4,9 +4,7 @@
     {
       "id": "religion",
       "name": "Religion",
-      "regions": [
-        "gethricism"
-      ],
+      "regions": [],
       "createdBy": {
         "id": 45669787,
         "login": "Flanz1"
@@ -18,6 +16,7 @@
       "name": "Gethricism",
       "regions": [
         "diarism",
+        "gethricism",
         "gethricism2",
         "kethregion",
         "razmyrregion",
