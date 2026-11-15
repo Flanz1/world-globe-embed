@@ -80,8 +80,8 @@ export function openEmbedDialog(t: EmbedTarget): void {
   };
   const radio = (v: "globe" | "flat", text: string) =>
     h("label", { className: "check" }, h("input", { type: "radio", name: "embed-view", value: v, checked: o.view === v, onchange: () => ((o.view = v), update()) }), text);
-  const check = (key: "label" | "dim" | "lock" | "key", text: string) =>
-    h("label", { className: "check" }, h("input", { type: "checkbox", checked: o[key], dataset: { opt: key }, onchange: (e: Event) => ((o[key] = (e.target as HTMLInputElement).checked), update()) }), text);
+  const check = (key: "label" | "dim" | "lock" | "key" | "pins", text: string) =>
+    h("label", { className: "check" }, h("input", { type: "checkbox", checked: !!o[key], dataset: { opt: key }, onchange: (e: Event) => ((o[key] = (e.target as HTMLInputElement).checked), update()) }), text);
   const height = h("input", { type: "number", min: "100", max: "2000", step: "10", value: String(o.height), ariaLabel: "Height in pixels" });
   height.addEventListener("input", () => {
     const v = Number(height.value);
@@ -98,6 +98,7 @@ export function openEmbedDialog(t: EmbedTarget): void {
       check("dim", "Dim outside the region"),
       check("lock", "Start locked"),
       ...(t.region.hasLegend ? [check("key", "Show legend")] : []),
+      check("pins", "Show map pins"),
     ),
     code,
     h("p", { className: "muted small", textContent: "Paste this into an Obsidian note. Renaming the region keeps this embed working; deleting it doesn't." }),

@@ -12,6 +12,8 @@ export interface EmbedOptions {
   lock: boolean;
   /** Show the region's legend (key=0 hides it). */
   key: boolean;
+  /** Draw the slot's map pins on top (pins=1). */
+  pins?: boolean;
 }
 
 export const defaultEmbedOptions = (region: { label?: boolean }): EmbedOptions => ({
@@ -30,6 +32,7 @@ export function regionEmbedUrl(site: string | URL, slot: string, region: { id: s
   if (o.dim) q.set("dim", "1");
   if (!o.lock) q.set("lock", "0");
   if (o.key === false) q.set("key", "0");
+  if (o.pins) q.set("pins", "1");
   return new URL(`v/${encodeURIComponent(slot)}/?${q}`, site).href;
 }
 

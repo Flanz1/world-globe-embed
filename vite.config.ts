@@ -2,7 +2,7 @@ import { defineConfig, type Plugin } from "vite";
 import { buildBoot } from "./scripts/lib/build-boot.ts";
 import { loadContent } from "./scripts/lib/content.ts";
 import { renderLanding } from "./scripts/lib/landing.ts";
-import { generatePreviewPage, generateRegionFiles, generateSlotPages, type ViewerModules } from "./scripts/lib/pages.ts";
+import { generatePinFiles, generatePreviewPage, generateRegionFiles, generateSlotPages, type ViewerModules } from "./scripts/lib/pages.ts";
 
 const DEV_MODULES: ViewerModules = { globe: "/src/viewer/globe.ts", flat: "/src/viewer/flat.ts" };
 
@@ -16,11 +16,18 @@ function devSlotPages(): Plugin {
         const url = new URL(req.url ?? "/", "http://x");
         const m = /^\/v\/([a-z0-9-]+)\/?$/.exec(url.pathname);
         const preview = url.pathname === "/preview/";
+        const pin = /^\/pins\/([a-z0-9][a-z0-9-]{0,63})\.json$/.exec(url.pathname);
         const region = /^\/regions\/([a-z0-9][a-z0-9-]{0,63})\.json$/.exec(url.pathname);
-        if (!m && !preview && !region && url.pathname !== "/" && url.pathname !== "/index.html") return next();
+        if (!m && !preview && !region && !pin && url.pathname !== "/" && url.pathname !== "/index.html") return next();
         const { content, errors } = loadContent();
         if (region) {
           const f = content && generateRegionFiles(content).find((r) => r.path === `regions/${region[1]}.json`);
+          if (!f) return next();
+          res.setHeader("Content-Type", "application/json");
+          return res.end(f.json);
+        }
+        if (pin) {
+          const f = content && generatePinFiles(content).find((p) => p.path === `pins/${pin[1]}.json`);
           if (!f) return next();
           res.setHeader("Content-Type", "application/json");
           return res.end(f.json);

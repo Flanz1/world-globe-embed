@@ -14,6 +14,6 @@ if (errors.length) {
   process.exit(1);
 }
 console.log(
-  `Content OK: ${Object.keys(content!.slots.slots).length} slot(s), ${content!.maps.size} map(s), ${content!.regions?.size ?? 0} region(s)` +
+  `Content OK: ${Object.keys(content!.slots.slots).length} slot(s), ${content!.maps.size} map(s), ${content!.regions?.size ?? 0} region(s), ${content!.pins?.size ?? 0} pin(s)` +
     (warnings.length ? `, ${warnings.length} warning(s).` : "."),
 );

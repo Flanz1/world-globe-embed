@@ -16,6 +16,7 @@ import { TILE_BUDGET, TileCache, levelFor, tileRect, tilesAt, tileUrl } from "..
 import type { FlatStartContext, PreviewMessage } from "./contract.ts";
 import { setupRuler } from "./ruler.ts";
 import { RELOCK_MS, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
+import { setupPins, type PinLayer } from "./pins.ts";
 
 type Img = ImageBitmap | HTMLImageElement;
 
@@ -57,6 +58,8 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   /** How to paint the region (colours, overlapping layers, borders), worked out once per region rather than per frame. */
   let spec: PaintLayer[] | null = null;
   let labelAt: Position[] = [];
+  /** Map pins (?pins=…). */
+  let pinLayer: PinLayer | null = null;
   let gridOn = cfg.grid;
   let lock: Lock | null = null;
   /** The reader moved the view this visit (so live updates and resizes don't yank it back). */
@@ -161,6 +164,11 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       labels?.place(i, x, y, x >= 0 && x <= w && y >= 0 && y <= h);
     });
     ruler.redraw();
+    pinLayer?.place(([plon, plat]) => {
+      const x = sx(plon + 360 * Math.round((view.cx - plon) / 360), w);
+      const y = sy(plat, h);
+      return { x, y, visible: x >= -12 && x <= w + 12 && y >= -12 && y <= h + 12 };
+    });
     maybeUpgrade();
     maybeTiles();
   }
@@ -398,6 +406,10 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     schedule();
   };
 
+  void setupPins(stage, canvas, cfg.slug).then((l) => {
+    pinLayer = l;
+    schedule();
+  });
   const labels = R ? makeLabels(stage) : null;
   const regionKey = R ? makeLegend(stage) : null;
   if (R) {
