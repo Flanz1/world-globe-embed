@@ -174,7 +174,7 @@ export function checkChange(d: FileDiff, actor: Actor, ownerId: number): string 
     case "pin":
       return checkPinChange(d, actor, ownerId);
     case "categories":
-      return checkCategoriesChange(d, actor, ownerId);
+      return checkCategoriesChange(d, actor);
   }
 }
 
@@ -269,15 +269,12 @@ function checkAccessChange(d: FileDiff, actor: Actor, ownerId: number): string |
 }
 
 /**
- * categories.json follows the region rules. "Create regions" lets someone add categories and rename or
- * delete their own; "Edit others' regions" does the same for anyone's. Moving a region into or out of a
- * folder needs the right to edit that region. Order is cosmetic: anyone who can create regions may
- * reorder. (A category with no creator recorded belongs to the repository owner.)
+ * categories.json: folders have no owner, so anyone who may create regions can add, rename, move, reorder and
+ * delete any folder and put any region in any folder (the region files themselves don't change). Only what
+ * isn't a plain tidy-up is checked: the file must be valid, and a region put in a folder must exist.
  */
-function checkCategoriesChange(d: FileDiff, actor: Actor, ownerId: number): string | null {
-  const mayCreate = actor.owner || actor.permissions.has("regions");
-  const mayEditAny = actor.owner || actor.permissions.has("editOthers");
-  if (!mayCreate) return "You don't have permission to change categories.";
+function checkCategoriesChange(d: FileDiff, actor: Actor): string | null {
+  if (!actor.owner && !actor.permissions.has("regions")) return "You don't have permission to change categories.";
   const parsed = d.after === null ? { categories: [] } : (parse(d.after) as CategoriesFile | undefined);
   if (d.after !== null) {
     if (parsed === undefined) return `${d.path} isn't valid JSON.`;
@@ -288,41 +285,17 @@ function checkCategoriesChange(d: FileDiff, actor: Actor, ownerId: number): stri
   const before = d.before === null ? null : (parse(d.before) as CategoriesFile | undefined);
   if (before === undefined) return "categories.json before this change isn't valid JSON.";
   const diff = diffCategories(before, after);
-  const owned = (k: { createdBy?: Account }) => (k.createdBy?.id ?? ownerId) === actor.id;
-  const mayEdit = (k: { createdBy?: Account }) => mayEditAny || owned(k);
-  const was = new Map((before?.categories ?? []).map((k) => [k.id, k]));
-  const now = new Map(after.categories.map((k) => [k.id, k]));
-  for (const id of diff.added) {
-    const c = now.get(id)!.createdBy;
-    if (actor.owner && c) continue; // The owner may record someone else as the creator.
-    if (!c || c.id !== actor.id || c.login !== actor.login) return `The new category "${now.get(id)!.name}" must have createdBy set to you (${actor.login}).`;
-  }
-  for (const id of diff.removed) if (!mayEdit(was.get(id)!)) return `You can't delete the category "${was.get(id)!.name}": ${creatorName(was.get(id)!)} created it.`;
-  for (const id of diff.renamed) if (!mayEdit(was.get(id)!)) return `You can't rename the category "${was.get(id)!.name}": ${creatorName(was.get(id)!)} created it.`;
-  for (const [id, k] of was) if (now.has(id) && !actor.owner && !same(k.createdBy, now.get(id)!.createdBy)) return `Only the repository owner can change who created "${k.name}".`;
-  // A folder moved into another folder (or out to the top level) is changed like a rename: the folder's owner, or someone who may edit others'. Folders whose own parent is being deleted just move up a level.
-  for (const id of diff.reparented) {
-    const k = was.get(id)!;
-    if (k.parent && diff.removed.includes(k.parent)) continue;
-    if (!mayEdit(k)) return `You can't move the category "${k.name}": ${creatorName(k)} created it.`;
-  }
-  // Regions leaving a category that is being deleted just become uncategorized: that isn't moving them.
   const gone = new Set(diff.removed);
   const placedBefore = placements(before);
   const placedAfter = placements(after);
   for (const id of diff.moved) {
-    if (actor.owner) break; // The repository owner may move any region.
+    if (actor.owner) break; // The repository owner's commits aren't looked up.
     if (gone.has(placedBefore.get(id) ?? "") && !placedAfter.has(id)) continue;
     const owner = d.regionOwners?.[id];
-    if (owner === undefined) return `Can't tell who created "${id}".`;
+    if (owner === undefined) return `Can't tell whether "${id}" exists.`;
     // A leftover id of a region that was deleted: anyone may tidy it away, but nobody may reserve a new one.
-    if (owner === null) {
-      if (placedAfter.has(id)) return `There's no region "${id}" to put in a category.`;
-      continue;
-    }
-    if (!canEditRegion(actor.permissions, actor.id, owner)) return `You can't move "${id}" between categories: someone else created it, and you can't edit other people's regions.`;
+    if (owner === null && placedAfter.has(id)) return `There's no region "${id}" to put in a category.`;
   }
   return null;
 }
 
-const creatorName = (k: { createdBy?: Account }) => k.createdBy?.login ?? "the owner";

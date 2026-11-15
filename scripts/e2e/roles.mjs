@@ -353,7 +353,7 @@ await step(K, "the owner adds, renames, reorders, fills and deletes categories",
   check(K, "no Category menu on cards yet", (await page.locator(".rcat").count()) === 0);
   await addCategory(page, "Kingdoms");
   await addCategory(page, "Seas");
-  check(K, "two folders saved with the owner as creator", JSON.stringify(cats().map((k) => [k.id, k.name, k.createdBy?.login])) === JSON.stringify([["kingdoms", "Kingdoms", "Flanz1"], ["seas", "Seas", "Flanz1"]]), JSON.stringify(cats()));
+  check(K, "two folders saved, with no creator", JSON.stringify(cats().map((k) => [k.id, k.name, k.createdBy])) === JSON.stringify([["kingdoms", "Kingdoms", undefined], ["seas", "Seas", undefined]]), JSON.stringify(cats()));
   const f1 = await folders(page);
   check(K, "folders show in order, then Uncategorized with every region", f1.join() === "kingdoms,seas,~uncategorized" && (await inFolder(page, "~uncategorized")).length > 2, f1.join());
   // Duplicate names are refused in the dialog.
@@ -481,7 +481,7 @@ await step(K, "a category change shows at once, and is undone with the reason if
   await ctx.close();
 });
 
-await step(K, "contributors and editors follow the region rules", async () => {
+await step(K, "contributors and editors manage any folder and sort any region", async () => {
   // Earlier checks made carto-ann an Editor: put the plain contributor back.
   const people = access();
   people.users.find((u) => u.login === "carto-ann").permissions = ["regions"];
@@ -498,27 +498,27 @@ await step(K, "contributors and editors follow the region rules", async () => {
   await ann.page.goto(`${ADMIN}#regions`);
   await ann.page.waitForSelector("#regions .rfolder", { timeout: 15000 });
   check(K, "a contributor can add a category", !(await disabled(ann.page, "#r-new-category")));
-  check(K, "…but not rename or delete other people's", (await disabled(ann.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]')) && (await disabled(ann.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="delete"]')));
-  check(K, "…with the reason on hover", /created this folder/.test((await ann.page.getAttribute('.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]', "title")) ?? ""));
-  check(K, "can move her own region, not someone else's", !(await disabled(ann.page, '[data-region="landmark-disc"] [data-action="category"]')) && (await disabled(ann.page, '[data-region="provinces"] [data-action="category"]')));
+  check(K, "…and rename or delete anyone's", !(await disabled(ann.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]')) && !(await disabled(ann.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="delete"]')));
+  check(K, "folders show no creator name", (await ann.page.locator("#regions .rfolder-head").allTextContents()).every((t) => !/\bby\b/.test(t)));
+  check(K, "she can move her own region and someone else's", !(await disabled(ann.page, '[data-region="landmark-disc"] [data-action="category"]')) && !(await disabled(ann.page, '[data-region="provinces"] [data-action="category"]')));
   await commits(ann.page, () => ann.page.selectOption('[data-region="landmark-disc"] [data-action="category"]', "kingdoms"));
   check(K, "her region goes into the owner's folder", (await inFolder(ann.page, "kingdoms")).includes("landmark-disc"), (await inFolder(ann.page, "kingdoms")).join());
   await addCategory(ann.page, "Ann's places");
   const mineCat = cats().find((k) => k.name === "Ann's places");
-  check(K, "her new category is stamped with her", mineCat?.createdBy?.login === "carto-ann", JSON.stringify(mineCat));
-  check(K, "she can rename and delete her own", !(await disabled(ann.page, `.rfolder[data-category="${mineCat.id}"] .rfolder-head [data-action="rename"]`)) && !(await disabled(ann.page, `.rfolder[data-category="${mineCat.id}"] .rfolder-head [data-action="delete"]`)));
+  check(K, "her new category has no creator", mineCat && mineCat.createdBy === undefined, JSON.stringify(mineCat));
+  check(K, "she can rename and delete it", !(await disabled(ann.page, `.rfolder[data-category="${mineCat.id}"] .rfolder-head [data-action="rename"]`)) && !(await disabled(ann.page, `.rfolder[data-category="${mineCat.id}"] .rfolder-head [data-action="delete"]`)));
   await ann.page.screenshot({ path: path.join(OUT, "categories-contributor.png"), fullPage: true });
-  // The API refuses what the page hides.
+  // The API takes the same rename.
   const cur = JSON.parse(mock.read("main", "content/categories.json"));
   cur.categories.find((k) => k.id === "kingdoms").name = "Mine now";
   const r = await forceCommit(ann.page, { path: "content/categories.json", content: JSON.stringify(cur, null, 2) + "\n" });
-  check(K, "renaming someone else's category directly is refused", r.status === 403 && /can't rename the category/.test(r.body.message), `${r.status} ${r.body.message}`);
+  check(K, "renaming someone else's category directly is allowed", r.status === 200, `${r.status} ${r.body?.message}`);
   await ann.ctx.close();
 
   const bo = await open("drafter-bo");
   await bo.page.goto(`${ADMIN}#regions`);
   await bo.page.waitForSelector("#regions .rfolder", { timeout: 15000 });
-  check(K, "an editor of others' regions can rename and delete anyone's category", !(await disabled(bo.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]')) && !(await disabled(bo.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="delete"]')));
+  check(K, "an editor can rename and delete any category", !(await disabled(bo.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]')) && !(await disabled(bo.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="delete"]')));
   check(K, "…and move anyone's region", !(await disabled(bo.page, '[data-region="provinces"] [data-action="category"]')));
   await commits(bo.page, async () => {
     await bo.page.click('.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]');

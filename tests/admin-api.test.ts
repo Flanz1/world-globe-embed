@@ -381,81 +381,50 @@ describe("admin API categories", () => {
   const CATS = "content/categories.json";
   const cat = (id: string, by: { id: number; login: string } | undefined, regions: string[] = [], name = id) => ({ id, name, regions, ...(by ? { createdBy: by, created: "2026-11-12T10:00:00Z" } : {}) });
   const seed = (cats: CategoriesFile["categories"]) => mock.externalWrite("main", CATS, JSON.stringify({ categories: cats }, null, 2) + "\n");
-  const file = () => JSON.parse(mock.read("main", CATS)!) as CategoriesFile;
   const write = (cats: CategoriesFile["categories"]) => put(CATS, JSON.stringify({ categories: cats }, null, 2) + "\n");
 
-  it("anyone who can create regions adds categories as themselves, and manages their own", async () => {
+  it("folders have no owner: anyone who can create regions adds, renames and deletes any of them", async () => {
+    seed([cat("simon-cat", SIMON, ["simon-land"]), cat("old-cat", undefined)]);
     const ann = await client(ANN);
-    expect(await tryCommit(ann, [write([cat("ann-stuff", ANN)])])).toBeNull();
-    expect(await tryCommit(ann, [write([cat("ann-stuff", ANN, ["ann-land"], "Ann's stuff")])])).toBeNull(); // rename + own region in
-    expect(file().categories[0].regions).toEqual(["ann-land"]);
-    expect(await tryCommit(ann, [write([])])).toBeNull(); // delete her own
-    // Made-up creators are refused, and so is no creator at all.
-    expect(await tryCommit(ann, [write([cat("fake", OWNER)])])).toMatch(/createdBy set to you/);
-    expect(await tryCommit(ann, [write([cat("fake", undefined)])])).toMatch(/createdBy set to you/);
+    expect(await tryCommit(ann, [write([cat("simon-cat", SIMON, ["simon-land"], "Renamed"), cat("old-cat", undefined), cat("new-cat", undefined)])])).toBeNull();
+    expect(await tryCommit(ann, [write([cat("old-cat", undefined)])])).toBeNull();
+    expect(await tryCommit(ann, [write([])])).toBeNull();
+    // A new folder needs no creator.
+    expect(await tryCommit(ann, [write([cat("ann-stuff", undefined)])])).toBeNull();
   });
 
   it("people without Create regions can't change categories", async () => {
     const mute = { id: 8001, login: "reader" };
     await client(OWNER).then((gh) => tryCommit(gh, [put("content/access.json", JSON.stringify({ users: [...ACCESS.users, { ...mute, permissions: ["maps"] }] }) + "\n")]));
-    expect(await tryCommit(await client(mute), [write([cat("x", mute)])])).toMatch(/permission to change categories/);
+    expect(await tryCommit(await client(mute), [write([cat("x", undefined)])])).toMatch(/permission to change categories/);
   });
 
-  it("only editors of others' regions touch other people's categories", async () => {
-    seed([cat("simon-cat", SIMON, ["simon-land"]), cat("old-cat", undefined)]);
+  it("anyone who can create regions puts any region in any folder; the region must exist", async () => {
+    seed([cat("a", undefined), cat("b", undefined)]);
     const ann = await client(ANN);
-    expect(await tryCommit(ann, [write([cat("simon-cat", SIMON, ["simon-land"], "Renamed"), cat("old-cat", undefined)])])).toMatch(/can't rename the category "simon-cat": LoopSimon created it/);
-    expect(await tryCommit(ann, [write([cat("old-cat", undefined)])])).toMatch(/can't delete the category "simon-cat"/);
-    expect(await tryCommit(ann, [write([cat("simon-cat", SIMON, ["simon-land"])])])).toMatch(/can't delete the category "old-cat": the owner created it/);
-    const bo = await client(BO);
-    expect(await tryCommit(bo, [write([cat("simon-cat", SIMON, ["simon-land"], "Renamed"), cat("old-cat", undefined)])])).toBeNull();
-    expect(await tryCommit(bo, [write([cat("simon-cat", SIMON, ["simon-land"], "Renamed")])])).toBeNull();
-    // Nobody but the owner changes who created a category.
-    expect(await tryCommit(bo, [write([cat("simon-cat", BO, ["simon-land"], "Renamed")])])).toMatch(/Only the repository owner can change who created/);
-  });
-
-  it("moving a region needs the right to edit that region", async () => {
-    seed([cat("a", ANN), cat("b", SIMON)]);
-    const ann = await client(ANN);
-    // Her own region goes into someone else's category: fine (the folder keeps its creator and name).
-    expect(await tryCommit(ann, [write([cat("a", ANN), cat("b", SIMON, ["ann-land"])])])).toBeNull();
-    expect(await tryCommit(ann, [write([cat("a", ANN, ["ann-land"]), cat("b", SIMON)])])).toBeNull();
-    // LoopSimon's region isn't hers to move, and neither is the owner's older region.
-    expect(await tryCommit(ann, [write([cat("a", ANN, ["simon-land"]), cat("b", SIMON)])])).toMatch(/can't move "simon-land"/);
-    expect(await tryCommit(ann, [write([cat("a", ANN, ["old-land"]), cat("b", SIMON)])])).toMatch(/can't move "old-land"/);
-    // The owner can, and an editor.
-    expect(await tryCommit(await client(OWNER), [write([cat("a", ANN, ["simon-land"]), cat("b", SIMON)])])).toBeNull();
-    expect(await tryCommit(await client(BO), [write([cat("a", ANN, ["simon-land", "ann-land"]), cat("b", SIMON)])])).toBeNull();
+    expect(await tryCommit(ann, [write([cat("a", undefined, ["simon-land", "old-land", "ann-land"]), cat("b", undefined)])])).toBeNull();
+    expect(await tryCommit(ann, [write([cat("a", undefined, ["old-land"]), cat("b", undefined, ["simon-land"])])])).toBeNull();
     // Ids of regions that don't exist can't be reserved, but leftovers can be tidied away.
-    expect(await tryCommit(await client(BO), [write([cat("a", ANN, ["simon-land", "ann-land", "ghost"]), cat("b", SIMON)])])).toMatch(/no region "ghost"/);
-    seed([cat("a", ANN, ["ghost", "ann-land"])]);
-    expect(await tryCommit(ann, [write([cat("a", ANN, ["ann-land"])])])).toBeNull();
+    expect(await tryCommit(ann, [write([cat("a", undefined, ["old-land", "ghost"]), cat("b", undefined, ["simon-land"])])])).toMatch(/no region "ghost"/);
+    seed([cat("a", undefined, ["ghost", "ann-land"])]);
+    expect(await tryCommit(ann, [write([cat("a", undefined, ["ann-land"])])])).toBeNull();
   });
 
-  it("deleting a category sends its regions to Uncategorized without needing rights over them", async () => {
-    seed([cat("mine", ANN, ["simon-land", "ann-land"])]);
+  it("deleting a category sends its regions to Uncategorized", async () => {
+    seed([cat("mine", undefined, ["simon-land", "ann-land"])]);
     expect(await tryCommit(await client(ANN), [write([])])).toBeNull();
-    seed([cat("mine", ANN, ["simon-land"]), cat("other", ANN)]);
-    // But moving them into another category still counts as moving them.
-    expect(await tryCommit(await client(ANN), [write([cat("other", ANN, ["simon-land"])])])).toMatch(/can't move "simon-land"/);
   });
 
-  it("moving a folder into another needs the right to edit that folder; nesting must be valid", async () => {
+  it("anyone may nest any folder in another; nesting must be valid", async () => {
     const inside = (c: ReturnType<typeof cat>, parent: string) => ({ ...c, parent });
-    seed([cat("mine", ANN), cat("theirs", SIMON)]);
+    seed([cat("mine", undefined), cat("theirs", undefined)]);
     const ann = await client(ANN);
-    // A new subfolder, and her own folder into someone else's.
-    expect(await tryCommit(ann, [write([cat("mine", ANN), cat("theirs", SIMON), inside(cat("sub", ANN), "theirs")])])).toBeNull();
-    expect(await tryCommit(ann, [write([inside(cat("mine", ANN), "theirs"), cat("theirs", SIMON), inside(cat("sub", ANN), "theirs")])])).toBeNull();
-    // Someone else's folder is theirs to move.
-    expect(await tryCommit(ann, [write([inside(cat("mine", ANN), "theirs"), inside(cat("theirs", SIMON), "mine"), inside(cat("sub", ANN), "theirs")])])).toMatch(/inside itself|can't move the category "theirs"/);
-    seed([cat("mine", ANN), cat("theirs", SIMON)]);
-    expect(await tryCommit(ann, [write([cat("mine", ANN), inside(cat("theirs", SIMON), "mine")])])).toMatch(/can't move the category "theirs": LoopSimon created it/);
-    // Deleting a folder moves what's in it up without needing rights over those.
-    seed([cat("mine", ANN), inside(cat("theirs", SIMON), "mine")]);
-    expect(await tryCommit(ann, [write([cat("theirs", SIMON)])])).toBeNull();
+    expect(await tryCommit(ann, [write([cat("mine", undefined), cat("theirs", undefined), inside(cat("sub", undefined), "theirs")])])).toBeNull();
+    expect(await tryCommit(ann, [write([cat("mine", undefined), inside(cat("theirs", undefined), "mine"), inside(cat("sub", undefined), "theirs")])])).toBeNull();
+    // Deleting a folder moves what's in it up.
+    expect(await tryCommit(ann, [write([cat("theirs", undefined)])])).toBeNull();
     // Bad trees.
-    expect(await tryCommit(ann, [write([inside(cat("a", ANN), "nope")])])).toMatch(/parent must be/);
+    expect(await tryCommit(ann, [write([inside(cat("a", undefined), "nope")])])).toMatch(/parent must be/);
   });
 
   it("lets anyone who can create regions reorder, and checks the file's shape", async () => {
