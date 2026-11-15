@@ -261,6 +261,7 @@ async function loadAll(): Promise<void> {
   renderMaps();
   renderSlots();
   await loadRegions();
+  void loadActivity();
 }
 
 async function slotsChange(mutate: (s: SlotsFile) => void): Promise<FileChange> {
@@ -439,10 +440,10 @@ function wireNewSlot(): void {
 
 /* ── Tabs (kept in the URL hash so a reload stays on the same tab) ── */
 
-const TABS = ["maps", "regions", "activity", "users"] as const;
+const TABS = ["maps", "regions", "users"] as const;
 type Tab = (typeof TABS)[number];
 /** The tabs this person may open: Maps & slots and Users need their own permission. */
-const allowedTabs = (): Tab[] => TABS.filter((t) => t === "regions" || t === "activity" || (t === "maps" ? can("maps") : can("users")));
+const allowedTabs = (): Tab[] => TABS.filter((t) => t === "regions" || (t === "maps" ? can("maps") : can("users")));
 
 function showTab(name: Tab): void {
   const allowed = allowedTabs();
@@ -456,11 +457,10 @@ function showTab(name: Tab): void {
   }
   if (name === "regions") renderRegions();
   watchEditing(name === "regions");
-  if (name === "activity") void loadActivity();
   if (name === "users") void loadUsers();
 }
 
-const tabFromHash = (): Tab => (location.hash === "#regions" ? "regions" : location.hash === "#activity" ? "activity" : location.hash === "#users" ? "users" : "maps");
+const tabFromHash = (): Tab => (location.hash === "#regions" ? "regions" : location.hash === "#users" ? "users" : "maps");
 
 function wireTabs(): void {
   for (const t of TABS)

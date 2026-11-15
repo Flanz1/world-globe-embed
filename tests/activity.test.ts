@@ -22,3 +22,25 @@ describe("activity feed", () => {
     expect(ago("nonsense", now)).toBe("");
   });
 });
+
+import { cutoffFor, filterChanges, pageOf, people, type Change } from "../src/shared/activity.ts";
+
+const mk = (login: string, date: string): Change => ({ sha: login + date, login, date, verb: "saved", regions: ["r"], tail: "", raw: "" });
+
+describe("activity filters and pages", () => {
+  const now = Date.parse("2026-11-15T12:00:00Z");
+  const all = [mk("ann", "2026-11-15T10:00:00Z"), mk("Bo", "2026-11-10T10:00:00Z"), mk("ann", "2026-10-01T10:00:00Z")];
+  it("filters by person and by range", () => {
+    expect(filterChanges(all, { login: "ANN" })).toHaveLength(2);
+    expect(filterChanges(all, { since: cutoffFor("7", now) })).toHaveLength(2);
+    expect(filterChanges(all, { since: cutoffFor("1", now), login: "bo" })).toHaveLength(0);
+    expect(filterChanges(all, { since: cutoffFor("all", now) })).toHaveLength(3);
+  });
+  it("pages and clamps", () => {
+    const xs = Array.from({ length: 25 }, (_, i) => i);
+    expect(pageOf(xs, 3, 10)).toMatchObject({ pages: 3, page: 3, items: [20, 21, 22, 23, 24] });
+    expect(pageOf(xs, 9, 10).page).toBe(3);
+    expect(pageOf([], 1, 10)).toMatchObject({ pages: 1, page: 1, items: [] });
+  });
+  it("lists people by activity", () => expect(people(all)).toEqual(["ann", "Bo"]));
+});

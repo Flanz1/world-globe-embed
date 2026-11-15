@@ -39,3 +39,46 @@ export function parseMessage(msg: string): Pick<Change, "verb" | "regions" | "ta
   return { verb: "", regions: [], tail: "", raw: line };
 }
 
+
+/** How far back the full view looks. `days: null` is everything. */
+export const RANGES = [
+  { id: "1", label: "Last 24 hours", days: 1 },
+  { id: "7", label: "Last 7 days", days: 7 },
+  { id: "30", label: "Last 30 days", days: 30 },
+  { id: "90", label: "Last 90 days", days: 90 },
+  { id: "365", label: "Last year", days: 365 },
+  { id: "all", label: "All activity", days: null },
+] as const;
+export const DEFAULT_RANGE = "7";
+
+/** Page sizes for the full view (the biggest is the most that is worth rendering at once). */
+export const PAGE_SIZES = [10, 25, 50, 100, 250, 500] as const;
+export const DEFAULT_PAGE_SIZE = 50;
+
+/** The earliest time to show for a range id (ms since epoch), or 0 for "all". */
+export const cutoffFor = (rangeId: string, now = Date.now()): number => {
+  const days = RANGES.find((r) => r.id === rangeId)?.days;
+  return days ? now - days * 86400_000 : 0;
+};
+
+/** Changes by one person (empty `login` = everyone) that happened at or after `since`. */
+export function filterChanges(all: readonly Change[], o: { login?: string; since?: number }): Change[] {
+  const who = (o.login ?? "").toLowerCase();
+  return all.filter((c) => (!who || c.login.toLowerCase() === who) && (!o.since || Date.parse(c.date) >= o.since));
+}
+
+export const pageCount = (total: number, size: number): number => Math.max(1, Math.ceil(total / Math.max(1, size)));
+
+/** 1-based page of a list, clamped to the pages that exist. */
+export function pageOf<T>(items: readonly T[], page: number, size: number): { items: T[]; page: number; pages: number } {
+  const pages = pageCount(items.length, size);
+  const p = Math.min(pages, Math.max(1, Math.floor(page) || 1));
+  return { items: items.slice((p - 1) * size, p * size), page: p, pages };
+}
+
+/** The people in a list, most active first. */
+export function people(all: readonly Change[]): string[] {
+  const n = new Map<string, number>();
+  for (const c of all) n.set(c.login, (n.get(c.login) ?? 0) + 1);
+  return [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([l]) => l);
+}
