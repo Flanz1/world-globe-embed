@@ -9,7 +9,8 @@
       "lat": 20,
       "lon": 0,
       "zoom": 1,
-      "shift": 29.05
+      "shift": 29.05,
+      "radius": 8100
     }
   }
 }
