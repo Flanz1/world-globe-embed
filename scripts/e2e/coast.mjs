@@ -1,3 +1,4 @@
+// e2e-suite: roots=EDITOR weight=5
 /**
  * Browser checks for coast snapping in the region editor, in headless Chromium.
  *

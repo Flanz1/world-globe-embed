@@ -1,3 +1,4 @@
+// e2e-tool: not in the suite list (editor timings: npm run perf:editor)
 /**
  * Editor speed check: milliseconds per frame while dragging a vertex of a dense outline, and per keystroke
  * in the description field. Prints the numbers; fails if a budget is exceeded.

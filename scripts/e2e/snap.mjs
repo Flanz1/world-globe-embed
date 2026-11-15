@@ -1,3 +1,4 @@
+// e2e-suite: roots=EDITOR,VIEWER weight=7
 /**
  * Browser checks for snapping, border tracing, attached vertices and shared-border drawing, in
  * headless Chromium.

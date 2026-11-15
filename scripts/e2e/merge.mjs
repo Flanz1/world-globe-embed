@@ -1,3 +1,4 @@
+// e2e-suite: roots=EDITOR weight=6
 /**
  * Browser checks for the editor's Combine and Extend tools, in headless Chromium.
  *

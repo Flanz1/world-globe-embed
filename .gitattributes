@@ -1,0 +1,3 @@
+# Generated from schema/*.json by scripts/build-worker-validators.ts. Collapsed in PR diffs;
+# after a rebase or merge, don't hand-resolve it: run `npm run worker:validators` (or `npm run preflight -- --fix`).
+worker/src/generated/validators.js linguist-generated=true

@@ -1,3 +1,4 @@
+// e2e-suite: roots=VIEWER weight=2
 /**
  * Browser checks for the slot's default view (globe or flat map), in headless Chromium.
  *

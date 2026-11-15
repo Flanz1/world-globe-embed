@@ -1,3 +1,4 @@
+// e2e-suite: roots=VIEWER,src/viewer/pins.ts,src/admin/pins.ts cut=src/admin/session.ts,src/admin/github.ts,src/shared/access.ts,src/shared/categories.ts weight=2
 /**
  * Browser checks for map pins, in headless Chromium.
  *

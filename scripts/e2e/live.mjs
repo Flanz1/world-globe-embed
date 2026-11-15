@@ -1,3 +1,4 @@
+// e2e-suite: roots=ADMIN weight=1
 /**
  * Browser checks for "Edit together": several regions open in one editor and saving writes each
  * changed one back, in headless Chromium.

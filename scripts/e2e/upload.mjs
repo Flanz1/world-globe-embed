@@ -1,3 +1,4 @@
+// e2e-suite: roots=src/admin/upload-image.ts,src/admin/images.ts weight=1
 /**
  * Browser check for big admin uploads, in headless Chromium against the in-memory GitHub API, which
  * (like GitHub) refuses blob uploads over ~40 MB.

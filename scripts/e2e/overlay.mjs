@@ -1,3 +1,4 @@
+// e2e-tool: not in the suite list (run by hand: npm run e2e:overlay)
 /**
  * Browser checks for the editor's "Other regions" tool (top right of the map), in headless Chromium.
  *

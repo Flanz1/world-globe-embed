@@ -1,3 +1,4 @@
+// e2e-suite: roots=VIEWER weight=2
 /**
  * Browser checks for stacked regions in the embed, in headless Chromium.
  *

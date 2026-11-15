@@ -3,12 +3,14 @@
  *
  *   npm run e2e                       all suites
  *   npm run e2e -- snap locks         just those
+ *   npm run e2e -- --changed          only the suites this branch's changes need (select.mjs vs origin/main)
+ *   npm run e2e -- --changed main     …against another base
  *   npm run e2e -- --jobs 2           limit concurrency (default: half the CPUs, 1–4; software GL is CPU-hungry and screenshots time out when oversubscribed)
  *
  * Output of each suite goes to .e2e/logs/<suite>.log; a failing suite's log tail is printed.
  * Exits non-zero if any suite fails.
  */
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, createWriteStream, readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import path from "node:path";
@@ -16,14 +18,24 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Slowest first, so the long ones start immediately and short ones fill the gaps.
-import { ALL } from "./select.mjs";
+import { ALL, select } from "./select.mjs";
 
 const args = process.argv.slice(2);
 let jobs = Math.max(1, Math.min(4, Math.floor(availableParallelism() / 2)));
 const names = [];
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--jobs") jobs = Math.max(1, Number(args[++i]) || 1);
-  else names.push(args[i]);
+  else if (args[i] === "--changed") {
+    const base = args[i + 1] && !args[i + 1].startsWith("--") ? args[++i] : "origin/main";
+    const files = execFileSync("git", ["diff", "--name-only", `${base}...HEAD`], { encoding: "utf8" }).split("\n").filter(Boolean);
+    const picked = select(files);
+    if (!picked.length) {
+      console.log(`No e2e suites needed for the changes since ${base}.`);
+      process.exit(0);
+    }
+    console.log(`Suites for the changes since ${base}: ${picked.join(" ")}`);
+    names.push(...picked);
+  } else names.push(args[i]);
 }
 const suites = names.length ? names : ALL;
 for (const s of suites) {

@@ -1,3 +1,4 @@
+// e2e-suite: roots=ADMIN,WORKER weight=1
 /**
  * Browser checks for contributor roles: GitHub sign-in, what each kind of person sees on the admin page,
  * the Users tab and its waiting list, region creators (filter, sort, and who saves what), and that the
@@ -452,6 +453,9 @@ await step(K, "a category change shows at once, and is undone with the reason if
   const { ctx, page, errors } = await open("Flanz1");
   await page.goto(`${ADMIN}#regions`);
   await page.waitForSelector("#regions .rfolder", { timeout: 15000 });
+  // The folders show before the page has finished loading (pins load after regions), and the end of
+  // loading sets the status to "Ready.", which would overwrite "saving": wait for it first.
+  await waitFor(page, async () => /Ready/.test((await page.textContent("#status")) ?? ""));
   // Hold the final step of every commit, then refuse it.
   let release;
   const held = new Promise((r) => (release = r));

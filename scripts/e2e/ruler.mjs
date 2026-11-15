@@ -1,3 +1,4 @@
+// e2e-suite: roots=VIEWER,src/admin/preview.ts weight=2
 /**
  * The real-size ruler (npm run e2e:ruler):
  *  1. Embed: a slot with a world radius gets the ruler button; one without doesn't; controls=0 hides it.

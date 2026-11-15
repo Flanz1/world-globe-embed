@@ -1,3 +1,4 @@
+// e2e-suite: roots=VIEWER,src/shared/tiers.ts weight=2
 /**
  * Browser checks for the texture stages, in headless Chromium (system Playwright, like `npm run measure`).
  *
