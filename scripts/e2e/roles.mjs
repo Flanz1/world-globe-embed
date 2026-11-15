@@ -249,6 +249,7 @@ await step(E, "edits other people's regions, can't delete them", async () => {
   await page.goto(`${ADMIN}#regions`);
   await page.waitForSelector("#regions .rcard", { timeout: 15000 });
   check(E, "Edit enabled, Delete disabled on someone else's region", !(await disabled(page, '[data-region="landmark-disc"] [data-action="edit"]')) && (await disabled(page, '[data-region="landmark-disc"] [data-action="delete"]')));
+  check(E, "an editor can also Propose changes, and a contributor can't (they Suggest)", (await page.locator('[data-region="landmark-disc"] [data-action="propose-changes"]').count()) === 1 && (await page.locator('[data-region="landmark-disc"] [data-action="suggest-changes"]').count()) === 0);
   const n = mock.log.length;
   await page.click('[data-region="landmark-disc"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open]");
