@@ -378,7 +378,6 @@ function folder(id: string, title: string, members: RegionEntry[], k: Category |
       h("span", { className: "rfolder-arrow", ariaHidden: "true", textContent: "▾" }),
       h("strong", { className: "rfolder-name", textContent: title }),
       h("span", { className: "badge", textContent: String(total), title: `${total} region${total === 1 ? "" : "s"}` }),
-      k?.createdBy ? h("span", { className: "muted small", textContent: ` by ${creatorOf(k)}` }) : null,
     ),
     k
       ? h(
