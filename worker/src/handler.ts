@@ -16,8 +16,9 @@ import { diffCategories, MAX_MOVED_PER_COMMIT, regionsPerCommit, type Categories
 import { ACCESS_PATH, PERMISSIONS, checkChange, pathKind, permissionsOf, regionOwner, type AccessFile, type Actor, type FileDiff, type Permission } from "../../src/shared/access.ts";
 import { HISTORY_MAX_LIMIT, HISTORY_MAX_WITH_FILES, type HistoryEntry, type HistoryPage } from "../../src/shared/history.ts";
 import { appJwt, nonce, sign, verify } from "./crypto.ts";
-import { validateAccess, validateCategories, validateMap, validateRegion, validateSlots, type ValidateFn } from "./generated/validators.js";
+import { validateAccess, validateCategories, validateMap, validatePin, validateRegion, validateSlots, type ValidateFn } from "./generated/validators.js";
 import { rateLimited, type RateLimiter } from "./ratelimit.ts";
+import * as proposals from "./proposals.ts";
 
 export interface KV {
   get(key: string): Promise<string | null>;
@@ -45,6 +46,8 @@ export interface Env {
   WAITING?: KV;
   /** Cloudflare rate-limiting binding (wrangler.toml). Optional: each Worker instance also counts on its own. */
   RATE_LIMITER?: RateLimiter;
+  /** Where suggested changes are kept (src/proposals.ts). Optional; the waiting list's namespace is used when it isn't bound. */
+  PROPOSALS?: proposals.ProposalKV;
 }
 
 export type Upstream = (url: string, init?: RequestInit) => Promise<Response>;
@@ -427,6 +430,59 @@ async function editingDone(req: Request, env: Env, up: Upstream, tab: string): P
   return new Response(null, { status: 204 });
 }
 
+/* ── Suggested changes (worker/src/proposals.ts) ── */
+
+async function suggestions(req: Request, env: Env, up: Upstream, p: string): Promise<Response | null> {
+  if (p !== "/proposals" && !p.startsWith("/proposals/")) return null;
+  const actor = await listedActor(req, env, up);
+  const ctx: proposals.ProposalCtx = {
+    kv: env.PROPOSALS ?? (env.WAITING as proposals.ProposalKV | undefined),
+    actor,
+    ownerId: ownerId(env),
+    schemaProblem: (data) => schemaError(validateRegion, data, "the region"),
+    region: async (id) => {
+      const r = await gh(env, up, `${repoPath(env)}/contents/content/regions/${id}.json?ref=${encodeURIComponent(branchOf(env))}`);
+      if (r.status === 404) return null;
+      if (!r.ok) throw new HttpError(502, `Couldn't read the region ${id} (${r.status}).`);
+      const f = await readJson<{ content?: string; sha: string }>(r);
+      let text = f.content ? utf8(f.content) : "";
+      if (!text) text = await blobText(env, up, f.sha);
+      try {
+        return { sha: f.sha, owner: regionOwner(JSON.parse(text) as { properties?: { createdBy?: { id: number; login: string } } }, ownerId(env)) };
+      } catch {
+        return { sha: f.sha, owner: ownerId(env) };
+      }
+    },
+  };
+  try {
+    let m: RegExpExecArray | null;
+    if (req.method === "GET" && p === "/proposals") return json(200, await proposals.listProposals(ctx));
+    if (req.method === "POST" && p === "/proposals") {
+      const raw = await req.text();
+      let body: { region?: unknown; feature?: unknown; note?: unknown } = {};
+      try {
+        body = JSON.parse(raw);
+      } catch {
+        throw new HttpError(400, "Bad suggestion.");
+      }
+      return json(201, await proposals.propose(ctx, body, raw.length));
+    }
+    if (req.method === "GET" && (m = /^\/proposals\/([^/]+)$/.exec(p))) return json(200, await proposals.getProposal(ctx, decodeURIComponent(m[1])));
+    if (req.method === "POST" && (m = /^\/proposals\/([^/]+)\/(accepted|declined)$/.exec(p))) {
+      const body = m[2] === "declined" ? await readJson<{ reason?: unknown }>(req) : {};
+      return json(200, await proposals.decide(ctx, decodeURIComponent(m[1]), m[2] as "accepted" | "declined", (body as { reason?: unknown }).reason));
+    }
+    if (req.method === "DELETE" && (m = /^\/proposals\/([^/]+)$/.exec(p))) {
+      await proposals.remove(ctx, decodeURIComponent(m[1]));
+      return new Response(null, { status: 204 });
+    }
+  } catch (e) {
+    if (e instanceof proposals.ProposalError) throw new HttpError(e.status, e.message);
+    throw e;
+  }
+  throw new HttpError(404, "Not found.");
+}
+
 /* ── The GitHub proxy ── */
 
 interface TreeEntry {
@@ -547,7 +603,7 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
   const problems: string[] = [];
   const reads = changes.filter((c) => {
     const k = pathKind(c.path);
-    return k === "region" || k === "access" || k === "categories";
+    return k === "region" || k === "pin" || k === "access" || k === "categories";
   });
   const maxReads = regionsPerCommit(actor.owner);
   if (reads.length > maxReads) return [`That commit changes ${reads.length} regions; the admin page saves at most ${maxReads} at a time.`];
@@ -562,9 +618,9 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
     }
     const kind = pathKind(c.path);
     const d: FileDiff = { path: c.path, before: null, after: null };
-    if (kind === "region" || kind === "access" || kind === "categories") {
+    if (kind === "region" || kind === "pin" || kind === "access" || kind === "categories") {
       // The owner may change any region, so what one was before doesn't matter: not reading it halves the subrequests of a big save.
-      const skipBefore = actor.owner && kind === "region" && c.after !== null;
+      const skipBefore = actor.owner && (kind === "region" || kind === "pin") && c.after !== null;
       [d.before, d.after] = await Promise.all([c.before ? (skipBefore ? "{}" : blobText(env, up, c.before)) : null, c.after ? blobText(env, up, c.after) : null]);
       if (kind === "categories" && !actor.owner) {
         const moved = movedRegions(d);
@@ -588,7 +644,7 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
       const err = await checkMapsFile(env, up, c.path, c.after, commitSha);
       if (err) problems.push(err);
     }
-    if (d.after !== null && (kind === "region" || kind === "access" || kind === "categories")) {
+    if (d.after !== null && (kind === "region" || kind === "pin" || kind === "access" || kind === "categories")) {
       let data: unknown;
       try {
         data = JSON.parse(d.after);
@@ -596,7 +652,7 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
         problems.push(`${c.path} isn't valid JSON.`);
         continue;
       }
-      const err = schemaError(kind === "region" ? validateRegion : kind === "access" ? validateAccess : validateCategories, data, c.path);
+      const err = schemaError(kind === "region" ? validateRegion : kind === "pin" ? validatePin : kind === "access" ? validateAccess : validateCategories, data, c.path);
       if (err) problems.push(err);
     }
   }
@@ -722,6 +778,7 @@ export async function handle(req: Request, env: Env, up: Upstream): Promise<Resp
     if (req.method === "GET" && p === "/editing") return withCors(await editingList(req, env, up));
     if (req.method === "POST" && p === "/editing") return withCors(await editingBeat(req, env, up));
     if (req.method === "DELETE" && (m = /^\/editing\/([a-z0-9]{6,24})$/.exec(p))) return withCors(await editingDone(req, env, up, m[1]));
+    if (p === "/proposals" || p.startsWith("/proposals/")) return withCors((await suggestions(req, env, up, p))!);
     if (p.startsWith("/gh/")) return withCors(await proxy(req, env, up, p.slice(3), url));
     if (p === "/") return new Response("World globe admin API. Sign in from the admin page.", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
     throw new HttpError(404, "Not found.");

@@ -7,14 +7,16 @@
  * Region embeds start locked on the region; unlocked, drag pans and wheel/pinch zoom.
  */
 import { clamp, clampPadding } from "../shared/params.ts";
-import { geometryBounds, globeToImage, polygonsOf, type Position } from "../shared/geo.ts";
+import { geometryBounds, globeToImage, imageToGlobe, polygonsOf, type Position } from "../shared/geo.ts";
 import { FLAT_K_MAX, flatFit, flatMinK, legendRows, regionLabelPoints, type FlatView, type RegionData } from "../shared/region.ts";
 import { paintLayerStack, type PaintLayer } from "../shared/raster.ts";
 import { hasContestedLayers, regionPaintLayers } from "../shared/region-paint.ts";
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
 import { TILE_BUDGET, TileCache, levelFor, tileRect, tilesAt, tileUrl } from "../shared/tiles.ts";
 import type { FlatStartContext, PreviewMessage } from "./contract.ts";
+import { setupRuler } from "./ruler.ts";
 import { RELOCK_MS, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
+import { setupPins, type PinLayer } from "./pins.ts";
 
 type Img = ImageBitmap | HTMLImageElement;
 
@@ -56,6 +58,8 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   /** How to paint the region (colours, overlapping layers, borders), worked out once per region rather than per frame. */
   let spec: PaintLayer[] | null = null;
   let labelAt: Position[] = [];
+  /** Map pins (?pins=…). */
+  let pinLayer: PinLayer | null = null;
   let gridOn = cfg.grid;
   let lock: Lock | null = null;
   /** The reader moved the view this visit (so live updates and resizes don't yank it back). */
@@ -83,6 +87,27 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     view.cy = clamp(view.cy, -90, 90);
     if (view.cx > 540 || view.cx < -540) view.cx = ((((view.cx + 180) % 360) + 360) % 360) - 180;
   };
+
+  /* ── Ruler: points live on the globe, so the padded, shifted map image maps onto them ── */
+  const frame = () => ({ north: cfg.north, south: cfg.south, shift: cfg.shift });
+  const ruler = setupRuler(cfg, {
+    canvas,
+    stage,
+    pick(x, y) {
+      const { w, h } = size();
+      const lat = view.cy - (y - h / 2) / (view.k * ky);
+      if (lat > 90 || lat < -90) return null;
+      return imageToGlobe([view.cx + (x - w / 2) / view.k, lat], frame());
+    },
+    project(p, nearX) {
+      const { w, h } = size();
+      const [lon, lat] = globeToImage(p, frame());
+      let x = sx(lon + 360 * Math.round((view.cx - lon) / 360), w);
+      const span = 360 * view.k;
+      if (nearX !== undefined) x += span * Math.round((nearX - x) / span);
+      return { x, y: sy(lat, h), ok: true };
+    },
+  });
 
   /* ── Render on demand ── */
   let raf = 0;
@@ -137,6 +162,12 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       const x = sx(lon, w);
       const y = sy(at[1], h);
       labels?.place(i, x, y, x >= 0 && x <= w && y >= 0 && y <= h);
+    });
+    ruler.redraw();
+    pinLayer?.place(([plon, plat]) => {
+      const x = sx(plon + 360 * Math.round((view.cx - plon) / 360), w);
+      const y = sy(plat, h);
+      return { x, y, visible: x >= -12 && x <= w + 12 && y >= -12 && y <= h + 12 };
     });
     maybeUpgrade();
     maybeTiles();
@@ -375,6 +406,10 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     schedule();
   };
 
+  void setupPins(stage, canvas, cfg.slug).then((l) => {
+    pinLayer = l;
+    schedule();
+  });
   const labels = R ? makeLabels(stage) : null;
   const regionKey = R ? makeLegend(stage) : null;
   if (R) {

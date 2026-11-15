@@ -18,6 +18,8 @@ are enforced in the API (`src/shared/access.ts`, tested in `tests/admin-api.test
 
 The presets are shortcuts. **Contributor** gives Create regions. **Editor** gives Create regions and Edit others' regions. **Admin** gives everything. The repository owner (`OWNER_ID` in `worker/wrangler.toml`) can always do everything, whatever `access.json` says. Nobody else gets Maps & slots unless it's ticked for them.
 
+Map pins (the Pins tab, `content/pins/<id>.json`) follow the same rules as regions: Create regions places pins and edits or deletes your own, Edit others' regions edits anyone's, Delete others' regions deletes anyone's. A pin records `createdBy` and `updatedBy` just like a region does.
+
 Every region records who created it (`createdBy`), when (`created`) and who saved it last (`updatedBy`).
 The API fills nothing in by itself. It checks those fields instead: a new region must name the person
 saving it as its creator, and only the owner or an admin (anyone with Manage users) can change a region's creator, with the Transfer button on the region's card. Regions from before this
@@ -39,6 +41,14 @@ They follow the region rules, with no extra permission:
 - Deleting a region leaves its id in `categories.json` until the next category change tidies it up (the build only warns about it).
 
 The API checks all of this on save, like the other rules.
+
+## Suggested changes
+
+Someone with "Create regions" who can't edit a region (they didn't create it and lack "Edit others' regions") sees **Suggest changes** on its card instead of Edit. It opens the normal editor; **Send suggestion** (with an optional note) stores their version, and nothing is written to the repository or the site.
+
+People who may edit that region (its creator, editors, admins, the owner) see it under **Suggestions to review** on the Regions tab. **Review** opens the editor on the suggested version with the current region drawn as a grey outline; **Accept suggestion** saves it as the reviewer, through the same permission checks as any save (the region's creator stays the same, the commit message names the suggester). **Decline** takes an optional reason. The sender sees the outcome under **Your suggestions**.
+
+Suggestions are kept in Cloudflare KV (the `PROPOSALS` binding if present, otherwise the same namespace as the waiting list, keys starting `p:`), one pending suggestion per person per region (sending again replaces it), at most 15 waiting per person, up to 90 days; decided ones stay 30 days. Endpoints: `/proposals` (list, send), `/proposals/<id>` (read, withdraw), `/proposals/<id>/accepted|declined`.
 
 ## Adding someone
 

@@ -27,6 +27,8 @@ export interface PreviewMessage {
   /** Prime meridian shift in degrees. */
   shift?: number;
   grid?: boolean;
+  /** The world's radius in km (0 = none), for the ruler. */
+  radius?: number;
 }
 
 /** postMessage from the admin page's region editor or region preview to the preview iframe. */

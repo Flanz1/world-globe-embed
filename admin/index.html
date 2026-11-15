@@ -14,6 +14,7 @@
   <div class="tabs" id="tabs" hidden role="tablist" aria-label="Admin sections">
     <button type="button" role="tab" id="tab-btn-maps" aria-controls="tab-maps" aria-selected="true">Maps &amp; slots</button>
     <button type="button" role="tab" id="tab-btn-regions" aria-controls="tab-regions" aria-selected="false">Regions</button>
+    <button type="button" role="tab" id="tab-btn-pins" aria-controls="tab-pins" aria-selected="false">Pins</button>
     <button type="button" role="tab" id="tab-btn-users" aria-controls="tab-users" aria-selected="false" hidden>Users</button>
   </div>
   <span id="who" class="muted"></span>
@@ -99,9 +100,12 @@
           <p><strong>No regions yet.</strong> A region is a named, coloured area on a map: a country, a province, a kingdom. You draw it here on the flat map, and each region gets its own embed code, which shows it highlighted on the globe (or on the flat map) in an Obsidian note.</p>
           <button type="button" class="r-new">New region</button>
         </div>
+        <div id="suggestions" class="suggestions" hidden></div>
         <div id="regions" class="regions"></div>
       </section>
     </div>
+
+    <div id="tab-pins" role="tabpanel" aria-labelledby="tab-btn-pins" class="tabpanel" hidden></div>
 
     <div id="tab-users" role="tabpanel" aria-labelledby="tab-btn-users" class="tabpanel" hidden>
       <section class="card">
@@ -156,6 +160,7 @@
       <label class="inline">Pole colour <input id="pv-pole" type="color"></label>
       <label class="inline"><input id="pv-grid" type="checkbox"> Show grid</label>
       <label>Prime meridian <span class="range"><input id="pv-shift" type="range" min="-180" max="180" step="0.01" aria-label="Prime meridian slider"><input id="pv-shift-n" type="number" min="-180" max="180" step="0.01" inputmode="decimal" aria-label="Prime meridian in degrees"><span aria-hidden="true">°</span></span><span class="muted small">← West · East →. Line the red grid line up with your map's prime meridian.</span></label>
+      <label>World size <span class="range"><input id="pv-radius" type="number" min="0" step="any" inputmode="decimal" placeholder="Radius" aria-label="World radius"><select id="pv-radius-unit" aria-label="Radius unit"><option value="km">km</option><option value="mi">mi</option></select><button id="pv-earth" type="button" class="ghost" title="Earth's radius, 6,371 km">Earth</button></span><span id="pv-radius-hint" class="muted small"></span></label>
       <button id="pv-fit" type="button" class="ghost">Fit padding to image</button>
       <p id="pv-hint" class="muted small"></p>
       <button id="pv-save" type="button">Save to slot</button>

@@ -27,6 +27,7 @@ import {
   type RegionGeometry,
 } from "../../shared/geo.ts";
 import { findClashes, prepare, type Prepared } from "../../shared/clash.ts";
+import { formatArea, sphereAreaKm2, validRadius } from "../../shared/measure.ts";
 import { paintSpec, traceGeometry, traceRing } from "../../shared/raster.ts";
 import { paintSpecOf, partColours, type Clashes } from "../../shared/region-paint.ts";
 import {
@@ -63,7 +64,7 @@ import { loadMapImage } from "../images.ts";
 import { SITE } from "../dom.ts";
 import { createOverlayFilter, type OverlayCategory, type OverlayMeta } from "./overlay-filter.ts";
 import { TILE_BUDGET, TILE_LEVELS, TileCache, levelFor, tileRect, tilesAt, tileUrl, type TileLevel } from "../../shared/tiles.ts";
-import { alertBox, confirmBox, modal, openEmbedDialog, previewUrl, sendRegion } from "../region-dialogs.ts";
+import { alertBox, askText, confirmBox, modal, openEmbedDialog, previewUrl, sendRegion } from "../region-dialogs.ts";
 import { regionPath, serialize, stamp } from "../regions.ts";
 import { account, currentUser } from "../session.ts";
 import { editingNote, startPresence } from "./presence.ts";
@@ -135,6 +136,27 @@ export interface EditorOptions {
   neighbourMeta?: { meta: Map<string, OverlayMeta>; categories: OverlayCategory[]; meId: number | undefined };
   takenIds: Set<string>;
   afterCommit: (sha: string) => Promise<void>;
+  /**
+   * Suggested changes. "propose": the person can't edit this region, so Save sends their version to the people who can
+   * (the region itself isn't written). "review": `feature` is someone's suggestion; the current region is drawn as an
+   * outline for comparison, and Save is the reviewer's accept (an ordinary save of the region).
+   */
+  suggest?:
+    | { kind: "propose"; send: (feature: RegionFeature, note: string) => Promise<void>; note?: string }
+    | {
+        kind: "review";
+        by: string;
+        note: string;
+        /** Something to know before accepting (e.g. the region changed since it was sent). */
+        warning?: string;
+        /** The region as it is on the branch now. */
+        current: RegionFeature;
+        commitMessage: string;
+        /** Called after the region was saved. */
+        accepted: () => Promise<void>;
+        /** Asks for a reason and declines; true when it was declined. */
+        decline: () => Promise<boolean>;
+      };
   /**
    * Edit several saved regions together (live.ts): every region's parts load into this editor, and
    * saving writes each changed region back to its own file, in one commit. `feature` is the first one.
@@ -277,7 +299,9 @@ export function openEditor(o: EditorOptions): void {
   const ky = 2 / aspect;
   const pad = clampPadding(slot.north ?? 0, slot.south ?? 0);
   const frame = { north: pad.north, south: pad.south, shift: slot.shift ?? 0 };
-  const neighbours = o.neighbours.filter((n) => n.properties.slot === slotName);
+  const review = o.suggest?.kind === "review" ? o.suggest : null;
+  const propose = o.suggest?.kind === "propose" ? o.suggest : null;
+  const neighbours = [...o.neighbours.filter((n) => n.properties.slot === slotName), ...(review ? [{ ...review.current, id: "current" }] : [])];
   // Other regions are hidden until switched on in the "Other regions" panel (top right of the map).
   /** The part the map selection is on: the selected part, else the one part the selected vertices belong to. */
   function layerBarPart(): number {
@@ -313,6 +337,7 @@ export function openEditor(o: EditorOptions): void {
     })),
     categories: o.neighbourMeta?.categories ?? [],
     meId: o.neighbourMeta?.meId,
+    pinned: review ? new Set([neighbours.length - 1]) : undefined,
     onChange: () => {
       ringCache.version = -1;
       draw();
@@ -485,7 +510,8 @@ export function openEditor(o: EditorOptions): void {
   const folders = h("div", { className: "ed-folders" });
   const addKeyBtn = btn("Add colour", "Add a colour (a new folder) for parts", () => addLegendEntry(), "key-add");
   const clashList = h("ul", { className: "ed-clashes small", ariaLive: "polite" });
-  const saveBtn = h("button", { type: "button", textContent: "Save", className: "ed-save" });
+  const saveBtn = h("button", { type: "button", textContent: review ? "Accept suggestion" : propose ? "Send suggestion" : "Save", className: "ed-save" });
+  const declineBtn = review ? h("button", { type: "button", className: "ghost danger", textContent: "Decline", dataset: { act: "decline-suggestion" }, onclick: () => void review.decline().then((ok) => ok && close()) }) : null;
   const closeBtn = h("button", { type: "button", className: "ghost", textContent: "Close" });
 
   const simpRange = h("input", { type: "range", min: "0", max: "100", value: "30", ariaLabel: "Simplify tolerance" });
@@ -516,7 +542,7 @@ export function openEditor(o: EditorOptions): void {
   const dlg = h(
     "dialog",
     { className: "editor", ariaLabel: "Region editor" },
-    h("div", { className: "pv-head" }, title, h("div", { className: "row" }, saveBtn, closeBtn)),
+    h("div", { className: "pv-head" }, title, h("div", { className: "row" }, saveBtn, declineBtn, closeBtn)),
     h(
       "div",
       { className: "ed-toolbar", role: "toolbar" },
@@ -1496,7 +1522,8 @@ export function openEditor(o: EditorOptions): void {
     // The spherical area is skipped mid-drag (it costs a few ms at 2,000 vertices) and refreshed on release.
     if (!hist.dragging || lastArea < 0) lastArea = parts_ ? areaPercent(mapGeometry(toGeometry(parts()), (p) => imageToGlobe(p, frame))) : 0;
     const area = lastArea;
-    stats.textContent = `${n.toLocaleString()} vertices in ${parts_} part${parts_ === 1 ? "" : "s"} · about ${area < 0.01 ? area.toFixed(4) : area.toFixed(2)}% of the globe's surface`;
+    const real = validRadius(slot.radius) ? ` (about ${formatArea((area / 100) * sphereAreaKm2(slot.radius), "km")} · ${formatArea((area / 100) * sphereAreaKm2(slot.radius), "mi")})` : "";
+    stats.textContent = `${n.toLocaleString()} vertices in ${parts_} part${parts_ === 1 ? "" : "s"} · about ${area < 0.01 ? area.toFixed(4) : area.toFixed(2)}% of the globe's surface${real}`;
     stats.classList.toggle("error", !live && n >= WARN_VERTICES);
     if (!live && n >= WARN_VERTICES) stats.textContent += ` · close to the ${MAX_VERTICES.toLocaleString()}-vertex limit`;
   }
@@ -1586,7 +1613,7 @@ export function openEditor(o: EditorOptions): void {
     title.textContent = live
       ? link
         ? `${link.sha ? "Edit" : "New"} linked region ${link.id}: ${live.map((x) => x.id).join(", ")}`
-        : `Edit together: ${live.map((x) => x.id).join(", ")}` : `${isNew ? "New region" : "Edit region"}: ${id || "(no id yet)"}`;
+        : `Edit together: ${live.map((x) => x.id).join(", ")}` : review ? `Suggestion from ${review.by} for ${id}` : propose ? `Suggest changes to ${id}` : `${isNew ? "New region" : "Edit region"}: ${id || "(no id yet)"}`;
   }
   const setProp = <K extends keyof EditorState["props"]>(k: K, v: EditorState["props"][K], label: string) =>
     hist.apply(label, { ...hist.state, props: { ...hist.state.props, [k]: v } }, `prop:${k}`);
@@ -3550,11 +3577,30 @@ export function openEditor(o: EditorOptions): void {
     const feature: RegionFeature = { ...built, properties: { ...built.properties, updated: stamp(), ...creatorFields(isNew), updatedBy: account() } };
     const path = regionPath(id);
     const text = serialize(feature);
+    if (propose) {
+      if (!dirty()) return setMsg("Change something first: a suggestion is your version of the region, so it needs a difference to show.", "error");
+      const note = await askText("Send suggestion", `Tell ${id}'s owner what you changed and why (optional). They see your version next to the current region and can accept or decline it.`, "Send", { placeholder: "e.g. Moved the northern border to the river", max: 160 });
+      if (note === null) return;
+      saving = true;
+      saveBtn.disabled = true;
+      setMsg("Sending…");
+      try {
+        await propose.send(feature, note);
+        saved = JSON.stringify(hist.state);
+        setMsg("Suggestion sent. The people who can edit this region will see it in their Regions tab. Sending again replaces it.", "ok");
+      } catch (e) {
+        setMsg((e as Error).message, "error");
+      } finally {
+        saving = false;
+        saveBtn.disabled = false;
+      }
+      return;
+    }
     saving = true;
     saveBtn.disabled = true;
     setMsg("Saving…");
     try {
-      const commitSha = await o.gh.commit(`Save region ${id}`, async () => {
+      const commitSha = await o.gh.commit(review ? review.commitMessage : `Save region ${id}`, async () => {
         const cur = await o.gh.fileSha(path);
         if (cur !== sha) throw new Conflict(cur ? "changed" : "gone");
         return [{ path, content: text }];
@@ -3566,6 +3612,7 @@ export function openEditor(o: EditorOptions): void {
       draftSync(true);
       setMsg(`Saved in commit ${commitSha.slice(0, 7)} to ${o.gh.branch}.`, "ok");
       syncPanel();
+      if (review) await review.accepted().catch(() => setMsg(`Saved in commit ${commitSha.slice(0, 7)}, but the suggestion couldn't be marked as accepted. Close it in the Regions tab.`, "error"));
       void o.afterCommit(commitSha);
     } catch (e) {
       if (e instanceof Conflict) void conflict(e.message === "gone");
@@ -3872,6 +3919,10 @@ export function openEditor(o: EditorOptions): void {
   }
   setTool(parts().length ? "select" : "freehand");
   syncPanel();
+  if (review) {
+    setMsg(`${review.by}: ${review.note ? `“${review.note}”` : "no note"}${review.warning ? ` ${review.warning}` : ""}`);
+    msg.title = "The grey outline is the region as it is now. Accept saves this version in its place.";
+  } else if (propose) setMsg("Change the region here, then Send suggestion.");
   canvas.focus();
   void draftOffer();
   // Test hook: lets the browser tests read the editor's state; exposes nothing the page doesn't already have.

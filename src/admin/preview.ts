@@ -5,6 +5,7 @@
 import type { PreviewMessage } from "../viewer/contract.ts";
 import type { MapMeta, Slot, ViewMode } from "../shared/types.ts";
 import { DEFAULT_VIEW } from "../shared/types.ts";
+import { EARTH_RADIUS_KM, KM_PER_MI, MAX_RADIUS_KM, MIN_RADIUS_KM, formatLength, validRadius, type DistUnit } from "../shared/measure.ts";
 
 export interface PreviewOptions {
   maps: MapMeta[];
@@ -14,7 +15,7 @@ export interface PreviewOptions {
   /** Map to show first (defaults to the slot's map). */
   mapId: string;
   /** Called with the fields to write into the slot. */
-  onSave?: (patch: { map: string; view: ViewMode; north: number; south: number; pole: string; shift: number }) => void;
+  onSave?: (patch: { map: string; view: ViewMode; north: number; south: number; pole: string; shift: number; radius: number }) => void;
 }
 
 const SITE = new URL("../", location.href);
@@ -54,14 +55,42 @@ export function roundShift(v: number): number {
   return Math.round(Math.max(-180, Math.min(180, v)) * 100) / 100;
 }
 
-const values = () => ({ north: Number(north.value), south: Number(south.value), pole: pole.value, shift: roundShift(Number(shift.value)) });
+const radius = $<HTMLInputElement>("pv-radius");
+const radiusUnit = $<HTMLSelectElement>("pv-radius-unit");
+const radiusHint = $<HTMLSpanElement>("pv-radius-hint");
+const earth = $<HTMLButtonElement>("pv-earth");
+
+/** The world radius typed in, in km: 0 when blank (no ruler in the embed), NaN when it isn't a usable size. */
+export function radiusKm(text: string, unit: DistUnit): number {
+  if (text.trim() === "") return 0;
+  const v = Number(text) * (unit === "mi" ? KM_PER_MI : 1);
+  const km = Math.round(v * 10) / 10;
+  return validRadius(km) ? km : NaN;
+}
+
+const values = () => {
+  const r = radiusKm(radius.value, radiusUnit.value as DistUnit);
+  return { north: Number(north.value), south: Number(south.value), pole: pole.value, shift: roundShift(Number(shift.value)), radius: Number.isNaN(r) ? 0 : r };
+};
 
 /** Padding (split evenly) that keeps a map wider than 2:1 in proportion on the sphere. */
 export function fitPadding(aspect: number): number {
   return aspect > 2 ? Math.round(((1 - 2 / aspect) / 2) * 1000) / 10 : 0;
 }
 
+function describeRadius(): void {
+  const r = radiusKm(radius.value, radiusUnit.value as DistUnit);
+  radiusHint.classList.toggle("error", Number.isNaN(r));
+  radiusHint.textContent = Number.isNaN(r)
+    ? `Enter a radius between ${MIN_RADIUS_KM.toLocaleString()} and ${MAX_RADIUS_KM.toLocaleString()} km.`
+    : r
+      ? `Circumference ${formatLength(2 * Math.PI * r, radiusUnit.value as DistUnit)}. Readers get a ruler (distance and area) in every embed of this slot.`
+      : "Leave empty for no ruler. Earth's radius is 6,371 km.";
+  save.disabled = Number.isNaN(r);
+}
+
 function describe(): void {
+  describeRadius();
   northV.value = `${north.value}%`;
   southV.value = `${south.value}%`;
   const m = current?.maps.find((x) => x.id === mapSel.value);
@@ -93,6 +122,7 @@ function load(): void {
     south: south.value,
     pole: pole.value,
     shift: shift.value,
+    radius: String(values().radius),
     grid: grid.checked ? "1" : "0",
     rotate: "0",
   });
@@ -120,6 +150,17 @@ shiftN.addEventListener("change", () => {
   send();
 });
 grid.addEventListener("change", send);
+radius.addEventListener("input", send);
+radiusUnit.addEventListener("change", () => {
+  // Keep the same size: convert what's typed into the other unit.
+  const km = radiusKm(radius.value, radiusUnit.value === "mi" ? "km" : "mi");
+  if (km) radius.value = String(Math.round((radiusUnit.value === "mi" ? km / KM_PER_MI : km) * 100) / 100);
+  send();
+});
+earth.addEventListener("click", () => {
+  radius.value = String(radiusUnit.value === "mi" ? Math.round((EARTH_RADIUS_KM / KM_PER_MI) * 100) / 100 : EARTH_RADIUS_KM);
+  send();
+});
 // The globe and the flat map are different viewers, so switching reloads the iframe (with the current settings).
 for (const b of viewBtns)
   b.addEventListener("click", () => {
@@ -140,7 +181,7 @@ fit.addEventListener("click", () => {
 save.addEventListener("click", () => {
   if (!current?.onSave) return;
   const v = values();
-  current.onSave({ map: mapSel.value, view, north: v.north, south: v.south, pole: v.pole, shift: v.shift });
+  current.onSave({ map: mapSel.value, view, north: v.north, south: v.south, pole: v.pole, shift: v.shift, radius: v.radius });
   dialog.close();
 });
 
@@ -154,13 +195,15 @@ export function openPreview(opts: PreviewOptions): void {
   north.value = String(s.north ?? DEFAULT_VIEW.north);
   south.value = String(s.south ?? DEFAULT_VIEW.south);
   pole.value = s.pole && /^#[0-9a-f]{6}$/i.test(s.pole) ? s.pole : DEFAULT_VIEW.pole;
+  radiusUnit.value = "km";
+  radius.value = s.radius ? String(s.radius) : "";
   grid.checked = s.grid ?? false;
   view = s.view === "flat" ? "flat" : "globe";
   showView();
   $("pv-title").textContent = opts.slug ? `Preview: ${opts.slug}` : "Preview";
   save.hidden = !opts.slug;
   note.textContent = opts.slug
-    ? "Saving commits the map, default view, padding and prime meridian to this slot. Drag and zoom here don't change the embed's starting view."
+    ? "Saving commits the map, default view, padding, prime meridian and world size to this slot. Drag and zoom here don't change the embed's starting view."
     : "Maps show up here once they're deployed.";
   load();
   dialog.showModal();

@@ -22,7 +22,9 @@ import type { Editing, FileCommit, GitHub } from "./github.ts";
 import { loadMapImage } from "./images.ts";
 import { compareBy, creatorChoices, creatorId, matchesQuery, type Filterable } from "./region-filter.ts";
 import { openHistory } from "./region-history.ts";
-import { modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
+import { alertBox, confirmBox, modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
+import { declineSuggestion, initSuggestions, loadSuggestions, markAccepted, pendingFor } from "./suggestions.ts";
+import type { SuggestionSummary } from "./github.ts";
 import { OWNER_ID, account, can, canDelete, canEdit, canTransfer, currentUser, ownerOf, refusal } from "./session.ts";
 import type { AccessFile, Account } from "../shared/access.ts";
 
@@ -116,6 +118,7 @@ export async function loadRegions(): Promise<void> {
     if (r.feature) e.feature = r.feature;
   }
   if (!hasPendingSaves()) entries = loaded;
+  void loadSuggestions();
   // Categories are optional: if the file can't be read, regions just show uncategorized.
   await loadCategories().catch(() => {});
   // A change is still being saved: this read may predate it. The save reloads when it's done.
@@ -254,7 +257,8 @@ function card(e: RegionEntry): HTMLElement {
       h(
         "div",
         { className: "actions" },
-        btn("Edit", () => edit(e), "", noEdit),
+        canEdit(f) || !can("regions") || linked ? btn("Edit", () => edit(e), "", noEdit) : btn("Suggest changes", () => suggest(e), "", ""),
+        !canEdit(f) || !pendingFor(e.id) ? null : h("span", { className: "badge warn", textContent: `${pendingFor(e.id)} suggestion${pendingFor(e.id) > 1 ? "s" : ""}`, title: "Waiting in the list above the regions" }),
         btn("Duplicate", () => duplicate(e), "ghost", noCreate),
         btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot)),
         btn("Copy embed code", () => openEmbedDialog({ region: { id: e.id, name: e.id, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot })),
@@ -579,6 +583,69 @@ function edit(e: RegionEntry): void {
   if (!e.feature || !canEdit(e.feature)) return;
   if (e.feature.properties.linked) return editLinked(e);
   openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature: e.feature, sha: e.sha, isNew: false, neighbours: others(e), neighbourMeta: overlayMeta(), takenIds: new Set(entries.map((x) => x.id)), afterCommit: deps.afterCommit });
+}
+
+/** Someone who can't edit this region changes it in the editor and sends the result to the people who can. */
+function suggest(e: RegionEntry): void {
+  if (!e.feature || !can("regions") || e.feature.properties.linked) return;
+  const region = e.id;
+  openEditor({
+    gh: deps.gh(),
+    maps: deps.maps(),
+    slots: deps.slots(),
+    feature: e.feature,
+    sha: e.sha,
+    isNew: false,
+    neighbours: others(e),
+    neighbourMeta: overlayMeta(),
+    takenIds: new Set(entries.map((x) => x.id)),
+    afterCommit: deps.afterCommit,
+    suggest: {
+      kind: "propose",
+      send: async (feature, note) => {
+        await deps.gh().suggest(region, feature, note);
+        await loadSuggestions();
+      },
+    },
+  });
+}
+
+/** The editor on someone's suggestion, the current region drawn beside it; accepting saves it as the reviewer. */
+async function reviewSuggestion(s: SuggestionSummary): Promise<void> {
+  const e = entries.find((x) => x.id === s.region);
+  if (!e?.feature || e.feature.properties.linked) {
+    if (await confirmBox("Region gone", `"${s.region}" doesn't exist as an editable region any more. Decline ${s.by.login}'s suggestion?`, "Decline", "Keep")) await declineSuggestion(s);
+    return;
+  }
+  const full = await deps.gh().suggestion(s.id);
+  const cur = e.feature.properties;
+  const rest: Record<string, unknown> = { ...full.feature.properties };
+  delete rest.createdBy;
+  delete rest.created;
+  // Who created the region doesn't change by accepting a suggestion.
+  const feature: RegionFeature = { ...full.feature, properties: { ...(rest as unknown as RegionFeature["properties"]), ...(cur.createdBy ? { createdBy: cur.createdBy } : {}), ...(cur.created ? { created: cur.created } : {}) } };
+  openEditor({
+    gh: deps.gh(),
+    maps: deps.maps(),
+    slots: deps.slots(),
+    feature,
+    sha: e.sha,
+    isNew: false,
+    neighbours: others(e),
+    neighbourMeta: overlayMeta(),
+    takenIds: new Set(entries.map((x) => x.id)),
+    afterCommit: deps.afterCommit,
+    suggest: {
+      kind: "review",
+      by: s.by.login,
+      note: s.note,
+      warning: s.base === e.sha ? "" : "The region has changed since this was sent: accepting replaces the current version.",
+      current: e.feature,
+      commitMessage: `Accept ${s.by.login}'s suggestion for region ${s.region}`,
+      accepted: () => markAccepted(s),
+      decline: () => declineSuggestion(s),
+    },
+  });
 }
 
 export function newRegion(slot: string): void {
@@ -920,6 +987,7 @@ function del(e: RegionEntry): void {
 
 export function initRegions(d: RegionsDeps): void {
   deps = d;
+  initSuggestions({ gh: d.gh, review: (s) => void reviewSuggestion(s).catch((e: Error) => alertBox("Couldn't open the suggestion", e.message)) });
   ui.search().addEventListener("input", renderRegions);
   ui.slot().addEventListener("change", renderRegions);
   ui.sort().addEventListener("change", renderRegions);

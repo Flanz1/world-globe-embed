@@ -46,7 +46,9 @@ import { hasContestedLayers, regionPaintLayers } from "../shared/region-paint.ts
 import { deviceLimit, deviceMemory, nextTier } from "../shared/tiers.ts";
 import { createGlobeTiles } from "./globe-tiles.ts";
 import type { PreviewMessage, StartContext } from "./contract.ts";
+import { setupRuler } from "./ruler.ts";
 import { RELOCK_MS, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
+import { setupPins, type PinLayer } from "./pins.ts";
 
 const DEG = Math.PI / 180;
 /** Auto-spin speed in radians per second (about 2 minutes per turn, like the desktop app). */
@@ -353,6 +355,57 @@ export async function start(ctx: StartContext): Promise<void> {
     });
   }
 
+  /* ── Ruler: picks and projects globe positions with the same lat/lon → xyz convention as buildGrid ── */
+  const rulerV = new Vector3();
+  const rulerQ = world.quaternion.clone();
+  const ruler = setupRuler(cfg, {
+    canvas,
+    stage,
+    pick(x, y) {
+      const w = stage.clientWidth;
+      const h = stage.clientHeight;
+      const t = Math.tan((camera.fov * DEG) / 2);
+      // Ray from the camera (0, 0, distance) through the pixel, against the unit sphere.
+      const dx = ((2 * x) / w - 1) * t * camera.aspect;
+      const dy = (1 - (2 * y) / h) * t;
+      const len = Math.hypot(dx, dy, 1);
+      const d = view.distance;
+      const b = (-d) / len; // origin · direction (direction = (dx, dy, -1) / len)
+      const disc = b * b - (d * d - 1);
+      if (disc < 0) return null;
+      const k = -b - Math.sqrt(disc);
+      rulerV.set((k * dx) / len, (k * dy) / len, d - k / len);
+      rulerV.applyQuaternion(rulerQ.copy(world.quaternion).invert());
+      return [Math.atan2(-rulerV.z, rulerV.x) / DEG, Math.asin(clamp(rulerV.y, -1, 1)) / DEG];
+    },
+    project([lon, lat]) {
+      const c = Math.cos(lat * DEG);
+      rulerV.set(OVERLAY_R * c * Math.cos(lon * DEG), OVERLAY_R * Math.sin(lat * DEG), -OVERLAY_R * c * Math.sin(lon * DEG));
+      rulerV.applyQuaternion(world.quaternion);
+      const ok = rulerV.z / OVERLAY_R > 1 / view.distance + 0.01;
+      rulerV.project(camera);
+      return { x: ((rulerV.x + 1) / 2) * stage.clientWidth, y: ((1 - rulerV.y) / 2) * stage.clientHeight, ok };
+    },
+  });
+
+  /** Map pins (?pins=…): markers placed like the labels, on the far side of the globe hidden. */
+  let pinLayer: PinLayer | null = null;
+  function placePins(): void {
+    pinLayer?.place((at) => {
+      const [lon, lat] = imageToGlobe(at, { north: pad.north, south: pad.south, shift });
+      const c = Math.cos(lat * DEG);
+      tmpV.set(OVERLAY_R * c * Math.cos(lon * DEG), OVERLAY_R * Math.sin(lat * DEG), -OVERLAY_R * c * Math.sin(lon * DEG));
+      tmpV.applyQuaternion(world.quaternion);
+      const facing = tmpV.z / OVERLAY_R > 1 / view.distance + 0.04;
+      tmpV.project(camera);
+      return { x: ((tmpV.x + 1) / 2) * stage.clientWidth, y: ((1 - tmpV.y) / 2) * stage.clientHeight, visible: facing };
+    });
+  }
+  void setupPins(stage, canvas, cfg.slug).then((l) => {
+    pinLayer = l;
+    invalidate();
+  });
+
   /* ── View state ── */
   const view = { yaw: 0, pitch: 0, distance: BASE_DISTANCE };
   /** Short ease back to the selected position when the view is re-locked. */
@@ -456,6 +509,8 @@ export async function start(ctx: StartContext): Promise<void> {
       camera.position.set(0, 0, view.distance);
       renderer.render(scene, camera);
       placeLabel();
+      ruler.redraw();
+      placePins();
       dirty = false;
       // The view moved: once it settles, see whether it needs a sharper texture or other tiles.
       if (!spinning && !fade) onZoom();

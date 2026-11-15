@@ -41,6 +41,8 @@ const EDITOR_CUT = ["src/admin/regions.ts", "src/admin/session.ts", "src/admin/c
  * roots: the entry files its page or process loads (GROUPS names or repo paths). A suite whose roots
  *        include EDITOR is an editor suite: the import graph is cut at EDITOR_CUT for it.
  * weight: optional rough runtime (higher = slower, default 1); the runner starts slow suites first.
+ * cut:    optional comma-separated files to cut the import graph at (changes there don't select the
+ *         suite), for suites that load a page but test only part of it. Editor suites default to EDITOR_CUT.
  *
  * Adding a suite is just adding its file with the header: no shared list to edit, so parallel
  * branches that each add a suite don't conflict here.
@@ -56,7 +58,9 @@ export function readSuites(dir = HERE) {
     const attrs = Object.fromEntries([...h[1].matchAll(/(\w+)=(\S+)/g)].map((a) => [a[1], a[2]]));
     const tokens = (attrs.roots ?? "").split(",").filter(Boolean);
     const roots = tokens.flatMap((t) => GROUPS[t] ?? [t]);
-    suites.push({ name: m[1], roots, editor: tokens.includes("EDITOR"), weight: Number(attrs.weight) || 1 });
+    const editor = tokens.includes("EDITOR");
+    const cut = attrs.cut ? attrs.cut.split(",").filter(Boolean) : editor ? EDITOR_CUT : [];
+    suites.push({ name: m[1], roots, editor, cut, weight: Number(attrs.weight) || 1 });
   }
   return suites.sort((a, b) => b.weight - a.weight || a.name.localeCompare(b.name));
 }
@@ -67,6 +71,7 @@ export const ALL = SUITES.map((s) => s.name);
 /** Entry files each suite exercises. Editor suites cut the graph at EDITOR_CUT. */
 export const SUITE_ROOTS = Object.fromEntries(SUITES.map((s) => [s.name, s.roots]));
 const EDITOR_SUITES = new Set(SUITES.filter((s) => s.editor).map((s) => s.name));
+const CUTS = Object.fromEntries(SUITES.map((s) => [s.name, s.cut]));
 
 /** [pattern, suites | (match) => suites]; first match wins. [] = no e2e needed. */
 const RULES = [
@@ -102,7 +107,7 @@ function importGraph() {
       outdir: "out",
       platform: "browser",
       packages: "external",
-      external: EDITOR_SUITES.has(suite) ? EDITOR_CUT.map((f) => path.join(ROOT, f)) : [],
+      external: CUTS[suite].map((f) => path.join(ROOT, f)),
       logLevel: "silent",
       loader: { ".css": "empty" },
       define: { "import.meta.env": "{}" },

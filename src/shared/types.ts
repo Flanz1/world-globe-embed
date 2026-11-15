@@ -34,6 +34,11 @@ export interface ViewDefaults {
    * desktop app's "Horizontal Shift", so the map's own prime meridian lines up with the grid's red line.
    */
   shift: number;
+  /**
+   * The world's radius in km, set by an admin once per slot. 0 = not set: the embed has no ruler.
+   * Not a query param: only the admin can set it.
+   */
+  radius: number;
 }
 
 export const DEFAULT_VIEW: ViewDefaults = {
@@ -50,6 +55,7 @@ export const DEFAULT_VIEW: ViewDefaults = {
   south: 0,
   pole: "#e8dcc8",
   shift: 0,
+  radius: 0,
 };
 
 export interface Slot extends Partial<ViewDefaults> {

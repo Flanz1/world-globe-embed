@@ -29,15 +29,18 @@ export async function sessionFor(login, hours = 1) {
 }
 
 class MemoryKV {
-  async get(key) {
-    return this.data.has(key) ? "" : null;
-  }
   data = new Map();
-  async put(k, _v, o) {
+  values = new Map();
+  async put(k, v, o) {
     this.data.set(k, o?.metadata);
+    this.values.set(k, v);
+  }
+  async get(k) {
+    return this.values.get(k) ?? null;
   }
   async delete(k) {
     this.data.delete(k);
+    this.values.delete(k);
   }
   async list(o) {
     return { keys: [...this.data].filter(([k]) => k.startsWith(o?.prefix ?? "")).map(([name, metadata]) => ({ name, metadata })) };

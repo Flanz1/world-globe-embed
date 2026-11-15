@@ -79,6 +79,9 @@ const ICON_GRID =
 const ICON_FS =
   '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
 
+const ICON_RULER =
+  '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="5" width="13" height="6" rx="1"/><path d="M4.5 5v2.5M7 5v3.5M9.5 5v2.5M12 5v3.5"/></svg>';
+
 const ICON_LOCK =
   '<svg class="i-shut" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>' +
   '<svg class="i-open" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 5.8-1"/></svg>';
@@ -200,7 +203,7 @@ ${first ? `<link rel="preload" href="${escapeHtml(first.url)}" as="fetch" type="
 </head>
 <body>
 <div id="stage"><div id="poster" role="img" aria-label="${title}"></div><canvas id="globe" aria-label="${title}, drag to rotate, scroll or pinch to zoom"></canvas></div>
-<div id="ui"${cfg.controls ? "" : " hidden"}><button id="btn-lock" type="button" hidden aria-pressed="true" title="Unlock view" aria-label="Unlock view">${ICON_LOCK}</button><button id="btn-view" type="button" hidden>${ICON_VIEW}</button><button id="btn-grid" type="button" aria-pressed="${cfg.grid}" title="Grid" aria-label="Toggle grid">${ICON_GRID}</button><button id="btn-fs" type="button" title="Fullscreen" aria-label="Fullscreen">${ICON_FS}</button></div>
+<div id="ui"${cfg.controls ? "" : " hidden"}><button id="btn-lock" type="button" hidden aria-pressed="true" title="Unlock view" aria-label="Unlock view">${ICON_LOCK}</button><button id="btn-ruler" type="button" hidden aria-pressed="false" title="Measure" aria-label="Measure distance and area">${ICON_RULER}</button><button id="btn-view" type="button" hidden>${ICON_VIEW}</button><button id="btn-grid" type="button" aria-pressed="${cfg.grid}" title="Grid" aria-label="Toggle grid">${ICON_GRID}</button><button id="btn-fs" type="button" title="Fullscreen" aria-label="Fullscreen">${ICON_FS}</button></div>
 <div id="legend" hidden><span><i style="background:#e8c44a"></i>Equator</span><span><i style="background:#e85050"></i>Prime meridian</span><span><i style="background:rgba(201,169,78,.6)"></i>30°</span><span><i style="background:rgba(201,169,78,.3)"></i>15°</span></div>
 <script type="application/json" id="wge-data">${data}</script>
 <script>${bootJs}</script>

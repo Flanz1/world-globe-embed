@@ -99,6 +99,12 @@
           "minimum": -180,
           "maximum": 180,
           "description": "Prime meridian: moves the map east (+) or west (-) by this many degrees so its prime meridian lines up with the grid's."
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 100,
+          "maximum": 1000000,
+          "description": "The world's radius in km. When set, every embed of the slot gets a ruler (distance and area in real units)."
         }
       }
     }

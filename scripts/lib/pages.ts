@@ -11,6 +11,7 @@ import {
   type RegionFeature,
   type RegionIndexEntry,
 } from "../../src/shared/region.ts";
+import { pinsJson, type PinFeature } from "../../src/shared/pins.ts";
 import type { Content } from "./content.ts";
 
 export interface GeneratedPage {
@@ -120,6 +121,13 @@ export function regionJson(f: RegionFeature): string {
 export function generateRegionFiles(content: Content): { path: string; json: string }[] {
   const regions = [...(content.regions ?? new Map<string, RegionFeature>()).values()];
   return regions.map((r) => ({ path: `regions/${r.id}.json`, json: regionJson(r) }));
+}
+
+/** pins/<slot>.json for every slot that has pins: the places an embed draws with ?pins=… (minified, re-checked on the way out). */
+export function generatePinFiles(content: Content): { path: string; json: string }[] {
+  const bySlot = new Map<string, PinFeature[]>();
+  for (const pin of content.pins?.values() ?? []) bySlot.set(pin.properties.slot, [...(bySlot.get(pin.properties.slot) ?? []), pin]);
+  return [...bySlot].sort(([a], [b]) => a.localeCompare(b)).map(([slot, pins]) => ({ path: `pins/${slot}.json`, json: pinsJson(pins) }));
 }
 
 /**

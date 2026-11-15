@@ -11,6 +11,7 @@ import { hasPendingSaves, initOptimistic, optimistic } from "./optimistic.ts";
 import { openPreview } from "./preview.ts";
 import { $, SITE, h } from "./dom.ts";
 import { initRegions, loadRegions, openRegionById, regionDisplayName, renderRegions, watchEditing } from "./regions.ts";
+import { initPins, loadPins, renderPins } from "./pins.ts";
 import { initActivity, loadActivity } from "./activity.ts";
 import { PART_BYTES, prepareImage } from "./upload-image.ts";
 import { can, refusal, setMe } from "./session.ts";
@@ -126,10 +127,11 @@ function renderSlots(): void {
               patch.north === (slot.north ?? 0) &&
               patch.south === (slot.south ?? 0) &&
               patch.pole.toLowerCase() === (slot.pole ?? "#e8dcc8").toLowerCase() &&
-              patch.shift === (slot.shift ?? 0);
+              patch.shift === (slot.shift ?? 0) &&
+              patch.radius === (slot.radius ?? 0);
             if (unchanged) return setStatus("Nothing changed.");
             void act(`Saving ${slug}…`, () =>
-              gh!.commit(`Update slot "${slug}": map "${patch.map}", ${patch.view} view, padding N ${patch.north}% / S ${patch.south}%, prime meridian ${patch.shift}°`, async () => [
+              gh!.commit(`Update slot "${slug}": map "${patch.map}", ${patch.view} view, padding N ${patch.north}% / S ${patch.south}%, prime meridian ${patch.shift}°, world radius ${patch.radius ? `${patch.radius} km` : "none"}`, async () => [
                 await slotsChange((s) => {
                   const cur = s.slots[slug];
                   if (!cur) throw new Error(`Slot "${slug}" no longer exists.`);
@@ -138,7 +140,7 @@ function renderSlots(): void {
                   if (patch.view === "flat") cur.view = "flat";
                   else delete cur.view;
                   // Keep slots.json tidy: write padding only when it's used.
-                  for (const k of ["north", "south", "shift"] as const) {
+                  for (const k of ["north", "south", "shift", "radius"] as const) {
                     if (patch[k]) cur[k] = patch[k];
                     else delete cur[k];
                   }
@@ -262,6 +264,8 @@ async function loadAll(): Promise<void> {
   renderSlots();
   await loadRegions();
   void loadActivity();
+  // Pins are a side feature: a failure to read them must not break the rest of the page.
+  await loadPins().catch((e) => setStatus(`Couldn't read the pins: ${(e as Error).message}`, "error"));
 }
 
 async function slotsChange(mutate: (s: SlotsFile) => void): Promise<FileChange> {
@@ -440,10 +444,10 @@ function wireNewSlot(): void {
 
 /* ── Tabs (kept in the URL hash so a reload stays on the same tab) ── */
 
-const TABS = ["maps", "regions", "users"] as const;
+const TABS = ["maps", "regions", "pins", "users"] as const;
 type Tab = (typeof TABS)[number];
 /** The tabs this person may open: Maps & slots and Users need their own permission. */
-const allowedTabs = (): Tab[] => TABS.filter((t) => t === "regions" || (t === "maps" ? can("maps") : can("users")));
+const allowedTabs = (): Tab[] => TABS.filter((t) => t === "regions" || t === "pins" || (t === "maps" ? can("maps") : can("users")));
 
 function showTab(name: Tab): void {
   const allowed = allowedTabs();
@@ -457,10 +461,11 @@ function showTab(name: Tab): void {
   }
   if (name === "regions") renderRegions();
   watchEditing(name === "regions");
+  if (name === "pins") renderPins();
   if (name === "users") void loadUsers();
 }
 
-const tabFromHash = (): Tab => (location.hash === "#regions" ? "regions" : location.hash === "#users" ? "users" : "maps");
+const tabFromHash = (): Tab => (location.hash === "#regions" ? "regions" : location.hash === "#pins" ? "pins" : location.hash === "#users" ? "users" : "maps");
 
 function wireTabs(): void {
   for (const t of TABS)
@@ -584,6 +589,7 @@ if (framed) {
   initOptimistic({ setCheck: (c) => { saveCheck = c; renderChecks(lastRuns); }, setStatus, committed: afterCommit, reload: loadAll });
   initActivity({ gh: () => gh!, openRegion: openRegionById, regionName: regionDisplayName });
   initRegions({ gh: () => gh!, maps: () => maps, slots: () => slots, act, afterCommit });
+  initPins({ gh: () => gh!, maps: () => maps, slots: () => slots, act });
   initUsers({ gh: () => gh!, act });
   wireTabs();
   $("#who").textContent = __REPO__;
