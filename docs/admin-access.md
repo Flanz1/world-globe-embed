@@ -47,6 +47,8 @@ The API checks all of this on save, like the other rules.
 
 If someone signs in before they're added, they're told they're waiting, and they appear under **Asked for access** in the Users tab, where you can approve them in one click. Removing someone takes effect on their next save, even while they're still signed in. Sessions last 12 hours and only live in that browser tab.
 
+While a region is open in the editor, that tab tells the admin API every 30 seconds (stored in the same KV namespace under `e:` keys, forgotten after 90 seconds of silence). The editor then warns "Ann has this region open", and the Regions tab shows who is editing each card. It's only a hint: saving is still checked against the branch.
+
 ## One-time setup (repository owner)
 
 You do this once. Until it's done, the Admin API workflow skips its deploy and the admin page says sign-in isn't set up.

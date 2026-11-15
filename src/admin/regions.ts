@@ -15,9 +15,10 @@ import { categories, canAddCategory, canEditCategory, creatorOf, initCategories,
 import { $, h } from "./dom.ts";
 import { hasPendingSaves, optimistic } from "./optimistic.ts";
 import { openEditor, type EditorOptions } from "./editor/editor.ts";
+import { joinNames } from "./editor/presence.ts";
 import { MAX_LIVE } from "./editor/live.ts";
 import type { OverlayMeta } from "./editor/overlay-filter.ts";
-import type { FileCommit, GitHub } from "./github.ts";
+import type { Editing, FileCommit, GitHub } from "./github.ts";
 import { loadMapImage } from "./images.ts";
 import { compareBy, creatorChoices, creatorId, matchesQuery, type Filterable } from "./region-filter.ts";
 import { modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
@@ -233,6 +234,11 @@ function card(e: RegionEntry): HTMLElement {
             e.linkMissing?.length ? h("span", { className: "badge warn", textContent: `missing: ${e.linkMissing.join(", ")}` }) : null,
           )
         : null,
+      (() => {
+        const b = h("div", { className: "small rediting", dataset: { editingFor: e.id }, role: "status" });
+        setEditingBadge(b, e.id);
+        return b;
+      })(),
       labelsText(p) ? h("div", { className: "muted small rlabels", textContent: labelsText(p) }) : null,
       h(
         "div",
@@ -416,6 +422,43 @@ function creatorOptions(): void {
     ...opts.map(([id, name]) => h("option", { value: String(id), textContent: name })),
   );
   sel.value = [...sel.options].some((o) => o.value === keep) ? keep : "";
+}
+
+/* ── Who has a region open in an editor (polled while the Regions tab is showing) ── */
+let editingNow: Editing[] = [];
+let editingTimer = 0;
+
+function editorsOf(id: string): string[] {
+  const names: string[] = [];
+  for (const e of editingNow) if (e.id !== currentUser()?.id && e.regions.includes(id) && !names.includes(e.login)) names.push(e.login);
+  return names;
+}
+
+async function pollEditing(): Promise<void> {
+  try {
+    const next = await deps.gh().editingNow();
+    const key = (l: Editing[]) => JSON.stringify(l.map((e) => [e.id, e.regions]).sort());
+    const changed = key(next) !== key(editingNow);
+    editingNow = next;
+    if (changed) for (const el of document.querySelectorAll<HTMLElement>("[data-editing-for]")) setEditingBadge(el, el.dataset.editingFor!);
+  } catch {
+    /* A hint only. */
+  }
+}
+
+function setEditingBadge(el: HTMLElement, id: string): void {
+  const names = editorsOf(id);
+  el.textContent = names.length ? `✎ ${joinNames(names)} ${names.length === 1 ? "is" : "are"} editing this` : "";
+  el.hidden = !names.length;
+}
+
+/** Starts or stops the polling: only while the Regions tab is on screen. */
+export function watchEditing(on: boolean): void {
+  clearInterval(editingTimer);
+  editingTimer = 0;
+  if (!on) return;
+  void pollEditing();
+  editingTimer = window.setInterval(() => void pollEditing(), 30_000);
 }
 
 export function renderRegions(): void {

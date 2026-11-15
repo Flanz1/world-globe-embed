@@ -85,6 +85,14 @@ export interface Me {
 }
 
 /** People who signed in but aren't on the list yet. */
+export interface Editing {
+  id: number;
+  login: string;
+  tab: string;
+  regions: string[];
+  at: string;
+}
+
 export interface Waiting {
   id: number;
   login: string;
@@ -210,6 +218,20 @@ export class GitHub {
 
   async waiting(): Promise<Waiting[]> {
     return (await this.send<Waiting[]>("/waiting", {}, this.root)).data;
+  }
+
+  /** Says these regions are open in this editor tab (repeat within 90 s); answers with everyone who has regions open right now. */
+  async editingBeat(tab: string, regions: string[]): Promise<Editing[]> {
+    return (await this.send<Editing[]>("/editing", { method: "POST", body: JSON.stringify({ tab, regions }) }, this.root)).data;
+  }
+
+  /** Everyone who has regions open in an editor right now. */
+  async editingNow(): Promise<Editing[]> {
+    return (await this.send<Editing[]>("/editing", {}, this.root)).data;
+  }
+
+  async editingDone(tab: string): Promise<void> {
+    await this.send(`/editing/${tab}`, { method: "DELETE", keepalive: true }, this.root);
   }
 
   async dismissWaiting(id: number): Promise<void> {

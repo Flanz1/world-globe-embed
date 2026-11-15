@@ -63,6 +63,7 @@ import { TILE_BUDGET, TILE_LEVELS, TileCache, levelFor, tileRect, tilesAt, tileU
 import { alertBox, confirmBox, modal, openEmbedDialog, previewUrl, sendRegion } from "../region-dialogs.ts";
 import { regionPath, serialize, stamp } from "../regions.ts";
 import { account, currentUser } from "../session.ts";
+import { editingNote, startPresence } from "./presence.ts";
 import { combineKind, combineParts, extendPart, type MergeResult } from "./merge.ts";
 import { LINKED_MAX, combineRegions } from "../../shared/combine.ts";
 import { MAX_LIVE, liveState, ownEntry, previewLegend, removeLiveEntry, splitLive, type LiveSource } from "./live.ts";
@@ -334,6 +335,8 @@ export function openEditor(o: EditorOptions): void {
   let g = mainCtx;
   const status = h("div", { className: "ed-status", ariaLive: "off" });
   const msg = h("p", { className: "ed-msg", role: "status", ariaLive: "polite" });
+  /** "Ann has this region open too": filled by the presence beat. */
+  const editingBanner = h("p", { className: "ed-editing", role: "status", ariaLive: "polite", hidden: true });
   const frameEl = h("iframe", { className: "ed-globe", title: "Globe preview of the region" });
   const ctxMenu = h("div", { className: "ed-menu", hidden: true, role: "menu" });
   const tip = h("div", { className: "ed-tip", hidden: true });
@@ -464,6 +467,7 @@ export function openEditor(o: EditorOptions): void {
         { className: "ed-side" },
         frameEl,
         h("div", { className: "row" }, btn("Centre on region", "Turn the globe preview to face the region", () => sendPreview(true), "centre"), btn("Embed code…", "Copy the iframe code for this region", () => embed(), "embed")),
+        editingBanner,
         msg,
         h("label", {}, "Id (permanent; embeds use it)", idIn),
         h("p", { className: "muted small", textContent: `Slot: ${slotName} · map: ${slot.map}` }),
@@ -3569,6 +3573,18 @@ export function openEditor(o: EditorOptions): void {
     }
   }
 
+  /* ── Someone else editing the same region ── */
+  const presence = startPresence(
+    o.gh,
+    () => (live ? live.map((x) => x.id) : isNew ? [] : [id]),
+    currentUser()?.id,
+    (others) => {
+      const note = editingNote(others, live ? live.map((x) => x.id) : [id]);
+      editingBanner.textContent = note;
+      editingBanner.hidden = !note;
+    },
+  );
+
   /* ── Close ── */
   const beforeUnload = (e: BeforeUnloadEvent) => {
     if (dirty()) e.preventDefault();
@@ -3580,6 +3596,7 @@ export function openEditor(o: EditorOptions): void {
   }
   function close(): void {
     window.removeEventListener("beforeunload", beforeUnload);
+    presence.stop();
     ro.disconnect();
     frameEl.src = "about:blank";
     dlg.close();
