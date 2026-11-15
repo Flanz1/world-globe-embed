@@ -8,6 +8,9 @@
  * the reviewer (the admin page writes the region with the reviewer's own permissions, through the API's
  * normal commit checks); this module only keeps the proposals and who may see or decide them.
  *
+ * Anyone with "Create regions" may propose, including people who can edit the region themselves (to have somebody else
+ * make the final call): nobody decides their own proposal.
+ *
  * One pending proposal per person per region: sending another one replaces it. Keys: `p:<region>~<proposer id>`.
  * The value is the proposal (JSON); the key's metadata is a short summary for lists.
  */
@@ -133,7 +136,6 @@ export async function propose(c: ProposalCtx, body: { region?: unknown; feature?
   if (bad) throw new ProposalError(422, `The suggestion doesn't match the region schema: ${bad}`);
   const cur = await c.region(body.region);
   if (!cur) throw new ProposalError(404, `There's no region "${body.region}" to suggest changes to.`);
-  if (mayReview(c.actor, cur.owner)) throw new ProposalError(409, "You can edit this region yourself: change it directly.");
   const id = `${body.region}~${c.actor.id}`;
   const { keys } = await store(c).list({ prefix: "p:", limit: 1000 });
   const mine = keys.map((k) => k.metadata as ProposalSummary | undefined).filter((s) => s && s.by?.id === c.actor.id && s.status === "pending" && s.id !== id);
@@ -160,6 +162,8 @@ export async function decide(c: ProposalCtx, id: string, status: "accepted" | "d
   const cur = await c.region(p.region);
   // A region deleted since: whoever could see the suggestion may close it, as the stored owner.
   const owner = cur?.owner ?? p.owner;
+  // Someone who can edit the region may propose too (to leave the final say to somebody else), but never decides their own.
+  if (p.by.id === c.actor.id) throw new ProposalError(403, "You can't accept or decline your own suggestion: someone else has to. (You can withdraw it.)");
   if (!mayReview(c.actor, owner)) throw new ProposalError(403, `You can't decide suggestions for "${p.region}": someone else created it.`);
   if (p.status !== "pending") throw new ProposalError(409, `That suggestion was already ${p.status}.`);
   const next: Proposal = { ...p, owner, status, decidedBy: c.actor.login, decidedAt: new Date().toISOString(), ...(status === "declined" && clip(reason, REASON_MAX) ? { reason: clip(reason, REASON_MAX) } : {}) };
