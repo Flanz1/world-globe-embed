@@ -25,6 +25,7 @@ const SIMON = { id: 138310181, login: "LoopSimon" };
 const ANN = { id: 5002, login: "carto-ann" }; // Contributor
 const BO = { id: 5003, login: "drafter-bo" }; // Editor
 const MANAGER = { id: 5001, login: "e2e-user" }; // Create regions + Manage users, no maps
+const CURATOR = { id: 5004, login: "curator-cy" }; // Create + edit others' + delete others'
 const STRANGER = { id: 7777, login: "stranger" };
 
 const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -80,6 +81,7 @@ const ACCESS: AccessFile = {
     { ...ANN, permissions: ["regions"] },
     { ...BO, permissions: ["regions", "editOthers"] },
     { ...MANAGER, permissions: ["regions", "users"] },
+    { ...CURATOR, permissions: ["regions", "editOthers", "deleteOthers"] },
   ],
 };
 
@@ -265,6 +267,25 @@ describe("admin API permissions", () => {
     // Regions from before owners existed belong to the repository owner.
     expect(await tryCommit(gh, [put("content/regions/old-land.json", region("old-land", undefined, ANN))])).toMatch(/someone else created it/);
     expect(mock.read("main", "content/regions/simon-land.json")).toBe(region("simon-land", SIMON));
+  });
+
+  it("restores a deleted region: its creator or someone who may edit and delete others' regions can put it back", async () => {
+    const ann = await client(ANN);
+    const path = "content/regions/ann-land.json";
+    const before = mock.read("main", path)!;
+    expect(await tryCommit(ann, [del(path)])).toBeNull();
+    // The save log names the delete and the commit before it, which still has the file.
+    const log = await ann.history({ path, files: true, limit: 1 });
+    expect(log.entries[0].files).toEqual([{ path, status: "removed" }]);
+    expect(log.entries[0].parent).toMatch(/^[0-9a-f]{40}$/);
+    expect(await ann.readFileAt(path, log.entries[0].parent!)).toBe(before);
+    expect(await ann.history({ path, since: "2999-01-01T00:00:00Z" })).toMatchObject({ entries: [] });
+    expect(await tryCommit(await client(BO), [put(path, region("ann-land", ANN, BO))])).toMatch(/createdBy set to you/);
+    expect(await tryCommit(await client(CURATOR), [put(path, region("ann-land", ANN, CURATOR))])).toBeNull();
+    expect(JSON.parse(mock.read("main", path)!).properties).toMatchObject({ createdBy: ANN, updatedBy: CURATOR });
+    // Restoring as the creator is the ordinary rule: your own region, saved by you.
+    expect(await tryCommit(ann, [del(path)])).toBeNull();
+    expect(await tryCommit(ann, [put(path, region("ann-land", ANN, ANN))])).toBeNull();
   });
 
   it("refuses made-up creators and savers", async () => {

@@ -306,6 +306,7 @@ async function authCallback(req: Request, env: Env, up: Upstream): Promise<Respo
 
 interface GhCommit {
   sha: string;
+  parents?: { sha: string }[];
   commit: { message?: string; author?: { name?: string; date?: string } | null; committer?: { date?: string } | null };
   author?: { login?: string; id?: number } | null;
   files?: { filename: string; status: string }[];
@@ -314,7 +315,8 @@ interface GhCommit {
 /**
  * GET /history: the saves (commits) on the content branch, newest first, shaped for the admin page.
  * `path` limits it to saves that touched a file or folder in content/ (default: all of content/),
- * `limit` is how many (up to 50), `page` pages back in time and `files=1` adds each save's changed files.
+ * `limit` is how many (up to 50), `page` pages back in time, `files=1` adds each save's changed files and
+ * `since` (an ISO time) leaves out older saves.
  * Anyone on the admin list may read it; it carries nothing that isn't already public in the repository.
  */
 async function history(req: Request, env: Env, up: Upstream, url: URL): Promise<Response> {
@@ -326,11 +328,17 @@ async function history(req: Request, env: Env, up: Upstream, url: URL): Promise<
   const limit = Math.min(cap, Math.max(1, Math.floor(Number(url.searchParams.get("limit") ?? 20)) || 20));
   const page = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get("page") ?? 1)) || 1));
   const qs = new URLSearchParams({ path, sha: branchOf(env), per_page: String(limit), page: String(page) });
+  const since = url.searchParams.get("since");
+  if (since) {
+    if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/.test(since) || Number.isNaN(Date.parse(since))) throw new HttpError(400, "since must be an ISO time such as 2026-11-12T10:00:00Z.");
+    qs.set("since", since);
+  }
   const list = await ghJson<GhCommit[]>(env, up, `${repoPath(env)}/commits?${qs}`);
   const entries: HistoryEntry[] = await Promise.all(
     list.map(async (c): Promise<HistoryEntry> => {
       const e: HistoryEntry = {
         sha: c.sha,
+        parent: c.parents?.[0]?.sha ?? null,
         date: c.commit.author?.date ?? c.commit.committer?.date ?? "",
         author: { login: c.author?.login ?? c.commit.author?.name ?? "unknown", id: typeof c.author?.id === "number" ? c.author.id : null },
         message: (c.commit.message ?? "").slice(0, 300),

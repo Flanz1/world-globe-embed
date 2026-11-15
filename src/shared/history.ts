@@ -7,6 +7,8 @@
 /** One save: a commit on the content branch. */
 export interface HistoryEntry {
   sha: string;
+  /** The save this one built on (its first parent); null for the very first. */
+  parent?: string | null;
   /** ISO time of the commit. */
   date: string;
   /** Who made it. `id` is the GitHub account id when GitHub knows the account (a commit by a bot or an unlinked email has none). */

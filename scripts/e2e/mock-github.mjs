@@ -230,11 +230,13 @@ export class MockGitHub {
       const fp = url.searchParams.get("path");
       const per = Number(url.searchParams.get("per_page") ?? 30);
       const page = Number(url.searchParams.get("page") ?? 1);
+      const since = url.searchParams.get("since");
       const out = [];
       let sha = this.refs.get(url.searchParams.get("sha") ?? this.defaultBranch);
       while (sha) {
         const c = this.commits.get(sha);
-        if (!fp || c.changed?.some((x) => x === fp || x.startsWith(`${fp}/`))) out.push({ sha, commit: { message: c.message, author: { name: c.author, date: c.date } }, author: { login: c.author, id: ACCOUNTS.find((a) => a.login === c.author)?.id } });
+        if (since && Date.parse(c.date) < Date.parse(since)) break;
+        if (!fp || c.changed?.some((x) => x === fp || x.startsWith(`${fp}/`))) out.push({ sha, parents: c.parent ? [{ sha: c.parent }] : [], commit: { message: c.message, author: { name: c.author, date: c.date } }, author: { login: c.author, id: ACCOUNTS.find((a) => a.login === c.author)?.id } });
         sha = c.parent;
       }
       return json(200, out.slice((page - 1) * per, page * per));

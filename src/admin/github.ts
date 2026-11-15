@@ -321,12 +321,13 @@ export class GitHub {
   }
 
   /** The save log (see src/shared/history.ts): saves that touched `path` (default all of content/), newest first. */
-  async history(opts: { path?: string; limit?: number; page?: number; files?: boolean } = {}): Promise<HistoryPage> {
+  async history(opts: { path?: string; limit?: number; page?: number; files?: boolean; since?: string } = {}): Promise<HistoryPage> {
     const q = new URLSearchParams();
     if (opts.path) q.set("path", opts.path);
     if (opts.limit) q.set("limit", String(opts.limit));
     if (opts.page) q.set("page", String(opts.page));
     if (opts.files) q.set("files", "1");
+    if (opts.since) q.set("since", opts.since);
     return (await this.send<HistoryPage>(`/history${q.size ? `?${q}` : ""}`, {}, this.root)).data;
   }
 
