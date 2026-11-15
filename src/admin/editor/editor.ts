@@ -27,6 +27,7 @@ import {
   type RegionGeometry,
 } from "../../shared/geo.ts";
 import { findClashes, prepare, type Prepared } from "../../shared/clash.ts";
+import { formatArea, sphereAreaKm2, validRadius } from "../../shared/measure.ts";
 import { paintSpec, traceGeometry, traceRing } from "../../shared/raster.ts";
 import { paintSpecOf, partColours, type Clashes } from "../../shared/region-paint.ts";
 import {
@@ -1521,7 +1522,8 @@ export function openEditor(o: EditorOptions): void {
     // The spherical area is skipped mid-drag (it costs a few ms at 2,000 vertices) and refreshed on release.
     if (!hist.dragging || lastArea < 0) lastArea = parts_ ? areaPercent(mapGeometry(toGeometry(parts()), (p) => imageToGlobe(p, frame))) : 0;
     const area = lastArea;
-    stats.textContent = `${n.toLocaleString()} vertices in ${parts_} part${parts_ === 1 ? "" : "s"} · about ${area < 0.01 ? area.toFixed(4) : area.toFixed(2)}% of the globe's surface`;
+    const real = validRadius(slot.radius) ? ` (about ${formatArea((area / 100) * sphereAreaKm2(slot.radius), "km")} · ${formatArea((area / 100) * sphereAreaKm2(slot.radius), "mi")})` : "";
+    stats.textContent = `${n.toLocaleString()} vertices in ${parts_} part${parts_ === 1 ? "" : "s"} · about ${area < 0.01 ? area.toFixed(4) : area.toFixed(2)}% of the globe's surface${real}`;
     stats.classList.toggle("error", !live && n >= WARN_VERTICES);
     if (!live && n >= WARN_VERTICES) stats.textContent += ` · close to the ${MAX_VERTICES.toLocaleString()}-vertex limit`;
   }

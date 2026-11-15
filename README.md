@@ -293,6 +293,7 @@ npm run e2e:tiers     # which texture sizes load, and in what order (1024 → 40
 npm run e2e:tiles     # close-up tiles at max zoom (synthetic 32768 map; env TILES_MAP=your.jpg for your own)
 npm run e2e:upload    # a big admin upload in 8 MB parts, with the progress bar (env UPLOAD_FILE=your.jpg for your own)
 npm run e2e:view      # a slot's default view (globe or flat) in the embed and the admin preview
+npm run e2e:ruler     # the real-size ruler in the embed, and the world size in the admin preview
 ```
 
 ### Layout

@@ -150,6 +150,7 @@ export function previewUrl(slot: Slot, q: Record<string, string>): string {
     south: String(slot.south ?? DEFAULT_VIEW.south),
     pole: slot.pole ?? DEFAULT_VIEW.pole,
     shift: String(slot.shift ?? DEFAULT_VIEW.shift),
+    radius: String(slot.radius ?? DEFAULT_VIEW.radius),
     rotate: "0",
     ...q,
   });
