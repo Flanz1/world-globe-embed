@@ -241,8 +241,9 @@ export function setupLayers(
   layers?: { names: Record<string, string>; title: string; hidden: string[] },
 ): void {
   const members = r.members;
-  if (!members) return;
+  if (!members) return legend.layers([], visible.hidden, () => {});
   const items = members.map((m) => ({ id: m.id, name: layers?.names[m.id]?.trim() || m.name || m.id }));
+  visible.hidden.clear();
   for (const id of layers?.hidden ?? []) visible.hidden.add(id);
   const build = (): void =>
     legend.layers(

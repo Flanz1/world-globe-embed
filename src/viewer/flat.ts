@@ -447,7 +447,15 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       if (!R.fitted && !touched) fitTo(r, false);
       schedule();
     });
+    let layerKey = "";
+    let layerRev = -1;
     R.subscribe?.((r, centre, focus) => {
+      const k = r.members?.map((m) => m.id).join(",") ?? "";
+      if (R.toggle && regionKey && (k !== layerKey || R.layers?.rev !== layerRev)) {
+        layerRev = R.layers?.rev ?? -1;
+        layerKey = k;
+        setupLayers(regionKey, r, visible, () => (setRegion(full!), schedule()), R.layers);
+      }
       setRegion(r);
       if (centre) fitTo(r, true, focus);
       schedule();

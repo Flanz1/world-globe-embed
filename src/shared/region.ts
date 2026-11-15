@@ -295,7 +295,8 @@ export function mergeRegions(list: readonly RegionData[], clip = false): RegionD
     legend: [],
     parts: list.flatMap((r) => r.parts),
     labels: list.flatMap((r) => r.labels),
-    geometry: { type: "MultiPolygon", coordinates: list.flatMap((r) => polygonsOf(r.geometry)) },
+    // A region over its underlays is framed by itself; plain stacked regions by all of them.
+    geometry: clip ? list[list.length - 1].geometry : { type: "MultiPolygon", coordinates: list.flatMap((r) => polygonsOf(r.geometry)) },
     members: [...list],
     ...(clip ? { clip: true } : {}),
   };
