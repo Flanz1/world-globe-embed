@@ -55,7 +55,11 @@ export interface OverlayFilter {
   close: () => void;
 }
 
-export function createOverlayFilter(o: { items: OverlayItem[]; categories: OverlayCategory[]; meId: number | undefined; onChange: () => void }): OverlayFilter {
+export function createOverlayFilter(o: { items: OverlayItem[]; categories: OverlayCategory[]; meId: number | undefined; onChange: () => void; pinned?: ReadonlySet<number> }): OverlayFilter {
+  // Pinned regions (a suggestion's current version) are always drawn and aren't in the list.
+  const pinned = o.pinned ?? new Set<number>();
+  const all = o.items;
+  o = { ...o, items: all.filter((i) => !pinned.has(i.index)) };
   const enabled = loadEnabled();
   const byIndex = new Map(o.items.map((i) => [i.index, i]));
   const on = (i: OverlayItem) => enabled.has(i.id);
@@ -166,5 +170,5 @@ export function createOverlayFilter(o: { items: OverlayItem[]; categories: Overl
     if (e.key === "Escape") toggle(false);
   });
   renderButton();
-  return { button, panel, visible: (i) => !!byIndex.get(i) && on(byIndex.get(i)!), close: () => toggle(false) };
+  return { button, panel, visible: (i) => pinned.has(i) || (!!byIndex.get(i) && on(byIndex.get(i)!)), close: () => toggle(false) };
 }
