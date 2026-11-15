@@ -125,3 +125,7 @@ Once you've signed in through the new page:
 ## Running the API locally or in tests
 
 `tests/admin-api.test.ts` runs the real handler in Node against the in-memory GitHub in `scripts/e2e/mock-github.mjs`, through the admin page's own client. The browser checks (`npm run e2e:*`) do the same inside Playwright. The schema validators the Worker uses are generated: after changing `schema/region.schema.json` or `schema/access.schema.json`, run `npm run worker:validators` (a test fails if you forget).
+
+## Save log (`GET /history`)
+
+The admin API serves the saves (commits) on the content branch, shaped for the admin page: `GET /history?path=content/regions/<id>.json&limit=20&page=1&files=1`. Everything is optional: `path` (anything under `content/`, default all of it), `limit` (up to 50, or 20 with `files=1`), `page` to go back in time, and `files=1` to include each save's changed files. The answer is `{ entries: [{ sha, date, author: { login, id }, message, files? }], next }` (types and helpers in `src/shared/history.ts`; client `GitHub.history()`), newest first. Anyone on the admin list may read it. `GitHub.readFileAt(path, sha)` reads a file as it was in one of those saves. The Regions tab's version history and the activity feed both build on this.
