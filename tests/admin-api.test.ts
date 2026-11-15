@@ -7,9 +7,9 @@ import { generateKeyPairSync, createVerify } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { GitHub, GitHubError, NotListed, mapLimit, retrying, type FileChange } from "../src/admin/github.ts";
-import { handle, resetCaches, returnAllowed, type Env, type KV } from "../worker/src/handler.ts";
+import { EDITING_SECONDS, handle, resetCaches, returnAllowed, type Env, type KV } from "../worker/src/handler.ts";
 import { appJwt, fromB64url, sign, verify } from "../worker/src/crypto.ts";
 import { MockGitHub, mockFetch } from "../scripts/e2e/mock-github.mjs";
 import { VALIDATORS_FILE, generateValidators } from "../scripts/build-worker-validators.ts";
@@ -201,6 +201,27 @@ describe("admin API sign-in", () => {
     await expect((await client(ANN)).waiting()).rejects.toThrow(/manage users/);
     await (await client(MANAGER)).dismissWaiting(STRANGER.id);
     expect(kv.data.size).toBe(0);
+  });
+
+  it("tells editors who else has a region open, and forgets people who leave or go quiet", async () => {
+    const ann = await client(ANN);
+    const mgr = await client(MANAGER);
+    expect(await ann.editingBeat("tabannnn1", ["nordland"])).toEqual([expect.objectContaining({ login: ANN.login, regions: ["nordland"] })]);
+    const seen = await mgr.editingBeat("tabmgrrr1", ["nordland", "other"]);
+    expect(seen.map((e) => e.login).sort()).toEqual([ANN.login, MANAGER.login].sort());
+    expect((await ann.editingNow()).length).toBe(2);
+    // Leaving removes only that tab.
+    await ann.editingDone("tabannnn1");
+    expect((await mgr.editingNow()).map((e) => e.login)).toEqual([MANAGER.login]);
+    // A tab that stopped beating drops off even if KV hasn't expired the key yet.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + (EDITING_SECONDS + 5) * 1000);
+    expect(await mgr.editingNow()).toEqual([]);
+    vi.useRealTimers();
+    await expect(ann.editingBeat("x", ["nordland"])).rejects.toThrow();
+    await expect(ann.editingBeat("tabannnn1", ["../x"])).rejects.toThrow();
+    // Not on the list: nothing.
+    await expect(client(STRANGER)).rejects.toBeInstanceOf(NotListed);
   });
 
   it("signs App requests with a JWT GitHub accepts (PKCS#1 key)", async () => {

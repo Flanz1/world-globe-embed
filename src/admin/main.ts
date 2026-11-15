@@ -10,7 +10,7 @@ import { GitHub, GitHubError, NotListed, type FileChange, type WorkflowRun } fro
 import { hasPendingSaves, initOptimistic, optimistic } from "./optimistic.ts";
 import { openPreview } from "./preview.ts";
 import { $, SITE, h } from "./dom.ts";
-import { initRegions, loadRegions, renderRegions } from "./regions.ts";
+import { initRegions, loadRegions, renderRegions, watchEditing } from "./regions.ts";
 import { PART_BYTES, prepareImage } from "./upload-image.ts";
 import { can, refusal, setMe } from "./session.ts";
 import { initUsers, loadUsers } from "./users.ts";
@@ -454,6 +454,7 @@ function showTab(name: Tab): void {
     b.tabIndex = t === name ? 0 : -1;
   }
   if (name === "regions") renderRegions();
+  watchEditing(name === "regions");
   if (name === "users") void loadUsers();
 }
 
