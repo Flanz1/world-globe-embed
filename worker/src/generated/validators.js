@@ -2239,8 +2239,8 @@ return errors === 0;
 validate27.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 export const validateSlots = validate28;
-const schema39 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/slots.schema.json","title":"Globe embed slots","description":"Which map each embed (slot) shows, plus its view defaults.","type":"object","required":["slots"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"slots":{"type":"object","propertyNames":{"pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"additionalProperties":{"$ref":"#/$defs/slot"}}},"$defs":{"slot":{"type":"object","required":["map"],"additionalProperties":false,"properties":{"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id (file stem in content/maps/)."},"title":{"type":"string","maxLength":120},"view":{"enum":["globe","flat"],"description":"Which view the embed opens in (default globe). ?view= overrides it."},"grid":{"type":"boolean"},"rotate":{"type":"boolean"},"legend":{"type":"boolean"},"controls":{"type":"boolean"},"bg":{"type":"string","pattern":"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},"lat":{"type":"number","minimum":-90,"maximum":90},"lon":{"type":"number","minimum":-180,"maximum":180},"zoom":{"type":"number","minimum":0.4,"maximum":2.2},"north":{"type":"number","minimum":0,"maximum":49,"description":"Percent of the globe's height left unmapped at the north pole."},"south":{"type":"number","minimum":0,"maximum":49,"description":"Percent left unmapped at the south pole."},"pole":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$","description":"Fill colour for the padded polar areas."},"shift":{"type":"number","minimum":-180,"maximum":180,"description":"Prime meridian: moves the map east (+) or west (-) by this many degrees so its prime meridian lines up with the grid's."}}}}};
-const schema40 = {"type":"object","required":["map"],"additionalProperties":false,"properties":{"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id (file stem in content/maps/)."},"title":{"type":"string","maxLength":120},"view":{"enum":["globe","flat"],"description":"Which view the embed opens in (default globe). ?view= overrides it."},"grid":{"type":"boolean"},"rotate":{"type":"boolean"},"legend":{"type":"boolean"},"controls":{"type":"boolean"},"bg":{"type":"string","pattern":"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},"lat":{"type":"number","minimum":-90,"maximum":90},"lon":{"type":"number","minimum":-180,"maximum":180},"zoom":{"type":"number","minimum":0.4,"maximum":2.2},"north":{"type":"number","minimum":0,"maximum":49,"description":"Percent of the globe's height left unmapped at the north pole."},"south":{"type":"number","minimum":0,"maximum":49,"description":"Percent left unmapped at the south pole."},"pole":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$","description":"Fill colour for the padded polar areas."},"shift":{"type":"number","minimum":-180,"maximum":180,"description":"Prime meridian: moves the map east (+) or west (-) by this many degrees so its prime meridian lines up with the grid's."}}};
+const schema39 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/slots.schema.json","title":"Globe embed slots","description":"Which map each embed (slot) shows, plus its view defaults.","type":"object","required":["slots"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"slots":{"type":"object","propertyNames":{"pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"additionalProperties":{"$ref":"#/$defs/slot"}}},"$defs":{"slot":{"type":"object","required":["map"],"additionalProperties":false,"properties":{"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id (file stem in content/maps/)."},"title":{"type":"string","maxLength":120},"view":{"enum":["globe","flat"],"description":"Which view the embed opens in (default globe). ?view= overrides it."},"grid":{"type":"boolean"},"rotate":{"type":"boolean"},"legend":{"type":"boolean"},"controls":{"type":"boolean"},"bg":{"type":"string","pattern":"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},"lat":{"type":"number","minimum":-90,"maximum":90},"lon":{"type":"number","minimum":-180,"maximum":180},"zoom":{"type":"number","minimum":0.4,"maximum":2.2},"north":{"type":"number","minimum":0,"maximum":49,"description":"Percent of the globe's height left unmapped at the north pole."},"south":{"type":"number","minimum":0,"maximum":49,"description":"Percent left unmapped at the south pole."},"pole":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$","description":"Fill colour for the padded polar areas."},"shift":{"type":"number","minimum":-180,"maximum":180,"description":"Prime meridian: moves the map east (+) or west (-) by this many degrees so its prime meridian lines up with the grid's."},"radius":{"type":"number","minimum":100,"maximum":1000000,"description":"The world's radius in km. When set, every embed of the slot gets a ruler (distance and area in real units)."}}}}};
+const schema40 = {"type":"object","required":["map"],"additionalProperties":false,"properties":{"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id (file stem in content/maps/)."},"title":{"type":"string","maxLength":120},"view":{"enum":["globe","flat"],"description":"Which view the embed opens in (default globe). ?view= overrides it."},"grid":{"type":"boolean"},"rotate":{"type":"boolean"},"legend":{"type":"boolean"},"controls":{"type":"boolean"},"bg":{"type":"string","pattern":"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},"lat":{"type":"number","minimum":-90,"maximum":90},"lon":{"type":"number","minimum":-180,"maximum":180},"zoom":{"type":"number","minimum":0.4,"maximum":2.2},"north":{"type":"number","minimum":0,"maximum":49,"description":"Percent of the globe's height left unmapped at the north pole."},"south":{"type":"number","minimum":0,"maximum":49,"description":"Percent left unmapped at the south pole."},"pole":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$","description":"Fill colour for the padded polar areas."},"shift":{"type":"number","minimum":-180,"maximum":180,"description":"Prime meridian: moves the map east (+) or west (-) by this many degrees so its prime meridian lines up with the grid's."},"radius":{"type":"number","minimum":100,"maximum":1000000,"description":"The world's radius in km. When set, every embed of the slot gets a ruler (distance and area in real units)."}}};
 const pattern23 = new RegExp("^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$", "u");
 const pattern24 = new RegExp("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$", "u");
 
@@ -2645,6 +2645,34 @@ var valid4 = _errs39 === errors;
 }
 else {
 var valid4 = true;
+}
+if(valid4){
+if(data2.radius !== undefined){
+let data18 = data2.radius;
+const _errs41 = errors;
+if(errors === _errs41){
+if((typeof data18 == "number") && (isFinite(data18))){
+if(data18 > 1000000 || isNaN(data18)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/radius",schemaPath:"#/$defs/slot/properties/radius/maximum",keyword:"maximum",params:{comparison: "<=", limit: 1000000},message:"must be <= 1000000"}];
+return false;
+}
+else {
+if(data18 < 100 || isNaN(data18)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/radius",schemaPath:"#/$defs/slot/properties/radius/minimum",keyword:"minimum",params:{comparison: ">=", limit: 100},message:"must be >= 100"}];
+return false;
+}
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/radius",schemaPath:"#/$defs/slot/properties/radius/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid4 = _errs41 === errors;
+}
+else {
+var valid4 = true;
+}
 }
 }
 }
