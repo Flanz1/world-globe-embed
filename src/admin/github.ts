@@ -5,6 +5,7 @@
  * placed in the Authorization header of requests to the admin API.
  */
 import type { Permission } from "../shared/access.ts";
+import type { HistoryPage } from "../shared/history.ts";
 
 /** `fn` over `items`, at most `limit` at a time; results in order, the first failure rejects. */
 export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
@@ -85,6 +86,14 @@ export interface Me {
 }
 
 /** People who signed in but aren't on the list yet. */
+export interface Editing {
+  id: number;
+  login: string;
+  tab: string;
+  regions: string[];
+  at: string;
+}
+
 export interface Waiting {
   id: number;
   login: string;
@@ -212,6 +221,20 @@ export class GitHub {
     return (await this.send<Waiting[]>("/waiting", {}, this.root)).data;
   }
 
+  /** Says these regions are open in this editor tab (repeat within 90 s); answers with everyone who has regions open right now. */
+  async editingBeat(tab: string, regions: string[]): Promise<Editing[]> {
+    return (await this.send<Editing[]>("/editing", { method: "POST", body: JSON.stringify({ tab, regions }) }, this.root)).data;
+  }
+
+  /** Everyone who has regions open in an editor right now. */
+  async editingNow(): Promise<Editing[]> {
+    return (await this.send<Editing[]>("/editing", {}, this.root)).data;
+  }
+
+  async editingDone(tab: string): Promise<void> {
+    await this.send(`/editing/${tab}`, { method: "DELETE", keepalive: true }, this.root);
+  }
+
   async dismissWaiting(id: number): Promise<void> {
     await this.send(`/waiting/${id}`, { method: "DELETE" }, this.root);
   }
@@ -251,6 +274,28 @@ export class GitHub {
     const c = list[0];
     if (!c) return null;
     return { author: c.author?.login ?? c.commit.author?.name ?? "unknown", date: c.commit.author?.date ?? "" };
+  }
+
+  /** The save log (see src/shared/history.ts): saves that touched `path` (default all of content/), newest first. */
+  async history(opts: { path?: string; limit?: number; page?: number; files?: boolean } = {}): Promise<HistoryPage> {
+    const q = new URLSearchParams();
+    if (opts.path) q.set("path", opts.path);
+    if (opts.limit) q.set("limit", String(opts.limit));
+    if (opts.page) q.set("page", String(opts.page));
+    if (opts.files) q.set("files", "1");
+    return (await this.send<HistoryPage>(`/history${q.size ? `?${q}` : ""}`, {}, this.root)).data;
+  }
+
+  /** A file as it was in an earlier save (a commit SHA from the save log), or null if it didn't exist then. */
+  async readFileAt(path: string, sha: string): Promise<string | null> {
+    try {
+      const f = await this.request<{ content: string; encoding: string; sha: string; size?: number }>(`/repos/${this.repo}/contents/${path}?ref=${encodeURIComponent(sha)}`, { cache: "default" });
+      if (f.encoding === "none" || (!f.content && (f.size ?? 0) > 0)) return await this.readBlob(f.sha);
+      return base64ToUtf8(f.content);
+    } catch (e) {
+      if (e instanceof GitHubError && e.status === 404) return null;
+      throw e;
+    }
   }
 
   /**

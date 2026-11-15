@@ -165,11 +165,20 @@ dialog.editor[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr
 .ed-side label.inline { display: flex; align-items: center; gap: 8px; }
 .ed-side textarea { font: inherit; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); resize: vertical; }
 .ed-side input[type=color] { width: 44px; height: 30px; padding: 2px; }
+.ed-editing { margin: 0 0 4px; padding: 6px 10px; border-radius: 6px; font-size: 13px; background: var(--card); color: var(--fg); border: 1px solid var(--accent); border-left-width: 4px; }
+.ed-editing[hidden] { display: none; }
+.rediting { color: var(--accent); font-weight: 600; }
 .ed-msg { margin: 0; min-height: 1.3em; font-size: 13px; }
 .ed-stats { margin: 0; }
 .ed-colours { display: grid; gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
 .ed-colours > legend { padding: 0 4px; font-size: 13px; }
 .ed-colours > button { justify-self: start; }
+.ed-under { display: grid; gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.ed-under > legend { padding: 0 4px; font-size: 13px; }
+.ed-under-list { display: grid; gap: 6px; }
+.ed-under-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto auto auto auto; gap: 4px; align-items: center; }
+.ed-under-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-under-row .check { display: flex; align-items: center; gap: 4px; margin: 0; }
 .ed-fill { display: flex; align-items: center; gap: 8px; }
 /* Colour folders: one per colour, each holding its parts' rows. Shift/Ctrl+click picks rows, so no text selection there (inputs still select). */
 .ed-folders { display: grid; gap: 8px; user-select: none; -webkit-user-select: none; }
@@ -255,3 +264,14 @@ button.tiny { padding: 1px 7px; font-size: 12px; }
 .ed-folder-head .ed-src { font-size: 11px; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-live-note { margin: 0; }
 .rcard .rlinked { margin: 2px 0; }
+
+/* Region history */
+dialog.history { width: min(940px, calc(100vw - 32px)); }
+.hist-grid { display: grid; grid-template-columns: minmax(220px, 300px) 1fr; gap: 14px; align-items: start; }
+.hist-list { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; max-height: 60vh; overflow: auto; }
+.hist-item { width: 100%; text-align: left; display: grid; gap: 2px; background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; color: var(--fg); cursor: pointer; }
+.hist-list li.on .hist-item { border-color: var(--accent, #e8590c); background: color-mix(in srgb, var(--accent, #e8590c) 12%, transparent); }
+.hist-side { display: grid; gap: 8px; }
+.hist-canvas { width: 100%; max-width: 520px; height: auto; aspect-ratio: 520 / 300; border-radius: 6px; background: var(--line); }
+.hist-dash { display: inline-block; width: 26px; border-top: 2px dashed #e8590c; vertical-align: middle; }
+@media (max-width: 700px) { .hist-grid { grid-template-columns: 1fr; } }

@@ -40,6 +40,7 @@ import {
   normalizePartOccupied,
   type LegendEntry,
   type RegionFeature,
+  type UnderEntry,
 } from "../../shared/region.ts";
 export { partAnchor } from "../../shared/geo.ts";
 
@@ -68,6 +69,12 @@ export interface RegionProps {
   legend: EditorLegendEntry[];
   /** Draw national borders where parts share a line (off unless asked). */
   nationalBorders?: boolean;
+  /** Regions shown under this one in its embed (see RegionProperties.under), bottom first. */
+  under?: UnderEntry[];
+  /** false: the underlays aren't cut to this region's outline. */
+  underClip?: boolean;
+  underTitle?: string;
+  layerLabel?: string;
 }
 
 export interface EditorState {
@@ -166,6 +173,7 @@ export function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"
       legendTitle: (fp?.legendTitle ?? "").slice(0, LEGEND_TITLE_MAX),
       legend,
       nationalBorders: fp?.nationalBorders === true,
+      ...(fp?.under?.length ? { under: fp.under.map((e) => ({ ...e })), underClip: fp.underClip !== false, underTitle: fp.underTitle ?? "", layerLabel: fp.layerLabel ?? "" } : {}),
     },
   };
 }

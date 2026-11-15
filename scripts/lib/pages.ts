@@ -29,13 +29,26 @@ export interface ViewerModules {
 const modules = (m: string | ViewerModules, preloads: string[] = []): ViewerModules =>
   typeof m === "string" ? { globe: m, globePreloads: preloads } : m;
 
+/** The underlay settings of a region for the inline index: only regions that exist on its slot (and aren't itself). */
+function underIndex(r: RegionFeature, all: ReadonlyMap<string, RegionFeature> | undefined): Pick<RegionIndexEntry, "u" | "uc" | "ut" | "ul"> {
+  const p = r.properties;
+  const u = (p.under ?? []).filter((e) => e.id !== r.id && all?.get(e.id)?.properties.slot === p.slot);
+  if (!u.length) return {};
+  return {
+    u: u.map((e) => ({ id: e.id, ...(e.label?.trim() ? { label: e.label.trim() } : {}), ...(typeof e.on === "boolean" ? { on: e.on } : {}) })),
+    ...(p.underClip === false ? { uc: false as const } : {}),
+    ...(p.underTitle?.trim() ? { ut: p.underTitle.trim() } : {}),
+    ...(p.layerLabel?.trim() ? { ul: p.layerLabel.trim() } : {}),
+  };
+}
+
 /** Each slot's regions as the inline index (where to face, how far to zoom, flat bounds). */
 export function regionIndex(content: Content, slug: string): Record<string, RegionIndexEntry> {
   const slot = content.slots.slots[slug];
   const out: Record<string, RegionIndexEntry> = {};
   if (!slot) return out;
   const frame = { north: slot.north ?? DEFAULT_VIEW.north, south: slot.south ?? DEFAULT_VIEW.south, shift: slot.shift ?? DEFAULT_VIEW.shift };
-  for (const [id, r] of content.regions ?? []) if (r.properties.slot === slug) out[id] = regionIndexEntry(r.geometry, frame);
+  for (const [id, r] of content.regions ?? []) if (r.properties.slot === slug) out[id] = { ...regionIndexEntry(r.geometry, frame), ...underIndex(r, content.regions) };
   return out;
 }
 
