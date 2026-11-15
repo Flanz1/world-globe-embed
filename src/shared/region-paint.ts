@@ -5,10 +5,10 @@
  * this one. Loaded with the viewers and the admin page, not the boot script.
  */
 import { regionBorders } from "./borders.ts";
-import { findClashes, prepare, type Prepared } from "./clash.ts";
+import { clash, findClashes, prepare, type Prepared } from "./clash.ts";
 import { polygonsOf, type Position, type Ring } from "./geo.ts";
 import type { PaintLayer, PaintSpec } from "./raster.ts";
-import { OWN_COLOUR, regionLayers, type RegionData } from "./region.ts";
+import { OWN_COLOUR, legendRows, regionLayers, type LegendEntry, type RegionData } from "./region.ts";
 
 export type PaintInput = Pick<RegionData, "color" | "legend" | "parts" | "occupied" | "geometry" | "provinceBorders" | "nationalBorders">;
 
@@ -111,6 +111,35 @@ export const hasContestedMarks = (spec: PaintSpec): boolean => spec.cells.length
 export const hasContestedLayers = (layers: readonly PaintLayer[]): boolean => layers.some((l) => hasContestedMarks(l.spec));
 
 /**
+ * The legend rows to show. Stacked regions list every region's rows; a region shown under layers lists, for
+ * each layer, only the colours some part of which lies inside the region (the others aren't seen).
+ */
+export function legendRowsFor(r: RegionData): LegendEntry[] {
+  const members = r.members;
+  if (!members || !r.clip) return legendRows(r);
+  const top = members[members.length - 1];
+  const topPrepared = polygonsOf(top.geometry).map((p) => prepare(p));
+  const seen = new Set<string>();
+  return members
+    .flatMap((m, i) => (i === members.length - 1 ? legendRows(m) : presentRows(m, topPrepared)))
+    .filter((e) => !seen.has(`${e.color}\u0000${e.label}`) && !!seen.add(`${e.color}\u0000${e.label}`));
+}
+
+function presentRows(m: RegionData, within: Prepared[]): LegendEntry[] {
+  const used = new Set<number>();
+  polygonsOf(m.geometry).forEach((poly, i) => {
+    const k = m.parts[i] ?? OWN_COLOUR;
+    const key = k >= 0 && k < m.legend.length ? k : OWN_COLOUR;
+    if (used.has(key)) return;
+    const prepared = prepare(poly);
+    if (within.some((t) => clash(prepared, t))) used.add(key);
+  });
+  return [{ label: m.colorLabel, color: m.color, key: OWN_COLOUR }, ...m.legend.map((e, j) => ({ ...e, key: j }))]
+    .filter((e) => e.label.trim() && used.has(e.key))
+    .map(({ label, color }) => ({ label, color }));
+}
+
+/**
  * What the embed paints: one layer per region, in drawing order (a lone region is one layer). Stacked regions
  * (see mergeRegions) are each their own map: parts are only ever compared within a region, never across
  * them. With `clip`, every layer but the top one is cut to the top region's outline.
@@ -119,5 +148,11 @@ export function regionPaintLayers(r: PaintInput & { members?: RegionData[]; clip
   if (!r.members) return [{ spec: regionPaintSpec(r), opacity: r.fillOpacity ?? 0.35 }];
   const top = r.members[r.members.length - 1];
   const clip = r.clip ? polygonsOf(top.geometry) : undefined;
-  return r.members.map((m, i) => ({ spec: regionPaintSpec(m), opacity: m.fillOpacity, ...(clip && i < r.members!.length - 1 ? { clip } : {}) }));
+  // The underlays are shown over the region: it keeps its borders but gives up its fill, which only muddied their colours.
+  return r.members.map((m, i) => ({
+    spec: regionPaintSpec(m),
+    opacity: m.fillOpacity,
+    ...(clip && i < r.members!.length - 1 ? { clip } : {}),
+    ...(r.clip && i === r.members!.length - 1 ? { noFill: true } : {}),
+  }));
 }

@@ -41,6 +41,8 @@ export interface RegionStyle {
   lineWidth: number;
   /** Dim everything outside the region. */
   dim?: boolean;
+  /** Draw only the borders: no fill, no contested stripes (a region under the layers shown over it). */
+  noFill?: boolean;
 }
 
 /** Dim (optional), fill and outline a region. The canvas transform and size are the caller's. */
@@ -81,11 +83,13 @@ export function paintLayers(
   ctx.lineWidth = s.lineWidth;
   for (const l of layers) {
     const trace = () => traceGeometry(ctx, l.geometry, x, y, offsets);
-    ctx.beginPath();
-    trace();
-    ctx.globalAlpha = Math.max(0, Math.min(1, s.fillOpacity));
-    ctx.fillStyle = l.color;
-    ctx.fill("evenodd");
+    if (!s.noFill) {
+      ctx.beginPath();
+      trace();
+      ctx.globalAlpha = Math.max(0, Math.min(1, s.fillOpacity));
+      ctx.fillStyle = l.color;
+      ctx.fill("evenodd");
+    }
     ctx.globalAlpha = 1;
     ctx.strokeStyle = l.color;
     insetStroke(ctx, s.lineWidth, trace);
@@ -329,7 +333,7 @@ export function paintSpec(
     clipOutside(ctx, spec, cell.outside, x, y, offsets, area);
   };
   // Fills: each part where no part of another colour overlaps it (and, within one colour, only once).
-  spec.parts.forEach((p, i) => {
+  if (!s.noFill) spec.parts.forEach((p, i) => {
     const out = (spec.overlaps[i] ?? []).filter((j) => j > i || spec.parts[j]?.color !== p.color);
     ctx.save();
     clipOutside(ctx, spec, out, x, y, offsets, area);
@@ -341,7 +345,7 @@ export function paintSpec(
     ctx.restore();
   });
   // Contested land: equal stripes of every colour there.
-  for (const cell of spec.cells) {
+  for (const cell of s.noFill ? [] : spec.cells) {
     const pat = contestedStripes(ctx, cell.colors, lw);
     if (!pat) continue;
     ctx.save();
@@ -392,6 +396,8 @@ export interface PaintLayer {
   spec: PaintSpec;
   opacity: number;
   clip?: Position[][][];
+  /** Borders only (see RegionStyle.noFill). */
+  noFill?: boolean;
 }
 
 /** Paints stacked regions bottom to top, each as its own map. Dimming (outside the region) is the top layer's. */
@@ -401,7 +407,7 @@ export function paintLayerStack(
   x: (lon: number) => number,
   y: (lat: number) => number,
   offsets: number[],
-  s: Omit<RegionStyle, "color" | "fillOpacity">,
+  s: Omit<RegionStyle, "color" | "fillOpacity" | "noFill">,
   area: { w: number; h: number },
 ): void {
   layers.forEach((l, i) => {
@@ -411,7 +417,7 @@ export function paintLayerStack(
       for (const poly of l.clip) tracePoly(ctx, poly, x, y, offsets);
       ctx.clip("evenodd");
     }
-    paintSpec(ctx, l.spec, x, y, offsets, { ...s, fillOpacity: l.opacity, dim: s.dim && i === layers.length - 1 }, area);
+    paintSpec(ctx, l.spec, x, y, offsets, { ...s, fillOpacity: l.opacity, dim: s.dim && i === layers.length - 1, noFill: l.noFill }, area);
     ctx.restore();
   });
 }
