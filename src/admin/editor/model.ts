@@ -76,6 +76,8 @@ export interface RegionProps {
   /** false: the underlays aren't cut to this region's outline. */
   underClip?: boolean;
   underTitle?: string;
+  /** Give the region a toggle of its own in the embed's legend. */
+  ownToggle?: boolean;
   layerLabel?: string;
 }
 
@@ -176,7 +178,7 @@ export function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"
       legend,
       nationalBorders: fp?.nationalBorders === true,
       ...(fp?.pinMaps?.length ? { pinMaps: [...fp.pinMaps] } : {}),
-      ...(fp?.under?.length ? { under: fp.under.map((e) => ({ ...e })), underClip: fp.underClip !== false, underTitle: fp.underTitle ?? "", layerLabel: fp.layerLabel ?? "" } : {}),
+      ...(fp?.under?.length ? { under: fp.under.map((e) => ({ ...e })), underClip: fp.underClip !== false, underTitle: fp.underTitle ?? "", layerLabel: fp.layerLabel ?? "", ...(fp.ownToggle === true ? { ownToggle: true } : {}) } : {}),
     },
   };
 }

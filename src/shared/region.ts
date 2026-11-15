@@ -107,7 +107,9 @@ export interface RegionProperties {
   underClip?: boolean;
   /** With under: heading of the toggle list in the embed (default "Layers"). */
   underTitle?: string;
-  /** With under: this region's own toggle name (default: its name, else its id). */
+  /** With under: true to give this region a toggle of its own in the legend, so readers can switch it off too. Missing: it's always shown. */
+  ownToggle?: boolean;
+  /** With ownToggle: its name in the legend (default: its name, else its id). */
   layerLabel?: string;
   /** A linked combined region: the regions it's made of (see shared/combine.ts resolveLinked). */
   linked?: string[];
@@ -193,6 +195,8 @@ export interface RegionIndexEntry {
   /** underTitle and layerLabel, when set. */
   ut?: string;
   ul?: string;
+  /** ownToggle, when true. */
+  ot?: true;
 }
 
 export function regionData(f: RegionFeature): RegionData {

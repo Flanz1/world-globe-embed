@@ -95,6 +95,7 @@ if (regionId !== null) {
           const names: Record<string, string> = {};
           if (u.names && typeof u.names === "object") for (const [k, v] of Object.entries(u.names)) if (typeof v === "string") names[k] = v.slice(0, 60);
           previewLayers.names = names;
+          previewLayers.own = u.own === true;
           previewLayers.title = typeof u.title === "string" ? u.title.slice(0, 40) : "";
           previewLayers.rev = (previewLayers.rev ?? 0) + 1;
           previewLayers.hidden = Array.isArray(u.hidden) ? u.hidden.filter((x: unknown): x is string => typeof x === "string") : [];
@@ -147,6 +148,7 @@ if (regionId !== null) {
                 ? { ...Object.fromEntries(under.map((e) => [e.id, e.label ?? ""])), [regionId]: entry?.ul ?? "" }
                 : {},
               title: entry?.ut ?? "",
+              own: entry?.ot === true,
               hidden: under.length ? under.filter((e, i) => (e.on === undefined ? i > 0 : !e.on)).map((e) => e.id) : [],
             },
           }

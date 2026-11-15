@@ -68,18 +68,19 @@ try {
     await page.goto(`${SITE}/v/${SLOT.slug}/?region=provinces&view=${view}`);
     await ready(page);
     await page.waitForSelector(".rlayers label", { timeout: 15000 });
-    check(`[${view}] toggles use the names set in the editor`, JSON.stringify(await names(page)) === JSON.stringify(["Magenta layer", "Yellow layer", "Provinces"]), (await names(page)).join(" | "));
+    check(`[${view}] toggles use the names set in the editor`, JSON.stringify(await names(page)) === JSON.stringify(["Magenta layer", "Yellow layer"]), (await names(page)).join(" | "));
     check(`[${view}] heading is the one set`, (await page.locator(".rlayers-head").textContent()) === "Overlays");
-    check(`[${view}] starts as set (on, off, on)`, JSON.stringify(await checked(page)) === JSON.stringify([true, false, true]));
+    check(`[${view}] starts as set (on, off)`, JSON.stringify(await checked(page)) === JSON.stringify([true, false]));
     const before = await page.locator("#globe, canvas").first().screenshot();
     await page.locator(".rlayers label", { hasText: "Yellow layer" }).locator("input").check();
     await page.waitForTimeout(500);
     check(`[${view}] toggling a layer on redraws`, !before.equals(await page.locator("#globe, canvas").first().screenshot()));
     await page.screenshot({ path: path.join(OUT, `underlay-${view}.png`) });
-    await page.locator(".rlayers label", { hasText: "Provinces" }).locator("input").uncheck();
+    check(`[${view}] the region itself has no toggle`, !(await names(page)).includes("Provinces"));
     await page.locator(".rlayers label", { hasText: "Magenta layer" }).locator("input").uncheck();
+    await page.locator(".rlayers label", { hasText: "Yellow layer" }).locator("input").uncheck();
     await page.waitForTimeout(200);
-    check(`[${view}] the last shown layer can't be switched off`, (await checked(page)).filter(Boolean).length === 1);
+    check(`[${view}] both underlays can be switched off (the region stays)`, (await checked(page)).every((c) => !c));
     check(`[${view}] no page errors`, errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
@@ -98,6 +99,10 @@ try {
   await page.waitForSelector(".rlayers label", { timeout: 15000 });
   check("?regions=a,b: a toggle each, both on", JSON.stringify(await checked(page)) === JSON.stringify([true, true]) && (await names(page)).length === 2);
   check("…no contested row in the legend", (await page.locator(".rkey-contested").count()) === 0);
+  await page.locator(".rlayers input").nth(0).uncheck();
+  await page.locator(".rlayers input").nth(1).click(); // refused: snaps back
+  await page.waitForTimeout(200);
+  check("?regions=a,b: the last shown layer can't be switched off", (await checked(page)).filter(Boolean).length === 1);
   await page.goto(`${SITE}/v/${SLOT.slug}/?regions=landmark-disc,dateline-box&view=flat&toggle=0`);
   await ready(page);
   await page.waitForTimeout(500);

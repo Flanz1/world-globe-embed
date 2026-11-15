@@ -31,7 +31,7 @@ const modules = (m: string | ViewerModules, preloads: string[] = []): ViewerModu
   typeof m === "string" ? { globe: m, globePreloads: preloads } : m;
 
 /** The underlay settings of a region for the inline index: only regions that exist on its slot (and aren't itself). */
-function underIndex(r: RegionFeature, all: ReadonlyMap<string, RegionFeature> | undefined, pinMaps?: ReadonlyMap<string, { slot: string }>): Pick<RegionIndexEntry, "u" | "uc" | "ut" | "ul" | "pm"> {
+function underIndex(r: RegionFeature, all: ReadonlyMap<string, RegionFeature> | undefined, pinMaps?: ReadonlyMap<string, { slot: string }>): Pick<RegionIndexEntry, "u" | "uc" | "ut" | "ul" | "pm" | "ot"> {
   const p = r.properties;
   const pm = (p.pinMaps ?? []).filter((id) => pinMaps?.get(id)?.slot === p.slot);
   const u = (p.under ?? []).filter((e) => e.id !== r.id && all?.get(e.id)?.properties.slot === p.slot);
@@ -41,6 +41,7 @@ function underIndex(r: RegionFeature, all: ReadonlyMap<string, RegionFeature> | 
     u: u.map((e) => ({ id: e.id, ...(e.label?.trim() ? { label: e.label.trim() } : {}), ...(typeof e.on === "boolean" ? { on: e.on } : {}) })),
     ...(p.underClip === false ? { uc: false as const } : {}),
     ...(p.underTitle?.trim() ? { ut: p.underTitle.trim() } : {}),
+    ...(p.ownToggle === true ? { ot: true as const } : {}),
     ...(p.layerLabel?.trim() ? { ul: p.layerLabel.trim() } : {}),
   };
 }
