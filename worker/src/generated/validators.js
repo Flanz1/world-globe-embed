@@ -2238,3 +2238,1223 @@ return errors === 0;
 }
 validate27.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
+export const validateSlots = validate28;
+const schema39 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/slots.schema.json","title":"Globe embed slots","description":"Which map each embed (slot) shows, plus its view defaults.","type":"object","required":["slots"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"slots":{"type":"object","propertyNames":{"pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"additionalProperties":{"$ref":"#/$defs/slot"}}},"$defs":{"slot":{"type":"object","required":["map"],"additionalProperties":false,"properties":{"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id (file stem in content/maps/)."},"title":{"type":"string","maxLength":120},"view":{"enum":["globe","flat"],"description":"Which view the embed opens in (default globe). ?view= overrides it."},"grid":{"type":"boolean"},"rotate":{"type":"boolean"},"legend":{"type":"boolean"},"controls":{"type":"boolean"},"bg":{"type":"string","pattern":"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},"lat":{"type":"number","minimum":-90,"maximum":90},"lon":{"type":"number","minimum":-180,"maximum":180},"zoom":{"type":"number","minimum":0.4,"maximum":2.2},"north":{"type":"number","minimum":0,"maximum":49,"description":"Percent of the globe's height left unmapped at the north pole."},"south":{"type":"number","minimum":0,"maximum":49,"description":"Percent left unmapped at the south pole."},"pole":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$","description":"Fill colour for the padded polar areas."},"shift":{"type":"number","minimum":-180,"maximum":180,"description":"Prime meridian: moves the map east (+) or west (-) by this many degrees so its prime meridian lines up with the grid's."}}}}};
+const schema40 = {"type":"object","required":["map"],"additionalProperties":false,"properties":{"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id (file stem in content/maps/)."},"title":{"type":"string","maxLength":120},"view":{"enum":["globe","flat"],"description":"Which view the embed opens in (default globe). ?view= overrides it."},"grid":{"type":"boolean"},"rotate":{"type":"boolean"},"legend":{"type":"boolean"},"controls":{"type":"boolean"},"bg":{"type":"string","pattern":"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},"lat":{"type":"number","minimum":-90,"maximum":90},"lon":{"type":"number","minimum":-180,"maximum":180},"zoom":{"type":"number","minimum":0.4,"maximum":2.2},"north":{"type":"number","minimum":0,"maximum":49,"description":"Percent of the globe's height left unmapped at the north pole."},"south":{"type":"number","minimum":0,"maximum":49,"description":"Percent left unmapped at the south pole."},"pole":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$","description":"Fill colour for the padded polar areas."},"shift":{"type":"number","minimum":-180,"maximum":180,"description":"Prime meridian: moves the map east (+) or west (-) by this many degrees so its prime meridian lines up with the grid's."}}};
+const pattern22 = new RegExp("^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$", "u");
+const pattern23 = new RegExp("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$", "u");
+
+function validate28(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+/*# sourceURL="https://flanz1.github.io/world-globe-embed/schema/slots.schema.json" */;
+let vErrors = null;
+let errors = 0;
+const evaluated0 = validate28.evaluated;
+if(evaluated0.dynamicProps){
+evaluated0.props = undefined;
+}
+if(evaluated0.dynamicItems){
+evaluated0.items = undefined;
+}
+if(errors === 0){
+if(data && typeof data == "object" && !Array.isArray(data)){
+let missing0;
+if((data.slots === undefined) && (missing0 = "slots")){
+validate28.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
+return false;
+}
+else {
+const _errs1 = errors;
+for(const key0 in data){
+if(!((key0 === "$schema") || (key0 === "slots"))){
+validate28.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs1 === errors){
+if(data.$schema !== undefined){
+const _errs2 = errors;
+if(typeof data.$schema !== "string"){
+validate28.errors = [{instancePath:instancePath+"/$schema",schemaPath:"#/properties/%24schema/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+var valid0 = _errs2 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.slots !== undefined){
+let data1 = data.slots;
+const _errs4 = errors;
+if(errors === _errs4){
+if(data1 && typeof data1 == "object" && !Array.isArray(data1)){
+for(const key1 in data1){
+const _errs6 = errors;
+if(typeof key1 === "string"){
+if(!pattern4.test(key1)){
+const err0 = {instancePath:instancePath+"/slots",schemaPath:"#/properties/slots/propertyNames/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9][a-z0-9-]{0,63}$"},message:"must match pattern \""+"^[a-z0-9][a-z0-9-]{0,63}$"+"\"",propertyName:key1};
+if(vErrors === null){
+vErrors = [err0];
+}
+else {
+vErrors.push(err0);
+}
+errors++;
+}
+}
+var valid1 = _errs6 === errors;
+if(!valid1){
+const err1 = {instancePath:instancePath+"/slots",schemaPath:"#/properties/slots/propertyNames",keyword:"propertyNames",params:{propertyName: key1},message:"property name must be valid"};
+if(vErrors === null){
+vErrors = [err1];
+}
+else {
+vErrors.push(err1);
+}
+errors++;
+validate28.errors = vErrors;
+return false;
+break;
+}
+}
+if(valid1){
+for(const key2 in data1){
+let data2 = data1[key2];
+const _errs8 = errors;
+const _errs9 = errors;
+if(errors === _errs9){
+if(data2 && typeof data2 == "object" && !Array.isArray(data2)){
+let missing1;
+if((data2.map === undefined) && (missing1 = "map")){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1"),schemaPath:"#/$defs/slot/required",keyword:"required",params:{missingProperty: missing1},message:"must have required property '"+missing1+"'"}];
+return false;
+}
+else {
+const _errs11 = errors;
+for(const key3 in data2){
+if(!(func1.call(schema40.properties, key3))){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1"),schemaPath:"#/$defs/slot/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key3},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs11 === errors){
+if(data2.map !== undefined){
+let data3 = data2.map;
+const _errs12 = errors;
+if(errors === _errs12){
+if(typeof data3 === "string"){
+if(!pattern4.test(data3)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/map",schemaPath:"#/$defs/slot/properties/map/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9][a-z0-9-]{0,63}$"},message:"must match pattern \""+"^[a-z0-9][a-z0-9-]{0,63}$"+"\""}];
+return false;
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/map",schemaPath:"#/$defs/slot/properties/map/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid4 = _errs12 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data2.title !== undefined){
+let data4 = data2.title;
+const _errs14 = errors;
+if(errors === _errs14){
+if(typeof data4 === "string"){
+if(func2(data4) > 120){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/title",schemaPath:"#/$defs/slot/properties/title/maxLength",keyword:"maxLength",params:{limit: 120},message:"must NOT have more than 120 characters"}];
+return false;
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/title",schemaPath:"#/$defs/slot/properties/title/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid4 = _errs14 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data2.view !== undefined){
+let data5 = data2.view;
+const _errs16 = errors;
+if(!((data5 === "globe") || (data5 === "flat"))){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/view",schemaPath:"#/$defs/slot/properties/view/enum",keyword:"enum",params:{allowedValues: schema40.properties.view.enum},message:"must be equal to one of the allowed values"}];
+return false;
+}
+var valid4 = _errs16 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data2.grid !== undefined){
+const _errs17 = errors;
+if(typeof data2.grid !== "boolean"){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/grid",schemaPath:"#/$defs/slot/properties/grid/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
+return false;
+}
+var valid4 = _errs17 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data2.rotate !== undefined){
+const _errs19 = errors;
+if(typeof data2.rotate !== "boolean"){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/rotate",schemaPath:"#/$defs/slot/properties/rotate/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
+return false;
+}
+var valid4 = _errs19 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data2.legend !== undefined){
+const _errs21 = errors;
+if(typeof data2.legend !== "boolean"){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/legend",schemaPath:"#/$defs/slot/properties/legend/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
+return false;
+}
+var valid4 = _errs21 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data2.controls !== undefined){
+const _errs23 = errors;
+if(typeof data2.controls !== "boolean"){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/controls",schemaPath:"#/$defs/slot/properties/controls/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
+return false;
+}
+var valid4 = _errs23 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data2.bg !== undefined){
+let data10 = data2.bg;
+const _errs25 = errors;
+if(errors === _errs25){
+if(typeof data10 === "string"){
+if(!pattern22.test(data10)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/bg",schemaPath:"#/$defs/slot/properties/bg/pattern",keyword:"pattern",params:{pattern: "^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},message:"must match pattern \""+"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"+"\""}];
+return false;
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/bg",schemaPath:"#/$defs/slot/properties/bg/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid4 = _errs25 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data2.lat !== undefined){
+let data11 = data2.lat;
+const _errs27 = errors;
+if(errors === _errs27){
+if((typeof data11 == "number") && (isFinite(data11))){
+if(data11 > 90 || isNaN(data11)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/lat",schemaPath:"#/$defs/slot/properties/lat/maximum",keyword:"maximum",params:{comparison: "<=", limit: 90},message:"must be <= 90"}];
+return false;
+}
+else {
+if(data11 < -90 || isNaN(data11)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/lat",schemaPath:"#/$defs/slot/properties/lat/minimum",keyword:"minimum",params:{comparison: ">=", limit: -90},message:"must be >= -90"}];
+return false;
+}
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/lat",schemaPath:"#/$defs/slot/properties/lat/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid4 = _errs27 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data2.lon !== undefined){
+let data12 = data2.lon;
+const _errs29 = errors;
+if(errors === _errs29){
+if((typeof data12 == "number") && (isFinite(data12))){
+if(data12 > 180 || isNaN(data12)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/lon",schemaPath:"#/$defs/slot/properties/lon/maximum",keyword:"maximum",params:{comparison: "<=", limit: 180},message:"must be <= 180"}];
+return false;
+}
+else {
+if(data12 < -180 || isNaN(data12)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/lon",schemaPath:"#/$defs/slot/properties/lon/minimum",keyword:"minimum",params:{comparison: ">=", limit: -180},message:"must be >= -180"}];
+return false;
+}
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/lon",schemaPath:"#/$defs/slot/properties/lon/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid4 = _errs29 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data2.zoom !== undefined){
+let data13 = data2.zoom;
+const _errs31 = errors;
+if(errors === _errs31){
+if((typeof data13 == "number") && (isFinite(data13))){
+if(data13 > 2.2 || isNaN(data13)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/zoom",schemaPath:"#/$defs/slot/properties/zoom/maximum",keyword:"maximum",params:{comparison: "<=", limit: 2.2},message:"must be <= 2.2"}];
+return false;
+}
+else {
+if(data13 < 0.4 || isNaN(data13)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/zoom",schemaPath:"#/$defs/slot/properties/zoom/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0.4},message:"must be >= 0.4"}];
+return false;
+}
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/zoom",schemaPath:"#/$defs/slot/properties/zoom/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid4 = _errs31 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data2.north !== undefined){
+let data14 = data2.north;
+const _errs33 = errors;
+if(errors === _errs33){
+if((typeof data14 == "number") && (isFinite(data14))){
+if(data14 > 49 || isNaN(data14)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/north",schemaPath:"#/$defs/slot/properties/north/maximum",keyword:"maximum",params:{comparison: "<=", limit: 49},message:"must be <= 49"}];
+return false;
+}
+else {
+if(data14 < 0 || isNaN(data14)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/north",schemaPath:"#/$defs/slot/properties/north/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"}];
+return false;
+}
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/north",schemaPath:"#/$defs/slot/properties/north/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid4 = _errs33 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data2.south !== undefined){
+let data15 = data2.south;
+const _errs35 = errors;
+if(errors === _errs35){
+if((typeof data15 == "number") && (isFinite(data15))){
+if(data15 > 49 || isNaN(data15)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/south",schemaPath:"#/$defs/slot/properties/south/maximum",keyword:"maximum",params:{comparison: "<=", limit: 49},message:"must be <= 49"}];
+return false;
+}
+else {
+if(data15 < 0 || isNaN(data15)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/south",schemaPath:"#/$defs/slot/properties/south/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"}];
+return false;
+}
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/south",schemaPath:"#/$defs/slot/properties/south/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid4 = _errs35 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data2.pole !== undefined){
+let data16 = data2.pole;
+const _errs37 = errors;
+if(errors === _errs37){
+if(typeof data16 === "string"){
+if(!pattern23.test(data16)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/pole",schemaPath:"#/$defs/slot/properties/pole/pattern",keyword:"pattern",params:{pattern: "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"},message:"must match pattern \""+"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"+"\""}];
+return false;
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/pole",schemaPath:"#/$defs/slot/properties/pole/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid4 = _errs37 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data2.shift !== undefined){
+let data17 = data2.shift;
+const _errs39 = errors;
+if(errors === _errs39){
+if((typeof data17 == "number") && (isFinite(data17))){
+if(data17 > 180 || isNaN(data17)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/shift",schemaPath:"#/$defs/slot/properties/shift/maximum",keyword:"maximum",params:{comparison: "<=", limit: 180},message:"must be <= 180"}];
+return false;
+}
+else {
+if(data17 < -180 || isNaN(data17)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/shift",schemaPath:"#/$defs/slot/properties/shift/minimum",keyword:"minimum",params:{comparison: ">=", limit: -180},message:"must be >= -180"}];
+return false;
+}
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/shift",schemaPath:"#/$defs/slot/properties/shift/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid4 = _errs39 === errors;
+}
+else {
+var valid4 = true;
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1"),schemaPath:"#/$defs/slot/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+var valid2 = _errs8 === errors;
+if(!valid2){
+break;
+}
+}
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots",schemaPath:"#/properties/slots/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+var valid0 = _errs4 === errors;
+}
+else {
+var valid0 = true;
+}
+}
+}
+}
+}
+else {
+validate28.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+validate28.errors = vErrors;
+return errors === 0;
+}
+validate28.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+
+export const validateMap = validate29;
+const schema41 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/map.schema.json","title":"Processed map metadata","description":"Written by process-maps.yml. Edit only 'name' by hand.","type":"object","required":["id","name","uploadedBy","date","aspect","width","height","hash","sizes","lqip"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"name":{"type":"string","minLength":1,"maxLength":120},"uploadedBy":{"type":"string"},"date":{"type":"string","format":"date-time"},"aspect":{"type":"number","minimum":1,"maximum":4},"width":{"type":"integer","minimum":1024},"height":{"type":"integer","minimum":256},"hash":{"type":"string","pattern":"^[0-9a-f]{12}$"},"sizes":{"type":"object","required":["1024"],"additionalProperties":false,"properties":{"1024":{"$ref":"#/$defs/path"},"2048":{"$ref":"#/$defs/path"},"4096":{"$ref":"#/$defs/path"},"8192":{"$ref":"#/$defs/path"}}},"tiles":{"type":"object","additionalProperties":false,"properties":{"16384":{"$ref":"#/$defs/tiles"},"32768":{"$ref":"#/$defs/tiles"}}},"coast":{"type":"string","pattern":"^maps/[a-z0-9-]+/[0-9a-f]{12}-coast\\.bin$"},"lqip":{"type":"string","pattern":"^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$","maxLength":2800}},"$defs":{"path":{"type":"string","pattern":"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"},"tiles":{"type":"object","required":["w","h","size","cols","rows","url"],"additionalProperties":false,"properties":{"w":{"enum":[16384,32768]},"h":{"type":"integer","minimum":1},"size":{"const":2048},"cols":{"type":"integer","minimum":1,"maximum":16},"rows":{"type":"integer","minimum":1,"maximum":16},"url":{"type":"string","pattern":"^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"}}}}};
+const schema42 = {"type":"string","pattern":"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"};
+const schema46 = {"type":"object","required":["w","h","size","cols","rows","url"],"additionalProperties":false,"properties":{"w":{"enum":[16384,32768]},"h":{"type":"integer","minimum":1},"size":{"const":2048},"cols":{"type":"integer","minimum":1,"maximum":16},"rows":{"type":"integer","minimum":1,"maximum":16},"url":{"type":"string","pattern":"^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"}}};
+const pattern25 = new RegExp("^[0-9a-f]{12}$", "u");
+const pattern26 = new RegExp("^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$", "u");
+const pattern30 = new RegExp("^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$", "u");
+const pattern32 = new RegExp("^maps/[a-z0-9-]+/[0-9a-f]{12}-coast\\.bin$", "u");
+const pattern33 = new RegExp("^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$", "u");
+
+function validate29(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+/*# sourceURL="https://flanz1.github.io/world-globe-embed/schema/map.schema.json" */;
+let vErrors = null;
+let errors = 0;
+const evaluated0 = validate29.evaluated;
+if(evaluated0.dynamicProps){
+evaluated0.props = undefined;
+}
+if(evaluated0.dynamicItems){
+evaluated0.items = undefined;
+}
+if(errors === 0){
+if(data && typeof data == "object" && !Array.isArray(data)){
+let missing0;
+if(((((((((((data.id === undefined) && (missing0 = "id")) || ((data.name === undefined) && (missing0 = "name"))) || ((data.uploadedBy === undefined) && (missing0 = "uploadedBy"))) || ((data.date === undefined) && (missing0 = "date"))) || ((data.aspect === undefined) && (missing0 = "aspect"))) || ((data.width === undefined) && (missing0 = "width"))) || ((data.height === undefined) && (missing0 = "height"))) || ((data.hash === undefined) && (missing0 = "hash"))) || ((data.sizes === undefined) && (missing0 = "sizes"))) || ((data.lqip === undefined) && (missing0 = "lqip"))){
+validate29.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
+return false;
+}
+else {
+const _errs1 = errors;
+for(const key0 in data){
+if(!(func1.call(schema41.properties, key0))){
+validate29.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs1 === errors){
+if(data.$schema !== undefined){
+const _errs2 = errors;
+if(typeof data.$schema !== "string"){
+validate29.errors = [{instancePath:instancePath+"/$schema",schemaPath:"#/properties/%24schema/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+var valid0 = _errs2 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.id !== undefined){
+let data1 = data.id;
+const _errs4 = errors;
+if(errors === _errs4){
+if(typeof data1 === "string"){
+if(!pattern4.test(data1)){
+validate29.errors = [{instancePath:instancePath+"/id",schemaPath:"#/properties/id/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9][a-z0-9-]{0,63}$"},message:"must match pattern \""+"^[a-z0-9][a-z0-9-]{0,63}$"+"\""}];
+return false;
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/id",schemaPath:"#/properties/id/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid0 = _errs4 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.name !== undefined){
+let data2 = data.name;
+const _errs6 = errors;
+if(errors === _errs6){
+if(typeof data2 === "string"){
+if(func2(data2) > 120){
+validate29.errors = [{instancePath:instancePath+"/name",schemaPath:"#/properties/name/maxLength",keyword:"maxLength",params:{limit: 120},message:"must NOT have more than 120 characters"}];
+return false;
+}
+else {
+if(func2(data2) < 1){
+validate29.errors = [{instancePath:instancePath+"/name",schemaPath:"#/properties/name/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/name",schemaPath:"#/properties/name/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid0 = _errs6 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.uploadedBy !== undefined){
+const _errs8 = errors;
+if(typeof data.uploadedBy !== "string"){
+validate29.errors = [{instancePath:instancePath+"/uploadedBy",schemaPath:"#/properties/uploadedBy/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+var valid0 = _errs8 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.date !== undefined){
+const _errs10 = errors;
+if(errors === _errs10){
+if(errors === _errs10){
+if(!(typeof data.date === "string")){
+validate29.errors = [{instancePath:instancePath+"/date",schemaPath:"#/properties/date/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+}
+var valid0 = _errs10 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.aspect !== undefined){
+let data5 = data.aspect;
+const _errs12 = errors;
+if(errors === _errs12){
+if((typeof data5 == "number") && (isFinite(data5))){
+if(data5 > 4 || isNaN(data5)){
+validate29.errors = [{instancePath:instancePath+"/aspect",schemaPath:"#/properties/aspect/maximum",keyword:"maximum",params:{comparison: "<=", limit: 4},message:"must be <= 4"}];
+return false;
+}
+else {
+if(data5 < 1 || isNaN(data5)){
+validate29.errors = [{instancePath:instancePath+"/aspect",schemaPath:"#/properties/aspect/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
+return false;
+}
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/aspect",schemaPath:"#/properties/aspect/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid0 = _errs12 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.width !== undefined){
+let data6 = data.width;
+const _errs14 = errors;
+if(!(((typeof data6 == "number") && (!(data6 % 1) && !isNaN(data6))) && (isFinite(data6)))){
+validate29.errors = [{instancePath:instancePath+"/width",schemaPath:"#/properties/width/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+return false;
+}
+if(errors === _errs14){
+if((typeof data6 == "number") && (isFinite(data6))){
+if(data6 < 1024 || isNaN(data6)){
+validate29.errors = [{instancePath:instancePath+"/width",schemaPath:"#/properties/width/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1024},message:"must be >= 1024"}];
+return false;
+}
+}
+}
+var valid0 = _errs14 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.height !== undefined){
+let data7 = data.height;
+const _errs16 = errors;
+if(!(((typeof data7 == "number") && (!(data7 % 1) && !isNaN(data7))) && (isFinite(data7)))){
+validate29.errors = [{instancePath:instancePath+"/height",schemaPath:"#/properties/height/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+return false;
+}
+if(errors === _errs16){
+if((typeof data7 == "number") && (isFinite(data7))){
+if(data7 < 256 || isNaN(data7)){
+validate29.errors = [{instancePath:instancePath+"/height",schemaPath:"#/properties/height/minimum",keyword:"minimum",params:{comparison: ">=", limit: 256},message:"must be >= 256"}];
+return false;
+}
+}
+}
+var valid0 = _errs16 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.hash !== undefined){
+let data8 = data.hash;
+const _errs18 = errors;
+if(errors === _errs18){
+if(typeof data8 === "string"){
+if(!pattern25.test(data8)){
+validate29.errors = [{instancePath:instancePath+"/hash",schemaPath:"#/properties/hash/pattern",keyword:"pattern",params:{pattern: "^[0-9a-f]{12}$"},message:"must match pattern \""+"^[0-9a-f]{12}$"+"\""}];
+return false;
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/hash",schemaPath:"#/properties/hash/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid0 = _errs18 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.sizes !== undefined){
+let data9 = data.sizes;
+const _errs20 = errors;
+if(errors === _errs20){
+if(data9 && typeof data9 == "object" && !Array.isArray(data9)){
+let missing1;
+if((data9["1024"] === undefined) && (missing1 = "1024")){
+validate29.errors = [{instancePath:instancePath+"/sizes",schemaPath:"#/properties/sizes/required",keyword:"required",params:{missingProperty: missing1},message:"must have required property '"+missing1+"'"}];
+return false;
+}
+else {
+const _errs22 = errors;
+for(const key1 in data9){
+if(!((((key1 === "1024") || (key1 === "2048")) || (key1 === "4096")) || (key1 === "8192"))){
+validate29.errors = [{instancePath:instancePath+"/sizes",schemaPath:"#/properties/sizes/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs22 === errors){
+if(data9["1024"] !== undefined){
+let data10 = data9["1024"];
+const _errs23 = errors;
+const _errs24 = errors;
+if(errors === _errs24){
+if(typeof data10 === "string"){
+if(!pattern26.test(data10)){
+validate29.errors = [{instancePath:instancePath+"/sizes/1024",schemaPath:"#/$defs/path/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"+"\""}];
+return false;
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/sizes/1024",schemaPath:"#/$defs/path/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid1 = _errs23 === errors;
+}
+else {
+var valid1 = true;
+}
+if(valid1){
+if(data9["2048"] !== undefined){
+let data11 = data9["2048"];
+const _errs26 = errors;
+const _errs27 = errors;
+if(errors === _errs27){
+if(typeof data11 === "string"){
+if(!pattern26.test(data11)){
+validate29.errors = [{instancePath:instancePath+"/sizes/2048",schemaPath:"#/$defs/path/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"+"\""}];
+return false;
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/sizes/2048",schemaPath:"#/$defs/path/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid1 = _errs26 === errors;
+}
+else {
+var valid1 = true;
+}
+if(valid1){
+if(data9["4096"] !== undefined){
+let data12 = data9["4096"];
+const _errs29 = errors;
+const _errs30 = errors;
+if(errors === _errs30){
+if(typeof data12 === "string"){
+if(!pattern26.test(data12)){
+validate29.errors = [{instancePath:instancePath+"/sizes/4096",schemaPath:"#/$defs/path/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"+"\""}];
+return false;
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/sizes/4096",schemaPath:"#/$defs/path/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid1 = _errs29 === errors;
+}
+else {
+var valid1 = true;
+}
+if(valid1){
+if(data9["8192"] !== undefined){
+let data13 = data9["8192"];
+const _errs32 = errors;
+const _errs33 = errors;
+if(errors === _errs33){
+if(typeof data13 === "string"){
+if(!pattern26.test(data13)){
+validate29.errors = [{instancePath:instancePath+"/sizes/8192",schemaPath:"#/$defs/path/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"+"\""}];
+return false;
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/sizes/8192",schemaPath:"#/$defs/path/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid1 = _errs32 === errors;
+}
+else {
+var valid1 = true;
+}
+}
+}
+}
+}
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/sizes",schemaPath:"#/properties/sizes/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+var valid0 = _errs20 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.tiles !== undefined){
+let data14 = data.tiles;
+const _errs35 = errors;
+if(errors === _errs35){
+if(data14 && typeof data14 == "object" && !Array.isArray(data14)){
+const _errs37 = errors;
+for(const key2 in data14){
+if(!((key2 === "16384") || (key2 === "32768"))){
+validate29.errors = [{instancePath:instancePath+"/tiles",schemaPath:"#/properties/tiles/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key2},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs37 === errors){
+if(data14["16384"] !== undefined){
+let data15 = data14["16384"];
+const _errs38 = errors;
+const _errs39 = errors;
+if(errors === _errs39){
+if(data15 && typeof data15 == "object" && !Array.isArray(data15)){
+let missing2;
+if(((((((data15.w === undefined) && (missing2 = "w")) || ((data15.h === undefined) && (missing2 = "h"))) || ((data15.size === undefined) && (missing2 = "size"))) || ((data15.cols === undefined) && (missing2 = "cols"))) || ((data15.rows === undefined) && (missing2 = "rows"))) || ((data15.url === undefined) && (missing2 = "url"))){
+validate29.errors = [{instancePath:instancePath+"/tiles/16384",schemaPath:"#/$defs/tiles/required",keyword:"required",params:{missingProperty: missing2},message:"must have required property '"+missing2+"'"}];
+return false;
+}
+else {
+const _errs41 = errors;
+for(const key3 in data15){
+if(!((((((key3 === "w") || (key3 === "h")) || (key3 === "size")) || (key3 === "cols")) || (key3 === "rows")) || (key3 === "url"))){
+validate29.errors = [{instancePath:instancePath+"/tiles/16384",schemaPath:"#/$defs/tiles/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key3},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs41 === errors){
+if(data15.w !== undefined){
+let data16 = data15.w;
+const _errs42 = errors;
+if(!((data16 === 16384) || (data16 === 32768))){
+validate29.errors = [{instancePath:instancePath+"/tiles/16384/w",schemaPath:"#/$defs/tiles/properties/w/enum",keyword:"enum",params:{allowedValues: schema46.properties.w.enum},message:"must be equal to one of the allowed values"}];
+return false;
+}
+var valid8 = _errs42 === errors;
+}
+else {
+var valid8 = true;
+}
+if(valid8){
+if(data15.h !== undefined){
+let data17 = data15.h;
+const _errs43 = errors;
+if(!(((typeof data17 == "number") && (!(data17 % 1) && !isNaN(data17))) && (isFinite(data17)))){
+validate29.errors = [{instancePath:instancePath+"/tiles/16384/h",schemaPath:"#/$defs/tiles/properties/h/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+return false;
+}
+if(errors === _errs43){
+if((typeof data17 == "number") && (isFinite(data17))){
+if(data17 < 1 || isNaN(data17)){
+validate29.errors = [{instancePath:instancePath+"/tiles/16384/h",schemaPath:"#/$defs/tiles/properties/h/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
+return false;
+}
+}
+}
+var valid8 = _errs43 === errors;
+}
+else {
+var valid8 = true;
+}
+if(valid8){
+if(data15.size !== undefined){
+const _errs45 = errors;
+if(2048 !== data15.size){
+validate29.errors = [{instancePath:instancePath+"/tiles/16384/size",schemaPath:"#/$defs/tiles/properties/size/const",keyword:"const",params:{allowedValue: 2048},message:"must be equal to constant"}];
+return false;
+}
+var valid8 = _errs45 === errors;
+}
+else {
+var valid8 = true;
+}
+if(valid8){
+if(data15.cols !== undefined){
+let data19 = data15.cols;
+const _errs46 = errors;
+if(!(((typeof data19 == "number") && (!(data19 % 1) && !isNaN(data19))) && (isFinite(data19)))){
+validate29.errors = [{instancePath:instancePath+"/tiles/16384/cols",schemaPath:"#/$defs/tiles/properties/cols/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+return false;
+}
+if(errors === _errs46){
+if((typeof data19 == "number") && (isFinite(data19))){
+if(data19 > 16 || isNaN(data19)){
+validate29.errors = [{instancePath:instancePath+"/tiles/16384/cols",schemaPath:"#/$defs/tiles/properties/cols/maximum",keyword:"maximum",params:{comparison: "<=", limit: 16},message:"must be <= 16"}];
+return false;
+}
+else {
+if(data19 < 1 || isNaN(data19)){
+validate29.errors = [{instancePath:instancePath+"/tiles/16384/cols",schemaPath:"#/$defs/tiles/properties/cols/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
+return false;
+}
+}
+}
+}
+var valid8 = _errs46 === errors;
+}
+else {
+var valid8 = true;
+}
+if(valid8){
+if(data15.rows !== undefined){
+let data20 = data15.rows;
+const _errs48 = errors;
+if(!(((typeof data20 == "number") && (!(data20 % 1) && !isNaN(data20))) && (isFinite(data20)))){
+validate29.errors = [{instancePath:instancePath+"/tiles/16384/rows",schemaPath:"#/$defs/tiles/properties/rows/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+return false;
+}
+if(errors === _errs48){
+if((typeof data20 == "number") && (isFinite(data20))){
+if(data20 > 16 || isNaN(data20)){
+validate29.errors = [{instancePath:instancePath+"/tiles/16384/rows",schemaPath:"#/$defs/tiles/properties/rows/maximum",keyword:"maximum",params:{comparison: "<=", limit: 16},message:"must be <= 16"}];
+return false;
+}
+else {
+if(data20 < 1 || isNaN(data20)){
+validate29.errors = [{instancePath:instancePath+"/tiles/16384/rows",schemaPath:"#/$defs/tiles/properties/rows/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
+return false;
+}
+}
+}
+}
+var valid8 = _errs48 === errors;
+}
+else {
+var valid8 = true;
+}
+if(valid8){
+if(data15.url !== undefined){
+let data21 = data15.url;
+const _errs50 = errors;
+if(errors === _errs50){
+if(typeof data21 === "string"){
+if(!pattern30.test(data21)){
+validate29.errors = [{instancePath:instancePath+"/tiles/16384/url",schemaPath:"#/$defs/tiles/properties/url/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"+"\""}];
+return false;
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/tiles/16384/url",schemaPath:"#/$defs/tiles/properties/url/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid8 = _errs50 === errors;
+}
+else {
+var valid8 = true;
+}
+}
+}
+}
+}
+}
+}
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/tiles/16384",schemaPath:"#/$defs/tiles/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+var valid6 = _errs38 === errors;
+}
+else {
+var valid6 = true;
+}
+if(valid6){
+if(data14["32768"] !== undefined){
+let data22 = data14["32768"];
+const _errs52 = errors;
+const _errs53 = errors;
+if(errors === _errs53){
+if(data22 && typeof data22 == "object" && !Array.isArray(data22)){
+let missing3;
+if(((((((data22.w === undefined) && (missing3 = "w")) || ((data22.h === undefined) && (missing3 = "h"))) || ((data22.size === undefined) && (missing3 = "size"))) || ((data22.cols === undefined) && (missing3 = "cols"))) || ((data22.rows === undefined) && (missing3 = "rows"))) || ((data22.url === undefined) && (missing3 = "url"))){
+validate29.errors = [{instancePath:instancePath+"/tiles/32768",schemaPath:"#/$defs/tiles/required",keyword:"required",params:{missingProperty: missing3},message:"must have required property '"+missing3+"'"}];
+return false;
+}
+else {
+const _errs55 = errors;
+for(const key4 in data22){
+if(!((((((key4 === "w") || (key4 === "h")) || (key4 === "size")) || (key4 === "cols")) || (key4 === "rows")) || (key4 === "url"))){
+validate29.errors = [{instancePath:instancePath+"/tiles/32768",schemaPath:"#/$defs/tiles/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key4},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs55 === errors){
+if(data22.w !== undefined){
+let data23 = data22.w;
+const _errs56 = errors;
+if(!((data23 === 16384) || (data23 === 32768))){
+validate29.errors = [{instancePath:instancePath+"/tiles/32768/w",schemaPath:"#/$defs/tiles/properties/w/enum",keyword:"enum",params:{allowedValues: schema46.properties.w.enum},message:"must be equal to one of the allowed values"}];
+return false;
+}
+var valid10 = _errs56 === errors;
+}
+else {
+var valid10 = true;
+}
+if(valid10){
+if(data22.h !== undefined){
+let data24 = data22.h;
+const _errs57 = errors;
+if(!(((typeof data24 == "number") && (!(data24 % 1) && !isNaN(data24))) && (isFinite(data24)))){
+validate29.errors = [{instancePath:instancePath+"/tiles/32768/h",schemaPath:"#/$defs/tiles/properties/h/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+return false;
+}
+if(errors === _errs57){
+if((typeof data24 == "number") && (isFinite(data24))){
+if(data24 < 1 || isNaN(data24)){
+validate29.errors = [{instancePath:instancePath+"/tiles/32768/h",schemaPath:"#/$defs/tiles/properties/h/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
+return false;
+}
+}
+}
+var valid10 = _errs57 === errors;
+}
+else {
+var valid10 = true;
+}
+if(valid10){
+if(data22.size !== undefined){
+const _errs59 = errors;
+if(2048 !== data22.size){
+validate29.errors = [{instancePath:instancePath+"/tiles/32768/size",schemaPath:"#/$defs/tiles/properties/size/const",keyword:"const",params:{allowedValue: 2048},message:"must be equal to constant"}];
+return false;
+}
+var valid10 = _errs59 === errors;
+}
+else {
+var valid10 = true;
+}
+if(valid10){
+if(data22.cols !== undefined){
+let data26 = data22.cols;
+const _errs60 = errors;
+if(!(((typeof data26 == "number") && (!(data26 % 1) && !isNaN(data26))) && (isFinite(data26)))){
+validate29.errors = [{instancePath:instancePath+"/tiles/32768/cols",schemaPath:"#/$defs/tiles/properties/cols/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+return false;
+}
+if(errors === _errs60){
+if((typeof data26 == "number") && (isFinite(data26))){
+if(data26 > 16 || isNaN(data26)){
+validate29.errors = [{instancePath:instancePath+"/tiles/32768/cols",schemaPath:"#/$defs/tiles/properties/cols/maximum",keyword:"maximum",params:{comparison: "<=", limit: 16},message:"must be <= 16"}];
+return false;
+}
+else {
+if(data26 < 1 || isNaN(data26)){
+validate29.errors = [{instancePath:instancePath+"/tiles/32768/cols",schemaPath:"#/$defs/tiles/properties/cols/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
+return false;
+}
+}
+}
+}
+var valid10 = _errs60 === errors;
+}
+else {
+var valid10 = true;
+}
+if(valid10){
+if(data22.rows !== undefined){
+let data27 = data22.rows;
+const _errs62 = errors;
+if(!(((typeof data27 == "number") && (!(data27 % 1) && !isNaN(data27))) && (isFinite(data27)))){
+validate29.errors = [{instancePath:instancePath+"/tiles/32768/rows",schemaPath:"#/$defs/tiles/properties/rows/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+return false;
+}
+if(errors === _errs62){
+if((typeof data27 == "number") && (isFinite(data27))){
+if(data27 > 16 || isNaN(data27)){
+validate29.errors = [{instancePath:instancePath+"/tiles/32768/rows",schemaPath:"#/$defs/tiles/properties/rows/maximum",keyword:"maximum",params:{comparison: "<=", limit: 16},message:"must be <= 16"}];
+return false;
+}
+else {
+if(data27 < 1 || isNaN(data27)){
+validate29.errors = [{instancePath:instancePath+"/tiles/32768/rows",schemaPath:"#/$defs/tiles/properties/rows/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
+return false;
+}
+}
+}
+}
+var valid10 = _errs62 === errors;
+}
+else {
+var valid10 = true;
+}
+if(valid10){
+if(data22.url !== undefined){
+let data28 = data22.url;
+const _errs64 = errors;
+if(errors === _errs64){
+if(typeof data28 === "string"){
+if(!pattern30.test(data28)){
+validate29.errors = [{instancePath:instancePath+"/tiles/32768/url",schemaPath:"#/$defs/tiles/properties/url/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"+"\""}];
+return false;
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/tiles/32768/url",schemaPath:"#/$defs/tiles/properties/url/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid10 = _errs64 === errors;
+}
+else {
+var valid10 = true;
+}
+}
+}
+}
+}
+}
+}
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/tiles/32768",schemaPath:"#/$defs/tiles/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+var valid6 = _errs52 === errors;
+}
+else {
+var valid6 = true;
+}
+}
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/tiles",schemaPath:"#/properties/tiles/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+var valid0 = _errs35 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.coast !== undefined){
+let data29 = data.coast;
+const _errs66 = errors;
+if(errors === _errs66){
+if(typeof data29 === "string"){
+if(!pattern32.test(data29)){
+validate29.errors = [{instancePath:instancePath+"/coast",schemaPath:"#/properties/coast/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-coast\\.bin$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-coast\\.bin$"+"\""}];
+return false;
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/coast",schemaPath:"#/properties/coast/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid0 = _errs66 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.lqip !== undefined){
+let data30 = data.lqip;
+const _errs68 = errors;
+if(errors === _errs68){
+if(typeof data30 === "string"){
+if(func2(data30) > 2800){
+validate29.errors = [{instancePath:instancePath+"/lqip",schemaPath:"#/properties/lqip/maxLength",keyword:"maxLength",params:{limit: 2800},message:"must NOT have more than 2800 characters"}];
+return false;
+}
+else {
+if(!pattern33.test(data30)){
+validate29.errors = [{instancePath:instancePath+"/lqip",schemaPath:"#/properties/lqip/pattern",keyword:"pattern",params:{pattern: "^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$"},message:"must match pattern \""+"^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$"+"\""}];
+return false;
+}
+}
+}
+else {
+validate29.errors = [{instancePath:instancePath+"/lqip",schemaPath:"#/properties/lqip/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid0 = _errs68 === errors;
+}
+else {
+var valid0 = true;
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+else {
+validate29.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+validate29.errors = vErrors;
+return errors === 0;
+}
+validate29.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+

@@ -6,3 +6,5 @@ export interface ValidateFn {
 export const validateRegion: ValidateFn;
 export const validateAccess: ValidateFn;
 export const validateCategories: ValidateFn;
+export const validateSlots: ValidateFn;
+export const validateMap: ValidateFn;

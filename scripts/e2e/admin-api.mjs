@@ -29,6 +29,9 @@ export async function sessionFor(login, hours = 1) {
 }
 
 class MemoryKV {
+  async get(key) {
+    return this.data.has(key) ? "" : null;
+  }
   data = new Map();
   async put(k, _v, o) {
     this.data.set(k, o?.metadata);
