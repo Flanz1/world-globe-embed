@@ -15,6 +15,7 @@ import {
   normalizePartLegend,
   uniqueId,
   type LegendEntry,
+  type LinkedNames,
   type RegionFeature,
 } from "./region.ts";
 
@@ -59,6 +60,17 @@ export interface CombineResult {
 const hex6 = (c: string) => (c.length === 4 ? `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}` : c).toLowerCase();
 const safeColour = (c: unknown, fallback: string) => (typeof c === "string" && REGION_COLOR.test(c) ? hex6(c) : fallback);
 
+/** The label a source region's own colour gets in a combined legend (its colour label, else its name, else its id). */
+export function ownLabel(p: { colorLabel?: string; name?: string }, id: string): string {
+  return (typeof p.colorLabel === "string" && p.colorLabel.trim()) || (typeof p.name === "string" && p.name.trim()) || id;
+}
+
+/** `label` as a linked region's own names rename it (colour and label as in the linked regions), else unchanged. */
+function renamed(names: LinkedNames | undefined, label: string, color: string): string {
+  const hit = names?.legend?.find((e) => e.from === label.slice(0, LEGEND_LABEL_MAX) && hex6(e.color) === color);
+  return hit ? hit.label : label;
+}
+
 /** `label`, or `label (2)`, `label (3)`, … — the first that isn't in `used`, kept within the length limit. */
 function freeLabel(label: string, used: Set<string>): string {
   if (!used.has(label)) return label;
@@ -75,7 +87,7 @@ function freeLabel(label: string, used: Set<string>): string {
  * legend entry where it differs from the base's), and legend entries, in order (later sources' parts are drawn on top). Legend labels
  * that clash (same text, different colour) get a " (2)" suffix; identical entries are shared.
  */
-export function combineRegions(sources: readonly RegionFeature[], target: { id: string; base: RegionBase }, minSources = 2): CombineResult {
+export function combineRegions(sources: readonly RegionFeature[], target: { id: string; base: RegionBase }, minSources = 2, names?: LinkedNames): CombineResult {
   const errors: string[] = [];
   const notes: string[] = [];
   if (sources.length < minSources || !sources.length) return { feature: null, errors: ["Pick at least two regions to combine."], notes };
@@ -86,7 +98,7 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
   const used = new Set<string>();
   /** Index of an existing identical entry (same label and colour), or a new entry. */
   const entryFor = (label: string, color: string, from: string): number => {
-    const l = label.slice(0, LEGEND_LABEL_MAX);
+    const l = renamed(names, label, color).slice(0, LEGEND_LABEL_MAX);
     const same = legend.findIndex((e) => e.label === l && e.color === color);
     if (same >= 0) return same;
     const free = freeLabel(l, used);
@@ -113,7 +125,7 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
     const own = safeColour(p.color, colour);
     let ownIndex = OWN_COLOUR;
     if (si > 0 && own !== colour && partLegend.some((k) => k === OWN_COLOUR)) {
-      const name = (typeof p.colorLabel === "string" && p.colorLabel.trim()) || (typeof p.name === "string" && p.name.trim()) || f.id;
+      const name = ownLabel(p, f.id);
       ownIndex = entryFor(name, own, f.id);
     }
     // Older regions have one name instead of part labels: it becomes the first part's label (as in the editor).
@@ -148,8 +160,8 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
     notes.push("Some of these regions hide their labels and some show them; the combined region shows them (untick \"Show part labels in embed\" in the editor to hide them).");
 
   const desc = sources.map((f) => f.properties.description?.trim()).find((d) => d);
-  const legendTitle = sources.map((f) => f.properties.legendTitle?.trim()).find((t) => t);
-  const colorLabel = typeof first.colorLabel === "string" ? first.colorLabel.trim().slice(0, LEGEND_LABEL_MAX) : "";
+  const legendTitle = (names?.legendTitle !== undefined ? names.legendTitle.trim() : sources.map((f) => f.properties.legendTitle?.trim()).find((t) => t)) ?? "";
+  const colorLabel = names?.colorLabel !== undefined ? names.colorLabel.trim().slice(0, LEGEND_LABEL_MAX) : typeof first.colorLabel === "string" ? first.colorLabel.trim().slice(0, LEGEND_LABEL_MAX) : "";
   const feature: RegionFeature = {
     $schema: "../../schema/region.schema.json",
     type: "Feature",
@@ -200,12 +212,14 @@ export function resolveLinked(f: RegionFeature, lookup: (id: string) => RegionFe
     else missing.push(id);
   }
   if (!sources.length) return { feature: null, missing, errors: [] };
-  const r = combineRegions(sources, { id: f.id, base: { slot: f.properties.slot, map: f.properties.map } }, 1);
+  const names = f.properties.linkedNames;
+  const r = combineRegions(sources, { id: f.id, base: { slot: f.properties.slot, map: f.properties.map } }, 1, names);
   if (!r.feature) return { feature: null, missing, errors: r.errors };
   const p = f.properties;
   r.feature.properties = {
     ...r.feature.properties,
     linked: [...ids],
+    ...(names ? { linkedNames: names } : {}),
     ...(p.created ? { created: p.created } : {}),
     ...(p.createdBy ? { createdBy: p.createdBy } : {}),
     ...(p.updated ? { updated: p.updated } : {}),

@@ -32,6 +32,16 @@ export const PART_LABEL_MAX = 80;
 /** partLegend value for a part drawn in the region's own colour. */
 export const OWN_COLOUR = -1;
 
+/** A linked combined region's own legend names: they replace the linked regions' ones in this region only. */
+export interface LinkedNames {
+  /** Heading of the legend ("" for none). */
+  legendTitle?: string;
+  /** Label of the first linked region's own colour ("" for none). */
+  colorLabel?: string;
+  /** Renamed colours: the colour, the label it has in the linked regions, and the label to show here. */
+  legend?: { color: string; from: string; label: string }[];
+}
+
 /** One legend row: a colour some of the region's parts are drawn in, and what it means. */
 export interface LegendEntry {
   label: string;
@@ -113,6 +123,8 @@ export interface RegionProperties {
   layerLabel?: string;
   /** A linked combined region: the regions it's made of (see shared/combine.ts resolveLinked). */
   linked?: string[];
+  /** With linked: this region's own legend names (see shared/combine.ts LinkedNames). */
+  linkedNames?: LinkedNames;
   /** Province borders: open lines drawn inside the region (dotted in the embed). They don't change the parts. */
   provinceBorders?: Position[][];
   /**

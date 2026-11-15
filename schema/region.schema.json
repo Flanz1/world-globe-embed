@@ -160,6 +160,48 @@
             "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
           }
         },
+        "linkedNames": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Only with linked: this region's own names for its legend, so they can differ from the linked regions' (which stay as they are). legendTitle and colorLabel replace the ones taken from the linked regions (an empty text removes them); legend renames the colours: each entry names the colour and the label it has in the linked regions, and the label to show here.",
+          "properties": {
+            "legendTitle": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "colorLabel": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "legend": {
+              "type": "array",
+              "maxItems": 192,
+              "items": {
+                "type": "object",
+                "required": [
+                  "color",
+                  "from",
+                  "label"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "color": {
+                    "type": "string",
+                    "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+                  },
+                  "from": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                }
+              }
+            }
+          }
+        },
         "partLocked": {
           "type": "array",
           "maxItems": 1000,
