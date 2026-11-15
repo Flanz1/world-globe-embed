@@ -187,6 +187,15 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
     if (r.feature) regions.set(id, r.feature);
   }
 
+  // Underlays are looked up by id when the embed loads; one that's gone just isn't shown.
+  for (const [id, region] of regions) {
+    for (const e of region.properties.under ?? []) {
+      const other = regions.get(e.id);
+      if (e.id === id || !other || other.properties.slot !== region.properties.slot)
+        warnings.push(`content/regions/${id}.json: the region shown under it ("${e.id}") doesn't exist on slot "${region.properties.slot}", so it isn't shown.`);
+    }
+  }
+
   // Who may use the admin page (optional: without it only the repository owner can sign in).
   const accessFile = path.join(paths.content, "access.json");
   if (existsSync(accessFile)) {

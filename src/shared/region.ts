@@ -38,6 +38,20 @@ export interface LegendEntry {
   color: string;
 }
 
+/** A region shown under another one (see RegionProperties.under). */
+export interface UnderEntry {
+  /** Another region of the same slot. */
+  id: string;
+  /** Name of its toggle in the embed's legend; the region's name or id when missing. */
+  label?: string;
+  /** Whether it starts shown. Missing: the first underlay does, the others don't. */
+  on?: boolean;
+}
+
+/** Most regions one region can show under it. */
+export const UNDER_MAX = 8;
+export const UNDER_TITLE_MAX = 40;
+
 export interface RegionProperties {
   /** Legacy display name: shown as one label at the middle of the region when there are no partLabels. */
   name?: string;
@@ -82,6 +96,17 @@ export interface RegionProperties {
    * ignores it. Locked is the default: a missing list or entry means locked.
    */
   partLocked?: boolean[];
+  /**
+   * Regions of the same slot shown under this one in its embed (religion, culture, trade goods…), each cut to
+   * this region's outline unless underClip is false, with a toggle in the embed's legend. Bottom first.
+   */
+  under?: UnderEntry[];
+  /** With under: false to show the underlays outside this region's outline too. Missing: cut to the outline. */
+  underClip?: boolean;
+  /** With under: heading of the toggle list in the embed (default "Layers"). */
+  underTitle?: string;
+  /** With under: this region's own toggle name (default: its name, else its id). */
+  layerLabel?: string;
   /** A linked combined region: the regions it's made of (see shared/combine.ts resolveLinked). */
   linked?: string[];
   /** Province borders: open lines drawn inside the region (dotted in the embed). They don't change the parts. */
@@ -137,6 +162,13 @@ export interface RegionData {
   provinceBorders?: Position[][];
   /** Draw national borders where parts share a line (see RegionProperties.nationalBorders). Missing: no. */
   nationalBorders?: boolean;
+  /**
+   * Set only by mergeRegions (an embed with ?regions=a,b,c): the regions this one stacks. Each is painted,
+   * labelled and listed in the legend as its own map; `geometry` is all their parts, for framing.
+   */
+  members?: RegionData[];
+  /** With members: every region but the last is cut to the last one's outline (a region shown over its underlays). */
+  clip?: boolean;
 }
 
 /** Most positions in a region's province borders, all lines together. */
@@ -150,6 +182,13 @@ export interface RegionIndexEntry {
   z: number;
   /** Map-image-frame bounds [west, south, east, north] for the flat view (east may exceed 180). */
   b: [number, number, number, number];
+  /** The region's underlays (RegionProperties.under), only those that exist on this slot. */
+  u?: UnderEntry[];
+  /** underClip, when false. */
+  uc?: false;
+  /** underTitle and layerLabel, when set. */
+  ut?: string;
+  ul?: string;
 }
 
 export function regionData(f: RegionFeature): RegionData {
@@ -219,8 +258,47 @@ export function normalizePartOccupied(v: readonly unknown[] | undefined, legacy:
 }
 
 /** The embed's legend rows: every colour with a label (the region's own colour first), in order. */
-export function legendRows(r: Pick<RegionData, "color" | "colorLabel" | "legend">): LegendEntry[] {
+export function legendRows(r: Pick<RegionData, "color" | "colorLabel" | "legend"> & { members?: RegionData[] }): LegendEntry[] {
+  if (r.members) {
+    // Stacked regions: every region's rows in turn, a row once if two share colour and label.
+    const seen = new Set<string>();
+    return r.members.flatMap(legendRows).filter((e) => !seen.has(`${e.color}\u0000${e.label}`) && !!seen.add(`${e.color}\u0000${e.label}`));
+  }
   return [{ label: r.colorLabel, color: r.color }, ...r.legend].filter((e) => e.label.trim());
+}
+
+/** Most regions one embed can stack (?regions=a,b,c). */
+export const REGIONS_MAX = 12;
+
+/** The ids of ?regions=a,b,c: valid, without repeats, at most REGIONS_MAX. */
+export function parseRegionIds(v: string | null): string[] {
+  return [...new Set((v ?? "").split(",").map((s) => s.trim()).filter((s) => REGION_ID.test(s)))].slice(0, REGIONS_MAX);
+}
+
+/**
+ * Several regions of one slot as one RegionData for the viewers: later regions are drawn over earlier
+ * ones, each as its own map (they never mark each other as contested, see region-paint.ts). One region
+ * comes back as it is.
+ */
+export function mergeRegions(list: readonly RegionData[], clip = false): RegionData {
+  if (list.length === 1) return list[0];
+  const first = list[0];
+  return {
+    id: list.map((r) => r.id).join(","),
+    slot: first.slot,
+    name: "",
+    color: first.color,
+    colorLabel: "",
+    fillOpacity: first.fillOpacity,
+    label: list.some((r) => r.label),
+    legendTitle: list.find((r) => r.legendTitle.trim())?.legendTitle ?? "",
+    legend: [],
+    parts: list.flatMap((r) => r.parts),
+    labels: list.flatMap((r) => r.labels),
+    geometry: { type: "MultiPolygon", coordinates: list.flatMap((r) => polygonsOf(r.geometry)) },
+    members: [...list],
+    ...(clip ? { clip: true } : {}),
+  };
 }
 
 /** partLabelHidden padded or cut to `n` parts. Shown is the default: only an explicit `true` hides a label. */
@@ -301,7 +379,12 @@ export function checkLegend(p: RegionProperties, g: RegionGeometry, where: strin
  * Where the embed puts text: one label per part that has one (at a point inside that part), or, for a
  * region without part labels, its name once at the middle of the region. Map-image frame.
  */
-export function regionLabelPoints(r: Pick<RegionData, "name" | "labels" | "geometry"> & { labelHidden?: boolean[] }): { text: string; at: Position }[] {
+export function regionLabelPoints(
+  r: Pick<RegionData, "name" | "labels" | "geometry"> & { labelHidden?: boolean[]; label?: boolean; members?: RegionData[] },
+  forced = false,
+): { text: string; at: Position }[] {
+  // Stacked regions: each labels itself, unless it has labels switched off (and label=1 wasn't given).
+  if (r.members) return r.members.flatMap((m) => (forced || m.label ? regionLabelPoints(m) : []));
   if (r.labels.some((t) => t.trim())) {
     const at = partAnchors(r.geometry);
     return r.labels.flatMap((t, i) => (t.trim() && at[i] && r.labelHidden?.[i] !== true ? [{ text: t, at: at[i]! }] : []));

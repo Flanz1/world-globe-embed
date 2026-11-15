@@ -386,3 +386,32 @@ export function paintSpec(
   if (spec.borders) paintBorders(ctx, spec, x, y, offsets, lw, area);
   ctx.restore();
 }
+
+/** One region's paint spec with its own fill opacity; `clip` cuts it to the given polygons (outer ring first, then holes). */
+export interface PaintLayer {
+  spec: PaintSpec;
+  opacity: number;
+  clip?: Position[][][];
+}
+
+/** Paints stacked regions bottom to top, each as its own map. Dimming (outside the region) is the top layer's. */
+export function paintLayerStack(
+  ctx: Ctx,
+  layers: readonly PaintLayer[],
+  x: (lon: number) => number,
+  y: (lat: number) => number,
+  offsets: number[],
+  s: Omit<RegionStyle, "color" | "fillOpacity">,
+  area: { w: number; h: number },
+): void {
+  layers.forEach((l, i) => {
+    ctx.save();
+    if (l.clip) {
+      ctx.beginPath();
+      for (const poly of l.clip) tracePoly(ctx, poly, x, y, offsets);
+      ctx.clip("evenodd");
+    }
+    paintSpec(ctx, l.spec, x, y, offsets, { ...s, fillOpacity: l.opacity, dim: s.dim && i === layers.length - 1 }, area);
+    ctx.restore();
+  });
+}
