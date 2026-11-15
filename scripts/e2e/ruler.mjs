@@ -47,6 +47,9 @@ const slotsFile = path.join(dir, "content/slots.json");
 const slots = JSON.parse(readFileSync(slotsFile, "utf8"));
 slots.slots[SLOT.slug].view = "flat";
 slots.slots[SLOT.slug].radius = RADIUS;
+// The radius-less checks use the real "inara" slot, which can get a world size from the admin page at
+// any time: take it off in the fixture so they don't depend on live content.
+delete slots.slots.inara.radius;
 writeFileSync(slotsFile, JSON.stringify(slots, null, 2) + "\n");
 execFileSync("npm", ["run", "build"], { cwd: dir, env: { ...process.env, VITE_CONTENT_BRANCH: BRANCH }, stdio: "pipe" });
 const DIST = path.join(dir, "dist");
