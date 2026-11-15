@@ -27,6 +27,8 @@ Create `scripts/e2e/<name>.mjs` with this first line, and you're done:
 - `roots`: the entry files the suite's page loads. Use the groups `ADMIN`, `EDITOR`, `VIEWER` and `WORKER`
   (defined in `scripts/e2e/select.mjs`) or repo paths. A suite with `EDITOR` counts as an editor suite.
 - `weight`: a rough runtime from 1 (quick) to 9 (slowest). Slow suites start first.
+- `cut`: optional files where the import graph stops for this suite (changes there don't select it), for a
+  suite that loads a page but tests only part of it. See `pins.mjs`.
 
 There's no shared list to edit, so two branches that each add a suite don't conflict. Run a suite with
 `npm run e2e -- <name>`; a separate `e2e:<name>` script in package.json isn't needed. A browser check that
