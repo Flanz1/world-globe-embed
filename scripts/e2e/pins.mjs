@@ -173,6 +173,12 @@ for (const view of ["flat", "globe"]) {
     await page.keyboard.press("Escape");
     check(E, `${view}: Escape closes the card`, !(await card.isVisible()));
 
+    // A hovered or focused pin (and so its name label) sits above the pins around it.
+    const z = (loc) => loc.evaluate((el) => getComputedStyle(el).zIndex);
+    await harbour.focus();
+    check(E, `${view}: a focused pin rises above the others, so its name isn't covered`, Number(await z(harbour)) >= 2);
+    await page.evaluate(() => document.activeElement?.blur());
+
     // The whole slot: every pin; markup in a name is text.
     await page.goto(`${SITE}/v/${SLOT.slug}/?view=${view}&pins=1`);
     await ready(page);
