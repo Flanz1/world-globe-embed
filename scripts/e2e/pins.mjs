@@ -259,6 +259,8 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   const pane = await page.locator(".pn-pane").boundingBox();
   await page.mouse.click(pane.x + pane.width / 2, pane.y + pane.height / 2);
   await page.waitForSelector(".pn-form");
+  // The new marker is drawn a frame after the form opens, so wait for it instead of counting once.
+  await page.waitForFunction((n) => document.querySelectorAll(".pn-marker").length === n, SEED.length + 1, { timeout: 5000 }).catch(() => {});
   check(A, "clicking the map opens the new-pin form", (await page.locator(".pn-marker").count()) === SEED.length + 1);
   await page.fill('.pn-form input[aria-label="Name"]', "Test Harbour");
   await page.selectOption(".pn-form select", "port");
