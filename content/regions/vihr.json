@@ -324,11 +324,12 @@
       {
         "id": "gethricism",
         "label": "Religion",
-        "on": true
+        "on": true,
+        "fill": 0.7
       }
     ],
     "underTitle": "Religion",
-    "updated": "2026-11-15T19:53:43Z",
+    "updated": "2026-11-16T23:40:58Z",
     "created": "2026-11-12T21:39:43Z",
     "createdBy": {
       "id": 138310181,
