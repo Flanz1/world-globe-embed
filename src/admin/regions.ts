@@ -533,13 +533,21 @@ function setEditingBadge(el: HTMLElement, id: string): void {
   el.hidden = !names.length;
 }
 
-/** Starts or stops the polling: only while the Regions tab is on screen. */
+const pollIfVisible = () => {
+  if (editingTimer && document.visibilityState === "visible") void pollEditing();
+};
+
+/** Starts or stops the polling: only while the Regions tab is on screen and the browser tab isn't hidden. */
 export function watchEditing(on: boolean): void {
   clearInterval(editingTimer);
   editingTimer = 0;
+  document.removeEventListener("visibilitychange", pollIfVisible);
   if (!on) return;
   void pollEditing();
-  editingTimer = window.setInterval(() => void pollEditing(), 30_000);
+  editingTimer = window.setInterval(() => {
+    if (document.visibilityState !== "hidden") void pollEditing();
+  }, 30_000);
+  document.addEventListener("visibilitychange", pollIfVisible);
 }
 
 export function renderRegions(): void {
