@@ -8,15 +8,18 @@
     "color": "#ff1e05",
     "fillOpacity": 0.35,
     "label": false,
-    "updated": "2026-11-13T19:54:59Z",
+    "pinMaps": [
+      "zuhurist-holy-sites"
+    ],
+    "updated": "2026-11-16T08:38:22Z",
     "created": "2026-11-13T19:54:59Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
