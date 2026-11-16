@@ -240,7 +240,9 @@ await step(A, "the Fill tool traces the island out to its coast", async () => {
   await page.waitForTimeout(150);
   await page.locator("dialog.editor canvas.ed-canvas").focus();
   await page.keyboard.press("b");
-  check(A, "B picks the Fill tool", (await page.getAttribute('dialog.editor button[data-tool="fill"]', "aria-pressed")) === "true");
+  // The toolbar's pressed states update on the next redraw (a frame later), so wait for it rather than read it at once.
+  const fillOn = await page.waitForSelector('dialog.editor button[data-tool="fill"][aria-pressed="true"]', { timeout: 3000 }).then(() => true, () => false);
+  check(A, "B picks the Fill tool", fillOn);
   await click(14, -10);
   const s = await call("state");
   const ring = s.parts[1]?.[0] ?? [];
