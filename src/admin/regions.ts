@@ -297,17 +297,32 @@ function moreMenu(id: string, items: (MenuItem | null)[]): HTMLElement {
   const more = h("button", { type: "button", className: "ghost", textContent: "More…", dataset: { action: "more" } });
   more.setAttribute("aria-expanded", "false");
   more.setAttribute("aria-haspopup", "menu");
+  const close = () => {
+    if (menu.matches(":popover-open")) menu.hidePopover();
+  };
   const enabled = () => buttons.filter((b) => !b.disabled);
   menu.addEventListener("beforetoggle", (ev) => {
     if ((ev as ToggleEvent).newState !== "open") return;
     const r = more.getBoundingClientRect();
-    menu.style.top = `${Math.round(r.bottom + 4)}px`;
+    // Below the button, or above it when there is no room below.
+    const room = window.innerHeight - r.bottom - 8;
+    const need = buttons.length * 30 + 16;
+    menu.style.top = room >= need || r.top < need ? `${Math.round(r.bottom + 4)}px` : `${Math.round(r.top - 4 - need)}px`;
     menu.style.left = `${Math.max(8, Math.round(Math.min(r.right - 170, window.innerWidth - 178)))}px`;
   });
   menu.addEventListener("toggle", (ev) => {
     const open = (ev as ToggleEvent).newState === "open";
     more.setAttribute("aria-expanded", String(open));
-    if (open) (enabled()[0] ?? buttons[0])?.focus();
+    if (open) {
+      (enabled()[0] ?? buttons[0])?.focus();
+      window.addEventListener("scroll", close, { capture: true, passive: true });
+      window.addEventListener("resize", close);
+    } else {
+      window.removeEventListener("scroll", close, { capture: true });
+      window.removeEventListener("resize", close);
+      // Escape or a click outside: put focus back on More… unless it went somewhere else on purpose.
+      if (menu.contains(document.activeElement) || document.activeElement === document.body) more.focus();
+    }
   });
   menu.addEventListener("keydown", (ev) => {
     const live = enabled();
