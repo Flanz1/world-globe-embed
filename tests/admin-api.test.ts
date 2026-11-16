@@ -10,7 +10,7 @@ import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { GitHub, GitHubError, NotListed, mapLimit, retrying, type FileChange } from "../src/admin/github.ts";
 import { resetRateLimits } from "../worker/src/ratelimit.ts";
-import { EDITING_SECONDS, handle, resetCaches, returnAllowed, type Env, type KV } from "../worker/src/handler.ts";
+import { EDITING_REFRESH_SECONDS, EDITING_SECONDS, handle, resetCaches, returnAllowed, type Env, type KV } from "../worker/src/handler.ts";
 import { appJwt, fromB64url, sign, verify } from "../worker/src/crypto.ts";
 import { MockGitHub, mockFetch } from "../scripts/e2e/mock-github.mjs";
 import { VALIDATORS_FILE, generateValidators } from "../scripts/build-worker-validators.ts";
@@ -47,7 +47,9 @@ class MemoryKV implements KV {
     this.data.delete(key);
     this.values.delete(key);
   }
+  lists = 0;
   async list(opts?: { prefix?: string }) {
+    this.lists++;
     return { keys: [...this.data].filter(([k]) => k.startsWith(opts?.prefix ?? "")).map(([name, metadata]) => ({ name, metadata })) };
   }
 }
@@ -241,6 +243,35 @@ describe("admin API sign-in", () => {
     await expect(ann.editingBeat("tabannnn1", ["../x"])).rejects.toThrow();
     // Not on the list: nothing.
     await expect(client(STRANGER)).rejects.toBeInstanceOf(NotListed);
+  });
+
+  it("keeps the editing notices cheap on KV: no lists, and a write only when something changed or is due a refresh", async () => {
+    const ann = await client(ANN);
+    const mgr = await client(MANAGER);
+    const puts0 = kv.puts;
+    const lists0 = kv.lists;
+    await ann.editingBeat("tabannnn2", ["nordland"]);
+    expect(kv.puts - puts0).toBe(1);
+    // The same regions again, 30 s later: no write.
+    for (let i = 0; i < 5; i++) await ann.editingBeat("tabannnn2", ["nordland"]);
+    await mgr.editingNow();
+    expect(kv.puts - puts0).toBe(1);
+    // Other regions: written straight away.
+    await ann.editingBeat("tabannnn2", ["nordland", "other"]);
+    expect(kv.puts - puts0).toBe(2);
+    // Due a refresh: written again, and still there for others.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + (EDITING_REFRESH_SECONDS + 5) * 1000);
+    await ann.editingBeat("tabannnn2", ["nordland", "other"]);
+    expect(kv.puts - puts0).toBe(3);
+    expect((await mgr.editingNow()).map((e) => e.login)).toEqual([ANN.login]);
+    vi.useRealTimers();
+    // Closing a tab that isn't there writes nothing.
+    await ann.editingDone("tabnothere");
+    expect(kv.puts - puts0).toBe(3);
+    await ann.editingDone("tabannnn2");
+    expect(await mgr.editingNow()).toEqual([]);
+    expect(kv.lists - lists0).toBe(0);
   });
 
   it("signs App requests with a JWT GitHub accepts (PKCS#1 key)", async () => {

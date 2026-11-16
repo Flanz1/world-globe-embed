@@ -1,6 +1,7 @@
 /**
  * "Someone is editing this": an editor tab tells the admin API which regions it has open every 30 seconds
- * (the API forgets a tab after 90 s of silence), and the answer says who else has regions open. It's a hint to
+ * while the tab is on screen (the API forgets a tab after 10 minutes of silence), and the answer says who
+ * else has regions open. A hidden tab stays quiet, so a forgotten background tab costs nothing. It's a hint to
  * avoid two people working on the same region; the real protection stays the check when saving.
  */
 import type { Editing, GitHub } from "../github.ts";
@@ -49,12 +50,20 @@ export function startPresence(gh: GitHub, ids: () => string[], meId: number | un
     }
   };
   void beat();
-  const t = setInterval(() => void beat(), BEAT_MS);
+  const t = setInterval(() => {
+    if (document.visibilityState !== "hidden") void beat();
+  }, BEAT_MS);
+  // Back on screen: check in at once instead of waiting for the next tick.
+  const onVisible = () => {
+    if (document.visibilityState === "visible") void beat();
+  };
+  document.addEventListener("visibilitychange", onVisible);
   return {
     stop() {
       if (stopped) return;
       stopped = true;
       clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
       void gh.editingDone(tab).catch(() => {});
     },
   };

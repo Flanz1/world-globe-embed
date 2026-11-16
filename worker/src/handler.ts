@@ -61,8 +61,15 @@ const MAX_CHANGED_FILES = 400;
 /** Region and access files whose text a single commit may make the API read (each is a subrequest). */
 const MAX_READ_FILES = MAX_MOVED_PER_COMMIT;
 const WAITING_DAYS = 30;
-/** An editor tab says it's still open every 30 s; KV won't keep a key shorter than 60 s, and a silent tab drops off after this long. */
-export const EDITING_SECONDS = 90;
+/**
+ * Who has a region open lives in ONE KV key, read with get (100,000 a day on the free plan) rather than list
+ * (1,000 a day). A tab checks in every 30 s, but its entry is only rewritten when it's new, its regions change
+ * or it's older than EDITING_REFRESH_SECONDS, so a tab costs about 15 writes an hour instead of 120 writes and
+ * 120 lists. A tab that stops checking in (closed without saying so, or hidden) drops off after EDITING_SECONDS.
+ */
+export const EDITING_SECONDS = 600;
+export const EDITING_REFRESH_SECONDS = 240;
+const EDITING_KEY = "editing";
 const MAX_EDITING_REGIONS = MAX_MOVED_PER_COMMIT;
 
 export interface Session {
@@ -400,12 +407,30 @@ export interface Editing {
   at: string;
 }
 
+/** The stored list, without entries that went quiet. */
+async function readEditing(kv: KV): Promise<Editing[]> {
+  let list: unknown;
+  try {
+    list = JSON.parse((await kv.get(EDITING_KEY)) ?? "[]");
+  } catch {
+    return [];
+  }
+  const since = Date.now() - EDITING_SECONDS * 1000;
+  return Array.isArray(list) ? (list as Editing[]).filter((m) => !!m && typeof m.at === "string" && Date.parse(m.at) >= since) : [];
+}
+
+async function writeEditing(kv: KV, list: Editing[]): Promise<void> {
+  try {
+    if (list.length) await kv.put(EDITING_KEY, JSON.stringify(list), { expirationTtl: EDITING_SECONDS });
+    else await kv.delete(EDITING_KEY);
+  } catch {
+    /* A hint only; never fail an editor over it (e.g. the daily KV write limit). */
+  }
+}
+
 /** Everyone whose editor was open (and said so) in the last EDITING_SECONDS. Only a hint to avoid clashes: saving is still checked against the branch head. */
 async function activeEditing(env: Env): Promise<Editing[]> {
-  if (!env.WAITING) return [];
-  const { keys } = await env.WAITING.list({ prefix: "e:", limit: 200 });
-  const since = Date.now() - EDITING_SECONDS * 1000;
-  return keys.map((k) => k.metadata as Editing | undefined).filter((m): m is Editing => !!m && Date.parse(m.at) >= since);
+  return env.WAITING ? readEditing(env.WAITING) : [];
 }
 
 async function editingList(req: Request, env: Env, up: Upstream): Promise<Response> {
@@ -421,20 +446,25 @@ async function editingBeat(req: Request, env: Env, up: Upstream): Promise<Respon
   const regions = body.regions;
   if (typeof body.tab !== "string" || !/^[a-z0-9]{6,24}$/.test(body.tab) || !Array.isArray(regions) || regions.length > MAX_EDITING_REGIONS || !regions.every((r) => typeof r === "string" && /^[a-z0-9][a-z0-9-]{0,63}$/.test(r)))
     throw new HttpError(422, "Bad editing notice.");
-  if (env.WAITING) {
-    const me: Editing = { id: actor.id, login: actor.login, tab: body.tab, regions: regions as string[], at: new Date().toISOString() };
-    try {
-      await env.WAITING.put(`e:${actor.id}:${body.tab}`, "", { expirationTtl: EDITING_SECONDS, metadata: me });
-    } catch {
-      /* A hint only; never fail an editor over it. */
-    }
-  }
-  return json(200, await activeEditing(env));
+  if (!env.WAITING) return json(200, []);
+  const tab = body.tab;
+  const list = await readEditing(env.WAITING);
+  const mine = list.find((e) => e.id === actor.id && e.tab === tab);
+  const same = mine && mine.login === actor.login && JSON.stringify(mine.regions) === JSON.stringify(regions);
+  if (same && Date.now() - Date.parse(mine.at) < EDITING_REFRESH_SECONDS * 1000) return json(200, list);
+  const me: Editing = { id: actor.id, login: actor.login, tab, regions: regions as string[], at: new Date().toISOString() };
+  const next = [...list.filter((e) => !(e.id === actor.id && e.tab === tab)), me];
+  await writeEditing(env.WAITING, next);
+  return json(200, next);
 }
 
 async function editingDone(req: Request, env: Env, up: Upstream, tab: string): Promise<Response> {
   const actor = await listedActor(req, env, up);
-  await env.WAITING?.delete(`e:${actor.id}:${tab}`);
+  if (env.WAITING) {
+    const list = await readEditing(env.WAITING);
+    const next = list.filter((e) => !(e.id === actor.id && e.tab === tab));
+    if (next.length !== list.length) await writeEditing(env.WAITING, next);
+  }
   return new Response(null, { status: 204 });
 }
 
