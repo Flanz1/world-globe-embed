@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { PRESETS, parsePrefs, roleProperty, themeVars } from "../src/shared/theme-prefs.ts";
 import { DEFAULT_SEED, ROLES, contrast, hctFromHex, hexFromHct, schemeFromSeed, type Role } from "../src/shared/hct.ts";
 
 const css = readFileSync(new URL("../src/admin/admin.css", import.meta.url), "utf8");
@@ -70,5 +71,31 @@ describe("Material You scheme", () => {
     // Hex colours left after the roles are data/map colours, each commented as such, or the map background token.
     const hexes = [...rules.matchAll(/#[0-9a-f]{3,8}\b/gi)].map((m) => m[0].toLowerCase());
     expect(hexes.filter((h) => !["#14120f", "#e8590c", "#e8dcc8", "#ece2d0", "#fff", "#000"].includes(h))).toEqual([]);
+  });
+});
+
+describe("account theme", () => {
+  it("makes AA-contrast schemes for every preset and for odd custom colours, light and dark", () => {
+    for (const seed of [...PRESETS.map((p) => p.seed), "#000000", "#ffffff", "#808080", "#ff0000", "#00ff00", "#0000ff", "#ffff00"]) {
+      for (const dark of [false, true]) {
+        const s = schemeFromSeed(seed, dark);
+        for (const [fg, bg] of PAIRS) expect(contrast(s[fg], s[bg]), `${seed} ${dark ? "dark" : "light"} ${fg}/${bg}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+  it("accepts only #rrggbb seeds and the three modes", () => {
+    expect(parsePrefs({ seed: "#8a6a1f", mode: "dark" })).toEqual({ seed: "#8a6a1f", mode: "dark" });
+    for (const bad of [null, {}, { seed: "#8A6A1F", mode: "dark" }, { seed: "red", mode: "dark" }, { seed: "#8a6a1f", mode: "auto" }, { seed: "#8a6a1f" }]) expect(parsePrefs(bad)).toBeNull();
+  });
+  it("names every role as admin.css declares it, and Gold's values are the stylesheet's", () => {
+    const vars = themeVars(DEFAULT_SEED, false);
+    expect(Object.keys(vars)).toHaveLength(ROLES.length);
+    for (const [name, value] of Object.entries(vars)) {
+      expect(name).toMatch(/^--[a-z-]+$/);
+      expect(value).toMatch(/^#[0-9a-f]{6}$/);
+      expect(css).toContain(`${name}: ${value};`);
+    }
+    expect(roleProperty("primary")).toBe("--md-sys-color-primary");
+    expect(roleProperty("app-warn")).toBe("--app-warn");
   });
 });

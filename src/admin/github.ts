@@ -83,6 +83,8 @@ export interface Me {
   /** The repository owner: every permission, always. */
   owner: boolean;
   permissions: Permission[];
+  /** The account's saved colour theme (null: never chose). */
+  prefs?: unknown;
 }
 
 /** A suggested change to a region, as lists show it. */
@@ -230,8 +232,13 @@ export class GitHub {
     this.defaultBranch = repo.data.default_branch;
     if (!BRANCH.test(me.data.branch)) throw new Error("The admin API named an odd branch.");
     this.branch = me.data.branch;
-    const { id, login, owner, permissions } = me.data;
-    return { id, login, owner, permissions };
+    const { id, login, owner, permissions, prefs } = me.data;
+    return { id, login, owner, permissions, prefs };
+  }
+
+  /** Save the account's colour theme (PUT /prefs). Called a moment after the last change, never on a timer. */
+  async savePrefs(prefs: { seed: string; mode: string }): Promise<void> {
+    await this.send("/prefs", { method: "PUT", body: JSON.stringify(prefs) }, this.root);
   }
 
   /** A GitHub account by username (Users tab). */

@@ -4952,3 +4952,82 @@ return errors === 0;
 }
 validate31.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
+export const validatePrefs = validate32;
+const schema53 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/prefs.schema.json","title":"Admin page preferences","description":"One account's colour theme for the admin page: the accent colour's seed and light, dark or the system's setting. Kept by the admin API, not in the repository.","type":"object","required":["seed","mode"],"additionalProperties":false,"properties":{"seed":{"type":"string","pattern":"^#[0-9a-f]{6}$"},"mode":{"enum":["light","dark","system"]}}};
+const pattern54 = new RegExp("^#[0-9a-f]{6}$", "u");
+
+function validate32(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+/*# sourceURL="https://flanz1.github.io/world-globe-embed/schema/prefs.schema.json" */;
+let vErrors = null;
+let errors = 0;
+const evaluated0 = validate32.evaluated;
+if(evaluated0.dynamicProps){
+evaluated0.props = undefined;
+}
+if(evaluated0.dynamicItems){
+evaluated0.items = undefined;
+}
+if(errors === 0){
+if(data && typeof data == "object" && !Array.isArray(data)){
+let missing0;
+if(((data.seed === undefined) && (missing0 = "seed")) || ((data.mode === undefined) && (missing0 = "mode"))){
+validate32.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
+return false;
+}
+else {
+const _errs1 = errors;
+for(const key0 in data){
+if(!((key0 === "seed") || (key0 === "mode"))){
+validate32.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs1 === errors){
+if(data.seed !== undefined){
+let data0 = data.seed;
+const _errs2 = errors;
+if(errors === _errs2){
+if(typeof data0 === "string"){
+if(!pattern54.test(data0)){
+validate32.errors = [{instancePath:instancePath+"/seed",schemaPath:"#/properties/seed/pattern",keyword:"pattern",params:{pattern: "^#[0-9a-f]{6}$"},message:"must match pattern \""+"^#[0-9a-f]{6}$"+"\""}];
+return false;
+}
+}
+else {
+validate32.errors = [{instancePath:instancePath+"/seed",schemaPath:"#/properties/seed/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid0 = _errs2 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.mode !== undefined){
+let data1 = data.mode;
+const _errs4 = errors;
+if(!(((data1 === "light") || (data1 === "dark")) || (data1 === "system"))){
+validate32.errors = [{instancePath:instancePath+"/mode",schemaPath:"#/properties/mode/enum",keyword:"enum",params:{allowedValues: schema53.properties.mode.enum},message:"must be equal to one of the allowed values"}];
+return false;
+}
+var valid0 = _errs4 === errors;
+}
+else {
+var valid0 = true;
+}
+}
+}
+}
+}
+else {
+validate32.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+validate32.errors = vErrors;
+return errors === 0;
+}
+validate32.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+

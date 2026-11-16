@@ -16,7 +16,7 @@ import { diffCategories, MAX_MOVED_PER_COMMIT, regionsPerCommit, type Categories
 import { ACCESS_PATH, PERMISSIONS, checkChange, pathKind, permissionsOf, regionOwner, type AccessFile, type Actor, type FileDiff, type Permission } from "../../src/shared/access.ts";
 import { HISTORY_MAX_LIMIT, HISTORY_MAX_WITH_FILES, type HistoryEntry, type HistoryPage } from "../../src/shared/history.ts";
 import { appJwt, nonce, sign, verify } from "./crypto.ts";
-import { validateAccess, validateCategories, validateMap, validatePin, validatePinMaps, validateRegion, validateSlots, type ValidateFn } from "./generated/validators.js";
+import { validateAccess, validateCategories, validateMap, validatePin, validatePinMaps, validatePrefs, validateRegion, validateSlots, type ValidateFn } from "./generated/validators.js";
 import { rateLimited, type RateLimiter } from "./ratelimit.ts";
 import * as proposals from "./proposals.ts";
 
@@ -46,6 +46,8 @@ export interface Env {
   WAITING?: KV;
   /** Cloudflare rate-limiting binding (wrangler.toml). Optional: each Worker instance also counts on its own. */
   RATE_LIMITER?: RateLimiter;
+  /** Where each account's colour theme is kept. Optional; the waiting list's namespace is used when it isn't bound. */
+  PREFS?: KV;
   /** Where suggested changes are kept (src/proposals.ts). Optional; the waiting list's namespace is used when it isn't bound. */
   PROPOSALS?: proposals.ProposalKV;
   /** The EditingRoom Durable Object (index.ts, presence.ts). Optional: without it there are no "X is editing" notices. */
@@ -63,6 +65,11 @@ const MAX_CHANGED_FILES = 400;
 /** Region and access files whose text a single commit may make the API read (each is a subrequest). */
 const MAX_READ_FILES = MAX_MOVED_PER_COMMIT;
 const WAITING_DAYS = 30;
+
+export interface Prefs {
+  seed: string;
+  mode: "light" | "dark" | "system";
+}
 
 export interface Session {
   id: number;
@@ -357,7 +364,37 @@ async function history(req: Request, env: Env, up: Upstream, url: URL): Promise<
 
 async function sessionInfo(req: Request, env: Env, up: Upstream): Promise<Response> {
   const a = await listedActor(req, env, up, { noteWaiting: true });
-  return json(200, { id: a.id, login: a.login, owner: a.owner, permissions: PERMISSIONS.filter((p) => a.owner || a.permissions.has(p)), repo: env.REPO, branch: branchOf(env) });
+  // The account's colour theme rides along, so the page needs no extra request (one KV read per sign-in).
+  return json(200, { id: a.id, login: a.login, owner: a.owner, permissions: PERMISSIONS.filter((p) => a.owner || a.permissions.has(p)), repo: env.REPO, branch: branchOf(env), prefs: await readPrefs(env, a.id) });
+}
+
+/* ── Account preferences (the colour theme): one small KV value per GitHub account ── */
+
+const prefsStore = (env: Env) => env.PREFS ?? env.WAITING;
+
+async function readPrefs(env: Env, id: number): Promise<Prefs | null> {
+  try {
+    const raw = await prefsStore(env)?.get(`pref:${id}`);
+    const p = raw ? (JSON.parse(raw) as unknown) : null;
+    return p && validatePrefs(p) ? (p as Prefs) : null;
+  } catch {
+    return null; // The theme is a convenience; never fail sign-in over it.
+  }
+}
+
+/** PUT /prefs: replaces the signed-in person's theme. The page sends it only when they change it. */
+async function savePrefs(req: Request, env: Env, up: Upstream): Promise<Response> {
+  const a = await listedActor(req, env, up);
+  const kv = prefsStore(env);
+  if (!kv) throw new HttpError(501, "This admin API has no place to keep preferences.");
+  const body = await readJson<unknown>(req);
+  const bad = schemaError(validatePrefs, body, "the preferences");
+  if (bad) throw new HttpError(400, "That isn't a valid colour theme (a #rrggbb colour and light, dark or system).");
+  const next = body as Prefs;
+  // KV's free plan allows 1,000 writes a day: skip the write when nothing changed.
+  const cur = await readPrefs(env, a.id);
+  if (!cur || cur.seed !== next.seed || cur.mode !== next.mode) await kv.put(`pref:${a.id}`, JSON.stringify({ seed: next.seed, mode: next.mode }));
+  return json(200, { seed: next.seed, mode: next.mode });
 }
 
 function needUsers(a: Actor): void {
@@ -741,7 +778,7 @@ export async function handle(req: Request, env: Env, up: Upstream): Promise<Resp
   if (req.method === "OPTIONS")
     return new Response(null, {
       status: 204,
-      headers: { ...cors, "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE", "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, X-GitHub-Api-Version", "Access-Control-Max-Age": "600" },
+      headers: { ...cors, "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE", "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, X-GitHub-Api-Version", "Access-Control-Max-Age": "600" },
     });
   const url = new URL(req.url);
   const p = url.pathname;
@@ -754,6 +791,7 @@ export async function handle(req: Request, env: Env, up: Upstream): Promise<Resp
     let m: RegExpExecArray | null;
     if (req.method === "GET" && p === "/session") return withCors(await sessionInfo(req, env, up));
     if (req.method === "GET" && (m = /^\/users\/([^/]+)$/.exec(p))) return withCors(await lookupUser(req, env, up, decodeURIComponent(m[1])));
+    if (req.method === "PUT" && p === "/prefs") return withCors(await savePrefs(req, env, up));
     if (req.method === "GET" && p === "/history") return withCors(await history(req, env, up, url));
     if (req.method === "GET" && p === "/waiting") return withCors(await waitingList(req, env, up));
     if (req.method === "DELETE" && (m = /^\/waiting\/([^/]+)$/.exec(p))) return withCors(await dismissWaiting(req, env, up, m[1]));

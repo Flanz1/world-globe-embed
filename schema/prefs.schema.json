@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flanz1.github.io/world-globe-embed/schema/prefs.schema.json",
+  "title": "Admin page preferences",
+  "description": "One account's colour theme for the admin page: the accent colour's seed and light, dark or the system's setting. Kept by the admin API, not in the repository.",
+  "type": "object",
+  "required": ["seed", "mode"],
+  "additionalProperties": false,
+  "properties": {
+    "seed": { "type": "string", "pattern": "^#[0-9a-f]{6}$" },
+    "mode": { "enum": ["light", "dark", "system"] }
+  }
+}

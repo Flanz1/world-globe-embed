@@ -59,6 +59,8 @@ Suggestions are kept in Cloudflare KV (the `PROPOSALS` binding if present, other
 
 If someone signs in before they're added, they're told they're waiting, and they appear under **Asked for access** in the Users tab, where you can approve them in one click. Removing someone takes effect on their next save, even while they're still signed in. Sessions last 12 hours and only live in that browser tab.
 
+Each account's colour theme (the accent colour and light/dark/system choice from the header) is one small KV value, key `pref:<GitHub account id>` (the `PREFS` binding if present, otherwise the waiting list's namespace). The sign-in check (`GET /session`) returns it, which costs one KV read per sign-in, and `PUT /prefs` replaces it (schema `schema/prefs.schema.json`); the page sends it a moment after the last change and the Worker skips the write when nothing changed, so a few dozen writes a day at most against the free plan's 1,000.
+
 While a region is open in the editor, that tab keeps a WebSocket open to the admin API's `EditingRoom` Durable Object (`/editing/live`, `worker/src/presence.ts`) and says which regions it has open. The editor then warns "Ann has this region open", and the Regions tab shows who is editing each card. A tab that closes, reloads or crashes drops off at once; one that loses its network drops off within about 3 minutes (it stops pinging). Nothing is stored and no KV is used; Cloudflare answers the pings without waking the room. It's only a hint: saving is still checked against the branch.
 
 ## One-time setup (repository owner)
