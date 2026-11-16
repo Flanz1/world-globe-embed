@@ -1784,11 +1784,16 @@ export function openEditor(o: EditorOptions): void {
           fillIn.addEventListener("input", () => {
             const v = Number(fillIn.value);
             fillOut.value = `${Math.round(v * 100)}%`;
+            if (!fillReset.isConnected) fillLine.append(fillReset);
             setUnder((hist.state.props.under ?? []).map((x, j) => (j === i ? { ...x, fill: v } : x)), "Underlay fill");
             changed();
           });
           const fillReset = btn("Reset", "Use the underlay region's own fill again", () => {
             setUnder((hist.state.props.under ?? []).map((x, j) => (j === i ? { ...x, fill: undefined } : x)), "Underlay fill");
+            fillIn.value = String(own);
+            fillOut.value = `${Math.round(own * 100)}%`;
+            fillIn.focus();
+            fillReset.remove();
             changed();
           });
           const move = (d: -1 | 1) => () => {
