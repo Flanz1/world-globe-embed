@@ -636,6 +636,7 @@ export function renderRegions(): void {
   $("#regions-tools").hidden = entries.length === 0;
   const cats = categories().categories;
   $<HTMLButtonElement>("#r-new-category").hidden = !entries.length;
+  $<HTMLButtonElement>("#r-combine").hidden = !entries.length;
   $<HTMLButtonElement>("#r-new-category").disabled = !canAddCategory();
   $<HTMLButtonElement>("#r-new-category").title = canAddCategory() ? "Add a folder to sort regions into" : "You don't have permission to create folders.";
   const filtering = !!(q || slot || whoId != null);
