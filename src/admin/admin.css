@@ -80,7 +80,10 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .55); }
 .rthumb { width: 168px; height: 96px; border-radius: 4px; background: var(--line); display: block; }
 .rinfo { display: grid; gap: 4px; min-width: 0; }
 .rname { overflow-wrap: anywhere; }
-.rcard .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+/* The button row sits in its own full-width row, flush with the card's left edge, and never wraps.
+   On very narrow screens it scrolls sideways instead of breaking onto a second line. */
+.rcard .actions { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; margin-top: 4px; min-width: 0; overflow-x: auto; }
+.rcard .actions > * { flex: 0 0 auto; white-space: nowrap; }
 .rcard .actions button { padding: 3px 10px; font-size: 13px; }
 .rfolder { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px 10px; }
 .rfolder-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; }
@@ -328,7 +331,8 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
 .pn-cats p { flex-basis: 100%; margin: 0; }
 .pinmap { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px 8px; display: grid; gap: 4px; }
 .pinmap-head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
-.pinmap-head .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.pinmap-head .actions { display: flex; flex-wrap: nowrap; gap: 6px; margin-left: auto; min-width: 0; overflow-x: auto; }
+.pinmap-head .actions > * { flex: 0 0 auto; white-space: nowrap; }
 .pinmap-head .actions button { padding: 3px 10px; font-size: 13px; }
 .pinmap.loose { border-style: dashed; }
 .ed-pinmaps { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; margin: 0; display: grid; gap: 4px; }
