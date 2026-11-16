@@ -289,7 +289,7 @@ dialog.history { width: min(940px, calc(100vw - 32px)); }
 .hist-list li.on .hist-item { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .hist-side { display: grid; gap: 8px; }
 .hist-canvas { width: 100%; max-width: 520px; height: auto; aspect-ratio: 520 / 300; border-radius: 6px; background: var(--line); }
-.hist-dash { display: inline-block; width: 26px; border-top: 2px dashed var(--accent); vertical-align: middle; }
+.hist-dash { display: inline-block; width: 26px; border-top: 2px dashed #e8590c; /* data colour: matches the dashed line drawn in region-history.ts */ vertical-align: middle; }
 @media (max-width: 700px) { .hist-grid { grid-template-columns: 1fr; } }
 
 /* ── Activity tab ── */
