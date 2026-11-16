@@ -9,10 +9,14 @@
     "colorLabel": "Trinicism",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-15T13:44:40Z",
+    "updated": "2026-11-16T08:51:59Z",
     "updatedBy": {
       "id": 45669787,
       "login": "Flanz1"
+    },
+    "createdBy": {
+      "id": 138310181,
+      "login": "LoopSimon"
     }
   },
   "geometry": {
