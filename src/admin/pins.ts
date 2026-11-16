@@ -292,7 +292,7 @@ function renderForm(rebuild: boolean): void {
     const hint = h("p", { className: "muted small", textContent: can("regions") ? "Press “Place a pin” and click the map, or pick a pin on the map or in the list." : "Pick a pin on the map or in the list. You need the “Create regions” permission to place pins." });
     const empty = h("div", { className: "empty" }, hint);
     if (can("regions")) {
-      const place = h("button", { type: "button", textContent: "Place a pin", disabled: !slotMap() });
+      const place = h("button", { type: "button", className: "ghost", dataset: { action: "place-empty" }, textContent: adding ? "Click the map… (Esc to cancel)" : "Place a pin", disabled: !slotMap() });
       place.addEventListener("click", () => (el.add as HTMLButtonElement).click());
       empty.append(place);
     }
@@ -578,6 +578,8 @@ function syncControls(): void {
   add.setAttribute("aria-pressed", String(adding));
   add.textContent = adding ? "Click the map… (Esc to cancel)" : "Place a pin";
   (el.pane as HTMLElement).dataset.adding = String(adding);
+  const emptyPlace = el.form?.querySelector<HTMLButtonElement>("[data-action=place-empty]");
+  if (emptyPlace) emptyPlace.textContent = add.textContent;
   // Size the pane to the map so it has no empty bands (see .pn-pane in admin.css).
   (el.pane as HTMLElement).style.setProperty("--pn-aspect", String(aspect()));
 }
