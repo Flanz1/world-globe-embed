@@ -85,6 +85,14 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .55); }
 .rcard .actions { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; margin-top: 4px; min-width: 0; overflow-x: auto; }
 .rcard .actions > * { flex: 0 0 auto; white-space: nowrap; }
 .rcard .actions button { padding: 3px 10px; font-size: 13px; }
+@media (max-width: 480px) { .rcard .actions { gap: 4px; } .rcard .actions button { padding: 3px 8px; } }
+.rmore { display: inline-flex; flex: 0 0 auto; }
+.rmenu { position: fixed; inset: auto; margin: 0; min-width: 170px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); box-shadow: 0 6px 20px rgba(0, 0, 0, .25); }
+.rmenu:popover-open { display: flex; flex-direction: column; gap: 2px; }
+.rmenu button { width: 100%; text-align: left; border: 0; padding: 6px 10px; font-size: 13px; }
+.rmenu button:hover:not(:disabled), .rmenu button:focus-visible { background: color-mix(in srgb, var(--fg) 8%, transparent); }
+.rmenu button.danger { margin-top: 4px; position: relative; }
+.rmenu button.danger::before { content: ""; position: absolute; left: 0; right: 0; top: -3px; border-top: 1px solid var(--line); }
 .rfolder { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px 10px; }
 .rfolder-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; }
 .rfolder-toggle { display: inline-flex; align-items: center; gap: 6px; border: 0; padding: 4px 6px; font-size: 15px; text-align: left; }

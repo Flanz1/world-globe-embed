@@ -260,17 +260,69 @@ function card(e: RegionEntry): HTMLElement {
     h(
       "div",
       { className: "actions" },
-      canEdit(f) || !can("regions") || linked ? btn("Edit", () => edit(e), "", noEdit) : btn("Suggest changes", () => suggest(e), "", ""),
-      canEdit(f) && can("regions") && !linked ? h("button", { type: "button", className: "ghost", textContent: "Propose changes", title: "Draw changes and send them for somebody else to accept or decline", onclick: () => suggest(e), dataset: { action: "propose-changes" } }) : null,
+      canEdit(f) || !can("regions") || linked ? btn("Edit", () => edit(e), "", noEdit) : null,
+      !canEdit(f) && !linked && can("regions") ? btn("Suggest changes", () => suggest(e), "", "") : null,
       !canEdit(f) || !pendingFor(e.id) ? null : h("span", { className: "badge warn", textContent: `${pendingFor(e.id)} suggestion${pendingFor(e.id) > 1 ? "s" : ""}`, title: "Waiting in the list above the regions" }),
-      btn("Duplicate", () => duplicate(e), "ghost", noCreate),
       btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot, p.pinMaps)),
-      btn("Copy embed code", () => openEmbedDialog({ region: { id: e.id, name: e.id, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot })),
-      linked ? null : btn("History", () => openHistory({ gh: deps.gh(), id: e.id, path: e.path, feature: f, map, noRestore: noEdit, act: deps.act }), "ghost", ""),
-      btn("Delete", () => del(e), "ghost danger", noDelete),
-      canTransfer() ? btn("Transfer", () => transfer(e, f), "ghost", "") : null,
+      h("button", { type: "button", className: "ghost", textContent: "Embed code…", title: "Choose what to show and copy the embed code", dataset: { action: "embed" }, onclick: () => openEmbedDialog({ region: { id: e.id, name: e.id, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot }) }),
+      moreMenu(e.id, [
+        // Editors who can edit it themselves can still send a suggestion for somebody else to accept (same name as everywhere).
+        canEdit(f) && can("regions") && !linked ? item("Suggest changes", () => suggest(e), "", "Draw changes and send them for somebody else to accept or decline") : null,
+        item("Duplicate", () => duplicate(e), noCreate),
+        item("History", () => openHistory({ gh: deps.gh(), id: e.id, path: e.path, feature: f, map, noRestore: noEdit, act: deps.act }), linked ? "A linked region has no history of its own: open the regions it combines." : ""),
+        canTransfer() ? item("Transfer", () => transfer(e, f), "") : null,
+        item("Delete", () => del(e), noDelete, "", true),
+      ]),
     ),
   );
+}
+
+type MenuItem = { text: string; onclick: () => void; why: string; hint: string; danger: boolean };
+const item = (text: string, onclick: () => void, why = "", hint = "", danger = false): MenuItem => ({ text, onclick, why, hint, danger });
+
+/** The "More…" button at the end of a region card's row, with a menu of the less used actions (Delete last, red, behind a line). */
+function moreMenu(id: string, items: (MenuItem | null)[]): HTMLElement {
+  const list = items.filter((x): x is MenuItem => !!x);
+  const menu = h("div", { className: "rmenu", role: "menu", ariaLabel: `More actions for ${id}`, dataset: { region: id } });
+  menu.setAttribute("popover", "auto");
+  const buttons = list.map((x) => {
+    const b = h("button", { type: "button", role: "menuitem", className: `ghost${x.danger ? " danger" : ""}`, textContent: x.text, disabled: !!x.why, title: x.why || x.hint, dataset: { action: x.text.toLowerCase().replace(/\W+/g, "-") } });
+    b.addEventListener("click", () => {
+      menu.hidePopover();
+      x.onclick();
+    });
+    return b;
+  });
+  menu.append(...buttons);
+  const more = h("button", { type: "button", className: "ghost", textContent: "More…", dataset: { action: "more" } });
+  more.setAttribute("aria-expanded", "false");
+  more.setAttribute("aria-haspopup", "menu");
+  const enabled = () => buttons.filter((b) => !b.disabled);
+  menu.addEventListener("beforetoggle", (ev) => {
+    if ((ev as ToggleEvent).newState !== "open") return;
+    const r = more.getBoundingClientRect();
+    menu.style.top = `${Math.round(r.bottom + 4)}px`;
+    menu.style.left = `${Math.max(8, Math.round(Math.min(r.right - 170, window.innerWidth - 178)))}px`;
+  });
+  menu.addEventListener("toggle", (ev) => {
+    const open = (ev as ToggleEvent).newState === "open";
+    more.setAttribute("aria-expanded", String(open));
+    if (open) (enabled()[0] ?? buttons[0])?.focus();
+  });
+  menu.addEventListener("keydown", (ev) => {
+    const live = enabled();
+    const at = live.indexOf(document.activeElement as HTMLButtonElement);
+    const go = (n: number) => (ev.preventDefault(), live[(n + live.length) % live.length]?.focus());
+    if (ev.key === "ArrowDown") go(at + 1);
+    else if (ev.key === "ArrowUp") go(at < 0 ? -1 : at - 1);
+    else if (ev.key === "Home") go(0);
+    else if (ev.key === "End") go(live.length - 1);
+    else if (ev.key === "Tab") menu.hidePopover();
+  });
+  more.addEventListener("click", () => {
+    menu.togglePopover();
+  });
+  return h("span", { className: "rmore" }, more, menu);
 }
 
 /** "Folder" dropdown on a card: only shown once folders exist. Moving needs the right to edit the region. */
