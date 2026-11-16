@@ -320,7 +320,8 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
 .pn-form { display: grid; gap: 8px; }
 .pn-form textarea { font: inherit; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); resize: vertical; max-width: 100%; }
 .pn-color { display: flex; align-items: center; gap: 10px; }
-.pn-list { display: grid; gap: 4px; max-height: 320px; overflow: auto; }
+.pn-below { margin-top: 14px; display: grid; gap: 6px; }
+.pn-list { display: grid; gap: 4px; }
 .pn-row { display: flex; align-items: center; gap: 8px; text-align: left; background: transparent; color: var(--fg); border: 1px solid var(--line); padding: 4px 8px; }
 .pn-row.on { border-color: var(--accent); }
 .pn-row .pn-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
