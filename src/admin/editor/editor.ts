@@ -124,6 +124,7 @@ import { clearDraft, draftKey, loadDraft, saveDraft, type Draft } from "./draft.
 import { Coast, loadCoast, thinTrace } from "./coast.ts";
 import { fillArea, type Barrier } from "./fill.ts";
 import { carryLines, posKey, findSnap, followBorders, lineCarry, type LineCarry, insertOnEdges, partRings, sharedEdges, snapRing, traceBetween, vertexIndex, withGlued, type Snap, type SnapRing } from "./snap.ts";
+import { modeButton } from "../theme.ts";
 
 export interface EditorOptions {
   gh: GitHub;
@@ -570,7 +571,7 @@ export function openEditor(o: EditorOptions): void {
   const dlg = h(
     "dialog",
     { className: "editor", ariaLabel: "Region editor" },
-    h("div", { className: "pv-head" }, title, h("div", { className: "row" }, saveBtn, declineBtn, closeBtn)),
+    h("div", { className: "pv-head" }, title, h("div", { className: "row" }, saveBtn, declineBtn, modeButton(), closeBtn)),
     h(
       "div",
       { className: "ed-toolbar", role: "toolbar" },

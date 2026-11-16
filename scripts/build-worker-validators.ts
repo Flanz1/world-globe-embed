@@ -1,5 +1,5 @@
 /**
- * Generates worker/src/generated/validators.js: the region, pin, access, categories, slots and map JSON schemas compiled to plain
+ * Generates worker/src/generated/validators.js: the region, pin, access, categories, slots, map and prefs JSON schemas compiled to plain
  * functions, because Cloudflare Workers can't compile schemas at run time (no eval).
  *
  *   npm run worker:validators          writes the file
@@ -15,10 +15,10 @@ export const VALIDATORS_FILE = path.join(ROOT, "worker/src/generated/validators.
 
 export function generateValidators(): string {
   const ajv = new Ajv2020({ allErrors: false, strict: true, validateFormats: false, code: { source: true, esm: true, lines: true } });
-  for (const [name, file] of [["region", "region.schema.json"], ["access", "access.schema.json"], ["categories", "categories.schema.json"], ["slots", "slots.schema.json"], ["map", "map.schema.json"], ["pin", "pin.schema.json"], ["pinmaps", "pinmaps.schema.json"]])
+  for (const [name, file] of [["region", "region.schema.json"], ["access", "access.schema.json"], ["categories", "categories.schema.json"], ["slots", "slots.schema.json"], ["map", "map.schema.json"], ["pin", "pin.schema.json"], ["pinmaps", "pinmaps.schema.json"], ["prefs", "prefs.schema.json"]])
     ajv.addSchema(JSON.parse(readFileSync(path.join(ROOT, "schema", file), "utf8")) as object, name);
   const gen = (standaloneCode as unknown as { default?: typeof standaloneCode }).default ?? standaloneCode;
-  const code = gen(ajv, { validateRegion: "region", validateAccess: "access", validateCategories: "categories", validateSlots: "slots", validateMap: "map", validatePin: "pin", validatePinMaps: "pinmaps" })
+  const code = gen(ajv, { validateRegion: "region", validateAccess: "access", validateCategories: "categories", validateSlots: "slots", validateMap: "map", validatePin: "pin", validatePinMaps: "pinmaps", validatePrefs: "prefs" })
     // Ajv's "esm" output still require()s two tiny runtime helpers; a Worker module has no require.
     .replace(/require\("ajv\/dist\/runtime\/ucs2length"\)\.default/g, "ucs2length")
     .replace(/require\("ajv\/dist\/runtime\/equal"\)\.default/g, "deepEqual");

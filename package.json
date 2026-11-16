@@ -48,7 +48,8 @@
     "region-owners": "tsx scripts/region-owners.ts",
     "worker:validators": "tsx scripts/build-worker-validators.ts",
     "preflight": "tsx scripts/preflight.mjs",
-    "e2e:roles": "tsx scripts/e2e/roles.mjs"
+    "e2e:roles": "tsx scripts/e2e/roles.mjs",
+    "e2e:theme": "tsx scripts/e2e/theme.mjs"
   },
   "dependencies": {
     "polygon-clipping": "^0.15.7",

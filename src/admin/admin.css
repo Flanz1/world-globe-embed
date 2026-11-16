@@ -486,3 +486,28 @@ button.ed-pinfolder-toggle.ghost { border-color: transparent; color: var(--md-sy
 /* Grid tracks must be allowed to shrink, or a wide button row stretches the whole page on phones. */
 .regions, .rfolder-body, .pn-below, .pn-list, .pn-side, .pinmap, .content { grid-template-columns: minmax(0, 1fr); }
 .rfolder, .rfolder-head, .pinmap-head { min-width: 0; }
+
+/* ── Account colour theme: sun/moon switch and colour menu in the header (src/admin/theme.ts) ── */
+.theme-ctl { display: inline-flex; align-items: center; gap: 8px; }
+.theme-ctl[hidden] { display: none; }
+.theme-colour { display: inline-flex; }
+/* Outlined like .ghost, but not named ghost: the editor's tests (and Close) look for `.pv-head button.ghost`. */
+button.theme-mode, button.theme-swatch { background-color: transparent; color: var(--md-sys-color-primary); border-color: var(--md-sys-color-outline); }
+button.icon { width: 40px; padding: 0; display: inline-grid; place-items: center; }
+dialog.editor button.icon { width: 32px; }
+button.icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+button.theme-mode[aria-pressed="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: transparent; }
+.theme-swatch .dot, .theme-item .dot { width: 20px; height: 20px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
+.theme-swatch .dot { background: var(--md-sys-color-primary); box-shadow: 0 0 0 2px var(--md-sys-color-surface), 0 0 0 3px var(--md-sys-color-outline); }
+.theme-menu { position: fixed; inset: auto; margin: 0; width: 220px; max-width: calc(100vw - 16px); max-height: calc(100vh - 80px); overflow: auto; padding: 4px 0; border: 0; border-radius: 12px; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); box-shadow: var(--app-shadow); }
+.theme-menu:popover-open { display: flex; flex-direction: column; }
+.theme-head { padding: 8px 16px 4px; }
+.theme-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; padding: 0 16px; font-size: 14px; text-align: left; justify-content: flex-start; border-radius: 0; color: var(--md-sys-color-on-surface); }
+button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weight: 400; padding: 0 16px; }
+.theme-item:focus-visible, .theme-menu button:focus-visible { outline-offset: -2px; }
+.theme-item[aria-checked="true"]::after { content: ""; margin-left: auto; width: 16px; height: 16px; background: currentColor; mask: var(--app-tick) center / contain no-repeat; -webkit-mask: var(--app-tick) center / contain no-repeat; }
+.theme-custom { cursor: pointer; }
+.theme-custom:hover { background-image: var(--app-hover); }
+.theme-custom input[type=color] { margin-left: auto; width: 36px; height: 28px; padding: 2px; border-radius: 8px; }
+.theme-custom[aria-checked="true"] input { margin-left: auto; }
+.theme-custom[aria-checked="true"]::after { margin-left: 8px; }

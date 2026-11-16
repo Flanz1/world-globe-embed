@@ -15,6 +15,7 @@ import { initPins, loadPins, renderPins } from "./pins.ts";
 import { initActivity, loadActivity } from "./activity.ts";
 import { PART_BYTES, prepareImage } from "./upload-image.ts";
 import { can, refusal, setMe } from "./session.ts";
+import { adopt, colourMenu, connectAccount, forgetTheme, initTheme, modeButton, parsePrefs } from "./theme.ts";
 import { initUsers, loadUsers } from "./users.ts";
 import { setChecks, type Check } from "./status.ts";
 
@@ -547,6 +548,10 @@ async function signIn(token: string): Promise<void> {
     const me = await client.whoAmI();
     setMe(me);
     gh = client;
+    // The account's saved theme (null: never chose, so the defaults), and where later changes are saved.
+    adopt(parsePrefs(me.prefs));
+    connectAccount((p) => client.savePrefs(p), () => setStatus("Couldn't save your colour theme to your account; it only applies in this browser for now.", "error"));
+    $("#theme-ctl").hidden = false;
     $("#who").textContent = `${__REPO__} · signed in as ${me.login}`;
     showBranch(client);
     $("#forget").hidden = false;
@@ -562,6 +567,7 @@ async function signIn(token: string): Promise<void> {
   } catch (e) {
     if (e instanceof NotListed) {
       // Signed in, but nobody has added them yet: the owner sees them in the Users tab.
+      $("#theme-ctl").hidden = false;
       $("#forget").hidden = false;
       $("#signin").hidden = true;
       $("#waiting").hidden = false;
@@ -575,6 +581,8 @@ async function signIn(token: string): Promise<void> {
 
 function signOut(): void {
   store.clear();
+  connectAccount(null);
+  forgetTheme();
   gh = null;
   setMe(null);
   clearTimeout(pollTimer);
@@ -586,6 +594,8 @@ if (framed) {
     h("p", { className: "error", textContent: "The admin page can't be used inside a frame. " }, h("a", { href: location.href, target: "_top", rel: "noopener", textContent: "Open it directly" })),
   );
 } else {
+  initTheme();
+  $("#theme-ctl").append(modeButton(), colourMenu());
   $("#forget").addEventListener("click", signOut);
   $("#waiting-out").addEventListener("click", signOut);
   $("#signin-github").addEventListener("click", signInWithGitHub);

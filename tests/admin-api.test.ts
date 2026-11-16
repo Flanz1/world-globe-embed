@@ -197,7 +197,7 @@ describe("admin API sign-in", () => {
     expect(s!.exp - Date.now() / 1000).toBeLessThanOrEqual(12 * 3600 + 5);
 
     const me = await new GitHub(token, REPO, API).whoAmI();
-    expect(me).toEqual({ ...ANN, owner: false, permissions: ["regions"] });
+    expect(me).toEqual({ ...ANN, owner: false, permissions: ["regions"], prefs: null });
   });
 
   it("rejects forged, tampered and expired sessions", async () => {
@@ -658,6 +658,40 @@ describe("admin API big saves", () => {
     tries = 0;
     await expect(retrying(async () => (tries++, Promise.reject(new GitHubError(403, "No permission"))), 3, 1)).rejects.toThrow("No permission");
     expect(tries).toBe(1);
+  });
+});
+
+describe("account colour theme (/prefs)", () => {
+  const PREFS = { seed: "#036879", mode: "dark" };
+  const putPrefs = async (a: { id: number; login: string }, body: unknown) => call(`${API}/prefs`, { method: "PUT", headers: { ...(await bearer(a)), "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const prefsOf = async (a: { id: number; login: string }) => ((await (await call(`${API}/session`, { headers: await bearer(a) })).json()) as { prefs: unknown }).prefs;
+
+  it("keeps each account's theme apart and hands it back with /session", async () => {
+    expect(await prefsOf(ANN)).toBeNull();
+    expect((await putPrefs(ANN, PREFS)).status).toBe(200);
+    expect(await prefsOf(ANN)).toEqual(PREFS);
+    expect(await prefsOf(BO)).toBeNull();
+    expect((await putPrefs(BO, { seed: "#6750a4", mode: "light" })).status).toBe(200);
+    expect(await prefsOf(ANN)).toEqual(PREFS);
+    expect(await prefsOf(BO)).toEqual({ seed: "#6750a4", mode: "light" });
+  });
+
+  it("refuses anything that isn't a #rrggbb colour and light, dark or system", async () => {
+    for (const bad of [{}, { seed: "red", mode: "dark" }, { seed: "#8A6A1F", mode: "dark" }, { seed: "#8a6a1f", mode: "auto" }, { seed: "#8a6a1f", mode: "dark", extra: 1 }, null, "x"])
+      expect((await putPrefs(ANN, bad)).status, JSON.stringify(bad)).toBe(400);
+    expect(await prefsOf(ANN)).toBeNull();
+  });
+
+  it("only lets people on the admin list save, writes only on a change, and reads once per sign-in", async () => {
+    expect((await putPrefs(STRANGER, PREFS)).status).toBe(403);
+    expect((await call(`${API}/prefs`, { method: "PUT", body: JSON.stringify(PREFS) })).status).toBe(401);
+    const before = kv.puts;
+    await putPrefs(ANN, PREFS);
+    await putPrefs(ANN, PREFS);
+    await putPrefs(ANN, PREFS);
+    expect(kv.puts - before).toBe(1);
+    await putPrefs(ANN, { ...PREFS, mode: "system" });
+    expect(kv.puts - before).toBe(2);
   });
 });
 
