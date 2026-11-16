@@ -111,7 +111,10 @@
         "id": 138310181,
         "login": "LoopSimon"
       },
-      "created": "2026-11-13T18:48:10Z"
+      "created": "2026-11-13T18:48:10Z",
+      "pinned": [
+        "vas-ira"
+      ]
     }
   ]
 }
