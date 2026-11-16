@@ -260,8 +260,8 @@ function card(e: RegionEntry): HTMLElement {
     h(
       "div",
       { className: "actions" },
-      canEdit(f) || !can("regions") || linked ? btn("Edit", () => edit(e), "", noEdit) : null,
-      !canEdit(f) && !linked && can("regions") ? btn("Suggest changes", () => suggest(e), "", "") : null,
+      canEdit(f) || !can("regions") || linked ? btn("Edit", () => edit(e), "tonal", noEdit) : null,
+      !canEdit(f) && !linked && can("regions") ? btn("Suggest changes", () => suggest(e), "tonal", "") : null,
       !canEdit(f) || !pendingFor(e.id) ? null : h("span", { className: "badge warn", textContent: `${pendingFor(e.id)} suggestion${pendingFor(e.id) > 1 ? "s" : ""}`, title: "Waiting in the list above the regions" }),
       btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot, p.pinMaps)),
       h("button", { type: "button", className: "ghost", textContent: "Embed code…", title: "Choose what to show and copy the embed code", dataset: { action: "embed" }, onclick: () => openEmbedDialog({ region: { id: e.id, name: e.id, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot }) }),
@@ -294,7 +294,7 @@ function moreMenu(id: string, items: (MenuItem | null)[]): HTMLElement {
     return b;
   });
   menu.append(...buttons);
-  const more = h("button", { type: "button", className: "ghost", textContent: "More…", dataset: { action: "more" } });
+  const more = h("button", { type: "button", className: "ghost text", textContent: "More…", dataset: { action: "more" } });
   more.setAttribute("aria-expanded", "false");
   more.setAttribute("aria-haspopup", "menu");
   const close = () => {
