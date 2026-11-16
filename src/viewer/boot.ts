@@ -68,6 +68,16 @@ if (regionId !== null) {
   // A region that includes pin maps shows their pins unless the embed code says otherwise (?pins=0 turns them off).
   if (!stacked && !preview && entry?.pm?.length && !q.has("pins")) cfg.pins = entry.pm.join(",");
   const ids = stacked ? stacked.filter(inIndex) : [...under.map((e) => e.id), regionId];
+  // Stacked regions bring their own underlays (under=0 leaves them out): each goes just below its region, cut to it. Their ids are `<id>@<region>`, as one underlay can serve several regions.
+  const stackPlan: { id: string; host?: string; label?: string; on?: boolean; clip?: boolean }[] = stacked
+    ? ids.flatMap((id) => {
+        const e = inIndex(id);
+        const us = q.get("under") !== "0" && e?.u ? e.u.filter((u) => u.id !== id && inIndex(u.id)) : [];
+        return [...us.map((u, i) => ({ id: u.id, host: id, label: u.label, on: u.on ?? i === 0, clip: e?.uc !== false })), { id }];
+      })
+    : [];
+  const stackUnder = stackPlan.filter((s) => s.host);
+  const underId = (s: { id: string; host?: string }) => `${s.id}@${s.host}`;
   if ((stacked ? ids.length > 0 : REGION_ID.test(regionId) && (entry || preview))) {
     const given = (k: string) => {
       const v = q.get(k);
@@ -118,7 +128,13 @@ if (regionId !== null) {
           })
           .catch(() => null);
       regionData =
-        ids.length > 1
+        stacked && stackUnder.length
+          ? Promise.all(stackPlan.map((s) => load(s.id).then((r) => (r && s.host ? { ...r, id: underId(s), underOf: s.host, underClipped: s.clip } : r)))).then((all) => {
+              // An underlay without its region isn't shown.
+              const found = all.filter((r): r is RegionData => !!r && (!r.underOf || all.some((h) => h?.id === r.underOf)));
+              return found.length ? mergeRegions(found) : null;
+            })
+          : ids.length > 1
           ? Promise.all(ids.map(load)).then((all) => {
               const found = all.filter((r): r is RegionData => !!r);
               // The region itself must be there; without it the underlays alone aren't what was asked for.
@@ -141,7 +157,19 @@ if (regionId !== null) {
       // Stacked regions (?regions=) are framed once they've loaded; until then the poster faces the first (or the union, flat). A region with underlays is framed by itself, from the index.
       fitted: (ids.length === 1 || under.length > 0) && !!entry,
       ...(preview ? { layers: previewLayers } : {}),
-      ...(ids.length > 1
+      ...(stacked && stackUnder.length
+        ? {
+            layers: {
+              names: {
+                ...Object.fromEntries(ids.flatMap((id) => (inIndex(id)?.ul ? [[id, inIndex(id)!.ul!]] : []))),
+                ...Object.fromEntries(stackUnder.map((s) => [underId(s), s.label ?? ""])),
+              },
+              title: "",
+              own: false,
+              hidden: stackUnder.filter((s) => !s.on).map(underId),
+            },
+          }
+        : ids.length > 1
         ? {
             layers: {
               names: under.length

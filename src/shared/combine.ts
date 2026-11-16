@@ -16,6 +16,7 @@ import {
   uniqueId,
   type LegendEntry,
   type LinkedNames,
+  UNDER_MAX,
   type RegionFeature,
 } from "./region.ts";
 
@@ -220,6 +221,12 @@ export function resolveLinked(f: RegionFeature, lookup: (id: string) => RegionFe
     ...r.feature.properties,
     linked: [...ids],
     ...(names ? { linkedNames: names } : {}),
+    // The linked region's own layers settings (regions shown under it) are its own, not its sources'.
+    ...(p.under?.length ? { under: p.under } : {}),
+    ...(p.underClip === false ? { underClip: false } : {}),
+    ...(p.underTitle ? { underTitle: p.underTitle } : {}),
+    ...(p.ownToggle ? { ownToggle: true } : {}),
+    ...(p.layerLabel ? { layerLabel: p.layerLabel } : {}),
     ...(p.created ? { created: p.created } : {}),
     ...(p.createdBy ? { createdBy: p.createdBy } : {}),
     ...(p.updated ? { updated: p.updated } : {}),
@@ -227,4 +234,23 @@ export function resolveLinked(f: RegionFeature, lookup: (id: string) => RegionFe
   };
   if (f.$schema) r.feature.$schema = f.$schema;
   return { feature: r.feature, missing, errors: [] };
+}
+
+/**
+ * Regions shown under a linked combined region are shown under every region it links too (so adding one in the
+ * combined view puts it on all its children). A child keeps its own underlays first and never goes under itself.
+ * Changes `regions` (the resolved ones) in place.
+ */
+export function inheritLinkedUnder(regions: Map<string, RegionFeature>): void {
+  for (const region of [...regions.values()]) {
+    const under = region.properties.linked && region.properties.under;
+    if (!under?.length) continue;
+    for (const cid of region.properties.linked!) {
+      const child = regions.get(cid);
+      if (!child || child.properties.linked || child.properties.slot !== region.properties.slot) continue;
+      const have = child.properties.under ?? [];
+      const extra = under.filter((e) => e.id !== cid && !have.some((h) => h.id === e.id));
+      if (extra.length) regions.set(cid, { ...child, properties: { ...child.properties, under: [...have, ...extra].slice(0, UNDER_MAX) } });
+    }
+  }
 }

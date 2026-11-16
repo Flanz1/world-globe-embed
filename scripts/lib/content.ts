@@ -10,7 +10,7 @@ import { MAX_PINS_PER_SLOT, checkPin, type PinFeature } from "../../src/shared/p
 import { checkAccess } from "../../src/shared/access.ts";
 import { checkCategories, type CategoriesFile } from "../../src/shared/categories.ts";
 import { checkPinMaps, type PinMapsFile } from "../../src/shared/pinmaps.ts";
-import { resolveLinked } from "../../src/shared/combine.ts";
+import { inheritLinkedUnder, resolveLinked } from "../../src/shared/combine.ts";
 import { ROOT, contentPaths, type ContentPaths } from "./paths.ts";
 
 const readJson = (file: string): unknown => JSON.parse(readFileSync(file, "utf8"));
@@ -195,6 +195,9 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
     if (r.errors.length) warnings.push(`${rel}: can't combine its linked regions (${r.errors[0]}); the saved snapshot is shown instead.`);
     if (r.feature) regions.set(id, r.feature);
   }
+
+  // Regions shown under a linked combined region are shown under every region it links too.
+  inheritLinkedUnder(regions);
 
   // Underlays are looked up by id when the embed loads; one that's gone just isn't shown.
   for (const [id, region] of regions) {
