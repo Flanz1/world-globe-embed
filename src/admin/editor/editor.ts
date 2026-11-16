@@ -1780,7 +1780,7 @@ export function openEditor(o: EditorOptions): void {
           });
           const own = neighbours.find((x) => x.id === e.id)?.properties.fillOpacity ?? DEFAULT_FILL_OPACITY;
           const fillIn = h("input", { type: "range", min: String(UNDER_FILL_MIN), max: "1", step: "0.05", value: String(underFill(e.fill) ?? own), name: "under-fill", ariaLabel: `Fill for ${regionTitle(e.id)}`, disabled: !(e.on ?? i === 0), title: (e.on ?? i === 0) ? "" : "Turn On to change fill" });
-          const fillOut = h("output", { ariaLive: "polite", textContent: e.fill === undefined ? "own" : `${Math.round(underFill(e.fill)! * 100)}%` });
+          const fillOut = h("output", { ariaLive: "polite", textContent: `${Math.round((underFill(e.fill) ?? own) * 100)}%` });
           fillIn.addEventListener("input", () => {
             const v = Number(fillIn.value);
             fillOut.value = `${Math.round(v * 100)}%`;
@@ -1798,8 +1798,10 @@ export function openEditor(o: EditorOptions): void {
             setUnder(cur, "Underlay order");
             changed();
           };
-          const fillRow = h("label", { className: "ed-under-fill small", title: "How strongly this underlay is filled: raise it to make it stand out" }, "Fill", fillIn, fillOut);
-          if (e.fill !== undefined) fillRow.append(fillReset);
+          const fillRow = h("label", { className: "small", title: `How strongly this underlay is filled: raise it to make it stand out${e.fill === undefined ? " (now the region's own fill)" : ""}` }, "Fill", fillIn, fillOut);
+          const fillLine = h("div", { className: "ed-under-fill" }, fillRow);
+          fillReset.classList.add("text");
+          if (e.fill !== undefined) fillLine.append(fillReset);
           return h(
             "div",
             { className: "ed-under-row" },
@@ -1812,7 +1814,7 @@ export function openEditor(o: EditorOptions): void {
               setUnder((hist.state.props.under ?? []).filter((_, j) => j !== i), "Remove underlay");
               changed();
             }),
-            fillRow,
+            fillLine,
           );
         }),
       );
