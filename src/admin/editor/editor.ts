@@ -527,6 +527,13 @@ export function openEditor(o: EditorOptions): void {
   const keyTitleIn = h("input", { type: "text", maxLength: LEGEND_TITLE_MAX, placeholder: "Legend", value: hist.state.props.legendTitle, name: "legend-title" });
   /** One collapsible folder per colour (the region's own colour first), each holding its parts' rows. */
   const folders = h("div", { className: "ed-folders" });
+  const foldAllBtn = h("button", {
+    type: "button",
+    className: "ghost tiny ed-fold-all",
+    textContent: "Collapse all",
+    title: "Fold every colour's parts away",
+    dataset: { act: "fold-all" },
+  });
   const addKeyBtn = btn("Add colour", "Add a colour (a new folder) for parts", () => addLegendEntry(), "key-add");
   const clashList = h("ul", { className: "ed-clashes small", ariaLive: "polite" });
   const saveBtn = h("button", { type: "button", textContent: review ? "Accept suggestion" : propose ? "Send suggestion" : "Save", className: "ed-save" });
@@ -624,6 +631,7 @@ export function openEditor(o: EditorOptions): void {
               "Each colour is a folder of parts. Give a colour a label and the embed lists it in the legend. Move a part to another colour with its colour menu. Where parts overlap, the higher-numbered part is drawn on top: use Forward and Back to change that.",
           }),
           h("label", {}, "Legend title", keyTitleIn),
+          foldAllBtn,
           folders,
           addKeyBtn,
         ),
@@ -2109,6 +2117,14 @@ export function openEditor(o: EditorOptions): void {
     if (!members.length) body.append(h("p", { className: "muted small ed-empty", textContent: "No parts in this colour." }));
     return h("section", { className: `ed-folder${open ? "" : " folded"}`, dataset: { key: String(k) } }, head, body);
   }
+  /** Collapse all folders, or expand them all when every one is already collapsed. */
+  foldAllBtn.addEventListener("click", () => {
+    const keys = [OWN_COLOUR, ...hist.state.props.legend.map((_, i) => i)];
+    if (keys.every((k) => folded.has(k))) folded.clear();
+    else for (const k of keys) folded.add(k);
+    colourSig = "";
+    syncColours();
+  });
   /** Rebuilds the folders and part rows only when their structure changes, so typing keeps focus. */
   let colourSig = "";
   function syncColours(): void {
@@ -2119,6 +2135,9 @@ export function openEditor(o: EditorOptions): void {
       const keys = [OWN_COLOUR, ...s.props.legend.map((_, i) => i)];
       folders.replaceChildren(...keys.map((k) => folder(k, s.parts.flatMap((_, p) => ((s.styles[p] ?? OWN_COLOUR) === k ? [p] : [])))));
     }
+    const allFolded = [OWN_COLOUR, ...s.props.legend.map((_, i) => i)].every((k) => folded.has(k));
+    foldAllBtn.textContent = allFolded ? "Expand all" : "Collapse all";
+    foldAllBtn.title = allFolded ? "Show every colour's parts" : "Fold every colour's parts away";
     // Values that change without changing the structure.
     folders.querySelectorAll<HTMLInputElement>(".ed-folder-head input[data-key]").forEach((el) => {
       const e = s.props.legend[Number(el.dataset.key)];
