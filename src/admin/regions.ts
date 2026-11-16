@@ -82,6 +82,8 @@ async function pool<T>(items: T[], limit: number, work: (item: T) => Promise<voi
 export async function loadRegions(): Promise<void> {
   const gh = deps.gh();
   // One listing request per folder level, however many regions there are (the contents API stops at 1,000).
+  // Categories are optional: if the file can't be read, regions just show uncategorized. Read alongside the regions.
+  const categoriesDone = loadCategories().catch(() => {});
   const files = (await gh.listTree("content/regions")).filter((f) => f.type === "file" && f.name.endsWith(".json"));
   const loaded: RegionEntry[] = [];
   await pool(files, READ_PARALLEL, async (f) => {
@@ -120,9 +122,11 @@ export async function loadRegions(): Promise<void> {
     if (r.feature) e.feature = r.feature;
   }
   if (!hasPendingSaves()) entries = loaded;
-  void loadSuggestions();
-  // Categories are optional: if the file can't be read, regions just show uncategorized.
-  await loadCategories().catch(() => {});
+  // The cards show a badge for pending suggestions, so draw them again once those have arrived (they may come after the first draw).
+  void loadSuggestions().then(() => {
+    if (!hasPendingSaves()) renderRegions();
+  });
+  await categoriesDone;
   // A change is still being saved: this read may predate it. The save reloads when it's done.
   if (hasPendingSaves()) return;
   renderRegions();

@@ -253,19 +253,24 @@ function renderRuns(runs: WorkflowRun[]): void {
 /* ── Data ── */
 
 async function loadAll(): Promise<void> {
+  // Everything below is independent, so it all goes out at once: the page used to read maps, slots, regions,
+  // categories and pins one after another, and each step waits for a round trip to the admin API.
+  const regionsDone = loadRegions();
+  const pinsDone = loadPins().catch((e) => setStatus(`Couldn't read the pins: ${(e as Error).message}`, "error"));
+  // Don't leave these unhandled if the maps read below throws first.
+  regionsDone.catch(() => {});
   const files = (await gh!.listDir("content/maps")).filter((f) => f.type === "file" && f.name.endsWith(".json"));
-  const texts = await Promise.all(files.map((f) => gh!.readText(f.path)));
+  const [texts, slotsText] = await Promise.all([Promise.all(files.map((f) => gh!.readText(f.path))), gh!.readText("content/slots.json")]);
   maps = texts.map((t) => JSON.parse(t) as MapMeta).sort((a, b) => b.date.localeCompare(a.date));
-  const freshSlots = JSON.parse(await gh!.readText("content/slots.json")) as SlotsFile;
+  const freshSlots = JSON.parse(slotsText) as SlotsFile;
   // A change is still being saved: this read may predate it, and the save reloads when it's done.
   if (hasPendingSaves()) return;
   slots = freshSlots;
   renderMaps();
   renderSlots();
-  await loadRegions();
   void loadActivity();
-  // Pins are a side feature: a failure to read them must not break the rest of the page.
-  await loadPins().catch((e) => setStatus(`Couldn't read the pins: ${(e as Error).message}`, "error"));
+  await regionsDone;
+  await pinsDone;
 }
 
 async function slotsChange(mutate: (s: SlotsFile) => void): Promise<FileChange> {

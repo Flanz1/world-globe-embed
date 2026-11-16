@@ -340,18 +340,44 @@ export class GitHub {
    * request per file). A missing folder is empty.
    */
   async listTree(path: string): Promise<{ name: string; path: string; sha: string; type: string }[]> {
-    const ref = await this.request<{ object: { sha: string } }>(`/repos/${this.repo}/git/ref/heads/${this.branch}`);
-    const commit = await this.request<{ tree: { sha: string } }>(`/repos/${this.repo}/git/commits/${ref.object.sha}`);
-    let sha = commit.tree.sha;
+    let sha = await this.branchTree();
     for (const part of path.split("/").filter(Boolean)) {
-      const t = await this.request<{ tree: { path: string; type: string; sha: string }[] }>(`/repos/${this.repo}/git/trees/${sha}`, { cache: "default" });
+      const t = await this.treeAt(sha);
       const next = t.tree.find((e) => e.path === part && e.type === "tree");
       if (!next) return [];
       sha = next.sha;
     }
-    const t = await this.request<{ tree: { path: string; type: string; sha: string }[]; truncated?: boolean }>(`/repos/${this.repo}/git/trees/${sha}`, { cache: "default" });
+    const t = await this.treeAt(sha);
     if (t.truncated) throw new GitHubError(422, `The folder ${path} is too big to list.`);
     return t.tree.map((e) => ({ name: e.path, path: `${path.replace(/\/$/, "")}/${e.path}`, sha: e.sha, type: e.type === "blob" ? "file" : "dir" }));
+  }
+
+  /*
+   * Requests that are in flight right now are shared: the page lists several folders at once on load (regions,
+   * pins), and they all start from the same branch head and walk through the same root tree. Nothing is kept
+   * once the request has finished, so a later call always sees the branch as it is then.
+   */
+  private inflight = new Map<string, Promise<unknown>>();
+  private shared<T>(key: string, run: () => Promise<T>): Promise<T> {
+    let p = this.inflight.get(key) as Promise<T> | undefined;
+    if (!p) {
+      p = run().finally(() => this.inflight.delete(key));
+      this.inflight.set(key, p);
+    }
+    return p;
+  }
+
+  /** The root tree of the branch's latest commit. */
+  private branchTree(): Promise<string> {
+    return this.shared(`head:${this.branch}`, async () => {
+      const ref = await this.request<{ object: { sha: string } }>(`/repos/${this.repo}/git/ref/heads/${this.branch}`);
+      const commit = await this.request<{ tree: { sha: string } }>(`/repos/${this.repo}/git/commits/${ref.object.sha}`);
+      return commit.tree.sha;
+    });
+  }
+
+  private treeAt(sha: string): Promise<{ tree: { path: string; type: string; sha: string }[]; truncated?: boolean }> {
+    return this.shared(`tree:${sha}`, () => this.request(`/repos/${this.repo}/git/trees/${sha}`, { cache: "default" }));
   }
 
   /** A file's text by blob SHA. A blob never changes, so the browser caches it and the next listing only fetches new ones. */
