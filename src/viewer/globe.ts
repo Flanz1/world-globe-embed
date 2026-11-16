@@ -329,10 +329,53 @@ export async function start(ctx: StartContext): Promise<void> {
       { w: W, h: H },
     );
     o.tex.needsUpdate = true;
+    uploadQueued = true;
     const pts = (R?.label ?? vis.label) ? regionLabelPoints(vis, R?.label === true) : [];
     labelAt = pts.map((p) => p.at);
     labels?.set(pts.map((p) => p.text));
     regionKey?.set(R?.key ? legendRowsFor(vis) : [], vis.legendTitle, !!R?.key && hasContestedLayers(spec!));
+  }
+  /*
+   * Live repaints (the admin editor streams every edit, undo and redo here) wait until the GPU has finished the
+   * previous overlay upload. The overlay is up to 8192×4096, so each repaint uploads 128 MB; with software GL a
+   * burst of edits queued uploads faster than they were consumed and the GPU process grew to many GB, stalling
+   * the page (screenshots and clicks waited minutes). A real GPU finishes within a frame, so this rarely waits.
+   */
+  let uploadQueued = false;
+  let uploadFence: WebGLSync | null = null;
+  let repaintWanted = false;
+  let repaintTimer = 0;
+  const gpuBusy = (): boolean => {
+    if (!uploadFence || !(gl instanceof WebGL2RenderingContext)) return false;
+    if (gl.isContextLost() || gl.getSyncParameter(uploadFence, gl.SYNC_STATUS) === gl.SIGNALED) {
+      gl.deleteSync(uploadFence);
+      uploadFence = null;
+      return false;
+    }
+    return true;
+  };
+  /** After a render that uploaded the overlay: a fence the next live repaint waits for. */
+  function fenceUpload(): void {
+    if (!uploadQueued) return;
+    uploadQueued = false;
+    if (!(gl instanceof WebGL2RenderingContext) || uploadFence) return;
+    uploadFence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+    gl.flush();
+  }
+  /** Repaints the overlay with the latest region as soon as the GPU is done with the last upload. */
+  function repaintSoon(): void {
+    repaintWanted = true;
+    if (repaintTimer) return;
+    if (gpuBusy()) {
+      repaintTimer = window.setTimeout(() => {
+        repaintTimer = 0;
+        if (repaintWanted) repaintSoon();
+      }, 50);
+      return;
+    }
+    repaintWanted = false;
+    drawRegion();
+    invalidate();
   }
   const visible = makeVisibility();
   let spec: PaintLayer[] | null = null;
@@ -513,6 +556,7 @@ export async function start(ctx: StartContext): Promise<void> {
       world.quaternion.setFromEuler(euler);
       camera.position.set(0, 0, view.distance);
       renderer.render(scene, camera);
+      fenceUpload();
       placeLabel();
       ruler.redraw();
       placePins();
@@ -694,7 +738,7 @@ export async function start(ctx: StartContext): Promise<void> {
         layerKey = k;
         setupLayers(regionKey, r, visible, () => (drawRegion(), invalidate()), R.layers);
       }
-      drawRegion();
+      repaintSoon();
       if (centre) {
         fit(focus);
         goHome(true);
