@@ -336,7 +336,12 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
 .pinmap-head .actions button { padding: 3px 10px; font-size: 13px; }
 .pinmap.loose { border-style: dashed; }
 .ed-pinmaps { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; margin: 0; display: grid; gap: 4px; }
-.ed-pinmaps-list { display: grid; gap: 2px; }
+.ed-pinmaps-list { display: grid; gap: 2px; max-height: 260px; overflow: auto; }
+.ed-pinfolder { display: grid; gap: 2px; }
+.ed-pinfolder-toggle { display: flex; align-items: center; gap: 6px; border: 0; padding: 2px 4px; font-size: 13px; text-align: left; }
+.ed-pinfolder.closed .rfolder-arrow { transform: rotate(-90deg); }
+.ed-pinfolder-body { display: grid; gap: 2px; margin-left: 14px; }
+.ed-pinfolder-body[hidden] { display: none; }
 
 /* Regions pinned to the top of a folder. */
 .rcard.pinned { border-color: var(--accent, var(--line)); }
