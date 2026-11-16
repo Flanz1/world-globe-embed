@@ -1,12 +1,10 @@
 /**
- * "Someone is editing this": an editor tab tells the admin API which regions it has open every 30 seconds
- * while the tab is on screen (the API forgets a tab after 10 minutes of silence), and the answer says who
- * else has regions open. A hidden tab stays quiet, so a forgotten background tab costs nothing. It's a hint to
+ * "Someone is editing this": an editor tab tells the admin API's editing room which regions it has open
+ * (../editing.ts keeps a WebSocket to it), and hears straight away who else has regions open. It's a hint to
  * avoid two people working on the same region; the real protection stays the check when saving.
  */
+import { connectEditing } from "../editing.ts";
 import type { Editing, GitHub } from "../github.ts";
-
-export const BEAT_MS = 30_000;
 
 /** Names of the other people (not this account) who have any of `ids` open, per `list`. */
 export function othersOn(list: readonly Editing[], ids: readonly string[], meId: number | undefined): Map<string, string[]> {
@@ -34,37 +32,7 @@ export function editingNote(others: Map<string, string[]>, ids: readonly string[
   return `${joinNames(names)} ${names.length === 1 ? "has" : "have"} ${ids.length === 1 ? "this region" : "one of these regions"} open in the editor. Whoever saves second has to reload and redo their changes.`;
 }
 
-/**
- * Starts announcing `ids` (an editor tab). `onOthers` is called with who else has them open, after every beat.
- * Failures are ignored: the notice is a convenience.
- */
+/** Starts announcing `ids` (an editor tab). `onOthers` is called with who else has them open, after every change. */
 export function startPresence(gh: GitHub, ids: () => string[], meId: number | undefined, onOthers: (others: Map<string, string[]>) => void): { stop: () => void } {
-  const tab = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => (b % 36).toString(36)).join("");
-  let stopped = false;
-  const beat = async () => {
-    try {
-      const list = await gh.editingBeat(tab, ids());
-      if (!stopped) onOthers(othersOn(list, ids(), meId));
-    } catch {
-      /* ignore */
-    }
-  };
-  void beat();
-  const t = setInterval(() => {
-    if (document.visibilityState !== "hidden") void beat();
-  }, BEAT_MS);
-  // Back on screen: check in at once instead of waiting for the next tick.
-  const onVisible = () => {
-    if (document.visibilityState === "visible") void beat();
-  };
-  document.addEventListener("visibilitychange", onVisible);
-  return {
-    stop() {
-      if (stopped) return;
-      stopped = true;
-      clearInterval(t);
-      document.removeEventListener("visibilitychange", onVisible);
-      void gh.editingDone(tab).catch(() => {});
-    },
-  };
+  return connectEditing(gh, ids, (list) => onOthers(othersOn(list, ids(), meId)));
 }

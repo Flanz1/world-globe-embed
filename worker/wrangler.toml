@@ -30,3 +30,13 @@ name = "RATE_LIMITER"
 type = "ratelimit"
 namespace_id = "1001"
 simple = { limit = 900, period = 60 }
+
+# "X is editing this region": every admin tab holds a WebSocket to this one Durable Object (src/presence.ts).
+# It keeps nothing in storage, so it never touches the KV limits; SQLite-backed because that's what the free plan offers.
+[[durable_objects.bindings]]
+name = "EDITING_ROOM"
+class_name = "EditingRoom"
+
+[[migrations]]
+tag = "v1-editing-room"
+new_sqlite_classes = ["EditingRoom"]
