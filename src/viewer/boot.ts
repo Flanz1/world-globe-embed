@@ -9,7 +9,7 @@
  * view=flat.
  */
 import { applyParams, diameterFraction, distanceForZoom, posterVars } from "../shared/params.ts";
-import { REGION_ID, flatFit, mergeRegions, parseRegionData, parseRegionIds, type RegionData } from "../shared/region.ts";
+import { REGION_ID, flatFit, mergeRegions, parseRegionData, parseRegionIds, underFill, type RegionData } from "../shared/region.ts";
 import type { ViewerConfig } from "../shared/types.ts";
 import type { BootData, FlatStartContext, RegionContext, StartContext, ViewMode } from "./contract.ts";
 
@@ -69,11 +69,11 @@ if (regionId !== null) {
   if (!stacked && !preview && entry?.pm?.length && !q.has("pins")) cfg.pins = entry.pm.join(",");
   const ids = stacked ? stacked.filter(inIndex) : [...under.map((e) => e.id), regionId];
   // Stacked regions bring their own underlays (under=0 leaves them out): each goes just below its region, cut to it. Their ids are `<id>@<region>`, as one underlay can serve several regions.
-  const stackPlan: { id: string; host?: string; label?: string; on?: boolean; clip?: boolean }[] = stacked
+  const stackPlan: { id: string; host?: string; label?: string; on?: boolean; clip?: boolean; fill?: number }[] = stacked
     ? ids.flatMap((id) => {
         const e = inIndex(id);
         const us = q.get("under") !== "0" && e?.u ? e.u.filter((u) => u.id !== id && inIndex(u.id)) : [];
-        return [...us.map((u, i) => ({ id: u.id, host: id, label: u.label, on: u.on ?? i === 0, clip: e?.uc !== false })), { id }];
+        return [...us.map((u, i) => ({ id: u.id, host: id, label: u.label, on: u.on ?? i === 0, clip: e?.uc !== false, fill: underFill(u.fill) })), { id }];
       })
     : [];
   const stackUnder = stackPlan.filter((s) => s.host);
@@ -124,12 +124,15 @@ if (regionId !== null) {
           .then((r) => (r.ok ? r.json() : null))
           .then((j) => {
             const r = parseRegionData(j);
-            return r && r.id === id && r.slot === cfg.slug ? r : null;
+            if (!r || r.id !== id || r.slot !== cfg.slug) return null;
+            // An underlay can have its own fill (UnderEntry.fill), so it stands out.
+            const fill = underFill(under.find((e) => e.id === id)?.fill);
+            return fill === undefined ? r : { ...r, fillOpacity: fill };
           })
           .catch(() => null);
       regionData =
         stacked && stackUnder.length
-          ? Promise.all(stackPlan.map((s) => load(s.id).then((r) => (r && s.host ? { ...r, id: underId(s), underOf: s.host, underClipped: s.clip } : r)))).then((all) => {
+          ? Promise.all(stackPlan.map((s) => load(s.id).then((r) => (r && s.host ? { ...r, id: underId(s), underOf: s.host, underClipped: s.clip, ...(s.fill !== undefined ? { fillOpacity: s.fill } : {}) } : r)))).then((all) => {
               // An underlay without its region isn't shown.
               const found = all.filter((r): r is RegionData => !!r && (!r.underOf || all.some((h) => h?.id === r.underOf)));
               return found.length ? mergeRegions(found) : null;

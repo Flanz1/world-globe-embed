@@ -69,6 +69,17 @@ describe("mergeRegions", () => {
   });
 });
 
+describe("underlay fill", () => {
+  it("clamps a usable override and ignores junk", async () => {
+    const { underFill, UNDER_FILL_MIN } = await import("../src/shared/region.ts");
+    expect(underFill(0.8)).toBe(0.8);
+    expect(underFill(0)).toBe(UNDER_FILL_MIN);
+    expect(underFill(5)).toBe(1);
+    expect(underFill("x")).toBeUndefined();
+    expect(underFill(undefined)).toBeUndefined();
+  });
+});
+
 describe("stacked regions with underlays of their own", () => {
   const under = region("u", "#00ff00", [square(0, 0, 30)], { underOf: "h", id: "u@h" });
   const outsideCol = region("o", "#ffff00", [square(100, 100)], { underOf: "h", id: "o@h" });
