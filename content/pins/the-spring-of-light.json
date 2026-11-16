@@ -10,15 +10,16 @@
     "color": "#611f1f",
     "description": "The Spring of Light is the oldest Holy Site within Zuhurism, located in the Templi Heights. It is here that Pen-Zuhur himself is said to have first revealed himself to mortals. The fourth Zuhuri Holy war was fought over the Spring.",
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     },
-    "updated": "2026-11-15T11:16:33Z",
+    "updated": "2026-11-16T08:37:14Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
-    "created": "2026-11-15T11:16:33Z"
+    "created": "2026-11-15T11:16:33Z",
+    "pinMap": "zuhurist-holy-sites"
   },
   "geometry": {
     "type": "Point",

@@ -30,13 +30,12 @@ import {
 import type { Category } from "../shared/categories.ts";
 import { h } from "./dom.ts";
 import { GitHubError, type GitHub } from "./github.ts";
+import { optimistic } from "./optimistic.ts";
 import { confirmBox, modal } from "./region-dialogs.ts";
 import { can, refusal } from "./session.ts";
 
 export interface PinMapsDeps {
   gh: () => GitHub;
-  /** Commits with the admin page's busy/status handling (then the page reloads). */
-  act: (label: string, fn: () => Promise<string>) => Promise<void>;
   /** Redraws the Pins tab after the local state changed. */
   render: () => void;
 }
@@ -62,13 +61,28 @@ export async function loadPinMaps(): Promise<void> {
   current = await read(deps.gh());
 }
 
-/** Applies `edit` to a fresh copy of the file and commits it. Returns the id `edit` made, if it made one. */
+/**
+ * Applies the change on screen at once and commits it in the background (see optimistic.ts). The commit
+ * edits a fresh copy of the file, so changes someone else made meanwhile are kept.
+ */
 async function save(label: string, edit: (f: PinMapsFile) => PinMapsFile): Promise<void> {
-  const why = refusal({ path: PINMAPS_PATH, before: serializePinMaps(current), after: serializePinMaps(edit(current)) });
-  if (why) return void (await confirmBox("Can't do that", why, "OK", "Close"));
-  await deps.act(`${label}…`, () =>
-    deps.gh().commit(label, async () => [{ path: PINMAPS_PATH, content: serializePinMaps(edit(await read(deps.gh()))) }]),
-  );
+  let next = current;
+  await optimistic<PinMapsFile>({
+    label,
+    check: () => {
+      next = edit(current);
+      const why = refusal({ path: PINMAPS_PATH, before: serializePinMaps(current), after: serializePinMaps(next) });
+      return why && `Can't ${label[0].toLowerCase()}${label.slice(1)}: ${why}`;
+    },
+    apply: () => {
+      const before = current;
+      current = next;
+      return before;
+    },
+    undo: (before) => void (current = before),
+    render: deps.render,
+    commit: () => deps.gh().commit(label, async () => [{ path: PINMAPS_PATH, content: serializePinMaps(edit(await read(deps.gh()))) }]),
+  });
 }
 
 /* ── Dialogs ── */
@@ -158,7 +172,7 @@ export function newMap(slot: string, folder: string | null, then?: (id: string) 
       const r = addPinMap(f, name, slot, folder);
       id = r.id;
       return r.file;
-    }).then(() => id && then?.(id));
+    }).then(() => id && current.maps.some((m) => m.id === id) && then?.(id));
   });
 }
 

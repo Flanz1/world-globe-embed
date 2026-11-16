@@ -11,15 +11,16 @@
     "link": "https://publish.obsidian.md/garmeley/Cities%2C+Locations+%26+Wonders/Great+Wonders/Organius+of+Aviv",
     "description": "The Organius of Aviv is a vast shaft within the ancient city of Aviv and one of the five Holy Sites of Zuhurism. It descends kilometres into the underlands and is also known as the Crystalline city, as its hanging gardens are filled with panes of glass and crystal to guide the holy sunlight downward",
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     },
-    "updated": "2026-11-15T11:24:37Z",
+    "updated": "2026-11-16T08:37:08Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
-    "created": "2026-11-15T11:24:37Z"
+    "created": "2026-11-15T11:24:37Z",
+    "pinMap": "zuhurist-holy-sites"
   },
   "geometry": {
     "type": "Point",

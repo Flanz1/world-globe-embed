@@ -1,0 +1,11 @@
+{
+  "$schema": "../schema/pinmaps.schema.json",
+  "folders": [],
+  "maps": [
+    {
+      "id": "zuhurist-holy-sites",
+      "name": "Zuhurist holy sites",
+      "slot": "inara"
+    }
+  ]
+}
