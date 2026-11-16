@@ -289,7 +289,14 @@ const dirty = (): boolean => {
 function renderForm(rebuild: boolean): void {
   const box = el.form;
   if (!draft) {
-    box.replaceChildren(h("p", { className: "muted small", textContent: can("regions") ? "Press “Place a pin” and click the map, or pick a pin on the map or in the list." : "Pick a pin on the map or in the list. You need the “Create regions” permission to place pins." }));
+    const hint = h("p", { className: "muted small", textContent: can("regions") ? "Press “Place a pin” and click the map, or pick a pin on the map or in the list." : "Pick a pin on the map or in the list. You need the “Create regions” permission to place pins." });
+    const empty = h("div", { className: "empty" }, hint);
+    if (can("regions")) {
+      const place = h("button", { type: "button", textContent: "Place a pin", disabled: !slotMap() });
+      place.addEventListener("click", () => (el.add as HTMLButtonElement).click());
+      empty.append(place);
+    }
+    box.replaceChildren(empty);
     return;
   }
   const f = draft;
@@ -571,6 +578,8 @@ function syncControls(): void {
   add.setAttribute("aria-pressed", String(adding));
   add.textContent = adding ? "Click the map… (Esc to cancel)" : "Place a pin";
   (el.pane as HTMLElement).dataset.adding = String(adding);
+  // Size the pane to the map so it has no empty bands (see .pn-pane in admin.css).
+  (el.pane as HTMLElement).style.setProperty("--pn-aspect", String(aspect()));
 }
 
 /** Embed code for the slot's pins: all of them, or the ticked pin maps. `only` ticks one pin map to begin with. */
