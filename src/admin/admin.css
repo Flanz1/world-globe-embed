@@ -60,7 +60,7 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .55); }
 .pv-controls .range input[type=number] { flex: 0 0 6.5em; width: 6.5em; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ── Branch banner and tabs ── */
-.branch { font-size: 13px; padding: 3px 8px; border-radius: 6px; background: #e8a33d; color: #1b1915; }
+.branch { font-size: 13px; padding: 3px 8px; border-radius: 6px; background: #e8a33d; color: #1b1915; font-weight: 600; }
 .tabs { display: flex; gap: 4px; }
 .tabs button { background: transparent; color: var(--muted); border: 1px solid transparent; border-radius: 8px; padding: 6px 14px; }
 .tabs button[aria-selected="true"] { color: var(--fg); background: var(--card); border-color: var(--line); }
@@ -142,7 +142,7 @@ dialog.rpreview { width: min(980px, calc(100vw - 32px)); }
 .sc-group h3 { margin: 4px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .sc-group + .sc-group { border-top: 1px solid var(--line); padding-top: 10px; }
 .sc-notes { margin: 0; display: grid; gap: 8px; font-size: 14px; }
-.sc-notes dt { }
+.sc-notes dt { font-weight: 600; }
 .sc-notes dd { margin: 0; color: var(--muted); }
 kbd { font: 12px ui-monospace, monospace; padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--bg); }
 
@@ -151,8 +151,8 @@ dialog.editor { width: calc(100vw - 16px); height: calc(100vh - 16px); max-width
 dialog.editor[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
 .ed-toolbar { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--line); align-items: center; }
 .ed-toolbar button { padding: 3px 8px; font-size: 13px; }
-/* Pressed (toggled-on) editor tools: a lighter tint with a thicker inset edge, so they never look like the filled Save button and are not colour-only. */
-dialog.editor button[aria-pressed="true"], .ed-ov-btn.active { background: color-mix(in srgb, var(--accent) 18%, var(--card)); color: var(--fg); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+/* Pressed (toggled-on) editor tools: a lighter tint with an inset edge, so they never look like the filled Save button and are not colour-only. */
+dialog.editor button[aria-pressed="true"], .ed-ov-btn.active, .ed-part-row.locked .ed-lock { background: color-mix(in srgb, var(--accent) 18%, var(--card)); color: var(--fg); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .ed-toolbar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
 .ed-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 34%); min-height: 0; }
 .ed-canvas-wrap { position: relative; min-height: 0; overflow: hidden; }
@@ -172,7 +172,7 @@ dialog.editor button[aria-pressed="true"], .ed-ov-btn.active { background: color
 .ed-side input[type=color] { width: 44px; height: 30px; padding: 2px; }
 .ed-editing { margin: 0 0 4px; padding: 6px 10px; border-radius: 6px; font-size: 13px; background: var(--card); color: var(--fg); border: 1px solid var(--accent); border-left-width: 4px; }
 .ed-editing[hidden] { display: none; }
-.rediting { color: var(--accent); }
+.rediting { color: var(--accent); font-weight: 600; }
 .ed-msg { margin: 0; min-height: 1.3em; font-size: 13px; }
 .ed-stats { margin: 0; }
 .ed-colours { display: grid; gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
@@ -191,7 +191,7 @@ dialog.editor button[aria-pressed="true"], .ed-ov-btn.active { background: color
 .ed-folder { display: grid; gap: 4px; border: 1px solid var(--line); border-radius: 8px; padding: 4px; }
 .ed-folder.folded { padding-bottom: 4px; }
 .ed-folder-head { display: flex; gap: 4px; align-items: center; }
-.ed-folder-head input[type=text] { flex: 1 1 auto; min-width: 0; width: 0; }
+.ed-folder-head input[type=text] { flex: 1 1 auto; min-width: 0; width: 0; font-weight: 600; }
 .ed-folder-head .ed-count { white-space: nowrap; }
 .ed-folder-head button { padding: 2px 7px; }
 .ed-fold { width: 26px; padding: 2px 0 !important; }
@@ -229,7 +229,6 @@ button.tiny { padding: 1px 7px; font-size: 12px; }
 .warn { color: #b9770e; }
 .ed-part-row.label-off input[type=text] { opacity: .55; text-decoration: line-through; }
 .ed-part-row .ed-labelbtn[aria-pressed=false] { opacity: .75; }
-.ed-part-row.locked .ed-lock { background: var(--accent); color: var(--card); border-color: var(--accent); }
 
 /* Editor: "Other regions" tool (button at the toolbar's right end, panel at the top right of the map) */
 .ed-toolbar-end { margin-left: auto; display: flex; }
@@ -242,7 +241,7 @@ button.tiny { padding: 1px 7px; font-size: 12px; }
 .ed-ov-panel select { flex: 1 1 90px; min-width: 0; }
 .ed-ov-list { overflow: auto; display: grid; align-content: start; gap: 2px; }
 .ed-ov-row { display: flex; align-items: baseline; gap: 6px; padding: 2px 0; cursor: pointer; }
-.ed-ov-name { }
+.ed-ov-name { font-weight: 600; }
 .ed-ov-info { margin: 0; }
 
 /* ── Status sidebar (right) and Recent activity sidebar (left) ── */
