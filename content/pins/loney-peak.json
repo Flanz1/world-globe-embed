@@ -10,15 +10,16 @@
     "description": "One of the Five Holy Sites of Zuhurism, and the only one not held by a zuhuri lord, pilgrimages here have been cause for great conflcit.",
     "color": "#4e1818",
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     },
-    "updated": "2026-11-15T11:14:11Z",
+    "updated": "2026-11-16T08:37:12Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
-    "created": "2026-11-15T11:14:11Z"
+    "created": "2026-11-15T11:14:11Z",
+    "pinMap": "zuhurist-holy-sites"
   },
   "geometry": {
     "type": "Point",
