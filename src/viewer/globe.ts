@@ -48,7 +48,7 @@ import { createGlobeTiles } from "./globe-tiles.ts";
 import type { PreviewMessage, StartContext } from "./contract.ts";
 import { setupRuler } from "./ruler.ts";
 import { RELOCK_MS, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
-import { setupPins, type PinLayer } from "./pins.ts";
+import { setupPins, watchPreviewPins, type PinLayer } from "./pins.ts";
 
 const DEG = Math.PI / 180;
 /** Auto-spin speed in radians per second (about 2 minutes per turn, like the desktop app). */
@@ -402,6 +402,11 @@ export async function start(ctx: StartContext): Promise<void> {
     });
   }
   void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins).then((l) => {
+    pinLayer = l;
+    invalidate();
+  });
+  // The admin preview gets its pins from the admin page.
+  watchPreviewPins(stage, canvas, (l) => {
     pinLayer = l;
     invalidate();
   });

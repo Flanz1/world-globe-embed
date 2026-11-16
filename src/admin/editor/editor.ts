@@ -117,6 +117,8 @@ import {
   type VRef,
 } from "./model.ts";
 import { pinMaps as allPinMaps } from "../pinmaps.ts";
+import { pinEntries } from "../pins.ts";
+import { keepPinsSent, sendPins } from "../preview-pins.ts";
 import { REGION_PINMAPS_MAX, mapsOfSlot } from "../../shared/pinmaps.ts";
 import { clearDraft, draftKey, loadDraft, saveDraft, type Draft } from "./draft.ts";
 import { Coast, loadCoast, thinTrace } from "./coast.ts";
@@ -1655,6 +1657,7 @@ export function openEditor(o: EditorOptions): void {
     return (n: RegionFeature): RegionData => cache.get(n.id) ?? (cache.set(n.id, regionData(n)), cache.get(n.id)!);
   })();
   function sendPreview(centre = false, focus?: number): void {
+    sendPinsPreview();
     if (centre) return sendRegion(frameEl, regionNow(), true, focus, underFor());
     if (lastSent === hist.version) return;
     const send = () => {
@@ -1677,9 +1680,20 @@ export function openEditor(o: EditorOptions): void {
     // At most one update per animation frame.
     if (!previewRaf) previewRaf = requestAnimationFrame(send);
   }
+  /** The pin maps ticked for this region, shown in the preview as the embed will show them. */
+  let pinsSig = "";
+  function sendPinsPreview(force = false): void {
+    const show = (hist.state.props.pinMaps ?? []).join(",");
+    const sig = `${show}|${pinEntries().length}`;
+    if (!force && sig === pinsSig) return;
+    pinsSig = sig;
+    sendPins(frameEl, slotName, show);
+  }
+  keepPinsSent(frameEl, slotName, () => (hist.state.props.pinMaps ?? []).join(","));
   frameEl.addEventListener("load", () => {
     lastSent = -1;
     sendRegion(frameEl, regionNow(), true, undefined, underFor(true));
+    sendPinsPreview(true);
   });
   frameEl.src = previewUrl(slot, { region: previewId(), lock: "0" });
 

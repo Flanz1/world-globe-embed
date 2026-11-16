@@ -1,4 +1,4 @@
-// e2e-suite: roots=VIEWER,src/viewer/pins.ts,src/admin/pins.ts cut=src/admin/session.ts,src/admin/github.ts,src/shared/access.ts,src/shared/categories.ts,src/admin/pinmaps.ts,src/shared/pinmaps.ts weight=2
+// e2e-suite: roots=VIEWER,src/viewer/pins.ts,src/admin/pins.ts,src/admin/preview-pins.ts cut=src/admin/session.ts,src/admin/github.ts,src/shared/access.ts,src/shared/categories.ts,src/admin/pinmaps.ts,src/shared/pinmaps.ts weight=2
 /**
  * Browser checks for map pins, in headless Chromium.
  *
@@ -393,6 +393,19 @@ await step(A, "a contributor", async () => {
   await waitCommit(page, n0);
   const f = onBranch("content/pins/ann-s-camp.json");
   check(A, "can place their own pin", f?.properties.createdBy.login === "carto-ann" && f.properties.name === "Ann's Camp", JSON.stringify(f?.properties));
+  check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+});
+
+await step(A, "the region preview shows the pins of its pin maps", async () => {
+  const { ctx, page, errors } = await adminPage("Flanz1");
+  await page.goto(`${SITE}/admin/#regions`);
+  await page.waitForSelector('[data-region="landmark-disc"] [data-action="preview"]', { timeout: 15000 });
+  await page.click('[data-region="landmark-disc"] [data-action="preview"]');
+  const frame = page.frameLocator("dialog[open] iframe.rp-frame");
+  // The region includes the "Cities" pin map: its one pin shows, though the pins aren't part of the preview page.
+  await frame.locator('.wpin[data-name="Magenta Harbour"]').waitFor({ state: "attached", timeout: 30000 });
+  check(A, "the region preview draws the pins of the pin maps the region includes", (await frame.locator(".wpin").count()) === 1);
   check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));
   await ctx.close();
 });
