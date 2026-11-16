@@ -60,7 +60,7 @@ import { TEXTURE_WIDTHS, type MapMeta, type SlotsFile, type TextureWidth } from 
 import { deviceLimit, nextTier } from "../../shared/tiers.ts";
 import { h } from "../dom.ts";
 import { mapLimit, type GitHub } from "../github.ts";
-import { regionsPerCommit } from "../../shared/categories.ts";
+import { childrenOf, regionsPerCommit } from "../../shared/categories.ts";
 import { loadMapImage } from "../images.ts";
 import { SITE } from "../dom.ts";
 import { createOverlayFilter, type OverlayCategory, type OverlayMeta } from "./overlay-filter.ts";
@@ -119,7 +119,7 @@ import {
 import { pinMaps as allPinMaps } from "../pinmaps.ts";
 import { pinEntries } from "../pins.ts";
 import { keepPinsSent, sendPins } from "../preview-pins.ts";
-import { REGION_PINMAPS_MAX, mapsOfSlot } from "../../shared/pinmaps.ts";
+import { REGION_PINMAPS_MAX, mapsOfSlot, treeOf, type PinMap } from "../../shared/pinmaps.ts";
 import { clearDraft, draftKey, loadDraft, saveDraft, type Draft } from "./draft.ts";
 import { Coast, loadCoast, thinTrace } from "./coast.ts";
 import { fillArea, type Barrier } from "./fill.ts";
@@ -1803,29 +1803,73 @@ export function openEditor(o: EditorOptions): void {
     ownToggleIn.checked = p.ownToggle === true;
     (layerLabelIn.closest("label") as HTMLElement).hidden = !list.length || p.ownToggle !== true;
   }
+  /** Folders of the pin-map picker the user has opened; null until first drawn (then the folders holding a ticked pin map start open). */
+  let pinOpen: Set<string> | null = null;
   let pinMapKey = "";
   function renderPinMapBox(): void {
-    const maps = mapsOfSlot(allPinMaps(), slotName);
+    const file = allPinMaps();
+    const maps = mapsOfSlot(file, slotName);
     const on = hist.state.props.pinMaps ?? [];
-    const key = JSON.stringify([maps.map((m) => [m.id, m.name]), on]);
+    const tree = treeOf(file);
+    const key = JSON.stringify([maps.map((m) => [m.id, m.name]), file.folders.map((k) => [k.id, k.name, k.parent ?? null, k.regions]), on]);
     if (key === pinMapKey) return;
     pinMapKey = key;
+    const here = new Set(maps.map((m) => m.id));
+    const row = (m: PinMap): HTMLElement => {
+      const box = h("input", { type: "checkbox", checked: on.includes(m.id), ariaLabel: m.name, dataset: { pinmap: m.id } });
+      box.addEventListener("change", () => {
+        const cur = hist.state.props.pinMaps ?? [];
+        const next = box.checked ? [...cur.filter((x) => x !== m.id), m.id] : cur.filter((x) => x !== m.id);
+        if (next.length > REGION_PINMAPS_MAX) {
+          box.checked = false;
+          return setMsg(`A region can include at most ${REGION_PINMAPS_MAX} pin maps.`, "error");
+        }
+        setProp("pinMaps", next.length ? next : undefined, "Pin maps");
+        changed("panel");
+        // Redraw so the folders' ticked counts update, keeping the keyboard focus on the box.
+        renderPinMapBox();
+        pinMapList.querySelector<HTMLInputElement>(`input[data-pinmap="${m.id}"]`)?.focus();
+      });
+      return h("label", { className: "check" }, box, m.name);
+    };
+    /** The slot's pin maps in a folder (and below it), counted for the badge. */
+    const inside = (id: string): PinMap[] => {
+      const k = file.folders.find((f) => f.id === id);
+      return [...(k?.regions.filter((r) => here.has(r)).map((r) => maps.find((m) => m.id === r)!) ?? []), ...childrenOf(tree, id).flatMap((c) => inside(c.id))];
+    };
+    if (!pinOpen) pinOpen = new Set(file.folders.filter((k) => inside(k.id).some((m) => on.includes(m.id))).map((k) => k.id));
+    const open = pinOpen;
+    const level = (parent: string | null): HTMLElement[] =>
+      childrenOf(tree, parent).flatMap((k) => {
+        const all = inside(k.id);
+        if (!all.length) return [];
+        const direct = k.regions.filter((r) => here.has(r)).map((r) => maps.find((m) => m.id === r)!);
+        const ticked = all.filter((m) => on.includes(m.id)).length;
+        const isOpen = open.has(k.id);
+        const body = h("div", { className: "ed-pinfolder-body" }, ...direct.map(row), ...level(k.id));
+        body.hidden = !isOpen;
+        const toggle = h(
+          "button",
+          { type: "button", className: "ghost ed-pinfolder-toggle", ariaExpanded: String(isOpen), title: "Open or close this folder", dataset: { pinfolder: k.id } },
+          h("span", { className: "rfolder-arrow", ariaHidden: "true", textContent: "▾" }),
+          h("strong", { textContent: k.name }),
+          h("span", { className: "badge", textContent: ticked ? `${ticked}/${all.length}` : String(all.length), title: `${ticked} of ${all.length} pin maps ticked` }),
+        );
+        const el = h("section", { className: `ed-pinfolder${isOpen ? "" : " closed"}` }, toggle, body);
+        toggle.addEventListener("click", () => {
+          const now = body.hidden;
+          body.hidden = !now;
+          el.classList.toggle("closed", !now);
+          toggle.setAttribute("aria-expanded", String(now));
+          if (now) open.add(k.id);
+          else open.delete(k.id);
+        });
+        return [el];
+      });
+    const inFolder = new Set(file.folders.flatMap((k) => k.regions));
     pinMapList.replaceChildren(
       ...(maps.length
-        ? maps.map((m) => {
-            const box = h("input", { type: "checkbox", checked: on.includes(m.id), ariaLabel: m.name, dataset: { pinmap: m.id } });
-            box.addEventListener("change", () => {
-              const cur = hist.state.props.pinMaps ?? [];
-              const next = box.checked ? [...cur.filter((x) => x !== m.id), m.id] : cur.filter((x) => x !== m.id);
-              if (next.length > REGION_PINMAPS_MAX) {
-                box.checked = false;
-                return setMsg(`A region can include at most ${REGION_PINMAPS_MAX} pin maps.`, "error");
-              }
-              setProp("pinMaps", next.length ? next : undefined, "Pin maps");
-              changed("panel");
-            });
-            return h("label", { className: "check" }, box, m.name);
-          })
+        ? [...level(null), ...maps.filter((m) => !inFolder.has(m.id)).map(row)]
         : [h("p", { className: "muted small", textContent: "This slot has no pin maps yet. Add one in the Pins tab." })]),
     );
   }
