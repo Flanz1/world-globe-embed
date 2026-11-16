@@ -1,6 +1,14 @@
 {
   "$schema": "../schema/pinmaps.schema.json",
-  "folders": [],
+  "folders": [
+    {
+      "id": "religion",
+      "name": "Religion",
+      "regions": [
+        "zuhurist-holy-sites"
+      ]
+    }
+  ],
   "maps": [
     {
       "id": "zuhurist-holy-sites",
