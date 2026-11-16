@@ -30,6 +30,7 @@ const CSS = `
 .wpin[aria-expanded=true]{box-shadow:0 0 0 3px rgba(255,255,255,.55),0 1px 4px rgba(0,0,0,.55);z-index:2}
 .wpin::after{content:attr(data-name);position:absolute;left:50%;bottom:calc(100% + 5px);transform:translateX(-50%);padding:2px 7px;border-radius:5px;background:rgba(20,18,14,.85);color:#f3ead8;font:600 12px/1.3 system-ui,sans-serif;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis;opacity:0;pointer-events:none;transition:opacity .12s}
 .wpin:hover::after,.wpin:focus-visible::after{opacity:1}
+.wpin:hover,.wpin:focus-visible{z-index:2}
 .wpin-card{position:absolute;left:8px;bottom:8px;z-index:3;box-sizing:border-box;width:min(300px,calc(100% - 16px));max-height:60%;overflow:auto;padding:10px 12px;border-radius:8px;background:rgba(20,18,14,.9);color:#f3ead8;font:13px/1.4 system-ui,sans-serif;pointer-events:auto}
 .wpin-card[hidden]{display:none}
 .wpin-card h3{margin:0 24px 2px 0;font:700 14px/1.3 system-ui,sans-serif;overflow-wrap:anywhere}

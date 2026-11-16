@@ -173,6 +173,12 @@ for (const view of ["flat", "globe"]) {
     await page.keyboard.press("Escape");
     check(E, `${view}: Escape closes the card`, !(await card.isVisible()));
 
+    // A hovered or focused pin (and so its name label) sits above the pins around it.
+    const z = (loc) => loc.evaluate((el) => getComputedStyle(el).zIndex);
+    await harbour.focus();
+    check(E, `${view}: a focused pin rises above the others, so its name isn't covered`, Number(await z(harbour)) >= 2);
+    await page.evaluate(() => document.activeElement?.blur());
+
     // The whole slot: every pin; markup in a name is text.
     await page.goto(`${SITE}/v/${SLOT.slug}/?view=${view}&pins=1`);
     await ready(page);
@@ -253,6 +259,8 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   const pane = await page.locator(".pn-pane").boundingBox();
   await page.mouse.click(pane.x + pane.width / 2, pane.y + pane.height / 2);
   await page.waitForSelector(".pn-form");
+  // The new marker is drawn a frame after the form opens, so wait for it instead of counting once.
+  await page.waitForFunction((n) => document.querySelectorAll(".pn-marker").length === n, SEED.length + 1, { timeout: 5000 }).catch(() => {});
   check(A, "clicking the map opens the new-pin form", (await page.locator(".pn-marker").count()) === SEED.length + 1);
   await page.fill('.pn-form input[aria-label="Name"]', "Test Harbour");
   await page.selectOption(".pn-form select", "port");
