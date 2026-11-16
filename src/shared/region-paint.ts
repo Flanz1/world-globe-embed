@@ -116,6 +116,20 @@ export const hasContestedLayers = (layers: readonly PaintLayer[]): boolean => la
  */
 export function legendRowsFor(r: RegionData): LegendEntry[] {
   const members = r.members;
+  if (members?.some((m) => m.underOf)) {
+    // Stacked regions with underlays of their own: an underlay lists only the colours that lie inside its host.
+    const host = (m: RegionData) => (m.underOf && m.underClipped !== false ? members.find((h) => h.id === m.underOf) : undefined);
+    const hostPrepared = new Map<string, Prepared[]>();
+    const seenRows = new Set<string>();
+    return members
+      .flatMap((m) => {
+        const h = host(m);
+        if (!h) return legendRows(m);
+        if (!hostPrepared.has(h.id)) hostPrepared.set(h.id, polygonsOf(h.geometry).map((p) => prepare(p)));
+        return presentRows(m, hostPrepared.get(h.id)!);
+      })
+      .filter((e) => !seenRows.has(`${e.color}\u0000${e.label}`) && !!seenRows.add(`${e.color}\u0000${e.label}`));
+  }
   if (!members || !r.clip) return legendRows(r);
   const top = members[members.length - 1];
   const topPrepared = polygonsOf(top.geometry).map((p) => prepare(p));
@@ -149,10 +163,17 @@ export function regionPaintLayers(r: PaintInput & { members?: RegionData[]; clip
   const top = r.members[r.members.length - 1];
   const clip = r.clip ? polygonsOf(top.geometry) : undefined;
   // The underlays are shown over the region: it keeps its borders but gives up its fill, which only muddied their colours.
-  return r.members.map((m, i) => ({
-    spec: regionPaintSpec(m),
-    opacity: m.fillOpacity,
-    ...(clip && i < r.members!.length - 1 ? { clip } : {}),
-    ...(r.clip && i === r.members!.length - 1 ? { noFill: true } : {}),
-  }));
+  const members = r.members;
+  return members.map((m, i) => {
+    // An underlay of a stacked region is cut to that region, which keeps its borders but gives up its fill.
+    const host = m.underOf && m.underClipped !== false ? members.find((h) => h.id === m.underOf) : undefined;
+    const hostClip = host ? polygonsOf(host.geometry) : undefined;
+    const hasUnder = members.some((x) => x.underOf === m.id);
+    return {
+      spec: regionPaintSpec(m),
+      opacity: m.fillOpacity,
+      ...(clip && i < members.length - 1 ? { clip } : hostClip ? { clip: hostClip } : {}),
+      ...((r.clip && i === members.length - 1) || hasUnder ? { noFill: true } : {}),
+    };
+  });
 }

@@ -195,6 +195,12 @@ export interface RegionData {
   members?: RegionData[];
   /** With members: every region but the last is cut to the last one's outline (a region shown over its underlays). */
   clip?: boolean;
+  /**
+   * On a member of a stack (?regions=a,b,c): this member is an underlay of the stacked member with this id, drawn
+   * just below it and cut to its outline unless underClipped is false.
+   */
+  underOf?: string;
+  underClipped?: boolean;
 }
 
 /** Most positions in a region's province borders, all lines together. */

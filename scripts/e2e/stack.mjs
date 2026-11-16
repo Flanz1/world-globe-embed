@@ -103,6 +103,16 @@ try {
   await page.locator(".rlayers input").nth(1).click(); // refused: snaps back
   await page.waitForTimeout(200);
   check("?regions=a,b: the last shown layer can't be switched off", (await checked(page)).filter(Boolean).length === 1);
+  // A stacked region brings its own underlays (each its own toggle, off/on as set); under=0 leaves them out.
+  await page.goto(`${SITE}/v/${SLOT.slug}/?regions=provinces,landmark-disc&view=flat`);
+  await ready(page);
+  await page.waitForSelector(".rlayers label", { timeout: 15000 });
+  const stackNames = await names(page);
+  check("?regions= with a region that has underlays: its underlays get toggles", stackNames.includes("Magenta layer") && stackNames.includes("Yellow layer"), stackNames.join("|"));
+  await page.goto(`${SITE}/v/${SLOT.slug}/?regions=provinces,landmark-disc&view=flat&under=0`);
+  await ready(page);
+  await page.waitForSelector(".rlayers label", { timeout: 15000 });
+  check("…under=0 leaves them out", !(await names(page)).includes("Magenta layer"));
   await page.goto(`${SITE}/v/${SLOT.slug}/?regions=landmark-disc,dateline-box&view=flat&toggle=0`);
   await ready(page);
   await page.waitForTimeout(500);
