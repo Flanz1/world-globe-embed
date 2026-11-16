@@ -6,27 +6,29 @@
     "slot": "inara",
     "map": "globe-map",
     "color": "#7952e5",
+    "colorLabel": "Birgonism",
     "fillOpacity": 0.35,
     "label": true,
+    "legendTitle": "Vas Ira",
     "legend": [
       {
         "label": "bihrasmanism",
         "color": "#48db96"
       },
       {
-        "label": "iratism",
+        "label": "Iratism",
         "color": "#05637a"
       },
       {
-        "label": "karaluk",
+        "label": "Karaluk",
         "color": "#05eeff"
       },
       {
-        "label": "noorism",
+        "label": "Noorism",
         "color": "#582bbf"
       },
       {
-        "label": "rayadan",
+        "label": "Rayadan",
         "color": "#195ce1"
       }
     ],
@@ -174,12 +176,38 @@
       "noorism",
       "rayadan"
     ],
+    "linkedNames": {
+      "legend": [
+        {
+          "color": "#05637a",
+          "from": "iratism",
+          "label": "Iratism"
+        },
+        {
+          "color": "#05eeff",
+          "from": "karaluk",
+          "label": "Karaluk"
+        },
+        {
+          "color": "#582bbf",
+          "from": "noorism",
+          "label": "Noorism"
+        },
+        {
+          "color": "#195ce1",
+          "from": "rayadan",
+          "label": "Rayadan"
+        }
+      ],
+      "colorLabel": "Birgonism",
+      "legendTitle": "Vas Ira"
+    },
     "created": "2026-11-16T08:47:14Z",
     "createdBy": {
       "id": 45669787,
       "login": "Flanz1"
     },
-    "updated": "2026-11-16T08:47:14Z",
+    "updated": "2026-11-16T08:48:08Z",
     "updatedBy": {
       "id": 45669787,
       "login": "Flanz1"
