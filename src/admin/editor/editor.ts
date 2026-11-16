@@ -571,7 +571,7 @@ export function openEditor(o: EditorOptions): void {
   const dlg = h(
     "dialog",
     { className: "editor", ariaLabel: "Region editor" },
-    h("div", { className: "pv-head" }, title, h("div", { className: "row" }, saveBtn, declineBtn, modeButton(), closeBtn)),
+    h("div", { className: "pv-head" }, title, h("div", { className: "row" }, modeButton(), h("span", { className: "head-sep", ariaHidden: "true" }), saveBtn, declineBtn, closeBtn)),
     h(
       "div",
       { className: "ed-toolbar", role: "toolbar" },

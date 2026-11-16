@@ -511,3 +511,6 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
 .theme-custom input[type=color] { margin-left: auto; width: 36px; height: 28px; padding: 2px; border-radius: 8px; }
 .theme-custom[aria-checked="true"] input { margin-left: auto; }
 .theme-custom[aria-checked="true"]::after { margin-left: 8px; }
+.theme-seg { margin: 4px 16px 8px; }
+.theme-seg button { min-height: 32px; padding: 0 12px; font-size: 13px; flex: 1; justify-content: center; }
+.head-sep { align-self: stretch; width: 1px; margin: 4px 4px; background: var(--md-sys-color-outline-variant); }

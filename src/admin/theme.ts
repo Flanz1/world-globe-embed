@@ -136,16 +136,17 @@ export function modeButton(): HTMLButtonElement {
 export function colourMenu(): HTMLElement {
   const menu = h("div", { className: "theme-menu", role: "menu", ariaLabel: "Colour theme", id: "theme-menu" });
   menu.setAttribute("popover", "auto");
-  const swatch = h("button", { type: "button", className: "icon theme-swatch", ariaLabel: "Colour theme", title: "Colour theme" });
+  const swatch = h("button", { type: "button", className: "icon theme-swatch", ariaLabel: "Accent colour", title: "Colour theme" });
   swatch.dataset.action = "theme-colour";
   swatch.setAttribute("aria-haspopup", "menu");
   swatch.setAttribute("aria-expanded", "false");
   swatch.append(h("span", { className: "dot" }));
 
   const items: { el: HTMLElement; sync: () => void }[] = [];
+  const dots: { el: HTMLElement; seed: string }[] = [];
   const radio = (label: string, group: string, on: () => boolean, pick: () => void, dot?: string) => {
     const el = h("button", { type: "button", role: "menuitemradio", className: "ghost text theme-item", dataset: { group } }, h("span", { className: "dot", ariaHidden: "true" }), label);
-    if (dot) el.querySelector<HTMLElement>(".dot")!.style.background = dot;
+    if (dot) dots.push({ el: el.querySelector<HTMLElement>(".dot")!, seed: dot });
     else el.querySelector(".dot")!.remove();
     el.addEventListener("click", pick);
     items.push({
@@ -170,16 +171,29 @@ export function colourMenu(): HTMLElement {
     },
   });
 
+  const modeBtn = (label: Mode, text: string) => {
+    const b = h("button", { type: "button", className: "ghost", textContent: text, dataset: { group: "mode", mode: label } });
+    b.addEventListener("click", () => choose({ mode: label }));
+    items.push({ el: b, sync: () => b.setAttribute("aria-pressed", String(current.mode === label)) });
+    return b;
+  };
+  const seg = h("div", { className: "seg theme-seg", role: "group", ariaLabel: "Mode" }, modeBtn("light", "Light"), modeBtn("dark", "Dark"), modeBtn("system", "System"));
+
   menu.append(
     head("Accent colour"),
-    ...PRESETS.map((p) => radio(p.name, "seed", () => current.seed === p.seed, () => choose({ seed: p.seed }), schemeFromSeed(p.seed, false).primary)),
+    ...PRESETS.map((p) => radio(p.name, "seed", () => current.seed === p.seed, () => choose({ seed: p.seed }), p.seed)),
     customRow,
     head("Mode"),
-    radio("Light", "mode", () => current.mode === "light", () => choose({ mode: "light" })),
-    radio("Dark", "mode", () => current.mode === "dark", () => choose({ mode: "dark" })),
-    radio("Follow system", "mode", () => current.mode === "system", () => choose({ mode: "system" })),
+    seg,
   );
-  const sync = () => items.forEach((i) => i.sync());
+  const nameOf = () => (isPreset() ? PRESETS.find((p) => p.seed === current.seed)!.name : "Custom");
+  const sync = () => {
+    items.forEach((i) => i.sync());
+    swatch.setAttribute("aria-label", `Accent colour: ${nameOf()}`);
+    swatch.title = `Colour theme (${nameOf()})`;
+    // Each dot is that preset's primary for the mode showing now, so what you pick is what you get.
+    for (const d of dots) d.el.style.background = schemeFromSeed(d.seed, isDark()).primary;
+  };
   views.push(sync);
   sync();
 

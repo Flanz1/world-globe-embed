@@ -97,10 +97,11 @@ await step(T, "default, picking a preset, and the switch", async () => {
   const { ctx, page, api, errors } = await open("Flanz1");
   await page.goto(ADMIN);
   await signedIn(page);
-  check(T, "the header has the colour swatch and the dark-mode switch", (await page.locator('.theme-swatch[aria-label="Colour theme"]').count()) === 1 && (await page.locator('.theme-mode[aria-label="Dark mode"]').count()) === 1);
+  check(T, "the header has the colour swatch and the dark-mode switch", (await page.locator('.theme-swatch[aria-label^="Accent colour"]').count()) === 1 && (await page.locator('.theme-mode[aria-label="Dark mode"]').count()) === 1);
+  check(T, "the swatch's name includes the current choice", (await page.getAttribute(".theme-swatch", "aria-label")) === "Accent colour: Gold");
   check(T, "an account that never chose is Gold and follows the system (light here)", (await token(page, "--md-sys-color-primary")) === GOLD.primary && (await page.getAttribute(".theme-mode", "aria-pressed")) === "false");
   await page.click(".theme-swatch");
-  check(T, "the menu lists 8 presets, Custom… and the three modes", (await page.locator('.theme-menu [data-group="seed"]').count()) === 8 && (await page.locator(".theme-custom").count()) === 1 && (await page.locator('.theme-menu [data-group="mode"]').count()) === 3);
+  check(T, "the menu lists 8 presets, Custom… and the three modes as one segmented control", (await page.locator('.theme-menu [data-group="seed"]').count()) === 8 && (await page.locator(".theme-custom").count()) === 1 && (await page.locator('.theme-menu .theme-seg [data-group="mode"]').count()) === 3);
   await waitFor(page, () => page.evaluate(() => !!document.activeElement?.closest(".theme-menu")));
   check(T, "focus moves into the menu and Gold shows as chosen", (await page.getAttribute('.theme-menu [data-group="seed"][aria-checked="true"]', "aria-checked")) === "true" && (await page.evaluate(() => !!document.activeElement?.closest(".theme-menu"))));
   await page.keyboard.press("ArrowDown");
@@ -172,9 +173,9 @@ await step(T, "system mode follows the OS", async () => {
   await page.goto(ADMIN);
   await signedIn(page);
   await page.click(".theme-swatch");
-  await page.click('.theme-menu [data-group="mode"]:has-text("Follow system")');
+  await page.click('.theme-menu [data-group="mode"]:has-text("System")');
   await page.keyboard.press("Escape");
-  check(T, "Follow system: no forced data-theme, dark when the system is dark", (await page.evaluate(() => document.documentElement.dataset.theme)) === undefined && (await page.getAttribute(".theme-mode", "aria-pressed")) === "true" && (await token(page, "--md-sys-color-primary")) === SEA_DARK.primary);
+  check(T, "Follow system: no forced data-theme, dark when the system is dark", (await page.evaluate(() => document.documentElement.dataset.theme)) === undefined && (await page.getAttribute(".theme-mode", "aria-pressed")) === "true" && (await page.getAttribute('.theme-seg [data-mode="system"]', "aria-pressed")) === "true" && (await token(page, "--md-sys-color-primary")) === SEA_DARK.primary);
   await page.emulateMedia({ colorScheme: "light" });
   await waitFor(page, async () => (await token(page, "--md-sys-color-primary")) === SEA.primary);
   check(T, "and it follows a change of the system setting", (await token(page, "--md-sys-color-primary")) === SEA.primary && (await page.getAttribute(".theme-mode", "aria-pressed")) === "false");
