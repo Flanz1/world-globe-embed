@@ -31,6 +31,15 @@
       ],
       "added": "2026-11-12T21:46:35Z",
       "addedBy": "LoopSimon"
+    },
+    {
+      "id": 357569561,
+      "login": "Mank-cmd",
+      "permissions": [
+        "regions"
+      ],
+      "added": "2026-11-16T21:31:23Z",
+      "addedBy": "Flanz1"
     }
   ]
 }
