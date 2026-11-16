@@ -16,6 +16,7 @@ import { $, h } from "./dom.ts";
 import { hasPendingSaves, optimistic } from "./optimistic.ts";
 import { openEditor, type EditorOptions } from "./editor/editor.ts";
 import { joinNames } from "./editor/presence.ts";
+import { connectEditing } from "./editing.ts";
 import { MAX_LIVE } from "./editor/live.ts";
 import type { OverlayMeta } from "./editor/overlay-filter.ts";
 import type { Editing, FileCommit, GitHub } from "./github.ts";
@@ -505,9 +506,9 @@ function creatorOptions(): void {
   sel.value = [...sel.options].some((o) => o.value === keep) ? keep : "";
 }
 
-/* ── Who has a region open in an editor (polled while the Regions tab is showing) ── */
+/* ── Who has a region open in an editor (live while the Regions tab is showing: editing.ts) ── */
 let editingNow: Editing[] = [];
-let editingTimer = 0;
+let editingLink: { stop: () => void } | null = null;
 
 function editorsOf(id: string): string[] {
   const names: string[] = [];
@@ -515,16 +516,11 @@ function editorsOf(id: string): string[] {
   return names;
 }
 
-async function pollEditing(): Promise<void> {
-  try {
-    const next = await deps.gh().editingNow();
-    const key = (l: Editing[]) => JSON.stringify(l.map((e) => [e.id, e.regions]).sort());
-    const changed = key(next) !== key(editingNow);
-    editingNow = next;
-    if (changed) for (const el of document.querySelectorAll<HTMLElement>("[data-editing-for]")) setEditingBadge(el, el.dataset.editingFor!);
-  } catch {
-    /* A hint only. */
-  }
+function gotEditing(next: Editing[]): void {
+  const key = (l: Editing[]) => JSON.stringify(l.map((e) => [e.id, e.regions]).sort());
+  const changed = key(next) !== key(editingNow);
+  editingNow = next;
+  if (changed) for (const el of document.querySelectorAll<HTMLElement>("[data-editing-for]")) setEditingBadge(el, el.dataset.editingFor!);
 }
 
 function setEditingBadge(el: HTMLElement, id: string): void {
@@ -533,21 +529,14 @@ function setEditingBadge(el: HTMLElement, id: string): void {
   el.hidden = !names.length;
 }
 
-const pollIfVisible = () => {
-  if (editingTimer && document.visibilityState === "visible") void pollEditing();
-};
-
-/** Starts or stops the polling: only while the Regions tab is on screen and the browser tab isn't hidden. */
+/** Starts or stops listening: only while the Regions tab is on screen. */
 export function watchEditing(on: boolean): void {
-  clearInterval(editingTimer);
-  editingTimer = 0;
-  document.removeEventListener("visibilitychange", pollIfVisible);
-  if (!on) return;
-  void pollEditing();
-  editingTimer = window.setInterval(() => {
-    if (document.visibilityState !== "hidden") void pollEditing();
-  }, 30_000);
-  document.addEventListener("visibilitychange", pollIfVisible);
+  if (!on) {
+    editingLink?.stop();
+    editingLink = null;
+    return;
+  }
+  editingLink ??= connectEditing(deps.gh(), () => [], gotEditing);
 }
 
 export function renderRegions(): void {

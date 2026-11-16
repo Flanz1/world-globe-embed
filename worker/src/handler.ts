@@ -48,6 +48,8 @@ export interface Env {
   RATE_LIMITER?: RateLimiter;
   /** Where suggested changes are kept (src/proposals.ts). Optional; the waiting list's namespace is used when it isn't bound. */
   PROPOSALS?: proposals.ProposalKV;
+  /** The EditingRoom Durable Object (index.ts, presence.ts). Optional: without it there are no "X is editing" notices. */
+  EDITING_ROOM?: { idFromName(name: string): unknown; get(id: unknown): { fetch(req: Request): Promise<Response> } };
 }
 
 export type Upstream = (url: string, init?: RequestInit) => Promise<Response>;
@@ -61,16 +63,6 @@ const MAX_CHANGED_FILES = 400;
 /** Region and access files whose text a single commit may make the API read (each is a subrequest). */
 const MAX_READ_FILES = MAX_MOVED_PER_COMMIT;
 const WAITING_DAYS = 30;
-/**
- * Who has a region open lives in ONE KV key, read with get (100,000 a day on the free plan) rather than list
- * (1,000 a day). A tab checks in every 30 s, but its entry is only rewritten when it's new, its regions change
- * or it's older than EDITING_REFRESH_SECONDS, so a tab costs about 15 writes an hour instead of 120 writes and
- * 120 lists. A tab that stops checking in (closed without saying so, or hidden) drops off after EDITING_SECONDS.
- */
-export const EDITING_SECONDS = 600;
-export const EDITING_REFRESH_SECONDS = 240;
-const EDITING_KEY = "editing";
-const MAX_EDITING_REGIONS = MAX_MOVED_PER_COMMIT;
 
 export interface Session {
   id: number;
@@ -397,75 +389,27 @@ async function dismissWaiting(req: Request, env: Env, up: Upstream, id: string):
   return new Response(null, { status: 204 });
 }
 
-/* ── Who has a region open ── */
+/* ── Who has a region open (live, in the EditingRoom Durable Object: presence.ts) ── */
 
-export interface Editing {
-  id: number;
-  login: string;
-  tab: string;
-  regions: string[];
-  at: string;
-}
+export type { Editing } from "./presence.ts";
 
-/** The stored list, without entries that went quiet. */
-async function readEditing(kv: KV): Promise<Editing[]> {
-  let list: unknown;
-  try {
-    list = JSON.parse((await kv.get(EDITING_KEY)) ?? "[]");
-  } catch {
-    return [];
-  }
-  const since = Date.now() - EDITING_SECONDS * 1000;
-  return Array.isArray(list) ? (list as Editing[]).filter((m) => !!m && typeof m.at === "string" && Date.parse(m.at) >= since) : [];
-}
-
-async function writeEditing(kv: KV, list: Editing[]): Promise<void> {
-  try {
-    if (list.length) await kv.put(EDITING_KEY, JSON.stringify(list), { expirationTtl: EDITING_SECONDS });
-    else await kv.delete(EDITING_KEY);
-  } catch {
-    /* A hint only; never fail an editor over it (e.g. the daily KV write limit). */
-  }
-}
-
-/** Everyone whose editor was open (and said so) in the last EDITING_SECONDS. Only a hint to avoid clashes: saving is still checked against the branch head. */
-async function activeEditing(env: Env): Promise<Editing[]> {
-  return env.WAITING ? readEditing(env.WAITING) : [];
-}
-
-async function editingList(req: Request, env: Env, up: Upstream): Promise<Response> {
-  await listedActor(req, env, up);
-  return json(200, await activeEditing(env));
-}
-
-/** "I have these regions open": also answers with who else has, so a tab learns about a newcomer within one beat. */
-async function editingBeat(req: Request, env: Env, up: Upstream): Promise<Response> {
-  const actor = await listedActor(req, env, up);
-  if (!canWriteAnything(actor)) throw new HttpError(403, "You can look around, but you don't have permission to change anything.");
-  const body = await readJson<{ tab?: unknown; regions?: unknown }>(req);
-  const regions = body.regions;
-  if (typeof body.tab !== "string" || !/^[a-z0-9]{6,24}$/.test(body.tab) || !Array.isArray(regions) || regions.length > MAX_EDITING_REGIONS || !regions.every((r) => typeof r === "string" && /^[a-z0-9][a-z0-9-]{0,63}$/.test(r)))
-    throw new HttpError(422, "Bad editing notice.");
-  if (!env.WAITING) return json(200, []);
-  const tab = body.tab;
-  const list = await readEditing(env.WAITING);
-  const mine = list.find((e) => e.id === actor.id && e.tab === tab);
-  const same = mine && mine.login === actor.login && JSON.stringify(mine.regions) === JSON.stringify(regions);
-  if (same && Date.now() - Date.parse(mine.at) < EDITING_REFRESH_SECONDS * 1000) return json(200, list);
-  const me: Editing = { id: actor.id, login: actor.login, tab, regions: regions as string[], at: new Date().toISOString() };
-  const next = [...list.filter((e) => !(e.id === actor.id && e.tab === tab)), me];
-  await writeEditing(env.WAITING, next);
-  return json(200, next);
-}
-
-async function editingDone(req: Request, env: Env, up: Upstream, tab: string): Promise<Response> {
-  const actor = await listedActor(req, env, up);
-  if (env.WAITING) {
-    const list = await readEditing(env.WAITING);
-    const next = list.filter((e) => !(e.id === actor.id && e.tab === tab));
-    if (next.length !== list.length) await writeEditing(env.WAITING, next);
-  }
-  return new Response(null, { status: 204 });
+/**
+ * A tab's WebSocket to the editing room. Browsers can't send an Authorization header with a WebSocket, so the
+ * session token comes as the second subprotocol: `new WebSocket(url, ["presence", token])`.
+ */
+async function editingLive(req: Request, env: Env, up: Upstream): Promise<Response> {
+  if (req.headers.get("Upgrade")?.toLowerCase() !== "websocket") throw new HttpError(426, "Expected a WebSocket.");
+  if (!corsHeaders(req, env)["Access-Control-Allow-Origin"]) throw new HttpError(403, "Not from the admin page.");
+  if (!env.EDITING_ROOM) throw new HttpError(501, "Live editing notices aren't set up.");
+  const [proto, token] = (req.headers.get("Sec-WebSocket-Protocol") ?? "").split(",").map((s) => s.trim());
+  if (proto !== "presence" || !token) throw new HttpError(401, "You're signed out (the session expired). Sign in again.");
+  const actor = await listedActor(new Request(req.url, { headers: { Authorization: `Bearer ${token}` } }), env, up);
+  const room = env.EDITING_ROOM.get(env.EDITING_ROOM.idFromName("editing"));
+  return room.fetch(
+    new Request("https://editing-room/live", {
+      headers: { Upgrade: "websocket", "X-Editing-Actor": JSON.stringify({ id: actor.id, login: actor.login, write: canWriteAnything(actor) }) },
+    }),
+  );
 }
 
 /* ── Suggested changes (worker/src/proposals.ts) ── */
@@ -813,9 +757,8 @@ export async function handle(req: Request, env: Env, up: Upstream): Promise<Resp
     if (req.method === "GET" && p === "/history") return withCors(await history(req, env, up, url));
     if (req.method === "GET" && p === "/waiting") return withCors(await waitingList(req, env, up));
     if (req.method === "DELETE" && (m = /^\/waiting\/([^/]+)$/.exec(p))) return withCors(await dismissWaiting(req, env, up, m[1]));
-    if (req.method === "GET" && p === "/editing") return withCors(await editingList(req, env, up));
-    if (req.method === "POST" && p === "/editing") return withCors(await editingBeat(req, env, up));
-    if (req.method === "DELETE" && (m = /^\/editing\/([a-z0-9]{6,24})$/.exec(p))) return withCors(await editingDone(req, env, up, m[1]));
+    // Not wrapped in withCors: copying the response would lose its WebSocket.
+    if (req.method === "GET" && p === "/editing/live") return await editingLive(req, env, up);
     if (p === "/proposals" || p.startsWith("/proposals/")) return withCors((await suggestions(req, env, up, p))!);
     if (p.startsWith("/gh/")) return withCors(await proxy(req, env, up, p.slice(3), url));
     if (p === "/") return new Response("World globe admin API. Sign in from the admin page.", { headers: { "Content-Type": "text/plain; charset=utf-8" } });

@@ -73,8 +73,9 @@ export const ADMIN_CSP = [
   "script-src 'self'",
   "style-src 'self'",
   "img-src 'self' data:",
-  // The editor fetches the map's coast file from this site; everything else goes through the admin API.
-  `connect-src 'self'${adminApiOrigin() ? ` ${adminApiOrigin()}` : ""}`,
+  // The editor fetches the map's coast file from this site; everything else goes through the admin API
+  // (plus its WebSocket for "X is editing", listed as wss:// too for browsers that don't match it from https://).
+  `connect-src 'self'${adminApiOrigin() ? ` ${adminApiOrigin()} ${adminApiOrigin().replace(/^http/, "ws")}` : ""}`,
   // The preview dialog shows this site's own preview/ page.
   "frame-src 'self'",
   "base-uri 'none'",
