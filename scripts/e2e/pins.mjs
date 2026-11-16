@@ -249,6 +249,28 @@ const waitCommit = async (page, n) => {
 };
 const onBranch = (p) => (mock.read(BRANCH, p) ? JSON.parse(mock.read(BRANCH, p).toString()) : null);
 
+await step(A, "the region editor lists pin maps in collapsible folders", async () => {
+  const { ctx, page, errors } = await adminPage("Flanz1");
+  await page.goto(`${SITE}/admin/#regions`);
+  await page.waitForSelector('[data-region="landmark-disc"] [data-action="edit"]', { timeout: 15000 });
+  await page.click('[data-region="landmark-disc"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
+  const picker = page.locator("dialog.editor .ed-pinmaps-list");
+  check(A, "pin maps sit in the folders of the Pins tab, nested", (await picker.locator('.ed-pinfolder input[data-pinmap="holy-sites"]').count()) === 1 && (await picker.locator('.ed-pinfolder .ed-pinfolder input[data-pinmap="battles"]').count()) === 1);
+  check(A, "a pin map in no folder is listed on its own", (await picker.locator('input[data-pinmap="cities"]').isChecked()) && (await picker.locator('.ed-pinfolder input[data-pinmap="cities"]').count()) === 0);
+  check(A, "folders without a ticked pin map start closed", !(await picker.locator('input[data-pinmap="holy-sites"]').isVisible()));
+  await picker.locator('.ed-pinfolder-toggle[data-pinfolder="places"]').click();
+  check(A, "opening a folder shows its pin maps", await picker.locator('input[data-pinmap="holy-sites"]').isVisible());
+  check(A, "a subfolder opens on its own", !(await picker.locator('input[data-pinmap="battles"]').isVisible()));
+  await picker.locator('.ed-pinfolder-toggle[data-pinfolder="war"]').click();
+  await picker.locator('input[data-pinmap="battles"]').check();
+  await page.waitForTimeout(200);
+  check(A, "ticking inside a folder keeps it open and shows the count on its badge", (await picker.locator('input[data-pinmap="battles"]').isVisible()) && /1\/2/.test((await picker.locator('.ed-pinfolder-toggle[data-pinfolder="places"] .badge').textContent()) ?? ""), await picker.locator('.ed-pinfolder-toggle[data-pinfolder="places"] .badge').textContent());
+  await page.screenshot({ path: path.join(OUT, "editor-pin-folders.png"), clip: (await page.locator("dialog.editor .ed-pinmaps").boundingBox()) ?? undefined });
+  check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+});
+
 await step(A, "owner places, moves and deletes a pin", async () => {
   const { ctx, page, errors } = await adminPage("Flanz1");
   check(A, "the list shows the slot's saved pins", (await page.locator(".pn-row").count()) === SEED.length, String(await page.locator(".pn-row").count()));
