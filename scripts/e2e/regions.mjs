@@ -576,6 +576,7 @@ await step(A, "editor: save", async () => {
 
 await step(A, "duplicate", async () => {
   const n = mock.log.length;
+  await page.click('[data-region="test-kingdom"] [data-action="more"]');
   await page.click('[data-region="test-kingdom"] [data-action="duplicate"]');
   await page.waitForSelector("dialog.editor[open]");
   check(A, "duplicate opens the editor with a new id", (await ed.id()) === "test-kingdom-copy", await ed.id());
@@ -640,6 +641,7 @@ await step(A, "combine", async () => {
 
 await step(A, "delete", async () => {
   const n = mock.log.length;
+  await page.click('[data-region="test-kingdom-copy"] [data-action="more"]');
   await page.click('[data-region="test-kingdom-copy"] [data-action="delete"]');
   const btn = page.locator('dialog.small-dlg button:has-text("Delete region")');
   check(A, "delete is disabled until the id is typed", await btn.isDisabled());
@@ -662,7 +664,8 @@ await step(A, "version history and restore", async () => {
   moved.geometry.coordinates = moved.geometry.type === "Polygon" ? moved.geometry.coordinates.map(shift) : moved.geometry.coordinates.map((poly) => poly.map(shift));
   mock.externalWrite(BRANCH, p, JSON.stringify(moved, null, 2) + "\n");
   await page.reload();
-  await page.waitForSelector(`[data-region="${id}"] [data-action="history"]`, { timeout: 15000 });
+  await page.waitForSelector(`[data-region="${id}"] [data-action="history"]`, { timeout: 15000, state: "attached" });
+  await page.click(`[data-region="${id}"] [data-action="more"]`);
   await page.click(`[data-region="${id}"] [data-action="history"]`);
   await page.waitForSelector("dialog.history .hist-item", { timeout: 10000 });
   const items = await page.locator("dialog.history .hist-item").count();
@@ -849,7 +852,7 @@ await step(A, "preview and embed code", async () => {
   check(A, "Preview: globe/flat switch shows the region embed", got === want, `${got}`);
   await page.click("dialog.rpreview .pv-head button");
 
-  await page.click('[data-region="evil-name"] [data-action="copy-embed-code"]');
+  await page.click('[data-region="evil-name"] [data-action="embed"]');
   const code = await page.inputValue("dialog.embed-dlg textarea");
   check(A, "embed snippet is titled by id and has nothing unescaped", code.includes('title="evil-name (Alignment test)"') && !code.includes("<script"), code);
   await page.click('dialog.embed-dlg input[data-opt="lock"]');

@@ -209,6 +209,7 @@ await step(C, "tabs and buttons", async () => {
 
   // Duplicating someone else's region makes a new region that is theirs.
   const n = mock.log.length;
+  await page.click('[data-region="provinces"] [data-action="more"]');
   await page.click('[data-region="provinces"] [data-action="duplicate"]');
   await page.waitForSelector("dialog.editor[open]");
   await page.click("dialog.editor .ed-save");
@@ -249,7 +250,7 @@ await step(E, "edits other people's regions, can't delete them", async () => {
   await page.goto(`${ADMIN}#regions`);
   await page.waitForSelector("#regions .rcard", { timeout: 15000 });
   check(E, "Edit enabled, Delete disabled on someone else's region", !(await disabled(page, '[data-region="landmark-disc"] [data-action="edit"]')) && (await disabled(page, '[data-region="landmark-disc"] [data-action="delete"]')));
-  check(E, "an editor can also Propose changes, and a contributor can't (they Suggest)", (await page.locator('[data-region="landmark-disc"] [data-action="propose-changes"]').count()) === 1 && (await page.locator('[data-region="landmark-disc"] [data-action="suggest-changes"]').count()) === 0);
+  check(E, "an editor can also Suggest changes (in More…), next to Edit; a contributor gets it instead of Edit", (await page.locator('[data-region="landmark-disc"] .actions > [data-action="suggest-changes"]').count()) === 0 && (await page.locator('[data-region="landmark-disc"] .rmenu [data-action="suggest-changes"]').count()) === 1);
   const n = mock.log.length;
   await page.click('[data-region="landmark-disc"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open]");
@@ -561,6 +562,7 @@ await step(T, "only the owner and admins can hand a region over", async () => {
   await page.goto(`${ADMIN}#regions`);
   await page.waitForSelector("#regions .rcard", { timeout: 15000 });
   const n = mock.log.length;
+  await page.click('[data-region="landmark-disc"] [data-action="more"]');
   await page.click('[data-region="landmark-disc"] [data-action="transfer"]');
   await page.waitForSelector("dialog[open] select");
   await page.selectOption("dialog[open] select", { label: "drafter-bo" });
