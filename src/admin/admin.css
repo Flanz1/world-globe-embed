@@ -493,8 +493,8 @@ button.ed-pinfolder-toggle.ghost { border-color: transparent; color: var(--md-sy
 .theme-colour { display: inline-flex; }
 /* Outlined like .ghost, but not named ghost: the editor's tests (and Close) look for `.pv-head button.ghost`. */
 button.theme-mode, button.theme-swatch { background-color: transparent; color: var(--md-sys-color-primary); border-color: var(--md-sys-color-outline); }
-button.icon { width: 40px; padding: 0; display: inline-grid; place-items: center; }
-dialog.editor button.icon { width: 32px; }
+button.icon { width: 40px; padding: 0; display: inline-grid; place-items: center; flex: 0 0 auto; }
+dialog.editor button.icon { width: 32px; padding: 0; }
 button.icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 button.theme-mode[aria-pressed="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: transparent; }
 .theme-swatch .dot, .theme-item .dot { width: 20px; height: 20px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
