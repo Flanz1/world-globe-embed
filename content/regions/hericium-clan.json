@@ -107,15 +107,33 @@
       "Ancient Tsurigist peoples",
       "City of Srespa"
     ],
-    "updated": "2026-11-13T15:12:58Z",
+    "partLabelHidden": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "updated": "2026-11-16T08:51:13Z",
     "created": "2026-11-13T14:17:41Z",
     "createdBy": {
       "id": 167983516,
       "login": "tombo661"
     },
     "updatedBy": {
-      "id": 167983516,
-      "login": "tombo661"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
@@ -278,8 +296,8 @@
           [24.8296, 12.6841],
           [24.7856, 12.646],
           [24.7856, 12.5509],
-          [24.7197, 12.5319],
-          [24.6648, 12.3892],
+          [24.6973, 12.5269],
+          [24.6423, 12.3843],
           [24.5769, 12.3892],
           [24.5549, 12.3702],
           [24.489, 12.3892],
