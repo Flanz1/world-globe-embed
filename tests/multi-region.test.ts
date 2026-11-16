@@ -68,3 +68,14 @@ describe("mergeRegions", () => {
     expect(regionLabelPoints(m, true).map((p) => p.text)).toEqual(["X", "Y"]);
   });
 });
+
+describe("underlay fill", () => {
+  it("clamps a usable override and ignores junk", async () => {
+    const { underFill, UNDER_FILL_MIN } = await import("../src/shared/region.ts");
+    expect(underFill(0.8)).toBe(0.8);
+    expect(underFill(0)).toBe(UNDER_FILL_MIN);
+    expect(underFill(5)).toBe(1);
+    expect(underFill("x")).toBeUndefined();
+    expect(underFill(undefined)).toBeUndefined();
+  });
+});

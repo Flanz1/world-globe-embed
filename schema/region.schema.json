@@ -225,7 +225,8 @@
             "properties": {
               "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
               "label": { "type": "string", "maxLength": 60, "description": "Name of its toggle in the legend (plain text). Defaults to the region's name, else its id." },
-              "on": { "type": "boolean", "description": "Whether it starts shown. Missing: the first underlay does, the others don't." }
+              "on": { "type": "boolean", "description": "Whether it starts shown. Missing: the first underlay does, the others don't." },
+              "fill": { "type": "number", "minimum": 0.1, "maximum": 1, "description": "Fill opacity this underlay is painted with, overriding its own, so it can look more pronounced. Leave it out to use the underlay region's own fill." }
             }
           }
         },

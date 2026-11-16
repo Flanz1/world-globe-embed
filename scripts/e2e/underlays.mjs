@@ -137,6 +137,14 @@ await step(A, "preview", async () => {
   await page.screenshot({ path: path.join(OUT, "editor-preview.png") });
 });
 
+await step(A, "underlay fill", async () => {
+  const slider = page.locator(`${D} .ed-under-row`).first().locator('input[name="under-fill"]');
+  check(A, "each underlay has a Fill slider with its own accessible name", /^Fill for /.test((await slider.getAttribute("aria-label")) ?? ""), await slider.getAttribute("aria-label"));
+  await slider.fill("0.8");
+  await page.waitForTimeout(900);
+  check(A, "the output reads 80%", (await page.locator(`${D} .ed-under-row`).first().locator("output").textContent()) === "80%");
+});
+
 await step(A, "save", async () => {
   const n0 = mock.log.length;
   await page.click(`${D} .ed-save`);
@@ -146,6 +154,7 @@ await step(A, "save", async () => {
   const c = mock.log.slice(n0);
   check(A, "save is one commit to content/regions/country.json", c.length === 1 && c[0].branch === BRANCH, JSON.stringify(c));
   const f = JSON.parse(mock.read(BRANCH, "content/regions/country.json"));
+  check(A, "saved with the underlay's fill", f.properties.under?.[0]?.fill === 0.8 && f.properties.under?.[1]?.fill === undefined, JSON.stringify(f.properties.under));
   check(A, "saved with under, its names and the heading", f.properties.under?.length === 2 && f.properties.under[0].label === "Religion" && f.properties.underTitle === "Map layers", JSON.stringify(f.properties.under));
 });
 

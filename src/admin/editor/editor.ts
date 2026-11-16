@@ -35,6 +35,9 @@ import {
   LEGEND_MAX,
   LEGEND_TITLE_MAX,
   UNDER_MAX,
+  UNDER_FILL_MIN,
+  underFill,
+  DEFAULT_FILL_OPACITY,
   UNDER_TITLE_MAX,
   OWN_COLOUR,
   REGION_ID,
@@ -1095,9 +1098,12 @@ export function openEditor(o: EditorOptions): void {
   let underBg: { key: string; canvas: HTMLCanvasElement } | null = null;
   function drawUnder(p: Parts, offs: number[], viewKey: string): boolean {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const layers = underOn().flatMap((e) => underPaint(e.id) ?? []);
+    const layers = underOn().flatMap((e) => {
+      const l = underPaint(e.id);
+      return l ? [{ ...l, opacity: underFill(e.fill) ?? l.opacity }] : [];
+    });
     if (!layers.length || !p.length) return false;
-    const key = `${viewKey}|${underOn().map((e) => e.id).join(",")}`;
+    const key = `${viewKey}|${underOn().map((e) => `${e.id}:${e.fill ?? ""}`).join(",")}`;
     if (!underBg || underBg.key !== key) {
       const c = underBg?.canvas ?? document.createElement("canvas");
       c.width = canvas.width;
@@ -1650,7 +1656,10 @@ export function openEditor(o: EditorOptions): void {
     underSig = sig;
     const regions = list.flatMap((e) => {
       const n = neighbours.find((x) => x.id === e.id);
-      return n ? [underData(n)] : [];
+      if (!n) return [];
+      const d = underData(n);
+      const fill = underFill(e.fill);
+      return [fill === undefined ? d : { ...d, fillOpacity: fill }];
     });
     return {
       regions,
@@ -1748,7 +1757,7 @@ export function openEditor(o: EditorOptions): void {
   function renderUnder(): void {
     const p = hist.state.props;
     const list = p.under ?? [];
-    const key = JSON.stringify(list.map((e) => [e.id, e.label ?? "", e.on ?? null]));
+    const key = JSON.stringify(list.map((e) => [e.id, e.label ?? "", e.on ?? null, e.fill ?? null]));
     const idsSame = list.map((e) => e.id).join(",") === underIds;
     // Undo/redo of a name or switch rebuilds the rows, but never while the user is typing in one.
     if (key !== underKey && (!idsSame || !underList.contains(document.activeElement))) {
@@ -1764,7 +1773,22 @@ export function openEditor(o: EditorOptions): void {
           });
           const onIn = h("input", { type: "checkbox", checked: e.on ?? i === 0, ariaLabel: `${e.id} starts shown` });
           onIn.addEventListener("change", () => {
+            fillIn.disabled = !onIn.checked;
+            fillIn.title = onIn.checked ? "" : "Turn On to change fill";
             setUnder((hist.state.props.under ?? []).map((x, j) => (j === i ? { ...x, on: onIn.checked } : x)), "Toggle starts shown");
+            changed();
+          });
+          const own = neighbours.find((x) => x.id === e.id)?.properties.fillOpacity ?? DEFAULT_FILL_OPACITY;
+          const fillIn = h("input", { type: "range", min: String(UNDER_FILL_MIN), max: "1", step: "0.05", value: String(underFill(e.fill) ?? own), name: "under-fill", ariaLabel: `Fill for ${regionTitle(e.id)}`, disabled: !(e.on ?? i === 0), title: (e.on ?? i === 0) ? "" : "Turn On to change fill" });
+          const fillOut = h("output", { ariaLive: "polite", textContent: e.fill === undefined ? "own" : `${Math.round(underFill(e.fill)! * 100)}%` });
+          fillIn.addEventListener("input", () => {
+            const v = Number(fillIn.value);
+            fillOut.value = `${Math.round(v * 100)}%`;
+            setUnder((hist.state.props.under ?? []).map((x, j) => (j === i ? { ...x, fill: v } : x)), "Underlay fill");
+            changed();
+          });
+          const fillReset = btn("Reset", "Use the underlay region's own fill again", () => {
+            setUnder((hist.state.props.under ?? []).map((x, j) => (j === i ? { ...x, fill: undefined } : x)), "Underlay fill");
             changed();
           });
           const move = (d: -1 | 1) => () => {
@@ -1774,6 +1798,8 @@ export function openEditor(o: EditorOptions): void {
             setUnder(cur, "Underlay order");
             changed();
           };
+          const fillRow = h("label", { className: "ed-under-fill small", title: "How strongly this underlay is filled: raise it to make it stand out" }, "Fill", fillIn, fillOut);
+          if (e.fill !== undefined) fillRow.append(fillReset);
           return h(
             "div",
             { className: "ed-under-row" },
@@ -1786,6 +1812,7 @@ export function openEditor(o: EditorOptions): void {
               setUnder((hist.state.props.under ?? []).filter((_, j) => j !== i), "Remove underlay");
               changed();
             }),
+            fillRow,
           );
         }),
       );
@@ -3748,7 +3775,7 @@ export function openEditor(o: EditorOptions): void {
         ...(props.pinMaps?.length ? { pinMaps: props.pinMaps.slice(0, REGION_PINMAPS_MAX) } : {}),
         ...(props.under?.length
           ? {
-              under: props.under.map((e) => ({ id: e.id, ...(e.label?.trim() ? { label: e.label.trim().slice(0, LEGEND_LABEL_MAX) } : {}), ...(typeof e.on === "boolean" ? { on: e.on } : {}) })),
+              under: props.under.map((e) => ({ id: e.id, ...(e.label?.trim() ? { label: e.label.trim().slice(0, LEGEND_LABEL_MAX) } : {}), ...(typeof e.on === "boolean" ? { on: e.on } : {}), ...(underFill(e.fill) !== undefined ? { fill: underFill(e.fill) } : {}) })),
               ...(props.underClip === false ? { underClip: false } : {}),
               ...(props.underTitle?.trim() ? { underTitle: props.underTitle.trim().slice(0, UNDER_TITLE_MAX) } : {}),
               ...(props.ownToggle ? { ownToggle: true } : {}),

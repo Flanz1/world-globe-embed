@@ -38,7 +38,7 @@ function underIndex(r: RegionFeature, all: ReadonlyMap<string, RegionFeature> | 
   if (!u.length) return pm.length ? { pm } : {};
   return {
     ...(pm.length ? { pm } : {}),
-    u: u.map((e) => ({ id: e.id, ...(e.label?.trim() ? { label: e.label.trim() } : {}), ...(typeof e.on === "boolean" ? { on: e.on } : {}) })),
+    u: u.map((e) => ({ id: e.id, ...(e.label?.trim() ? { label: e.label.trim() } : {}), ...(typeof e.on === "boolean" ? { on: e.on } : {}), ...(typeof e.fill === "number" ? { fill: e.fill } : {}) })),
     ...(p.underClip === false ? { uc: false as const } : {}),
     ...(p.underTitle?.trim() ? { ut: p.underTitle.trim() } : {}),
     ...(p.ownToggle === true ? { ot: true as const } : {}),

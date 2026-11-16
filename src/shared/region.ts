@@ -56,6 +56,16 @@ export interface UnderEntry {
   label?: string;
   /** Whether it starts shown. Missing: the first underlay does, the others don't. */
   on?: boolean;
+  /** Fill opacity (UNDER_FILL_MIN..1) this underlay is painted with, overriding its own, so one can stand out. Missing: its own. */
+  fill?: number;
+}
+
+/** Least fill an underlay can be given (it could vanish entirely at 0). */
+export const UNDER_FILL_MIN = 0.1;
+
+/** The underlay's fill override if it is a usable number, else undefined. */
+export function underFill(v: unknown): number | undefined {
+  return typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(UNDER_FILL_MIN, v)) : undefined;
 }
 
 /** Most regions one region can show under it. */

@@ -9,7 +9,7 @@
  * view=flat.
  */
 import { applyParams, diameterFraction, distanceForZoom, posterVars } from "../shared/params.ts";
-import { REGION_ID, flatFit, mergeRegions, parseRegionData, parseRegionIds, type RegionData } from "../shared/region.ts";
+import { REGION_ID, flatFit, mergeRegions, parseRegionData, parseRegionIds, underFill, type RegionData } from "../shared/region.ts";
 import type { ViewerConfig } from "../shared/types.ts";
 import type { BootData, FlatStartContext, RegionContext, StartContext, ViewMode } from "./contract.ts";
 
@@ -114,7 +114,10 @@ if (regionId !== null) {
           .then((r) => (r.ok ? r.json() : null))
           .then((j) => {
             const r = parseRegionData(j);
-            return r && r.id === id && r.slot === cfg.slug ? r : null;
+            if (!r || r.id !== id || r.slot !== cfg.slug) return null;
+            // An underlay can have its own fill (UnderEntry.fill), so it stands out.
+            const fill = underFill(under.find((e) => e.id === id)?.fill);
+            return fill === undefined ? r : { ...r, fillOpacity: fill };
           })
           .catch(() => null);
       regionData =

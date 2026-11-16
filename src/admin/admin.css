@@ -307,6 +307,9 @@ dialog.editor input:not([type=checkbox], [type=radio], [type=range], [type=color
 .ed-under > legend { padding: 0 4px; font-size: 13px; font-weight: 600; }
 .ed-under-list { display: grid; gap: 6px; }
 .ed-under-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto auto auto auto; gap: 4px; align-items: center; }
+.ed-under-fill { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin: 0; padding-top: 4px; min-width: 0; width: 100%; }
+.ed-under-fill input[type="range"] { flex: 1; min-width: 0; }
+.ed-under-fill output { min-width: 3ch; text-align: right; }
 .ed-under-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-under-row .check { display: flex; align-items: center; gap: 4px; margin: 0; }
 .ed-fill { display: flex; align-items: center; gap: 8px; }
