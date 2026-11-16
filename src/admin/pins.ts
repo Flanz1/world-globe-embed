@@ -50,7 +50,7 @@ export const pinEntries = (): PinEntry[] => entries;
 
 export async function loadPins(): Promise<void> {
   const gh = deps.gh();
-  await loadPinMaps().catch(() => {});
+  const pinMapsDone = loadPinMaps().catch(() => {});
   const files = (await gh.listTree("content/pins")).filter((f) => f.type === "file" && f.name.endsWith(".json"));
   const loaded: PinEntry[] = [];
   let next = 0;
@@ -84,6 +84,7 @@ export async function loadPins(): Promise<void> {
   const current = new Set(files.map((f) => f.sha));
   for (const k of parsed.keys()) if (!current.has(k)) parsed.delete(k);
   loaded.sort((a, b) => a.id.localeCompare(b.id));
+  await pinMapsDone;
   entries = loaded;
   refresh();
 }
