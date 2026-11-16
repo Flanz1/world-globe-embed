@@ -92,7 +92,7 @@ export async function useAdminApi(ctx, mock, { branch = "main", as = "Flanz1", a
   // The live "X is editing" room is a Durable Object in production; here a stand-in that accepts the socket,
   // answers pings and shares what each tab has open with the others in this context.
   const sockets = new Set();
-  const editingList = () => [...sockets].filter((s) => s.regions.length).map((s) => ({ id: 0, login: s.login, tab: s.tab, regions: s.regions, at: s.at }));
+  const editingList = () => [...sockets].filter((s) => s.regions.length).map((s) => ({ id: s.id, login: s.login, tab: s.tab, regions: s.regions, at: s.at }));
   const shareEditing = () => {
     const msg = JSON.stringify({ editing: editingList() });
     for (const s of sockets) {
@@ -104,7 +104,8 @@ export async function useAdminApi(ctx, mock, { branch = "main", as = "Flanz1", a
     }
   };
   await ctx.routeWebSocket(`${ADMIN_API.replace(/^http/, "ws")}/editing/live`, (ws) => {
-    const me = { ws, login: next ?? "Flanz1", tab: Math.random().toString(36).slice(2, 10), regions: [], at: new Date().toISOString() };
+    const login = next ?? "Flanz1";
+    const me = { ws, login, id: ACCOUNTS.find((x) => x.login === login)?.id ?? 0, tab: Math.random().toString(36).slice(2, 10), regions: [], at: new Date().toISOString() };
     sockets.add(me);
     ws.send(JSON.stringify({ editing: editingList() }));
     ws.onMessage((m) => {
