@@ -13,6 +13,7 @@ import type { MapMeta, SlotsFile } from "../shared/types.ts";
 import { clamp } from "../shared/params.ts";
 import { $, SITE, h } from "./dom.ts";
 import type { GitHub } from "./github.ts";
+import { optimistic } from "./optimistic.ts";
 import { loadMapImage } from "./images.ts";
 import { confirmBox, modal } from "./region-dialogs.ts";
 import { canOrganise, initPinMaps, loadPinMaps, moveMapDialog, newFolder, newMap, pinMaps, removeMap, renameMap, renderTree } from "./pinmaps.ts";
@@ -37,6 +38,8 @@ export interface PinEntry {
 
 let deps: PinsDeps;
 let entries: PinEntry[] = [];
+/** Pins with a save still being committed (id → count). */
+const inFlight = new Map<string, number>();
 const parsed = new Map<string, { feature: PinFeature | null; problem?: string }>();
 
 const stamp = () => new Date().toISOString().replace(/\.\d+Z$/, "Z");
@@ -400,20 +403,52 @@ async function save_(err: HTMLElement): Promise<void> {
   const why = refusal({ path, before: before ? serialize(before) : null, after: text });
   if (why) return void (err.textContent = why);
   const label = isNew ? `Place pin "${f.properties.name}"` : `Update pin "${f.properties.name}"`;
-  await deps.act(`${label}…`, async () => {
-    const sha = entryOf(f.id)?.sha;
-    if (!isNew && sha) {
-      const now = await gh.fileSha(path);
-      if (now !== sha) throw new Error(`"${f.properties.name}" was changed by someone else since you opened it. Close it and open it again.`);
-    }
-    if (isNew && (await gh.fileSha(path)) !== null) throw new Error(`A pin with the id "${f.id}" already exists. Try a different name.`);
-    const commit = await gh.commit(`${label} on slot "${slot}"`, async () => [{ path, content: text }]);
-    selected = f.id;
-    adding = false;
-    return commit;
+  const baseSha = entryOf(f.id)?.sha;
+  // A second save of the same pin while the first is still being committed would find the file changed (by us).
+  const followsOwnSave = (inFlight.get(f.id) ?? 0) > 0;
+  inFlight.set(f.id, (inFlight.get(f.id) ?? 0) + 1);
+  const wasSelected = selected;
+  const wasDraft = draft;
+  const wasAdding = adding;
+  err.textContent = "";
+  await optimistic<PinEntry[]>({
+    label,
+    apply: () => {
+      const before = entries;
+      const entry: PinEntry = { id: f.id, path, sha: baseSha ?? "", feature: f };
+      entries = isNew ? [...entries, entry].sort((a, b) => a.id.localeCompare(b.id)) : entries.map((x) => (x.id === f.id ? entry : x));
+      selected = f.id;
+      adding = false;
+      draft = structuredClone(f);
+      return before;
+    },
+    undo: (before) => {
+      entries = before;
+      // Put the form back as it was so the work isn't lost.
+      selected = isNew ? "new" : wasSelected;
+      draft = isNew ? wasDraft : structuredClone(f);
+      adding = wasAdding;
+    },
+    render: () => {
+      renderForm(true);
+      renderList();
+      syncControls();
+      redraw();
+    },
+    commit: async () => {
+      try {
+        if (!isNew && baseSha && !followsOwnSave) {
+          if ((await gh.fileSha(path)) !== baseSha) throw new Error(`"${f.properties.name}" was changed by someone else since you opened it. Close it and open it again.`);
+        }
+        if (isNew && (await gh.fileSha(path)) !== null) throw new Error(`A pin with the id "${f.id}" already exists. Try a different name.`);
+        return await gh.commit(`${label} on slot "${slot}"`, async () => [{ path, content: text }]);
+      } finally {
+        const n = (inFlight.get(f.id) ?? 1) - 1;
+        if (n > 0) inFlight.set(f.id, n);
+        else inFlight.delete(f.id);
+      }
+    },
   });
-  // After the reload, show the saved pin.
-  select(entryOf(f.id) ? f.id : null);
 }
 
 async function remove_(): Promise<void> {
@@ -422,8 +457,31 @@ async function remove_(): Promise<void> {
   const why = refusal({ path: e.path, before: serialize(e.feature), after: null });
   if (why) return void ($(".pn-form .error").textContent = why);
   if (!(await confirmBox("Delete pin", `Delete “${e.feature.properties.name}”? Embeds that show pins stop showing it once the site has rebuilt.`, "Delete pin", "Cancel", true))) return;
-  await deps.act(`Deleting pin "${e.feature.properties.name}"…`, () => deps.gh().commit(`Delete pin "${e.feature!.properties.name}"`, async () => [{ path: e.path, content: "", delete: true }]));
-  select(null);
+  const name = e.feature.properties.name;
+  const wasDraft = draft;
+  await optimistic<PinEntry[]>({
+    label: `Delete pin "${name}"`,
+    apply: () => {
+      const before = entries;
+      entries = entries.filter((x) => x !== e);
+      selected = null;
+      draft = null;
+      adding = false;
+      return before;
+    },
+    undo: (before) => {
+      entries = before;
+      selected = e.id;
+      draft = wasDraft;
+    },
+    render: () => {
+      renderForm(true);
+      renderList();
+      syncControls();
+      redraw();
+    },
+    commit: () => deps.gh().commit(`Delete pin "${name}"`, async () => [{ path: e.path, content: "", delete: true }]),
+  });
 }
 
 /* ── The list and the controls above it ── */
@@ -754,5 +812,5 @@ export function renderPins(): void {
 
 export function initPins(d: PinsDeps): void {
   deps = d;
-  initPinMaps({ gh: d.gh, act: d.act, render: () => renderList() });
+  initPinMaps({ gh: d.gh, render: () => renderList() });
 }
