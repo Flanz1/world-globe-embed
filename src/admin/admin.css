@@ -168,7 +168,8 @@ dialog.editor { width: calc(100vw - 16px); height: calc(100vh - 16px); max-width
 dialog.editor[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
 .ed-toolbar { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--line); align-items: center; }
 .ed-toolbar button { padding: 3px 8px; font-size: 13px; }
-.ed-toolbar button[aria-pressed="true"] { background: var(--accent); color: var(--card); }
+/* Pressed (toggled-on) editor tools: a lighter tint with an inset edge, so they never look like the filled Save button and are not colour-only. */
+dialog.editor button[aria-pressed="true"], .ed-ov-btn.active, .ed-part-row.locked .ed-lock { background: color-mix(in srgb, var(--accent) 18%, var(--card)); color: var(--fg); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .ed-toolbar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
 .ed-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 34%); min-height: 0; }
 .ed-canvas-wrap { position: relative; min-height: 0; overflow: hidden; }
@@ -246,11 +247,9 @@ button.tiny { padding: 1px 7px; font-size: 12px; }
 .warn { color: var(--warn); }
 .ed-part-row.label-off input[type=text] { opacity: .55; text-decoration: line-through; }
 .ed-part-row .ed-labelbtn[aria-pressed=false] { opacity: .75; }
-.ed-part-row.locked .ed-lock { background: var(--accent); color: var(--card); border-color: var(--accent); }
 
 /* Editor: "Other regions" tool (button at the toolbar's right end, panel at the top right of the map) */
 .ed-toolbar-end { margin-left: auto; display: flex; }
-.ed-ov-btn.active { background: var(--accent); color: var(--card); }
 .ed-ov-panel { position: absolute; right: 8px; top: 8px; z-index: 3; display: grid; gap: 6px; width: min(340px, calc(100% - 16px)); max-height: min(70vh, 520px); grid-template-rows: auto auto auto auto auto minmax(0, 1fr); padding: 10px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
 .ed-ov-panel[hidden] { display: none; }
 .ed-layer-bar { position: absolute; right: 8px; top: 8px; z-index: 3; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
