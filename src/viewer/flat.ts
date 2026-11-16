@@ -16,7 +16,7 @@ import { TILE_BUDGET, TileCache, levelFor, tileRect, tilesAt, tileUrl } from "..
 import type { FlatStartContext, PreviewMessage } from "./contract.ts";
 import { setupRuler } from "./ruler.ts";
 import { RELOCK_MS, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
-import { setupPins, type PinLayer } from "./pins.ts";
+import { setupPins, watchPreviewPins, type PinLayer } from "./pins.ts";
 
 type Img = ImageBitmap | HTMLImageElement;
 
@@ -407,6 +407,11 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   };
 
   void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins).then((l) => {
+    pinLayer = l;
+    schedule();
+  });
+  // The admin preview gets its pins from the admin page.
+  watchPreviewPins(stage, canvas, (l) => {
     pinLayer = l;
     schedule();
   });

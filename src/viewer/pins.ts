@@ -18,6 +18,8 @@ export interface PinPoint {
 export interface PinLayer {
   /** Positions every marker. `project` gets a pin's [lon, lat] in the map image's frame. */
   place(project: (at: [number, number]) => PinPoint): void;
+  /** Takes the markers and the card off the page. */
+  destroy(): void;
 }
 
 const CSS = `
@@ -43,7 +45,7 @@ const CSS = `
 /** `fallback` is what a region embed asks for by itself (the region's pin maps) when the URL has no ?pins=. */
 export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: string, search = location.search, fallback?: string): Promise<PinLayer | null> {
   const sel = parsePinsParam(new URLSearchParams(search).get("pins") ?? fallback);
-  // The admin preview page has no pins of its own.
+  // The admin preview page has no pins file of its own: it gets them from the admin page (watchPreviewPins).
   if (!sel || !PIN_ID.test(slug)) return null;
   let file: ReturnType<typeof parsePinsFile>;
   try {
@@ -52,6 +54,27 @@ export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: s
   } catch {
     file = null;
   }
+  return buildPins(stage, canvas, file, sel);
+}
+
+/**
+ * Admin preview only: the admin page sends the pins to show ({ type: "wge-pins", file, show }), as it has them
+ * before they are deployed. Only same-origin messages from the parent count; the data is validated like a fetched file.
+ */
+export function watchPreviewPins(stage: HTMLElement, canvas: HTMLElement, set: (layer: PinLayer | null) => void): void {
+  let layer: PinLayer | null = null;
+  window.addEventListener("message", (e: MessageEvent) => {
+    if (e.origin !== location.origin || e.source !== window.parent || e.data?.type !== "wge-pins") return;
+    layer?.destroy();
+    const sel = parsePinsParam(typeof e.data.show === "string" ? e.data.show : null);
+    layer = sel ? buildPins(stage, canvas, parsePinsFile(e.data.file), sel) : null;
+    set(layer);
+  });
+  // The viewer starts after the page has loaded, so the admin page can't know when it's listening: ask for the pins.
+  if (window.parent !== window) window.parent.postMessage({ type: "wge-pins-wanted" }, location.origin);
+}
+
+function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typeof parsePinsFile>, sel: NonNullable<ReturnType<typeof parsePinsParam>>): PinLayer | null {
   const mapName = new Map((file?.maps ?? []).map((m) => [m.id, m.name]));
   const labelOf = (p: PinData) => (p.pinMap && mapName.get(p.pinMap)) || "";
   const pins = (file?.pins ?? []).filter((p) => pinShown(sel, p));
@@ -120,15 +143,20 @@ export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: s
     card.setAttribute("aria-label", p.name);
     card.hidden = false;
   };
-  stage.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && open) {
-      const b = open;
-      close();
-      b.focus();
-    }
-  });
+  const gone = new AbortController();
+  stage.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key === "Escape" && open) {
+        const b = open;
+        close();
+        b.focus();
+      }
+    },
+    { signal: gone.signal },
+  );
   // A click on the map itself (not a marker) puts the card away.
-  canvas.addEventListener("pointerdown", close);
+  canvas.addEventListener("pointerdown", close, { signal: gone.signal });
 
   const size = markerSize(Math.min(stage.clientWidth, stage.clientHeight));
   const markers = pins.map((p) => {
@@ -151,6 +179,12 @@ export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: s
 
   const half = size / 2;
   return {
+    destroy() {
+      gone.abort();
+      layer.remove();
+      card.remove();
+      style.remove();
+    },
     place(project) {
       for (const { b, p } of markers) {
         const pt = project(p.at);

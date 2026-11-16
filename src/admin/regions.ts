@@ -264,7 +264,7 @@ function card(e: RegionEntry): HTMLElement {
       canEdit(f) && can("regions") && !linked ? h("button", { type: "button", className: "ghost", textContent: "Propose changes", title: "Draw changes and send them for somebody else to accept or decline", onclick: () => suggest(e), dataset: { action: "propose-changes" } }) : null,
       !canEdit(f) || !pendingFor(e.id) ? null : h("span", { className: "badge warn", textContent: `${pendingFor(e.id)} suggestion${pendingFor(e.id) > 1 ? "s" : ""}`, title: "Waiting in the list above the regions" }),
       btn("Duplicate", () => duplicate(e), "ghost", noCreate),
-      btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot)),
+      btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot, p.pinMaps)),
       btn("Copy embed code", () => openEmbedDialog({ region: { id: e.id, name: e.id, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot })),
       linked ? null : btn("History", () => openHistory({ gh: deps.gh(), id: e.id, path: e.path, feature: f, map, noRestore: noEdit, act: deps.act }), "ghost", ""),
       btn("Delete", () => del(e), "ghost danger", noDelete),

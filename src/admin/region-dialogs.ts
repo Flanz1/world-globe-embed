@@ -7,6 +7,7 @@ import type { RegionData } from "../shared/region.ts";
 import { DEFAULT_VIEW, type Slot } from "../shared/types.ts";
 import type { RegionMessage } from "../viewer/contract.ts";
 import { SITE, h } from "./dom.ts";
+import { keepPinsSent } from "./preview-pins.ts";
 
 /** A modal <dialog> that removes itself when closed. */
 export function modal(title: string, cls = ""): { dlg: HTMLDialogElement; body: HTMLDivElement; foot: HTMLDivElement; close: () => void } {
@@ -164,7 +165,7 @@ export function sendRegion(frame: HTMLIFrameElement, region: RegionData, centre 
   frame.contentWindow?.postMessage(msg, SITE.origin);
 }
 
-export function openRegionPreview(region: RegionData, slot: Slot, slotTitle: string): void {
+export function openRegionPreview(region: RegionData, slot: Slot, slotTitle: string, pinMaps: string[] = []): void {
   const m = modal(`Preview: ${region.id}`, "rpreview");
   const frame = h("iframe", { title: "Region embed preview", className: "rp-frame" });
   const state = { view: "globe" as "globe" | "flat", label: region.label, dim: false };
@@ -177,7 +178,11 @@ export function openRegionPreview(region: RegionData, slot: Slot, slotTitle: str
       lock: "1",
     });
   };
-  frame.addEventListener("load", () => sendRegion(frame, region));
+  frame.addEventListener("load", () => {
+    sendRegion(frame, region);
+  });
+  // The pin maps the region includes, as its embed shows them.
+  if (pinMaps.length) keepPinsSent(frame, region.slot, () => pinMaps.join(","));
   const seg = (v: "globe" | "flat", text: string) =>
     h("button", {
       type: "button",
