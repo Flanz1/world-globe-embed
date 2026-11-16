@@ -80,7 +80,8 @@ try {
   const { page } = owner;
   check("the region is in the list before it is deleted", (await page.locator(`#regions .rcard[data-region="${ID}"]`).count()) === 1);
   const n0 = mock.log.length;
-  await page.locator(`#regions .rcard[data-region="${ID}"] button:has-text("Delete")`).click();
+  await page.click(`#regions .rcard[data-region="${ID}"] [data-action="more"]`);
+  await page.locator(`.rmenu[data-region="${ID}"] button:has-text("Delete")`).click();
   await page.fill('dialog input[aria-label="Type the region id to confirm"]', ID);
   await page.click('dialog.danger[open] button:has-text("Delete region")');
   await waitCommit(page, n0);
