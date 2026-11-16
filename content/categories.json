@@ -61,6 +61,7 @@
       "name": "Ilrakhan",
       "regions": [
         "erlmondy",
+        "erlmondy-combined",
         "vihr"
       ],
       "parent": "country",
