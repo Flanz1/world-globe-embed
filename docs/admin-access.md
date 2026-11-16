@@ -59,7 +59,7 @@ Suggestions are kept in Cloudflare KV (the `PROPOSALS` binding if present, other
 
 If someone signs in before they're added, they're told they're waiting, and they appear under **Asked for access** in the Users tab, where you can approve them in one click. Removing someone takes effect on their next save, even while they're still signed in. Sessions last 12 hours and only live in that browser tab.
 
-While a region is open in the editor, that tab tells the admin API every 30 seconds (stored in the same KV namespace under `e:` keys, forgotten after 90 seconds of silence). The editor then warns "Ann has this region open", and the Regions tab shows who is editing each card. It's only a hint: saving is still checked against the branch.
+While a region is open in the editor, that tab keeps a WebSocket open to the admin API's `EditingRoom` Durable Object (`/editing/live`, `worker/src/presence.ts`) and says which regions it has open. The editor then warns "Ann has this region open", and the Regions tab shows who is editing each card. A tab that closes, reloads or crashes drops off at once; one that loses its network drops off within about 3 minutes (it stops pinging). Nothing is stored and no KV is used; Cloudflare answers the pings without waking the room. It's only a hint: saving is still checked against the branch.
 
 ## One-time setup (repository owner)
 

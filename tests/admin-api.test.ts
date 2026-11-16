@@ -7,10 +7,10 @@ import { generateKeyPairSync, createVerify } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { GitHub, GitHubError, NotListed, mapLimit, retrying, type FileChange } from "../src/admin/github.ts";
 import { resetRateLimits } from "../worker/src/ratelimit.ts";
-import { EDITING_REFRESH_SECONDS, EDITING_SECONDS, handle, resetCaches, returnAllowed, type Env, type KV } from "../worker/src/handler.ts";
+import { handle, resetCaches, returnAllowed, type Env, type KV } from "../worker/src/handler.ts";
 import { appJwt, fromB64url, sign, verify } from "../worker/src/crypto.ts";
 import { MockGitHub, mockFetch } from "../scripts/e2e/mock-github.mjs";
 import { VALIDATORS_FILE, generateValidators } from "../scripts/build-worker-validators.ts";
@@ -224,54 +224,30 @@ describe("admin API sign-in", () => {
     expect(kv.data.size).toBe(0);
   });
 
-  it("tells editors who else has a region open, and forgets people who leave or go quiet", async () => {
-    const ann = await client(ANN);
-    const mgr = await client(MANAGER);
-    expect(await ann.editingBeat("tabannnn1", ["nordland"])).toEqual([expect.objectContaining({ login: ANN.login, regions: ["nordland"] })]);
-    const seen = await mgr.editingBeat("tabmgrrr1", ["nordland", "other"]);
-    expect(seen.map((e) => e.login).sort()).toEqual([ANN.login, MANAGER.login].sort());
-    expect((await ann.editingNow()).length).toBe(2);
-    // Leaving removes only that tab.
-    await ann.editingDone("tabannnn1");
-    expect((await mgr.editingNow()).map((e) => e.login)).toEqual([MANAGER.login]);
-    // A tab that stopped beating drops off even if KV hasn't expired the key yet.
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(Date.now() + (EDITING_SECONDS + 5) * 1000);
-    expect(await mgr.editingNow()).toEqual([]);
-    vi.useRealTimers();
-    await expect(ann.editingBeat("x", ["nordland"])).rejects.toThrow();
-    await expect(ann.editingBeat("tabannnn1", ["../x"])).rejects.toThrow();
-    // Not on the list: nothing.
-    await expect(client(STRANGER)).rejects.toBeInstanceOf(NotListed);
-  });
-
-  it("keeps the editing notices cheap on KV: no lists, and a write only when something changed or is due a refresh", async () => {
-    const ann = await client(ANN);
-    const mgr = await client(MANAGER);
-    const puts0 = kv.puts;
-    const lists0 = kv.lists;
-    await ann.editingBeat("tabannnn2", ["nordland"]);
-    expect(kv.puts - puts0).toBe(1);
-    // The same regions again, 30 s later: no write.
-    for (let i = 0; i < 5; i++) await ann.editingBeat("tabannnn2", ["nordland"]);
-    await mgr.editingNow();
-    expect(kv.puts - puts0).toBe(1);
-    // Other regions: written straight away.
-    await ann.editingBeat("tabannnn2", ["nordland", "other"]);
-    expect(kv.puts - puts0).toBe(2);
-    // Due a refresh: written again, and still there for others.
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(Date.now() + (EDITING_REFRESH_SECONDS + 5) * 1000);
-    await ann.editingBeat("tabannnn2", ["nordland", "other"]);
-    expect(kv.puts - puts0).toBe(3);
-    expect((await mgr.editingNow()).map((e) => e.login)).toEqual([ANN.login]);
-    vi.useRealTimers();
-    // Closing a tab that isn't there writes nothing.
-    await ann.editingDone("tabnothere");
-    expect(kv.puts - puts0).toBe(3);
-    await ann.editingDone("tabannnn2");
-    expect(await mgr.editingNow()).toEqual([]);
-    expect(kv.lists - lists0).toBe(0);
+  it("lets signed-in people from the admin page into the live editing room, and nobody else", async () => {
+    const seen: Request[] = [];
+    env.EDITING_ROOM = {
+      idFromName: (n: string) => n,
+      get: () => ({ fetch: async (r: Request) => (seen.push(r), new Response("room", { status: 200 })) }),
+    };
+    const ws = async (a: { id: number; login: string } | null, headers: Record<string, string> = {}) =>
+      call(`${API}/editing/live`, {
+        headers: { Upgrade: "websocket", Origin: new URL(ADMIN).origin, ...(a ? { "Sec-WebSocket-Protocol": `presence, ${await session(a)}` } : {}), ...headers },
+      });
+    expect((await ws(ANN)).status).toBe(200);
+    expect(JSON.parse(seen[0].headers.get("X-Editing-Actor")!)).toEqual({ id: ANN.id, login: ANN.login, write: true });
+    expect(seen[0].headers.get("Upgrade")).toBe("websocket");
+    // No token, a forged one, someone not on the list, another site, or no upgrade: never reaches the room.
+    expect((await ws(null)).status).toBe(401);
+    expect((await ws(null, { "Sec-WebSocket-Protocol": "presence, x.y" })).status).toBe(401);
+    expect((await ws(STRANGER)).status).toBe(403);
+    expect((await ws(ANN, { Origin: "https://evil.example" })).status).toBe(403);
+    expect((await call(`${API}/editing/live`, { headers: { Origin: new URL(ADMIN).origin } })).status).toBe(426);
+    expect(seen).toHaveLength(1);
+    // The old KV-backed endpoints are gone, and nothing here touches KV.
+    expect((await call(`${API}/editing`, { headers: await bearer(ANN) })).status).toBe(404);
+    expect(kv.puts).toBe(0);
+    expect(kv.lists).toBe(0);
   });
 
   it("signs App requests with a JWT GitHub accepts (PKCS#1 key)", async () => {

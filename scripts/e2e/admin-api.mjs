@@ -89,6 +89,41 @@ export async function useAdminApi(ctx, mock, { branch = "main", as = "Flanz1", a
     }
     await route.fulfill({ status: res.status, headers: Object.fromEntries(res.headers), body: Buffer.from(await res.arrayBuffer()) });
   });
+  // The live "X is editing" room is a Durable Object in production; here a stand-in that accepts the socket,
+  // answers pings and shares what each tab has open with the others in this context.
+  const sockets = new Set();
+  const editingList = () => [...sockets].filter((s) => s.regions.length).map((s) => ({ id: 0, login: s.login, tab: s.tab, regions: s.regions, at: s.at }));
+  const shareEditing = () => {
+    const msg = JSON.stringify({ editing: editingList() });
+    for (const s of sockets) {
+      try {
+        s.ws.send(msg);
+      } catch {
+        /* page gone */
+      }
+    }
+  };
+  await ctx.routeWebSocket(`${ADMIN_API.replace(/^http/, "ws")}/editing/live`, (ws) => {
+    const me = { ws, login: next ?? "Flanz1", tab: Math.random().toString(36).slice(2, 10), regions: [], at: new Date().toISOString() };
+    sockets.add(me);
+    ws.send(JSON.stringify({ editing: editingList() }));
+    ws.onMessage((m) => {
+      if (m === "ping") return ws.send("pong");
+      try {
+        const r = JSON.parse(String(m)).regions;
+        if (Array.isArray(r)) {
+          me.regions = r;
+          shareEditing();
+        }
+      } catch {
+        /* ignore */
+      }
+    });
+    ws.onClose(() => {
+      sockets.delete(me);
+      shareEditing();
+    });
+  });
   if (as) {
     const token = await sessionFor(as);
     await ctx.addInitScript((t) => {
