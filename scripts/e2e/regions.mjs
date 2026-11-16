@@ -51,6 +51,18 @@ async function step(group, name, fn) {
     check(group, name, false, `threw: ${(e && e.message) || e}`.slice(0, 400));
   }
 }
+/**
+ * A screenshot kept only for a person to look at afterwards (nothing compares it). On a CI runner software GL
+ * can take minutes to hand over one frame of the editor, and a missing picture must not fail the checks before
+ * it, so this one gives up after 30 s with a note. Screenshots that a check compares keep using page.screenshot.
+ */
+async function keepShot(target, file, opts = {}) {
+  try {
+    await target.screenshot({ ...opts, path: path.join(OUT, file), timeout: 30000 });
+  } catch (e) {
+    console.log(`  note  no ${file}: ${String((e && e.message) || e).split("\n")[0]}`);
+  }
+}
 
 /* ── Build the fixture ── */
 const dir = await makeFixture({ quiet: true });
@@ -538,7 +550,7 @@ await step(A, "editor: draw and edit", async () => {
   }
   s = await ed.state();
   check(A, "redo all of it (Ctrl+Shift+Z / Ctrl+Y)", JSON.stringify(s) === JSON.stringify(finalState) && redos === undos, `${redos} steps`);
-  await page.screenshot({ path: path.join(OUT, "editor-new-region.png") });
+  await keepShot(page, "editor-new-region.png");
 });
 
 await step(A, "editor: save", async () => {
