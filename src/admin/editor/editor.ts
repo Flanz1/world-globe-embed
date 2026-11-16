@@ -97,6 +97,7 @@ import {
   remapContested,
   removeLegendEntry,
   reorderPart,
+  cloneState,
   layerTarget,
   ringRefs,
   setLabelHidden,
@@ -366,7 +367,19 @@ export function openEditor(o: EditorOptions): void {
   let newOwner = live ? live[0].id : "";
   let newPartOwner: string | null = null;
   /** A linked region has legend names of its own (shared/combine.ts LinkedNames): they never change the linked regions. */
-  const withNames = (s: EditorState): EditorState => (link ? applyLinkedNames(s, liveSources, link.feature.properties.linkedNames) : s);
+  /** A linked region's own settings on top of the live state: its names, and the regions shown under it (the first region's own `under` isn't it). */
+  const withNames = (s: EditorState): EditorState => {
+    if (!link) return s;
+    const next = cloneState(applyLinkedNames(s, liveSources, link.feature.properties.linkedNames));
+    const under = link.feature.properties.under;
+    if (under?.length) next.props.under = under.map((e) => ({ ...e }));
+    else delete next.props.under;
+    delete next.props.underClip;
+    delete next.props.underTitle;
+    delete next.props.ownToggle;
+    delete next.props.layerLabel;
+    return next;
+  };
   /** The state as it splits back into the regions: a linked region's own names stay out of them. */
   const splitNow = () => splitLive(link ? revertLinkedNames(hist.state, liveSources) : hist.state, liveSources);
   const hist = new History(live ? withNames(liveState(o.live!.sources.map((x, i) => (x.current ? { id: x.id, state: x.current, name: x.feature.properties.name } : liveSources[i])))) : stateOf(o.feature));
@@ -500,9 +513,9 @@ export function openEditor(o: EditorOptions): void {
   const opacityOut = h("output", {});
   const labelIn = h("input", { type: "checkbox", checked: hist.state.props.label, name: "label" });
   const borderIn = h("input", { type: "checkbox", checked: hist.state.props.nationalBorders === true, name: "national-borders" });
-  /* "Show over this region": other regions of the slot drawn below this one in its embed, each with a legend toggle. */
+  /* "Show under this region": other regions of the slot drawn below this one in its embed, each with a legend toggle. */
   const underList = h("div", { className: "ed-under-list" });
-  const underAdd = h("select", { name: "under-add", ariaLabel: "Add a region to show over this one" });
+  const underAdd = h("select", { name: "under-add", ariaLabel: "Add a region to show under this one" });
   const underClipIn = h("input", { type: "checkbox", checked: true, name: "under-clip" });
   const underTitleIn = h("input", { type: "text", maxLength: UNDER_TITLE_MAX, placeholder: "Layers", name: "under-title", ariaLabel: "Heading of the toggle list" });
   const ownToggleIn = h("input", { type: "checkbox", name: "own-toggle" });
@@ -510,7 +523,7 @@ export function openEditor(o: EditorOptions): void {
   const underBox = h(
     "fieldset",
     { className: "ed-under" },
-    h("legend", { textContent: "Show over this region" }),
+    h("legend", { textContent: "Show under this region" }),
     h("p", { className: "muted small", textContent: "Other regions of this slot (religion, culture, trade goods…) drawn under this one, each with a toggle in the embed's legend." }),
     underList,
     h("label", {}, "Add a region", underAdd),
@@ -660,7 +673,12 @@ export function openEditor(o: EditorOptions): void {
   if (live) {
     // Editing together: settings that belong to one region stay as each region has them, so they're not shown.
     for (const el of link ? [idIn, opacityIn, labelIn, borderIn, descIn] : [idIn, opacityIn, labelIn, borderIn, descIn, keyTitleIn]) (el.closest("label") as HTMLElement).hidden = true;
-    underBox.hidden = true;
+    // A linked region has underlays of its own (shown under each of its regions); anything else stays with each region.
+    underBox.hidden = !link;
+    if (link) {
+      (underBox.querySelector("p.muted") as HTMLElement).textContent = "Drawn under every region in this combination. The toggle-list heading and clipping come from each region.";
+      (underBox.querySelector("legend") as HTMLElement).textContent = "Show under all its regions";
+    }
     pinMapBox.hidden = true;
     for (const act of ["province-border", "embed"]) (dlg.querySelector(`button[data-act="${act}"]`) as HTMLElement).hidden = true;
     const ownerIn = h(
@@ -1834,9 +1852,10 @@ export function openEditor(o: EditorOptions): void {
     underClipIn.checked = p.underClip !== false;
     if (document.activeElement !== underTitleIn) underTitleIn.value = p.underTitle ?? "";
     if (document.activeElement !== layerLabelIn) layerLabelIn.value = p.layerLabel ?? "";
-    for (const el of [underClipIn, underTitleIn, ownToggleIn]) (el.closest("label") as HTMLElement).hidden = !list.length;
+    // On a linked region only the list counts: the other settings belong to each region.
+    for (const el of [underClipIn, underTitleIn, ownToggleIn]) (el.closest("label") as HTMLElement).hidden = !list.length || !!link;
     ownToggleIn.checked = p.ownToggle === true;
-    (layerLabelIn.closest("label") as HTMLElement).hidden = !list.length || p.ownToggle !== true;
+    (layerLabelIn.closest("label") as HTMLElement).hidden = !list.length || p.ownToggle !== true || !!link;
   }
   /** Folders of the pin-map picker the user has opened; null until first drawn (then the folders holding a ticked pin map start open). */
   let pinOpen: Set<string> | null = null;
@@ -3902,7 +3921,8 @@ export function openEditor(o: EditorOptions): void {
       } else {
         const lp = link.feature.properties;
         const made = link.sha && lp.createdBy ? { ...(lp.created ? { created: lp.created } : {}), createdBy: lp.createdBy } : { created: stamp(), createdBy: account() };
-        const core: RegionFeature = { ...r.feature, properties: { ...r.feature.properties, linked: live.map((x) => x.id), ...(names ? { linkedNames: names } : {}), ...made } };
+        const under = hist.state.props.under;
+        const core: RegionFeature = { ...r.feature, properties: { ...r.feature.properties, linked: live.map((x) => x.id), ...(under?.length ? { under: under.map((e) => ({ ...e })) } : {}), ...(names ? { linkedNames: names } : {}), ...made } };
         const strip = (f: RegionFeature) => {
           const rest = { ...f.properties };
           delete rest.updated;
@@ -3987,7 +4007,9 @@ export function openEditor(o: EditorOptions): void {
       const names = linkedNamesOf(hist.state, liveSources);
       const props = { ...link.feature.properties };
       delete props.linkedNames;
-      link.feature = { ...link.feature, properties: { ...props, ...(names ? { linkedNames: names } : {}) } };
+      delete props.under;
+      const under = hist.state.props.under;
+      link.feature = { ...link.feature, properties: { ...props, ...(under?.length ? { under: under.map((e) => ({ ...e })) } : {}), ...(names ? { linkedNames: names } : {}) } };
     }
     close();
     const ids = new Set(sources.map((x) => x.id));

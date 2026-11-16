@@ -1,6 +1,6 @@
 // e2e-suite: roots=EDITOR,VIEWER weight=4
 /**
- * Browser checks for "Show over this region" in the region editor, in headless Chromium.
+ * Browser checks for "Show under this region" in the region editor, in headless Chromium.
  *
  *   npm run e2e:underlays
  *
