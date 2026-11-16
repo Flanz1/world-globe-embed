@@ -532,6 +532,13 @@ if (want("editor")) {
     await page.screenshot({ path: path.join(OUT, "editor-folded.png"), clip: await page.locator("dialog.editor .ed-colours").boundingBox() });
     await page.click('dialog.editor .ed-folder[data-key="-1"] [data-act="fold"]');
     check(A, "…and unfolds again", await page.locator('dialog.editor .ed-part-row[data-row="0"]').isVisible());
+    // Collapse all / Expand all.
+    await page.click('dialog.editor [data-act="fold-all"]');
+    const allShut = await page.evaluate(() => ({ vis: [...document.querySelectorAll("dialog.editor .ed-folder .ed-part-row")].filter((r) => r.checkVisibility()).length, label: document.querySelector('dialog.editor [data-act="fold-all"]').textContent }));
+    check(A, "Collapse all folds every folder and offers Expand all", allShut.vis === 0 && allShut.label === "Expand all", JSON.stringify(allShut));
+    await page.click('dialog.editor [data-act="fold-all"]');
+    const allOpen = await page.evaluate(() => ({ vis: [...document.querySelectorAll("dialog.editor .ed-folder .ed-part-row")].filter((r) => r.checkVisibility()).length, label: document.querySelector('dialog.editor [data-act="fold-all"]').textContent }));
+    check(A, "Expand all opens them again", allOpen.vis === 2 && allOpen.label === "Collapse all", JSON.stringify(allOpen));
     // Shift+click and Ctrl+click on rows pick parts, with no text selection across the panel.
     await page.click('dialog.editor .ed-part-row[data-row="0"] .ed-badge');
     await page.click('dialog.editor .ed-part-row[data-row="1"] .ed-badge', { modifiers: ["Shift"] });

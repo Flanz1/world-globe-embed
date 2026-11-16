@@ -349,3 +349,4 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
 .rcard .rpin-toggle:hover:not(:disabled), .rcard .rpin-toggle.on { opacity: 1; color: var(--accent, #c9a227); }
 .rcard .rpin-toggle svg { transform: rotate(0deg); }
 @media (max-width: 560px) { .rcard.has-pin .rinfo > div:first-child { padding-right: 0; } .rpin-bar { top: 6px; right: 6px; } }
+.ed-fold-all { margin: 6px 0; }
