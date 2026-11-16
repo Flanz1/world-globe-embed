@@ -6,23 +6,24 @@
     "slot": "inara",
     "map": "globe-map",
     "color": "#162dda",
+    "colorLabel": "Erlmondy",
     "fillOpacity": 0.35,
     "label": true,
     "legend": [
       {
-        "label": "martella",
+        "label": "Martella",
         "color": "#d9c812"
       },
       {
-        "label": "nahr",
+        "label": "Nahr",
         "color": "#1b7e26"
       },
       {
-        "label": "ravland",
+        "label": "Ravland",
         "color": "#c0392b"
       },
       {
-        "label": "revelle",
+        "label": "Revelle",
         "color": "#df8f6d"
       }
     ],
@@ -85,12 +86,37 @@
       "ravland",
       "revelle"
     ],
+    "linkedNames": {
+      "legend": [
+        {
+          "color": "#d9c812",
+          "from": "martella",
+          "label": "Martella"
+        },
+        {
+          "color": "#1b7e26",
+          "from": "nahr",
+          "label": "Nahr"
+        },
+        {
+          "color": "#c0392b",
+          "from": "ravland",
+          "label": "Ravland"
+        },
+        {
+          "color": "#df8f6d",
+          "from": "revelle",
+          "label": "Revelle"
+        }
+      ],
+      "colorLabel": "Erlmondy"
+    },
     "created": "2026-11-16T22:27:45Z",
     "createdBy": {
       "id": 357569561,
       "login": "Mank-cmd"
     },
-    "updated": "2026-11-16T22:28:18Z",
+    "updated": "2026-11-16T22:30:33Z",
     "updatedBy": {
       "id": 357569561,
       "login": "Mank-cmd"
