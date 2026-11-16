@@ -12,7 +12,7 @@ import { h } from "./dom.ts";
 export { CACHE_KEY, DEFAULT_PREFS, PRESETS, isSeed, parsePrefs, roleProperty, themeVars, type Mode, type Prefs };
 
 const SAVE_DELAY_MS = 600;
-const MENU_WIDTH = 220;
+const MENU_WIDTH = 248;
 
 let current: Prefs = { ...DEFAULT_PREFS };
 let saver: ((p: Prefs) => Promise<unknown>) | null = null;

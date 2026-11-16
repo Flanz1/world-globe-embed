@@ -499,7 +499,7 @@ button.icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; s
 button.theme-mode[aria-pressed="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: transparent; }
 .theme-swatch .dot, .theme-item .dot { width: 20px; height: 20px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
 .theme-swatch .dot { background: var(--md-sys-color-primary); box-shadow: 0 0 0 2px var(--md-sys-color-surface), 0 0 0 3px var(--md-sys-color-outline); }
-.theme-menu { position: fixed; inset: auto; margin: 0; width: 220px; max-width: calc(100vw - 16px); max-height: calc(100vh - 80px); overflow: auto; padding: 4px 0; border: 0; border-radius: 12px; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); box-shadow: var(--app-shadow); }
+.theme-menu { position: fixed; inset: auto; margin: 0; width: 248px; max-width: calc(100vw - 16px); max-height: calc(100vh - 80px); overflow: auto; padding: 4px 0; border: 0; border-radius: 12px; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); box-shadow: var(--app-shadow); }
 .theme-menu:popover-open { display: flex; flex-direction: column; }
 .theme-head { padding: 8px 16px 4px; }
 .theme-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; padding: 0 16px; font-size: 14px; text-align: left; justify-content: flex-start; border-radius: 0; color: var(--md-sys-color-on-surface); }
@@ -512,5 +512,5 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
 .theme-custom[aria-checked="true"] input { margin-left: auto; }
 .theme-custom[aria-checked="true"]::after { margin-left: 8px; }
 .theme-seg { margin: 4px 16px 8px; }
-.theme-seg button { min-height: 32px; padding: 0 12px; font-size: 13px; flex: 1; justify-content: center; }
+.theme-seg button { min-height: 32px; padding: 0 8px; white-space: nowrap; font-size: 13px; flex: 1; justify-content: center; }
 .head-sep { align-self: stretch; width: 1px; margin: 4px 4px; background: var(--md-sys-color-outline-variant); }

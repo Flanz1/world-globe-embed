@@ -205,6 +205,8 @@ await step(T, "header and menu fit at phone, tablet and desktop widths", async (
       await page.goto(ADMIN);
       await signedIn(page);
       await page.click(".theme-swatch");
+      // The account's saved mode (from earlier steps) would win over the emulated scheme: pick the one this shot is for.
+      await page.click(`.theme-seg [data-mode="${scheme}"]`);
       const box = await page.locator(".theme-menu").boundingBox();
       const fits = !!box && box.x >= 0 && box.x + box.width <= width && box.y >= 0 && box.y + box.height <= 800;
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
