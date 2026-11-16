@@ -221,7 +221,7 @@ export function makeVisibility(): { hidden: Set<string>; of(r: RegionData): Regi
       if (!r.members || !hidden.size) return r;
       const key = [...hidden].sort().join(",");
       if (last && last.r === r && last.key === key) return last.out;
-      const shown = r.members.filter((m) => !hidden.has(m.id));
+      const shown = r.members.filter((m) => !hidden.has(m.id) && !(m.underOf && hidden.has(m.underOf)));
       const topHidden = !!r.clip && hidden.has(r.members[r.members.length - 1].id);
       const out = shown.length ? mergeRegions(shown, r.clip && !topHidden) : r;
       last = { r, key, out };

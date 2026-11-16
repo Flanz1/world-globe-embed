@@ -68,3 +68,23 @@ describe("mergeRegions", () => {
     expect(regionLabelPoints(m, true).map((p) => p.text)).toEqual(["X", "Y"]);
   });
 });
+
+describe("stacked regions with underlays of their own", () => {
+  const under = region("u", "#00ff00", [square(0, 0, 30)], { underOf: "h", id: "u@h" });
+  const outsideCol = region("o", "#ffff00", [square(100, 100)], { underOf: "h", id: "o@h" });
+  const host = region("h", "#ff0000", [square(5, 5)]);
+  const other = region("z", "#0000ff", [square(50, 50)]);
+  const m = mergeRegions([under, outsideCol, host, other]);
+  it("cuts each underlay to its region, which gives up its fill", () => {
+    const l = regionPaintLayers(m);
+    expect(l.map((x) => !!x.clip)).toEqual([true, true, false, false]);
+    expect(l.map((x) => !!x.noFill)).toEqual([false, false, true, false]);
+  });
+  it("leaves an underlay uncut with underClipped: false", () => {
+    const m2 = mergeRegions([{ ...under, underClipped: false }, host]);
+    expect(regionPaintLayers(m2).map((x) => !!x.clip)).toEqual([false, false]);
+  });
+  it("lists only the colours of an underlay that lie inside its region", () => {
+    expect(legendRowsFor(m).map((e) => e.label)).toEqual(["u", "h", "z"]);
+  });
+});
