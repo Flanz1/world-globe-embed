@@ -11,15 +11,16 @@
     "link": "https://publish.obsidian.md/garmeley/Cities%2C+Locations+%26+Wonders/Great+Wonders/Hastermon+Temple",
     "description": "Hastermon temple, sits atop mount Hastermon in southern Gorat and is one of the five Holy Sites of Zuhurism, of special import to the Gorati faithful. The Prophet Hastermon is said to have reached communion with Pen-Zuhur himself here and the Arunča leads the masked priests of Hastermon from here.",
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     },
-    "updated": "2026-11-15T11:19:40Z",
+    "updated": "2026-11-16T08:35:40Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
-    "created": "2026-11-15T11:19:40Z"
+    "created": "2026-11-15T11:19:40Z",
+    "pinMap": "zuhurist-holy-sites"
   },
   "geometry": {
     "type": "Point",
