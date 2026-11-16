@@ -254,7 +254,7 @@ dialog.editor[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr
 .ed-toolbar { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--md-sys-color-outline-variant); align-items: center; }
 /* Pressed (toggled-on) editor tools: a lighter tint with an inset edge, so they never look like the filled Save button and are not colour-only. */
 dialog.editor button[aria-pressed="true"], .ed-ov-btn.active, .ed-part-row.locked .ed-lock { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: var(--md-sys-color-outline); box-shadow: inset 0 0 0 1px var(--md-sys-color-outline); }
-.ed-toolbar button { padding: 0 9px; }
+dialog.editor .ed-toolbar button { padding: 0 8px; }
 .ed-toolbar .sep { width: 1px; align-self: stretch; background: var(--md-sys-color-outline-variant); margin: 0 4px; }
 .ed-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 34%); min-height: 0; }
 .ed-canvas-wrap { position: relative; min-height: 0; overflow: hidden; }
