@@ -256,40 +256,55 @@ dialog.rpreview { width: min(980px, calc(100vw - 32px)); }
 kbd { font: 12px ui-monospace, monospace; padding: 1px 6px; border: 1px solid var(--md-sys-color-outline-variant); border-bottom-width: 2px; border-radius: 6px; background: var(--md-sys-color-surface-container-lowest); }
 
 /* ── Region editor ── */
-dialog.editor { width: calc(100vw - 16px); height: calc(100vh - 16px); max-width: none; max-height: none; padding: 0; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 10px; background: var(--md-sys-color-surface-container-low); color: var(--md-sys-color-on-surface); }
+/* Nearly full screen, so a 16 px radius rather than the 28 px of small dialogs. */
+dialog.editor { width: calc(100vw - 16px); height: calc(100vh - 16px); max-width: none; max-height: none; padding: 0; border: 0; border-radius: 16px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-shadow: var(--app-shadow); overflow: hidden; }
+dialog.editor > .pv-head { padding: 10px 12px 8px 20px; background: var(--md-sys-color-surface-container); }
+dialog.editor > .pv-head .row { flex-wrap: nowrap; }
 dialog.editor[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
-.ed-toolbar { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--md-sys-color-outline-variant); align-items: center; }
+/* One row; at narrow widths it scrolls sideways instead of wrapping. */
+.ed-toolbar { display: flex; flex-wrap: nowrap; gap: 4px; padding: 4px 12px 8px; background: var(--md-sys-color-surface-container); align-items: center; overflow-x: auto; }
+.ed-toolbar > * { flex: 0 0 auto; white-space: nowrap; }
 /* Pressed (toggled-on) editor tools: a lighter tint with an inset edge, so they never look like the filled Save button and are not colour-only. */
-dialog.editor button[aria-pressed="true"], .ed-ov-btn.active, .ed-part-row.locked .ed-lock { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: var(--md-sys-color-outline); box-shadow: inset 0 0 0 1px var(--md-sys-color-outline); }
+dialog.editor button[aria-pressed="true"], .ed-ov-btn.active, .ed-part-row.locked .ed-lock { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: var(--md-sys-color-outline); }
+/* In the toolbar a pressed toggle also gets a tick (a mask, so not part of its name). */
+.ed-toolbar button[aria-pressed="true"]::before, .ed-ov-btn.active::before { content: ""; display: inline-block; width: 14px; height: 14px; margin: 0 4px -2px -2px; background: currentColor; -webkit-mask: var(--app-tick) center / contain no-repeat; mask: var(--app-tick) center / contain no-repeat; }
 dialog.editor .ed-toolbar button { padding: 0 8px; }
+/* The four drawing tools: one connected segmented button. */
+dialog.editor .ed-toolbar .tool { border-radius: 0; border-color: var(--md-sys-color-outline); color: var(--md-sys-color-on-surface); }
+dialog.editor .ed-toolbar .tool + .tool { margin-left: -5px; }
+dialog.editor .ed-toolbar .tool:first-child { border-radius: 16px 0 0 16px; padding-left: 12px; }
+dialog.editor .ed-toolbar .tool:not(:has(+ .tool)) { border-radius: 0 16px 16px 0; padding-right: 12px; }
 .ed-toolbar .sep { width: 1px; align-self: stretch; background: var(--md-sys-color-outline-variant); margin: 0 4px; }
 .ed-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 34%); min-height: 0; }
 .ed-canvas-wrap { position: relative; min-height: 0; overflow: hidden; }
 .ed-canvas { width: 100%; height: 100%; display: block; touch-action: none; background: var(--app-map-bg); }
 .ed-canvas:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: -3px; }
 .ed-status { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 8px; font: 12px/1.3 ui-monospace, monospace; color: #e8dcc8; background: rgba(20, 18, 14, .72); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ed-menu { position: absolute; left: 0; top: 0; background: var(--md-sys-color-surface-container-low); border: 1px solid var(--md-sys-color-outline-variant); border-radius: 6px; padding: 4px; box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
-.ed-menu button { display: block; width: 100%; text-align: left; background: transparent; color: var(--md-sys-color-on-surface); border: 0; }
-.ed-menu button:hover, .ed-menu button:focus { background: var(--md-sys-color-surface); }
+.ed-menu { position: absolute; left: 0; top: 0; background: var(--md-sys-color-surface-container); border: 0; border-radius: 8px; padding: 4px 0; box-shadow: var(--app-shadow); }
+dialog.editor .ed-menu button { display: block; width: 100%; min-height: 36px; text-align: left; background-color: transparent; color: var(--md-sys-color-on-surface); border: 0; border-radius: 0; padding: 0 16px; font-weight: 400; }
+.ed-menu button:focus-visible { outline-offset: -2px; }
 .ed-menu button.danger-item { color: var(--md-sys-color-error); }
-.ed-simplify, .ed-combine { position: absolute; left: 8px; top: 8px; display: grid; gap: 6px; max-width: 340px; padding: 10px; border-radius: 8px; background: var(--md-sys-color-surface-container-low); border: 1px solid var(--md-sys-color-outline-variant); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
+/* Panels floating on the map: surface-container-high, 12 px, shadow. */
+.ed-simplify, .ed-combine { position: absolute; left: 8px; top: 8px; display: grid; gap: 8px; max-width: 340px; padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); border: 0; box-shadow: var(--app-shadow); }
 .ed-combine label { display: flex; align-items: center; gap: 6px; }
 .ed-comb-info { margin: 0; }
-.ed-side { display: grid; gap: 10px; align-content: start; padding: 10px; overflow: auto; border-left: 1px solid var(--md-sys-color-outline-variant); }
-.ed-globe { width: 100%; aspect-ratio: 4 / 3; max-height: 44vh; border: 0; border-radius: 8px; background: var(--app-map-bg); display: block; }
+.ed-side { display: grid; gap: 10px; align-content: start; padding: 10px 12px; overflow: auto; background: var(--md-sys-color-surface-container-low); }
+/* Compact fields in the side panel and map panels (32 px). */
+dialog.editor input:not([type=checkbox], [type=radio], [type=range], [type=color], [type=file]), dialog.editor select { min-height: 32px; padding: 4px 10px; font-size: 14px; }
+.ed-globe { width: 100%; aspect-ratio: 4 / 3; max-height: 44vh; border: 0; border-radius: 12px; background: var(--app-map-bg); display: block; }
 .ed-side label.inline { display: flex; align-items: center; gap: 8px; }
-.ed-side textarea { font: inherit; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--md-sys-color-outline-variant); background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); resize: vertical; }
-.ed-side input[type=color] { width: 44px; height: 30px; padding: 2px; }
-.ed-editing { margin: 0 0 4px; padding: 6px 10px; border-radius: 6px; font-size: 13px; background: var(--md-sys-color-surface-container-low); color: var(--md-sys-color-on-surface); border: 1px solid var(--md-sys-color-primary); border-left-width: 4px; }
+.ed-side textarea { resize: vertical; }
+.ed-side input[type=color] { width: 44px; height: 32px; padding: 2px; }
+.ed-editing { margin: 0 0 4px; padding: 8px 12px; border-radius: 12px; font-size: 13px; background: var(--app-warn-container); color: var(--app-on-warn-container); border: 0; }
 .ed-editing[hidden] { display: none; }
 .rediting { color: var(--md-sys-color-primary); font-weight: 600; }
 .ed-msg { margin: 0; min-height: 1.3em; font-size: 13px; }
 .ed-stats { margin: 0; }
-.ed-colours { display: grid; gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 8px; min-width: 0; }
-.ed-colours > legend { padding: 0 4px; font-size: 13px; }
+.ed-colours { display: grid; gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; min-width: 0; }
+.ed-colours > legend { padding: 0 4px; font-size: 13px; font-weight: 600; }
 .ed-colours > button { justify-self: start; }
-.ed-under { display: grid; gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 8px; min-width: 0; }
-.ed-under > legend { padding: 0 4px; font-size: 13px; }
+.ed-under { display: grid; gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; min-width: 0; }
+.ed-under > legend { padding: 0 4px; font-size: 13px; font-weight: 600; }
 .ed-under-list { display: grid; gap: 6px; }
 .ed-under-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto auto auto auto; gap: 4px; align-items: center; }
 .ed-under-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -298,20 +313,21 @@ dialog.editor .ed-toolbar button { padding: 0 8px; }
 /* Colour folders: one per colour, each holding its parts' rows. Shift/Ctrl+click picks rows, so no text selection there (inputs still select). */
 .ed-folders { display: grid; gap: 8px; user-select: none; -webkit-user-select: none; }
 .ed-folders input[type=text] { user-select: text; -webkit-user-select: text; }
-.ed-folder { display: grid; gap: 4px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 8px; padding: 4px; }
+.ed-folder { display: grid; gap: 4px; background: var(--md-sys-color-surface-container-high); border-radius: 12px; padding: 4px 6px; }
 .ed-folder.folded { padding-bottom: 4px; }
 .ed-folder-head { display: flex; gap: 4px; align-items: center; }
 .ed-folder-head input[type=text] { flex: 1 1 auto; min-width: 0; width: 0; font-weight: 600; }
 .ed-folder-head .ed-count { white-space: nowrap; }
-.ed-folder-head button { padding: 0 8px; }
+dialog.editor .ed-folder-head button { padding: 0 8px; }
 .ed-fold { width: 28px; padding: 0 !important; }
 .ed-folder-body { display: grid; gap: 4px; padding-left: 14px; border-left: 2px solid var(--md-sys-color-outline-variant); margin-left: 12px; }
 .ed-folder-body[hidden] { display: none; }
 .ed-empty { margin: 2px 0; }
-.ed-part-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 40%); gap: 4px 8px; align-items: center; padding: 3px 4px; border-radius: 6px; cursor: pointer; }
+.ed-part-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 40%); gap: 4px 8px; align-items: center; padding: 4px 6px; border-radius: 8px; cursor: pointer; }
 .ed-part-row .ed-part-acts { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 4px; }
-.ed-part-row.pick { background: rgba(255, 212, 0, .08); box-shadow: inset 0 0 0 1px rgba(255, 212, 0, .35); }
-.ed-part-row.sel { background: rgba(255, 212, 0, .12); box-shadow: inset 0 0 0 1px rgba(255, 212, 0, .55); }
+/* Picked and selected rows: secondary container plus an outline, so not colour alone. */
+.ed-part-row.pick { background: color-mix(in srgb, var(--md-sys-color-secondary-container) 55%, transparent); box-shadow: inset 0 0 0 1px var(--md-sys-color-outline-variant); }
+.ed-part-row.sel { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); box-shadow: inset 0 0 0 1px var(--md-sys-color-outline); }
 .ed-clashes { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 2px; }
 .ed-clashes .muted { list-style: none; margin-left: -18px; }
 .ed-part-row input[type=text] { min-width: 0; }
@@ -341,9 +357,9 @@ dialog.editor .ed-toolbar button { padding: 0 8px; }
 
 /* Editor: "Other regions" tool (button at the toolbar's right end, panel at the top right of the map) */
 .ed-toolbar-end { margin-left: auto; display: flex; }
-.ed-ov-panel { position: absolute; right: 8px; top: 8px; z-index: 3; display: grid; gap: 6px; width: min(340px, calc(100% - 16px)); max-height: min(70vh, 520px); grid-template-rows: auto auto auto auto auto minmax(0, 1fr); padding: 10px; border-radius: 8px; background: var(--md-sys-color-surface-container-low); border: 1px solid var(--md-sys-color-outline-variant); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
+.ed-ov-panel { position: absolute; right: 8px; top: 8px; z-index: 3; display: grid; gap: 6px; width: min(340px, calc(100% - 16px)); max-height: min(70vh, 520px); grid-template-rows: auto auto auto auto auto minmax(0, 1fr); padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); border: 0; box-shadow: var(--app-shadow); }
 .ed-ov-panel[hidden] { display: none; }
-.ed-layer-bar { position: absolute; right: 8px; top: 8px; z-index: 3; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--md-sys-color-surface-container-low); border: 1px solid var(--md-sys-color-outline-variant); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
+.ed-layer-bar { position: absolute; right: 8px; top: 8px; z-index: 3; display: flex; align-items: center; gap: 6px; padding: 6px 8px 6px 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); border: 0; box-shadow: var(--app-shadow); }
 .ed-layer-bar[hidden] { display: none; }
 .ed-layer-name { font-size: 12px; color: var(--md-sys-color-on-surface-variant); white-space: nowrap; }
 .ed-ov-panel .row { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -376,7 +392,7 @@ dialog.editor .ed-toolbar button { padding: 0 8px; }
 .ed-folder-head .ed-src { font-size: 11px; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-live-note { margin: 0; }
 .rcard .rlinked { margin: 2px 0; }
-.ed-draft { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 8px; font-size: 13px; background: var(--md-sys-color-surface); }
+.ed-draft { display: grid; gap: 6px; padding: 10px 12px; border: 0; border-radius: 12px; font-size: 13px; background: var(--md-sys-color-surface-container-high); }
 .ed-draft[hidden] { display: none; }
 
 /* Region history */
@@ -445,7 +461,7 @@ button.link { background: none; border: 0; border-radius: 4px; min-height: 0; pa
 .pinmap-head .actions { display: flex; flex-wrap: nowrap; gap: 6px; margin-left: auto; min-width: 0; overflow-x: auto; }
 .pinmap-head .actions > * { flex: 0 0 auto; white-space: nowrap; }
 .pinmap.loose { border-style: dashed; }
-.ed-pinmaps { border: 1px solid var(--md-sys-color-outline-variant); border-radius: 8px; padding: 6px 10px; margin: 0; display: grid; gap: 4px; }
+.ed-pinmaps { border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; padding: 6px 10px; margin: 0; display: grid; gap: 4px; }
 .ed-pinmaps-list { display: grid; gap: 2px; max-height: 260px; overflow: auto; }
 .ed-pinfolder { display: grid; gap: 2px; }
 .ed-pinfolder-toggle { display: flex; align-items: center; gap: 6px; border: 0; min-height: 28px; padding: 0 8px 0 4px; font-size: 13px; text-align: left; }
