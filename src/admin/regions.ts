@@ -29,6 +29,10 @@ import { declineSuggestion, initSuggestions, loadSuggestions, markAccepted, pend
 import type { SuggestionSummary } from "./github.ts";
 import { OWNER_ID, account, can, canDelete, canEdit, canTransfer, currentUser, ownerOf, refusal } from "./session.ts";
 import type { AccessFile, Account } from "../shared/access.ts";
+import { newIdProblem, renameInCategories, renameInRegion } from "../shared/rename.ts";
+import { CATEGORIES_PATH, regionsPerCommit, serializeCategories, type CategoriesFile } from "../shared/categories.ts";
+import { SITE } from "./dom.ts";
+import type { FileChange } from "./github.ts";
 
 export interface RegionEntry {
   id: string;
@@ -226,6 +230,7 @@ function card(e: RegionEntry): HTMLElement {
   const linkBlock = linked ? linkProblem(e) : "";
   const noEdit = linkBlock ? linkBlock : canEdit(f) ? "" : someoneElse ? `${creatorName(e)} created this region, and you can't edit other people's regions.` : "You don't have permission to edit regions.";
   const noDelete = canDelete(f) ? "" : someoneElse ? `${creatorName(e)} created this region, and you can't delete other people's regions.` : "You don't have permission to delete regions.";
+  const noRename = linkedNoRename(e, f);
   const noCreate = can("regions") ? "" : "You don't have permission to create regions.";
   return h(
     "div",
@@ -259,6 +264,7 @@ function card(e: RegionEntry): HTMLElement {
         e.problem ? h("span", { className: "badge error", textContent: "invalid shape", title: e.problem }) : null,
       ),
       h("div", { className: "muted small", dataset: { regionMeta: e.id }, textContent: metaText(e) }),
+      renamedNotes.has(e.id) ? h("div", { className: "small warn", role: "status", ariaLive: "polite", dataset: { renamed: e.id }, textContent: renamedNotes.get(e.id) }) : null,
       categorySelect(e),
     ),
     h(
@@ -272,6 +278,7 @@ function card(e: RegionEntry): HTMLElement {
       moreMenu(e.id, [
         // Editors who can edit it themselves can still send a suggestion for somebody else to accept (same name as everywhere).
         canEdit(f) && can("regions") && !linked ? item("Suggest changes", () => suggest(e), "", "Draw changes and send them for somebody else to accept or decline") : null,
+        item("Rename…", () => changeId(e), noRename, "Change the id that embed links use"),
         item("Duplicate", () => duplicate(e), noCreate),
         item("History", () => openHistory({ gh: deps.gh(), id: e.id, path: e.path, feature: f, map, noRestore: noEdit, act: deps.act }), linked ? "A linked region has no history of its own: open the regions it combines." : ""),
         canTransfer() ? item("Transfer", () => transfer(e, f), "") : null,
@@ -795,6 +802,141 @@ async function reviewSuggestion(s: SuggestionSummary): Promise<void> {
 export function newRegion(slot: string): void {
   if (!deps.slots().slots[slot] || !can("regions")) return;
   openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), slot, sha: null, isNew: true, neighbours: others(), neighbourMeta: overlayMeta(), takenIds: new Set(entries.map((x) => x.id)), afterCommit: deps.afterCommit });
+}
+
+/* ── Change a region's id ── */
+
+/** Cards of regions just given a new id carry a note about the old embeds until the page is reloaded. */
+const renamedNotes = new Map<string, string>();
+
+/** Why the id can't be changed right now (null when it can). */
+function linkedNoRename(e: RegionEntry, f: RegionFeature): string {
+  if (!can("renameIds")) return "Only administrators can change a region's id.";
+  if (!canEdit(f) || !canDelete(f)) return canEdit(f) ? "You can't delete other people's regions, and changing an id removes the old one." : "You can't change other people's regions.";
+  if (pendingFor(e.id)) return "Decide the suggestions waiting for this region first: they would point at the old id.";
+  return "";
+}
+
+function changeId(e: RegionEntry): void {
+  const f = e.feature;
+  if (!f) return;
+  const gh = deps.gh();
+  const owner = !!currentUser()?.owner;
+  const taken = new Set(entries.map((x) => x.id));
+  const refs = entries.filter((x) => x !== e && x.feature && renameInRegion(x.feature, e.id, e.id));
+  const m = modal(`Change id of "${e.id}"`, "rename-dlg");
+  const input = h("input", { type: "text", maxLength: 64, autocomplete: "off", spellcheck: false, value: e.id, ariaLabel: "New id", id: "rename-id", dataset: { role: "new-id" } });
+  const err = h("p", { className: "error small", id: "rename-err", role: "status", dataset: { role: "rename-error" } });
+  input.setAttribute("aria-describedby", "rename-err");
+  const url = h("code", { className: "rename-url", dataset: { role: "new-url" } });
+  const copied = h("span", { className: "muted small", role: "status", ariaLive: "polite" });
+  const copy = h("button", {
+    type: "button",
+    className: "ghost",
+    textContent: "Copy",
+    onclick: () =>
+      void navigator.clipboard.writeText(url.textContent ?? "").then(
+        () => (copied.textContent = "Copied"),
+        () => (copied.textContent = "Couldn't reach the clipboard: select the address and press Ctrl+C."),
+      ),
+  });
+  const pathEl = h("div", { className: "rename-path" }, h("span", { className: "muted small", textContent: "New embed address" }), url, h("span", { className: "rename-copy" }, copy, copied));
+  const ack = h("input", { type: "checkbox", name: "understand", id: "rename-ack" });
+  const go = h("button", { type: "button", textContent: "Rename", disabled: true, dataset: { action: "rename-go" } });
+  const callout = h(
+    "div",
+    { className: "rename-note", role: "note" },
+    h("span", { className: "rename-note-icon", ariaHidden: "true", textContent: "⚠" }),
+    h(
+      "div",
+      {},
+      h("strong", { textContent: "Embeds that use the old id will stop working." }),
+      " Anything that points at ",
+      h("code", { textContent: e.id }),
+      " (an iframe in an Obsidian note, a pasted link) shows the plain globe with a “Region not found” note until you change it to the new id.",
+    ),
+  );
+  const limit = regionsPerCommit(owner) - 2;
+  const tooMany = refs.length > limit ? `${refs.length} other regions refer to it; one save can change at most ${limit}.` : "";
+  const refsNote = refs.length
+    ? h("p", { className: "muted small", dataset: { role: "rename-refs" } }, `${refs.length} other region${refs.length > 1 ? "s" : ""} refer${refs.length > 1 ? "" : "s"} to it and will be updated automatically: `, h("strong", { textContent: refs.map((x) => x.id).join(", ") }), ".")
+    : null;
+  const stamped = (r: RegionFeature): RegionFeature => ({ ...r, properties: { ...r.properties, updatedBy: account(), updated: stamp() } });
+  /** What the id change would write, for the permission check and for the commit. */
+  const plan = (id: string): { path: string; before: string | null; after: string | null }[] => {
+    const mine = stamped({ ...f, id });
+    if (!mine.properties.createdBy && owner) mine.properties.createdBy = account();
+    const out: { path: string; before: string | null; after: string | null }[] = [{ path: regionPath(id), before: null, after: serialize(mine) }, { path: e.path, before: serialize(f), after: null }];
+    for (const x of refs) {
+      const r = renameInRegion(x.feature!, e.id, id);
+      if (r) out.push({ path: x.path, before: serialize(x.feature!), after: serialize(stamped(r)) });
+    }
+    return out;
+  };
+  const update = (): void => {
+    const id = input.value.trim();
+    let why = newIdProblem(id, e.id, taken, REGION_ID) ?? (tooMany || null);
+    if (!why) for (const d of plan(id)) { const r = refusal(d); if (r) { why = r; break; } }
+    url.textContent = new URL(`v/${encodeURIComponent(f.properties.slot)}/?region=${encodeURIComponent(id || e.id)}`, SITE).href;
+    copied.textContent = "";
+    pathEl.hidden = !!(id === e.id || why);
+    err.textContent = id === e.id ? "" : why ?? "";
+    input.setAttribute("aria-invalid", id !== e.id && why ? "true" : "false");
+    const reason = why ?? (ack.checked ? "" : "Tick the box to confirm you understand the old embed links will break.");
+    go.disabled = !!reason;
+    go.title = reason || "Change the id";
+    if (id === e.id) go.title = "Type a new id first.";
+  };
+  input.addEventListener("input", update);
+  ack.addEventListener("change", update);
+  go.addEventListener("click", () => {
+    const id = input.value.trim();
+    m.close();
+    const oldId = e.id;
+    void deps.act(`Changing the id of ${oldId} to ${id}…`, async () => {
+      const stampNow = (r: RegionFeature) => stamped(r);
+      const sha = await gh.commit(`Change region id ${oldId} to ${id}`, async () => {
+        const cur = JSON.parse((await gh.readFile(e.path)).text) as RegionFeature;
+        const mine = stampNow({ ...cur, id });
+        if (!mine.properties.createdBy && owner) mine.properties.createdBy = account();
+        const out: FileChange[] = [{ path: regionPath(id), content: serialize(mine) }, { path: e.path, content: "", delete: true }];
+        for (const x of refs) {
+          const t = JSON.parse((await gh.readFile(x.path)).text) as RegionFeature;
+          const r = renameInRegion(t, oldId, id);
+          if (r) out.push({ path: x.path, content: serialize(stampNow(r)) });
+        }
+        return out;
+      });
+      // The folder it sits in follows in a second save: the API only accepts a region in a folder once it exists.
+      let last = sha;
+      try {
+        const fresh = JSON.parse(await gh.readText(CATEGORIES_PATH)) as CategoriesFile;
+        if (renameInCategories(fresh, oldId, id)) {
+          last = await gh.commit(`Move ${id} into its folder after the id change`, async () => {
+            const c = renameInCategories(JSON.parse(await gh.readText(CATEGORIES_PATH)) as CategoriesFile, oldId, id);
+            return c ? [{ path: CATEGORIES_PATH, content: serializeCategories(c) }] : [];
+          });
+        }
+      } catch {
+        /* no folders file, or it couldn't be updated: the region just shows as uncategorized */
+      }
+      renamedNotes.set(id, `Renamed from ${oldId}: update embeds that use the old id (v/${f.properties.slot}/?region=${oldId}).`);
+      return last;
+    });
+  });
+  m.body.append(
+    h("p", { className: "muted small", textContent: "The id is what embed links use. Part labels don't change." }),
+    h("label", { htmlFor: "rename-id" }, "New id", input),
+    err,
+    pathEl,
+    callout,
+    ...(refsNote ? [refsNote] : []),
+    h("label", { className: "check", htmlFor: "rename-ack" }, ack, h("span", { textContent: "I understand the old embed links will break" })),
+  );
+  m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), go);
+  update();
+  input.focus();
+  input.select();
 }
 
 function duplicate(e: RegionEntry): void {

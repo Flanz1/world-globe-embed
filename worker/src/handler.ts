@@ -13,7 +13,7 @@
  * `handle` takes the upstream fetch as an argument so tests can point it at an in-memory GitHub.
  */
 import { diffCategories, MAX_MOVED_PER_COMMIT, regionsPerCommit, type CategoriesFile } from "../../src/shared/categories.ts";
-import { ACCESS_PATH, PERMISSIONS, checkChange, pathKind, permissionsOf, regionOwner, type AccessFile, type Actor, type FileDiff, type Permission } from "../../src/shared/access.ts";
+import { ACCESS_PATH, PERMISSIONS, checkChange, checkIdChange, pathKind, permissionsOf, regionOwner, type AccessFile, type Actor, type FileDiff, type Permission } from "../../src/shared/access.ts";
 import { HISTORY_MAX_LIMIT, HISTORY_MAX_WITH_FILES, type HistoryEntry, type HistoryPage } from "../../src/shared/history.ts";
 import { appJwt, nonce, sign, verify } from "./crypto.ts";
 import { validateAccess, validateCategories, validateMap, validatePin, validatePinMaps, validatePrefs, validateRegion, validateSlots, type ValidateFn } from "./generated/validators.js";
@@ -265,7 +265,7 @@ async function listedActor(req: Request, env: Env, up: Upstream, opts: { noteWai
 /** The address GitHub links to a person's account; commits made through the API carry it as their author. */
 const noreplyEmail = (a: { id: number; login: string }) => `${a.id}+${a.login}@users.noreply.github.com`;
 
-const WRITE_PERMS: Permission[] = ["maps", "regions", "editOthers", "deleteOthers", "users"];
+const WRITE_PERMS: Permission[] = ["maps", "regions", "editOthers", "deleteOthers", "renameIds", "users"];
 const canWriteAnything = (a: Actor) => a.owner || WRITE_PERMS.some((p) => a.permissions.has(p));
 
 /* ── Sign-in ── */
@@ -626,6 +626,8 @@ export async function reviewCommit(env: Env, up: Upstream, actor: Actor, parentS
   });
   const maxReads = regionsPerCommit(actor.owner);
   if (reads.length > maxReads) return [`That commit changes ${reads.length} regions; the admin page saves at most ${maxReads} at a time.`];
+  const idProblem = checkIdChange(changes.map((c) => ({ path: c.path, before: !!c.before, after: !!c.after })), actor);
+  if (idProblem) return [idProblem];
   for (const c of changes) {
     if (c.type === "tree") {
       problems.push(checkChange({ path: c.path, before: null, after: null }, actor, ownerId(env)) ?? `${c.path} can't be changed here.`);

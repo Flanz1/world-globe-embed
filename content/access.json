@@ -9,6 +9,7 @@
         "regions",
         "editOthers",
         "deleteOthers",
+        "renameIds",
         "users"
       ]
     },
@@ -20,6 +21,7 @@
         "regions",
         "editOthers",
         "deleteOthers",
+        "renameIds",
         "users"
       ]
     },
