@@ -1,14 +1,14 @@
 {
   "$schema": "../../schema/region.schema.json",
   "type": "Feature",
-  "id": "region-2",
+  "id": "kindly-lords",
   "properties": {
     "slot": "inara",
     "map": "globe-map",
     "color": "#68c08e",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-17T00:57:16Z",
+    "updated": "2026-11-17T01:32:41Z",
     "created": "2026-11-17T00:52:08Z",
     "createdBy": {
       "id": 45669787,
