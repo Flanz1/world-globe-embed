@@ -5,10 +5,10 @@
   "properties": {
     "slot": "inara",
     "map": "globe-map",
-    "color": "#c0392b",
+    "color": "#68c08e",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-17T00:52:08Z",
+    "updated": "2026-11-17T00:57:16Z",
     "created": "2026-11-17T00:52:08Z",
     "createdBy": {
       "id": 45669787,
