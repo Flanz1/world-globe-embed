@@ -11,7 +11,7 @@
 import { checkPinMaps, PINMAPS_PATH, type PinMapsFile } from "./pinmaps.ts";
 import { CATEGORIES_PATH, checkCategories, diffCategories, placements, type CategoriesFile } from "./categories.ts";
 
-export const PERMISSIONS = ["maps", "regions", "editOthers", "deleteOthers", "users"] as const;
+export const PERMISSIONS = ["maps", "regions", "editOthers", "deleteOthers", "renameIds", "users"] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
 export const PERMISSION_LABELS: Record<Permission, { label: string; help: string }> = {
@@ -19,13 +19,14 @@ export const PERMISSION_LABELS: Record<Permission, { label: string; help: string
   regions: { label: "Create regions", help: "Draw new regions, and edit or delete the regions they created. Also create region folders and manage your own." },
   editOthers: { label: "Edit others' regions", help: "Change regions other people created, and rename, move, delete or fill other people's region folders." },
   deleteOthers: { label: "Delete others' regions", help: "Delete regions other people created." },
+  renameIds: { label: "Change region ids", help: "Change a region's id (More… → Rename…). Every embed link that uses the old id stops working, so this is for administrators." },
   users: { label: "Manage users", help: "Open the Users tab: add people and change what they can do (only up to their own permissions)." },
 };
 
 export const PRESETS: { name: string; permissions: Permission[] }[] = [
   { name: "Contributor", permissions: ["regions"] },
   { name: "Editor", permissions: ["regions", "editOthers"] },
-  { name: "Admin", permissions: ["maps", "regions", "editOthers", "deleteOthers", "users"] },
+  { name: "Admin", permissions: ["maps", "regions", "editOthers", "deleteOthers", "renameIds", "users"] },
 ];
 
 /** A GitHub account, by its permanent numeric id (logins can be renamed) and the login it had when stored. */
@@ -95,6 +96,16 @@ export function regionOwner(f: { properties?: { createdBy?: Account } } | null |
 
 /** Who may hand a region to another creator: the repository owner, or anyone allowed to manage users (admins). */
 export const canTransferRegions = (perms: ReadonlySet<Permission> | null, isOwner: boolean) => isOwner || !!perms?.has("users");
+
+/**
+ * A commit that removes a region file and adds another one is a change of id (embeds that use the old id break),
+ * which needs "Change region ids". Deleting or creating regions alone is unaffected.
+ */
+export function checkIdChange(paths: { path: string; before: boolean; after: boolean }[], actor: Actor): string | null {
+  if (actor.owner || actor.permissions.has("renameIds")) return null;
+  const regions = paths.filter((c) => pathKind(c.path) === "region");
+  return regions.some((c) => c.before && !c.after) && regions.some((c) => !c.before && c.after) ? "You don't have permission to change a region's id." : null;
+}
 
 /** True when two regions differ only in who created them and the save stamps (so an ownership transfer, nothing else). */
 function onlyOwnershipDiffers(a: RegionLike, b: RegionLike): boolean {

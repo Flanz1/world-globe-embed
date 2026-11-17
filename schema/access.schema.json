@@ -25,8 +25,8 @@
           "permissions": {
             "type": "array",
             "uniqueItems": true,
-            "items": { "enum": ["maps", "regions", "editOthers", "deleteOthers", "users"] },
-            "description": "maps: the Maps & slots tab. regions: create regions and change your own. editOthers / deleteOthers: change / delete other people's regions. users: the Users tab."
+            "items": { "enum": ["maps", "regions", "editOthers", "deleteOthers", "renameIds", "users"] },
+            "description": "maps: the Maps & slots tab. regions: create regions and change your own. editOthers / deleteOthers: change / delete other people's regions. renameIds: change a region's id. users: the Users tab."
           },
           "added": { "type": "string", "maxLength": 40, "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$" },
           "addedBy": { "type": "string", "maxLength": 39 }

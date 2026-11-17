@@ -25,6 +25,7 @@ const SIMON = { id: 138310181, login: "LoopSimon" };
 const ANN = { id: 5002, login: "carto-ann" }; // Contributor
 const BO = { id: 5003, login: "drafter-bo" }; // Editor
 const MANAGER = { id: 5001, login: "e2e-user" }; // Create regions + Manage users, no maps
+const NAMER = { id: 5005, login: "namer-nia" }; // Create + change region ids
 const CURATOR = { id: 5004, login: "curator-cy" }; // Create + edit others' + delete others'
 const STRANGER = { id: 7777, login: "stranger" };
 
@@ -84,6 +85,7 @@ const ACCESS: AccessFile = {
     { ...BO, permissions: ["regions", "editOthers"] },
     { ...MANAGER, permissions: ["regions", "users"] },
     { ...CURATOR, permissions: ["regions", "editOthers", "deleteOthers"] },
+    { ...NAMER, permissions: ["regions", "renameIds"] },
   ],
 };
 
@@ -276,6 +278,16 @@ describe("admin API permissions", () => {
     expect(mock.read("main", "content/regions/simon-land.json")).toBe(region("simon-land", SIMON));
   });
 
+  it("changing a region's id (remove one file, add another) needs its own permission", async () => {
+    const ann = await client(ANN);
+    expect(await tryCommit(ann, [put("content/regions/ann-new.json", region("ann-new", ANN)), del("content/regions/ann-land.json")])).toMatch(/permission to change a region's id/);
+    expect(await tryCommit(ann, [put("content/regions/ann-extra.json", region("ann-extra", ANN))])).toBeNull();
+    const nia = await client(NAMER);
+    expect(await tryCommit(nia, [put("content/regions/nia-a.json", region("nia-a", NAMER, NAMER))])).toBeNull();
+    expect(await tryCommit(nia, [put("content/regions/nia-b.json", region("nia-b", NAMER, NAMER)), del("content/regions/nia-a.json")])).toBeNull();
+    expect(await tryCommit(await client(OWNER), [put("content/regions/ann-new.json", region("ann-new", ANN, OWNER)), del("content/regions/ann-land.json")])).toBeNull();
+  });
+
   it("restores a deleted region: its creator or someone who may edit and delete others' regions can put it back", async () => {
     const ann = await client(ANN);
     const path = "content/regions/ann-land.json";
@@ -356,7 +368,7 @@ describe("admin API permissions", () => {
     resetCaches();
     const me = await (await client(OWNER)).whoAmI();
     expect(me.owner).toBe(true);
-    expect(me.permissions).toHaveLength(5);
+    expect(me.permissions).toHaveLength(6);
     expect(await tryCommit(gh, [del("content/regions/simon-land.json"), put("content/regions/gift.json", region("gift", SIMON, OWNER))])).toBeNull();
   });
 

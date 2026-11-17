@@ -18,7 +18,7 @@ export function can(p: Permission): boolean {
   return !!me && (me.owner || me.permissions.includes(p));
 }
 
-const perms = () => (me ? new Set<Permission>(me.owner ? ["maps", "regions", "editOthers", "deleteOthers", "users"] : me.permissions) : null);
+const perms = () => (me ? new Set<Permission>(me.owner ? ["maps", "regions", "editOthers", "deleteOthers", "renameIds", "users"] : me.permissions) : null);
 
 /** Whatever has a `properties.createdBy`: a region or a map pin. */
 type Owned = { properties?: { createdBy?: Account } } | null | undefined;

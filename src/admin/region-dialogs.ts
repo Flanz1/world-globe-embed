@@ -102,7 +102,7 @@ export function openEmbedDialog(t: EmbedTarget): void {
       check("pins", "Show map pins"),
     ),
     code,
-    h("p", { className: "muted small", textContent: "Paste this into an Obsidian note. Renaming the region keeps this embed working; deleting it doesn't." }),
+    h("p", { className: "muted small", textContent: "Paste this into an Obsidian note. Changing the region's id (More… → Rename…) or deleting the region breaks this embed." }),
   );
   m.foot.append(
     copied,
