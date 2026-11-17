@@ -125,7 +125,8 @@
     {
       "id": "ilrakhan-religions",
       "name": "Ilrakhan Religions",
-      "regions": []
+      "regions": [],
+      "parent": "religion"
     }
   ]
 }
