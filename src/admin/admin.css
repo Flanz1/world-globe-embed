@@ -288,7 +288,7 @@ dialog.editor .ed-menu button { display: block; width: 100%; min-height: 36px; t
 .ed-simplify, .ed-combine { position: absolute; left: 8px; top: 8px; display: grid; gap: 8px; max-width: 340px; padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); border: 0; box-shadow: var(--app-shadow); }
 .ed-combine label { display: flex; align-items: center; gap: 6px; }
 .ed-comb-info { margin: 0; }
-.ed-side { display: grid; gap: 10px; align-content: start; padding: 10px 12px; overflow: auto; background: var(--md-sys-color-surface-container-low); }
+.ed-side { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; padding: 10px 12px; overflow: auto; background: var(--md-sys-color-surface-container-low); }
 /* Compact fields in the side panel and map panels (32 px). */
 dialog.editor input:not([type=checkbox], [type=radio], [type=range], [type=color], [type=file]), dialog.editor select { min-height: 32px; padding: 4px 10px; font-size: 14px; }
 .ed-globe { width: 100%; aspect-ratio: 4 / 3; max-height: 44vh; border: 0; border-radius: 12px; background: var(--app-map-bg); display: block; }
@@ -300,7 +300,7 @@ dialog.editor input:not([type=checkbox], [type=radio], [type=range], [type=color
 .rediting { color: var(--md-sys-color-primary); font-weight: 600; }
 .ed-msg { margin: 0; min-height: 1.3em; font-size: 13px; }
 .ed-stats { margin: 0; }
-.ed-colours { display: grid; gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; min-width: 0; }
+.ed-colours { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; min-width: 0; }
 .ed-colours > legend { padding: 0 4px; font-size: 13px; font-weight: 600; }
 .ed-colours > button { justify-self: start; }
 .ed-under { display: grid; gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; min-width: 0; }
@@ -315,16 +315,17 @@ dialog.editor input:not([type=checkbox], [type=radio], [type=range], [type=color
 .ed-under-row .check { display: flex; align-items: center; gap: 4px; margin: 0; }
 .ed-fill { display: flex; align-items: center; gap: 8px; }
 /* Colour folders: one per colour, each holding its parts' rows. Shift/Ctrl+click picks rows, so no text selection there (inputs still select). */
-.ed-folders { display: grid; gap: 8px; user-select: none; -webkit-user-select: none; }
+.ed-folders { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 8px; user-select: none; -webkit-user-select: none; }
 .ed-folders input[type=text] { user-select: text; -webkit-user-select: text; }
-.ed-folder { display: grid; gap: 4px; background: var(--md-sys-color-surface-container-high); border-radius: 12px; padding: 4px 6px; }
+.ed-folder { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 4px; background: var(--md-sys-color-surface-container-high); border-radius: 12px; padding: 4px 6px; }
 .ed-folder.folded { padding-bottom: 4px; }
-.ed-folder-head { display: flex; gap: 4px; align-items: center; }
-.ed-folder-head input[type=text] { flex: 1 1 auto; min-width: 0; width: 0; font-weight: 600; }
+.ed-folder-head { display: flex; gap: 4px; align-items: center; min-width: 0; overflow-x: auto; }
+.ed-folder-head > * { flex: 0 0 auto; }
+.ed-folder-head input[type=text] { flex: 1 0 auto; min-width: 8em; width: 0; font-weight: 600; }
 .ed-folder-head .ed-count { white-space: nowrap; }
 dialog.editor .ed-folder-head button { padding: 0 8px; }
 .ed-fold { width: 28px; padding: 0 !important; }
-.ed-folder-body { display: grid; gap: 4px; padding-left: 14px; border-left: 2px solid var(--md-sys-color-outline-variant); margin-left: 12px; }
+.ed-folder-body { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 4px; padding-left: 14px; border-left: 2px solid var(--md-sys-color-outline-variant); margin-left: 12px; }
 .ed-folder-body[hidden] { display: none; }
 .ed-empty { margin: 2px 0; }
 .ed-part-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 40%); gap: 4px 8px; align-items: center; padding: 4px 6px; border-radius: 8px; cursor: pointer; }
