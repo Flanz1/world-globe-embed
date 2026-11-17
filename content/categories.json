@@ -121,6 +121,11 @@
       "pinned": [
         "vas-ira"
       ]
+    },
+    {
+      "id": "ilrakhan-religions",
+      "name": "Ilrakhan Religions",
+      "regions": []
     }
   ]
 }
