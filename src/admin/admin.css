@@ -526,4 +526,4 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
 .rename-path { display: grid; gap: 4px; }
 .rename-url { overflow-wrap: anywhere; word-break: break-all; font-size: 13px; }
 .rename-copy { display: flex; gap: 8px; align-items: center; }
-.rename-dlg input[aria-invalid="true"] { outline: 2px solid var(--md-sys-color-error); }
+.rename-dlg input[aria-invalid="true"], .rename-dlg input[aria-invalid="true"]:focus-visible { border-color: var(--md-sys-color-error); outline: 2px solid var(--md-sys-color-error); outline-offset: 0; }

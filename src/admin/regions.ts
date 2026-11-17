@@ -840,6 +840,7 @@ function changeId(e: RegionEntry): void {
         () => (copied.textContent = "Couldn't reach the clipboard: select the address and press Ctrl+C."),
       ),
   });
+  const pathEl = h("div", { className: "rename-path" }, h("span", { className: "muted small", textContent: "New embed address" }), url, h("span", { className: "rename-copy" }, copy, copied));
   const ack = h("input", { type: "checkbox", name: "understand", id: "rename-ack" });
   const go = h("button", { type: "button", textContent: "Rename", disabled: true, dataset: { action: "rename-go" } });
   const callout = h(
@@ -878,6 +879,7 @@ function changeId(e: RegionEntry): void {
     if (!why) for (const d of plan(id)) { const r = refusal(d); if (r) { why = r; break; } }
     url.textContent = new URL(`v/${encodeURIComponent(f.properties.slot)}/?region=${encodeURIComponent(id || e.id)}`, SITE).href;
     copied.textContent = "";
+    pathEl.hidden = !!(id === e.id || why);
     err.textContent = id === e.id ? "" : why ?? "";
     input.setAttribute("aria-invalid", id !== e.id && why ? "true" : "false");
     const reason = why ?? (ack.checked ? "" : "Tick the box to confirm you understand the old embed links will break.");
@@ -926,7 +928,7 @@ function changeId(e: RegionEntry): void {
     h("p", { className: "muted small", textContent: "The id is what embed links use. Part labels don't change." }),
     h("label", { htmlFor: "rename-id" }, "New id", input),
     err,
-    h("div", { className: "rename-path" }, h("span", { className: "muted small", textContent: "New embed address" }), url, h("span", { className: "rename-copy" }, copy, copied)),
+    pathEl,
     callout,
     ...(refsNote ? [refsNote] : []),
     h("label", { className: "check", htmlFor: "rename-ack" }, ack, h("span", { textContent: "I understand the old embed links will break" })),
