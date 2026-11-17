@@ -12,27 +12,6 @@
       "created": "2026-11-13T17:43:43Z"
     },
     {
-      "id": "gethricism",
-      "name": "Gethricism",
-      "regions": [
-        "diarism",
-        "gethricism",
-        "kethregion",
-        "razmyrregion",
-        "region",
-        "trinicism"
-      ],
-      "parent": "religion",
-      "createdBy": {
-        "id": 45669787,
-        "login": "Flanz1"
-      },
-      "created": "2026-11-13T17:43:50Z",
-      "pinned": [
-        "gethricism"
-      ]
-    },
-    {
       "id": "country",
       "name": "Country",
       "regions": [],
@@ -127,6 +106,27 @@
       "name": "Ilrakhan Religions",
       "regions": [],
       "parent": "religion"
+    },
+    {
+      "id": "gethricism",
+      "name": "Gethricism",
+      "regions": [
+        "diarism",
+        "gethricism",
+        "kethregion",
+        "razmyrregion",
+        "region",
+        "trinicism"
+      ],
+      "parent": "ilrakhan-religions",
+      "createdBy": {
+        "id": 45669787,
+        "login": "Flanz1"
+      },
+      "created": "2026-11-13T17:43:50Z",
+      "pinned": [
+        "gethricism"
+      ]
     }
   ]
 }
