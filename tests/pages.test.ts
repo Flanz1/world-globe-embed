@@ -173,6 +173,12 @@ describe("regions in the build", () => {
     expect(dataOf(pages[1].html).regions).toBeUndefined();
   });
 
+  it("keeps each underlay's fill in the inlined index (clamped), so embeds paint it", () => {
+    const host = { ...region, id: "host", properties: { ...region.properties, name: "h", under: [{ id: "evil", label: "Faith", on: true, fill: 0.7 }, { id: "evil", fill: 0.01 }] } };
+    const c: Content = { ...content, regions: new Map([["evil", region], ["host", host]] as [string, RegionFeature][]) };
+    expect(dataOf(generateSlotPages(c, "", "g.js")[0].html).regions!.host.u).toEqual([{ id: "evil", label: "Faith", on: true, fill: 0.7 }, { id: "evil", fill: 0.1 }]);
+  });
+
   it("writes regions/<id>.json minified, with the name as plain JSON text", () => {
     const [file] = generateRegionFiles(withRegion);
     expect(file.path).toBe("regions/evil.json");
