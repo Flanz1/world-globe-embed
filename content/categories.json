@@ -104,7 +104,9 @@
     {
       "id": "ilrakhan-religions",
       "name": "Ilrakhan Religions",
-      "regions": [],
+      "regions": [
+        "kindly-lords"
+      ],
       "parent": "religion"
     },
     {
