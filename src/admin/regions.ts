@@ -1386,7 +1386,12 @@ function bulkDelete(ids: string[]): void {
   m.body.append(
     h("p", {}, `This deletes ${plural(ids.length, "region")}${ids.length > perCommit() ? ` (in several saves, ${perCommit()} at a time)` : " in one save"}:`),
     h("ul", { className: "bulk-list" }, ...shown.map((id) => h("li", {}, h("code", { textContent: id }))), ids.length > shown.length ? h("li", { className: "muted", textContent: `and ${ids.length - shown.length} more` }) : null),
-    h("p", { className: "error", textContent: "Embeds that show these regions will stop showing them: they fall back to the plain globe with a small “Region not found” note." }),
+    h(
+      "div",
+      { className: "rename-note", role: "note" },
+      h("span", { className: "rename-note-icon", ariaHidden: "true", textContent: "⚠" }),
+      h("div", {}, h("strong", { textContent: "Embeds that show these regions will stop showing them." }), " They fall back to the plain globe with a small “Region not found” note."),
+    ),
     h("p", { className: "muted small", textContent: `They stay in Recently deleted for ${TRASH_DAYS} days, where you can restore them.` }),
   );
   m.foot.append(cancel, go);

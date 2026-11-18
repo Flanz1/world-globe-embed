@@ -102,7 +102,9 @@ export function selectionBar(sel: Selection, noun: string, actions: BulkAction[]
   const close = h("button", { type: "button", className: "tonal", textContent: "Done", dataset: { action: "select-done" }, onclick: done });
   const plain = buttons.filter((_, i) => !actions[i].danger);
   const danger = buttons.filter((_, i) => actions[i].danger);
-  const el = h("div", { className: "bulk-bar", role: "region", ariaLabel: `Actions for selected ${noun}s`, hidden: true }, count, h("div", { className: "bulk-actions" }, ...plain, sep, ...danger, sep.cloneNode() as HTMLElement, all, none, close));
+  const el = h("div", { className: "bulk-bar", role: "region", ariaLabel: `Actions for selected ${noun}s`, hidden: true }, count, h("div", { className: "bulk-actions" }, ...plain, sep, ...danger, sep.cloneNode() as HTMLElement, all, none));
+  el.insertBefore(close, el.children[1]);
+  close.classList.add("bulk-done");
   const update = () => {
     el.hidden = !sel.on;
     document.body.classList.toggle("bulk-on", sel.on);

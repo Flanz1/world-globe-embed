@@ -546,3 +546,6 @@ body.bulk-on { padding-bottom: 96px; }
 .bulk-sep { width: 1px; align-self: stretch; margin: 4px 6px; background: var(--md-sys-color-outline-variant); }
 @media (max-width: 560px) { .bulk-bar { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); } body.bulk-on { padding-bottom: 120px; } }
 .bulk-list { margin: 4px 0; padding-left: 20px; max-height: 40vh; overflow: auto; }
+.bulk-done { order: 2; flex: 0 0 auto; min-height: 32px; padding: 0 14px; font-size: 13px; }
+.bulk-bar .bulk-actions { order: 3; }
+@media (max-width: 560px) { .bulk-bar { flex-flow: row wrap; } .bulk-count { order: 1; flex: 1 1 auto; } .bulk-actions { flex: 1 1 100%; } }
