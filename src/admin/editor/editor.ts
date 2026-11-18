@@ -249,7 +249,7 @@ export const SHORTCUT_GROUPS: { title: string; rows: [string, string][] }[] = [
       ["Click", "Add a point (polygon)"],
       ["Double-click / Enter", "Finish the outline"],
       ["Click the lit-up first point", "Close the outline (freehand closes on release, unless Keep open is on)"],
-      ["K", "Freehand: keep the line open between strokes; the next stroke continues from its end"],
+      ["K", "Freehand: Open line, so the next stroke continues from the end of the last"],
       ["Backspace / right-click", "Remove the last point (repeat to go back to the start)"],
       ["Tab", "Follow a border the other way round"],
       ["Esc", "Cancel the outline, or clear the selection"],
@@ -502,12 +502,13 @@ export function openEditor(o: EditorOptions): void {
     "snap",
   );
   const keepOpenBtn = btn(
-    "Keep open",
-    "Freehand: lifting the pointer doesn't close the outline. The line stays and the next stroke continues from its end, until you close it: finish a stroke near the first point, tap that point, or press Enter (K). Backspace or right-click takes back the last stroke.",
+    "Open line",
+    "Don't close the shape when you lift the pen. Tap the first point or press Enter to close. (K)",
     () => toggleKeepOpen(),
     "keep-open",
   );
-  keepOpenBtn.hidden = true;
+  /** Top left of the map while Freehand is active: its option, so the toolbar row never changes. */
+  const optBar = h("div", { className: "ed-opt-bar", hidden: true, role: "toolbar", ariaLabel: "Freehand option" }, keepOpenBtn);
   const coastBtn = btn(
     "Coast",
     "Also snap to the map's coastline (shown in amber) where no part or region is in reach, and follow it between two clicks (O). Rivers, lakes and marshes count as land.",
@@ -691,7 +692,6 @@ export function openEditor(o: EditorOptions): void {
       h("span", { className: "sep" }),
       snapBtn,
       coastBtn,
-      keepOpenBtn,
       gridBtn,
       btn("?", "Keyboard shortcuts", () => showHelp(), "help"),
       h("span", { className: "ed-toolbar-end" }, overlays.button),
@@ -699,7 +699,7 @@ export function openEditor(o: EditorOptions): void {
     h(
       "div",
       { className: "ed-body" },
-      h("div", { className: "ed-canvas-wrap" }, canvas, pinsLayer.tip, overlays.panel, layerBar.el, ctxMenu, tip, simpPanel, combPanel, status),
+      h("div", { className: "ed-canvas-wrap" }, canvas, pinsLayer.tip, overlays.panel, layerBar.el, optBar, ctxMenu, tip, simpPanel, combPanel, status),
       side.el,
     ),
   );
@@ -1671,7 +1671,7 @@ export function openEditor(o: EditorOptions): void {
     for (const b of dlg.querySelectorAll<HTMLButtonElement>("button.tool")) b.setAttribute("aria-pressed", String(b.dataset.tool === tool));
     gridBtn.setAttribute("aria-pressed", String(gridOn));
     snapBtn.setAttribute("aria-pressed", String(snapOn));
-    keepOpenBtn.hidden = tool !== "freehand" || lineTarget();
+    optBar.hidden = tool !== "freehand" || lineTarget();
     keepOpenBtn.setAttribute("aria-pressed", String(keepOpen));
     coastBtn.setAttribute("aria-pressed", String(coastActive()));
     // The spherical area is skipped mid-drag (it costs a few ms at 2,000 vertices) and refreshed on release.
