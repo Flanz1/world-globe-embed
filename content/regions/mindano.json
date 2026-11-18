@@ -1,0 +1,35 @@
+{
+  "$schema": "../../schema/region.schema.json",
+  "type": "Feature",
+  "id": "mindano",
+  "properties": {
+    "slot": "inara",
+    "map": "globe-map",
+    "color": "#c0392b",
+    "fillOpacity": 0.35,
+    "label": false,
+    "updated": "2026-11-18T20:45:18Z",
+    "created": "2026-11-18T20:45:18Z",
+    "createdBy": {
+      "id": 357569561,
+      "login": "Mank-cmd"
+    },
+    "updatedBy": {
+      "id": 357569561,
+      "login": "Mank-cmd"
+    }
+  },
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [-41.3006, 26.563],
+        [-40.8583, 26.2841],
+        [-40.4588, 26.7415],
+        [-40.4846, 27.0688],
+        [-41.3894, 27.2689],
+        [-41.3006, 26.563]
+      ]
+    ]
+  }
+}
