@@ -262,10 +262,25 @@ button.rfolder-toggle.ghost { border-color: transparent; color: var(--md-sys-col
 .urow.new { border-color: var(--app-warn); }
 .urow[data-waiting] { grid-template-columns: minmax(150px, 1fr) 140px auto auto; }
 .uname { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; overflow-wrap: anywhere; }
-.uperms { display: flex; flex-wrap: wrap; gap: 2px 14px; }
+.uperms { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 6px; }
+.uaccess { min-width: 0; }
+.usummary { margin: 0; color: var(--md-sys-color-on-surface-variant); }
+.uperm-more { margin-top: 2px; }
+.uperm-more > summary { font-size: 13px; }
+#users-note:empty { display: none; }
+.users-bar { position: sticky; bottom: 0; z-index: 4; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 12px -16px -16px; padding: 10px 16px; background: var(--md-sys-color-surface-container-high); border-top: 1px solid var(--md-sys-color-outline-variant); border-radius: 0 0 16px 16px; }
+.users-bar[hidden] { display: none; }
+.users-bar .warn { margin-right: auto; font-weight: 600; }
+body:has(#tab-users:not([hidden]) #users-bar:not([hidden])) .snackbar { bottom: 72px; }
 .uperms .check { display: inline-flex; flex-direction: row; gap: 5px; align-items: center; color: var(--md-sys-color-on-surface); }
 .badge.rcreator { font-weight: 500; }
 @media (max-width: 720px) { .urow, .urow[data-waiting] { grid-template-columns: 1fr; } }
+/* Phones: name and role on their own lines; the summary + Permissions… on the left and a compact Remove on the right of the same line. */
+@media (max-width: 720px) {
+  .urow:not([data-waiting]) { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
+  .urow:not([data-waiting]) > .uname, .urow:not([data-waiting]) > select, .urow:not([data-waiting]) > span.muted { grid-column: 1 / -1; }
+  .urow:not([data-waiting]) > button[data-action="remove-user"] { grid-column: 2; align-self: start; justify-self: end; }
+}
 
 /* ── Small dialogs ── */
 /* Dialogs: 28 px radius on surface-container-high (M3). */
@@ -719,6 +734,11 @@ body.bulk-on { padding-bottom: 96px; }
   dialog.editor .ed-toolbar button { min-height: 40px; }
   dialog.editor .ed-toolbar button::after { height: 44px; }
   .ed-toolbar { padding-bottom: 6px; }
+}
+
+/* Touch: each permission checkbox row gets the 44 px minimum hit height. */
+@media (pointer: coarse) {
+  .uperms .check { min-height: 44px; }
 }
 
 /* ── Warp regions (Maps & slots → slot → More… → Warp regions…) ── */

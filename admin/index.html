@@ -133,10 +133,11 @@
           <label>Access <select id="user-preset"></select></label>
           <button type="submit" class="ghost">Add person</button>
         </form>
-        <div class="row">
+        <p id="users-note" class="muted small" aria-live="polite"></p>
+        <div id="users-bar" class="users-bar" role="group" aria-label="Unsaved changes" hidden>
+          <span class="warn small">Unsaved changes</span>
           <button id="users-save" type="button" disabled>Save changes</button>
           <button id="users-reset" type="button" class="ghost" disabled>Undo changes</button>
-          <span id="users-note" class="muted small" aria-live="polite"></span>
         </div>
       </section>
       <section class="card">

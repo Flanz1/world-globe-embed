@@ -29,6 +29,21 @@ export const PRESETS: { name: string; permissions: Permission[] }[] = [
   { name: "Admin", permissions: ["maps", "regions", "editOthers", "deleteOthers", "renameIds", "users"] },
 ];
 
+/** Short names for the one-line summary under a person's role ("Create regions, edit others'"). */
+const SHORT: Record<Permission, string> = {
+  maps: "maps & slots",
+  regions: "create regions",
+  editOthers: "edit others'",
+  deleteOthers: "delete others'",
+  renameIds: "change ids",
+  users: "manage users",
+};
+export function summaryOf(perms: readonly Permission[]): string {
+  if (!perms.length) return "No permissions";
+  if (PERMISSIONS.every((p) => perms.includes(p))) return "Everything";
+  const text = PERMISSIONS.filter((p) => perms.includes(p)).map((p) => SHORT[p]).join(", ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 /** A GitHub account, by its permanent numeric id (logins can be renamed) and the login it had when stored. */
 export interface Account {
   id: number;
