@@ -312,7 +312,8 @@ export async function start(ctx: StartContext): Promise<void> {
   function overlayLineWidth(W: number): number {
     const fCss = stage.clientHeight / 2 / Math.tan((camera.fov * DEG) / 2);
     const screenPxPerRad = fCss / Math.max(0.05, view.distance - 1);
-    return (FLAT_LINE_PX * (W / (2 * Math.PI))) / screenPxPerRad;
+    // Never below one texel: a thinner stroke fades out instead of getting thinner once the texture is magnified.
+    return Math.max(1, (FLAT_LINE_PX * (W / (2 * Math.PI))) / screenPxPerRad);
   }
   function drawRegion(): void {
     if (!reg) return;
@@ -321,7 +322,7 @@ export async function start(ctx: StartContext): Promise<void> {
     const H = o.canvas.height;
     const g = o.canvas.getContext("2d")!;
     g.clearRect(0, 0, W, H);
-    drawnLineW = overlayLineWidth(W);
+    drawnLineW = overlayLineWidth(W); 
     // Clashes are worked out once per region (or live update), not per redraw.
     const vis = visible.of(reg);
     if (specFor !== vis) {
@@ -914,7 +915,9 @@ export async function start(ctx: StartContext): Promise<void> {
         overlay.tex.dispose();
         drawRegion();
       } else if (overlay && reg && Math.abs(overlayLineWidth(overlay.canvas.width) / drawnLineW - 1) > 0.08) {
-        drawRegion(); // keep the borders the same on-screen thickness as the flat map
+        // Keep the borders the same on-screen thickness as the flat map.
+        drawRegion();
+        invalidate();
       }
     }, 250);
   };
