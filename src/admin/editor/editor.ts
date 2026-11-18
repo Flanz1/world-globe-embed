@@ -62,6 +62,7 @@ import { clampPadding } from "../../shared/params.ts";
 import { TEXTURE_WIDTHS, type MapMeta, type SlotsFile, type TextureWidth } from "../../shared/types.ts";
 import { deviceLimit, nextTier } from "../../shared/tiers.ts";
 import { h } from "../dom.ts";
+import { sidePanel } from "./sheet.ts";
 import { mapLimit, type GitHub } from "../github.ts";
 import { childrenOf, regionsPerCommit } from "../../shared/categories.ts";
 import { loadMapImage } from "../images.ts";
@@ -599,6 +600,61 @@ export function openEditor(o: EditorOptions): void {
     h("div", { className: "row" }, combApply, btn("Cancel", "", () => closeCombine())),
   );
 
+  /* The side panel: four-ish sections shown as collapsible sections (wide) or tabs in a bottom sheet (phones, tablets). */
+  const side = sidePanel({
+    frame: frameEl,
+    banners: [draftBar, editingBanner, msg],
+    sections: [
+      {
+        id: "region",
+        title: "Region",
+        children: [
+          h("div", { className: "row" }, btn("Centre on region", "Turn the globe preview to face the region", () => sendPreview(true), "centre"), btn("Embed code…", "Copy the iframe code for this region", () => embed(), "embed")),
+          h("label", {}, "Id (permanent; embeds use it)", idIn),
+          h("p", { className: "muted small", textContent: `Slot: ${slotName} · map: ${slot.map}` }),
+          h("h4", { className: "ed-sub", textContent: "Appearance" }),
+          h("label", { className: "inline grow ed-fill" }, "Fill", opacityIn, opacityOut),
+          h("label", { className: "check" }, labelIn, "Show part labels in embed"),
+          h("label", { className: "check", title: "Draw a dark border where parts of different colours share a line (parts of one colour read as one). Off: parts that touch just touch." }, borderIn, "Draw national borders"),
+          h("h4", { className: "ed-sub", textContent: "Description" }),
+          h("label", {}, "Description (plain text)", descIn),
+        ],
+      },
+      {
+        id: "parts",
+        title: "Parts",
+        children: [
+        h(
+          "fieldset",
+          { className: "ed-colours" },
+          h("legend", { textContent: "Colours and parts" }),
+          h("p", {
+            className: "muted small",
+            textContent:
+              "Each colour is a folder of parts. Give a colour a label and the embed lists it in the legend. Move a part to another colour with its colour menu. Where parts overlap, the higher-numbered part is drawn on top: use Forward and Back to change that.",
+          }),
+          h("label", {}, "Legend title", keyTitleIn),
+          foldAllBtn,
+          folders,
+          addKeyBtn,
+        ),
+        h(
+          "fieldset",
+          { className: "ed-overlaps" },
+          h("legend", { textContent: "Overlaps" }),
+          h("p", {
+            className: "muted small",
+            textContent:
+              "Where parts of different colours overlap, the overlap is contested: equal stripes of every colour, with the borders through it dashed in each. A contested area (a colour's + Contested, or a part's Contested button) is an occupied area: striped and dash-bordered the same way, but the borders of the parts under it stay solid, as they were.",
+          }),
+          clashList,
+        ),
+          stats,
+        ],
+      },
+      { id: "underlays", title: "Underlays", children: [underBox, pinMapBox] },
+    ],
+  });
   const title = h("h2", {});
   // The Pin tool: place, edit and move pins on this map (they save on their own, apart from the region).
   const pinTool = createPinTool({
@@ -704,49 +760,7 @@ export function openEditor(o: EditorOptions): void {
       "div",
       { className: "ed-body" },
       h("div", { className: "ed-canvas-wrap" }, canvas, pinsLayer.tip, commentTool.markers, pinTool.popover, commentTool.popover, overlays.panel, layerBar.el, ctxMenu, tip, simpPanel, combPanel, status),
-      h(
-        "div",
-        { className: "ed-side" },
-        frameEl,
-        h("div", { className: "row" }, btn("Centre on region", "Turn the globe preview to face the region", () => sendPreview(true), "centre"), btn("Embed code…", "Copy the iframe code for this region", () => embed(), "embed")),
-        draftBar,
-        editingBanner,
-        msg,
-        h("label", {}, "Id (permanent; embeds use it)", idIn),
-        h("p", { className: "muted small", textContent: `Slot: ${slotName} · map: ${slot.map}` }),
-        h("label", { className: "inline grow ed-fill" }, "Fill", opacityIn, opacityOut),
-        h("label", { className: "check" }, labelIn, "Show part labels in embed"),
-        h("label", { className: "check", title: "Draw a dark border where parts of different colours share a line (parts of one colour read as one). Off: parts that touch just touch." }, borderIn, "Draw national borders"),
-        h("label", {}, "Description (plain text)", descIn),
-        underBox,
-        pinMapBox,
-        h(
-          "fieldset",
-          { className: "ed-colours" },
-          h("legend", { textContent: "Colours and parts" }),
-          h("p", {
-            className: "muted small",
-            textContent:
-              "Each colour is a folder of parts. Give a colour a label and the embed lists it in the legend. Move a part to another colour with its colour menu. Where parts overlap, the higher-numbered part is drawn on top: use Forward and Back to change that.",
-          }),
-          h("label", {}, "Legend title", keyTitleIn),
-          foldAllBtn,
-          folders,
-          addKeyBtn,
-        ),
-        h(
-          "fieldset",
-          { className: "ed-overlaps" },
-          h("legend", { textContent: "Overlaps" }),
-          h("p", {
-            className: "muted small",
-            textContent:
-              "Where parts of different colours overlap, the overlap is contested: equal stripes of every colour, with the borders through it dashed in each. A contested area (a colour's + Contested, or a part's Contested button) is an occupied area: striped and dash-bordered the same way, but the borders of the parts under it stay solid, as they were.",
-          }),
-          clashList,
-        ),
-        stats,
-      ),
+      side.el,
     ),
   );
   document.body.append(dlg);
@@ -760,6 +774,7 @@ export function openEditor(o: EditorOptions): void {
       (underBox.querySelector("legend") as HTMLElement).textContent = "Show under all its regions";
     }
     pinMapBox.hidden = true;
+    for (const e of dlg.querySelectorAll<HTMLElement>(".ed-sub")) e.hidden = true;
     for (const act of ["province-border", "embed"]) (dlg.querySelector(`button[data-act="${act}"]`) as HTMLElement).hidden = true;
     const ownerIn = h(
       "select",
@@ -4276,6 +4291,7 @@ export function openEditor(o: EditorOptions): void {
 
   dlg.addEventListener("close", () => commentTool.dispose());
   dlg.showModal();
+  side.refresh();
   measure();
   fitView();
   if (o.live?.view) {
