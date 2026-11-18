@@ -466,6 +466,7 @@ function showTab(name: Tab): void {
     b.hidden = !allowed.includes(t);
     b.setAttribute("aria-selected", String(t === name));
     b.tabIndex = t === name ? 0 : -1;
+    if (t === name) b.scrollIntoView?.({ inline: "nearest", block: "nearest" });
   }
   if (name === "regions") renderRegions();
   watchEditing(name === "regions");

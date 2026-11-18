@@ -35,7 +35,7 @@ export interface HealthInput {
 /** The checks, in the order the Health tab lists them. */
 export const HEALTH_CHECKS: { code: HealthCode; title: string; help: string }[] = [
   { code: "unreadable", title: "Files that can't be read", help: "A region or pin file that is broken or has the wrong shape." },
-  { code: "older-map", title: "Drawn on a different map", help: "The slot now shows another map than the one this was drawn on (an older map), so it may sit in the wrong place." },
+  { code: "older-map", title: "Drawn on a different map", help: "Drawn or placed on another map than the one its slot shows now, so it may sit in the wrong place." },
   { code: "pin-outside", title: "Pins outside their region", help: "A pin of a pin map that a region shows, lying outside every region that shows that pin map." },
   { code: "missing-pin-map", title: "Pin map doesn't exist", help: "A region or pin names a pin map that isn't in the Pins tab." },
   { code: "unused-pin-map", title: "Unused pin maps", help: "A pin map with no pins in it that no region shows." },

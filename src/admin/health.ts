@@ -53,7 +53,7 @@ export function renderHealth(checked = false): void {
       "section",
       { className: "card" },
       h("h2", { textContent: "Content health" }),
-      h("p", { className: "muted", textContent: "Things in the regions, pins and folders that nothing blocks, but that someone should look at. Worked out here from what is already loaded." }),
+      h("p", { className: "muted", textContent: "Things in regions, pins and folders worth a look. Nothing here blocks saving." }),
       h(
         "div",
         { className: "row hl-head" },
