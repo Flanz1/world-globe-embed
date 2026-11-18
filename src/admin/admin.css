@@ -676,6 +676,90 @@ body.bulk-on { padding-bottom: 96px; }
   .ed-toolbar { padding-bottom: 6px; }
 }
 
+/* ── Warp regions (Maps & slots → slot → More… → Warp regions…) ── */
+dialog.warp { width: calc(100vw - 16px); height: calc(100vh - 16px); max-width: none; max-height: none; padding: 0; border: 0; border-radius: 16px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-shadow: var(--app-shadow); overflow: hidden; }
+dialog.warp::backdrop { background: rgba(0, 0, 0, .45); }
+dialog.warp[open] { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+dialog.warp > .pv-head { padding: 10px 12px 8px 20px; background: var(--md-sys-color-surface-container); }
+dialog.warp button { min-height: 32px; padding: 0 12px; font-size: 13px; line-height: 18px; white-space: nowrap; }
+dialog.warp button.tiny { min-height: 28px; padding: 0 10px; font-size: 12px; }
+dialog.warp button[aria-pressed="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: var(--md-sys-color-outline); }
+dialog.warp .wp-bar button[aria-pressed="true"]::before { content: ""; display: inline-block; width: 14px; height: 14px; margin: 0 4px -2px -2px; background: currentColor; -webkit-mask: var(--app-tick) center / contain no-repeat; mask: var(--app-tick) center / contain no-repeat; }
+dialog.warp select { min-height: 32px; padding: 4px 10px; font-size: 14px; min-width: 0; }
+.wp-body { display: flex; flex-direction: column; min-height: 0; }
+.wp-body > .wp-grid { flex: 1 1 auto; }
+.wp-bar { display: flex; flex-wrap: nowrap; gap: 12px; align-items: end; padding: 4px 16px 10px; background: var(--md-sys-color-surface-container); overflow-x: auto; }
+.wp-bar > * { flex: 0 0 auto; }
+.wp-field { display: grid; gap: 2px; font-size: 14px; color: var(--md-sys-color-on-surface); }
+.wp-field strong { font-weight: 500; line-height: 32px; }
+.wp-arrow { align-self: end; line-height: 32px; color: var(--md-sys-color-on-surface-variant); }
+.wp-smooth, .wp-overlay { display: flex; align-items: center; gap: 8px; color: var(--md-sys-color-on-surface); }
+.wp-smooth input, .wp-overlay input { width: 120px; accent-color: var(--md-sys-color-primary); }
+.wp-smooth output, .wp-overlay output { min-width: 3.2em; font-variant-numeric: tabular-nums; }
+.wp-seg { display: none; margin: 8px 8px 0; }
+.wp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr); gap: 8px; padding: 8px; min-height: 0; }
+.wp-col { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; min-width: 0; border-radius: 12px; overflow: hidden; background: var(--md-sys-color-surface-container-low); border: 1px solid var(--md-sys-color-outline-variant); }
+.wp-pane-head { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; flex-wrap: nowrap; overflow-x: auto; }
+.wp-pane-head > * { flex: 0 0 auto; }
+.wp-pane-head h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.wp-old-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wp-pane { position: relative; min-height: 0; background: var(--app-map-bg); overflow: hidden; touch-action: none; cursor: crosshair; outline: none; }
+.wp-pane:focus-visible { box-shadow: inset 0 0 0 2px var(--md-sys-color-primary); }
+.wp-pane::after { content: ""; position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 1px solid rgba(255, 255, 255, .5); border-radius: 50%; pointer-events: none; opacity: 0; }
+.wp-pane:focus-visible::after { opacity: 1; }
+.wp-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.wp-marks { position: absolute; inset: 0; pointer-events: none; }
+.wp-pane-note { position: absolute; left: 8px; right: 8px; bottom: 8px; margin: 0; padding: 6px 10px; border-radius: 8px; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); pointer-events: none; }
+dialog.warp .wp-mark { position: absolute; pointer-events: auto; transform: translate(-50%, -50%); min-height: 0; width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 2px solid #14120f; background: var(--wp-c); color: #14120f; font-size: 12px; font-weight: 700; line-height: 20px; cursor: grab; box-shadow: 0 0 0 1px rgba(255, 255, 255, .7); }
+dialog.warp .wp-mark.selected { width: 30px; height: 30px; line-height: 26px; box-shadow: 0 0 0 3px #fff, 0 0 0 5px #14120f; z-index: 1; }
+dialog.warp .wp-mark:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.wp-grid.previewing .wp-pane { cursor: grab; }
+.wp-side { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto; padding: 8px 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-low); border: 1px solid var(--md-sys-color-outline-variant); }
+.wp-side-head { display: flex; align-items: center; justify-content: space-between; }
+.wp-side-head h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.wp-hint { margin: 0; }
+.wp-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.wp-point { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); }
+.wp-point.selected { outline: 2px solid var(--md-sys-color-primary); }
+.wp-point.open { background: transparent; border: 1px dashed var(--md-sys-color-outline); }
+dialog.warp .wp-num { width: 28px; min-height: 28px; padding: 0; border-radius: 50%; background: var(--wp-c); color: #14120f; border: 2px solid #14120f; font-weight: 700; }
+dialog.warp .wp-num[aria-pressed="true"] { background: var(--wp-c); color: #14120f; box-shadow: 0 0 0 2px var(--md-sys-color-primary); }
+.wp-worst { color: var(--app-on-warn-container); background: var(--app-warn-container); padding: 2px 6px; border-radius: 8px; font-weight: 500; }
+.wp-fit-note { margin: 0; }
+.wp-what summary { font-size: 14px; }
+.wp-items { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+.wp-items label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--md-sys-color-on-surface); }
+.wp-items input { margin: 0; }
+.wp-swatch { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; border: 1px solid var(--md-sys-color-outline); }
+dialog.warp > .dlg-foot { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--md-sys-color-surface-container); }
+.wp-foot-text { flex: 1 1 auto; min-width: 0; display: grid; gap: 4px; }
+.wp-status { margin: 0; }
+.wp-alert { display: grid; gap: 4px; }
+.wp-alert p { margin: 0; }
+.wp-cant { margin: 4px 0; padding-left: 18px; max-height: 30vh; overflow-y: auto; }
+@media (min-width: 768px) and (max-width: 1100px) {
+  .wp-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .wp-side { grid-column: 1 / -1; max-height: 34vh; }
+  .wp-points { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+}
+@media (max-width: 767px) {
+  .wp-seg { display: inline-flex; }
+  .wp-grid { grid-template-columns: minmax(0, 1fr); }
+  .wp-grid > * { display: none; }
+  .wp-grid[data-view="old"] > .wp-col-old, .wp-grid[data-view="new"] > .wp-col-new, .wp-grid[data-view="preview"] > .wp-col-new { display: grid; }
+  .wp-grid[data-view="points"] > .wp-side { display: flex; }
+  dialog.warp { width: 100vw; height: 100dvh; border-radius: 0; }
+  .wp-bar { flex-wrap: wrap; gap: 8px 12px; overflow-x: visible; }
+  .wp-bar > .wp-field { flex: 1 1 100%; min-width: 0; }
+  .wp-bar select { width: 100%; }
+  .wp-arrow { display: none; }
+  .wp-smooth input { width: 96px; }
+  .wp-grid { padding: 8px 8px 0; }
+  dialog.warp > .dlg-foot { flex-wrap: wrap; padding: 8px 12px; }
+  .wp-foot-text { flex-basis: 100%; }
+  dialog.warp > .dlg-foot button { flex: 1 1 0; }
+}
+
 /* Reviewer comments (the editor's Comment tool): numbered markers over the map; the popover is the Pin tool's. */
 .ed-cm-markers { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 .ed-cm-mark { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; padding: 0; min-height: 0; display: grid; place-items: center; border-radius: 50% 50% 50% 4px; border: 2px solid var(--md-sys-color-surface); background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); font-size: 12px; font-weight: 600; box-shadow: var(--app-shadow); pointer-events: auto; cursor: pointer; }
