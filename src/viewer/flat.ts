@@ -406,7 +406,24 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     schedule();
   };
 
-  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins).then((l) => {
+  /** A cluster of pins was clicked: zoom in on them (false when the view can't zoom in any further). */
+  const zoomToPins = (pts: [number, number][]): boolean => {
+    const { w, h } = size();
+    const lons = pts.map(([lon]) => lon + 360 * Math.round((view.cx - lon) / 360));
+    const lats = pts.map(([, lat]) => lat);
+    const dw = Math.max(...lons) - Math.min(...lons);
+    const dh = Math.max(...lats) - Math.min(...lats);
+    const fit = Math.min((w * 0.6) / Math.max(dw, 1e-3), (h * 0.6) / (Math.max(dh, 1e-3) * ky));
+    const k = clamp(Math.max(fit, view.k * 1.8), flatMinK(aspect, w, h), FLAT_K_MAX);
+    if (k < view.k * 1.05) return false;
+    const to = { ...view, cx: (Math.max(...lons) + Math.min(...lons)) / 2, cy: (Math.max(...lats) + Math.min(...lats)) / 2, k };
+    touched = true;
+    if (reduced.matches) Object.assign(view, to);
+    else ease = { from: { ...view }, to, t0: performance.now() };
+    schedule();
+    return true;
+  };
+  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins, zoomToPins).then((l) => {
     pinLayer = l;
     schedule();
   });
@@ -414,7 +431,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   watchPreviewPins(stage, canvas, (l) => {
     pinLayer = l;
     schedule();
-  });
+  }, zoomToPins);
   const labels = R ? makeLabels(stage) : null;
   const regionKey = R ? makeLegend(stage) : null;
   if (R) {
