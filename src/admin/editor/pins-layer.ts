@@ -43,28 +43,41 @@ export interface PinsLayer {
   draw: (g: CanvasRenderingContext2D, offs: number[]) => void;
   /** Shows the tooltip for the pin under the pointer (canvas CSS pixels), or hides it. */
   hover: (x: number, y: number, offs: number[]) => void;
-  /** Re-reads the pins. */
+  /** Re-reads the pins (and redraws). */
   refresh: () => void;
+  /** Shows `draft` (a pin being placed or edited) instead of its saved copy, with a ring on it; null clears it. */
+  setDraft: (draft: PinFeature | null) => void;
+  /** The pin whose marker is under (x, y) in canvas CSS pixels, if any. */
+  pinAt: (x: number, y: number, offs: number[]) => PinFeature | null;
+  /** Shows the pins whether or not the switch is on (the Pin tool needs them), or goes back to the switch. */
+  force: (on: boolean) => void;
 }
 
 export function createPinsLayer(o: { pins: () => PinFeature[]; sx: (lon: number) => number; sy: (lat: number) => number; changed: () => void }): PinsLayer {
   let on = load();
+  let forced = false;
+  let draftPin: PinFeature | null = null;
   let shown: PinFeature[] = [];
+  const visible = () => on || forced;
+  /** The pins to paint: the saved ones, with the draft in place of its saved copy (or added when it is new). */
+  const list = (): PinFeature[] => (draftPin ? [...shown.filter((p) => p.id !== draftPin!.id || !draftPin!.id), draftPin] : shown);
   const tip = h("div", { className: "ed-pin-tip", hidden: true });
   const box = h("input", { type: "checkbox", checked: on, name: "ed-pins-show" });
   const info = h("span", { className: "muted small" });
   const row = h("label", { className: "check ed-ov-pins", title: "Show this map's pins on the editor map (change them in the Pins tab)" }, box, "Show pins", info);
 
+  let ready = false;
   function refresh(): void {
     shown = o.pins();
     box.disabled = !shown.length;
     info.textContent = shown.length ? ` (${shown.length})` : " (none on this map)";
+    if (ready) o.changed();
   }
 
   function draw(g: CanvasRenderingContext2D, offs: number[]): void {
-    if (!on) return;
+    if (!visible()) return;
     g.save();
-    for (const p of shown) {
+    for (const p of list()) {
       const bg = pinColor(p.properties);
       const [lon, lat] = p.geometry.coordinates;
       const y = o.sy(lat);
@@ -77,6 +90,13 @@ export function createPinsLayer(o: { pins: () => PinFeature[]; sx: (lon: number)
         g.lineWidth = 2;
         g.strokeStyle = "rgba(255,255,255,.92)";
         g.stroke();
+        if (p === draftPin) {
+          g.beginPath();
+          g.arc(x, y, R + 4, 0, Math.PI * 2);
+          g.lineWidth = 2;
+          g.strokeStyle = "#ffd400";
+          g.stroke();
+        }
         g.save();
         g.translate(x - 7, y - 7);
         g.scale(14 / 24, 14 / 24);
@@ -91,11 +111,16 @@ export function createPinsLayer(o: { pins: () => PinFeature[]; sx: (lon: number)
     g.restore();
   }
 
-  function hover(x: number, y: number, offs: number[]): void {
+  function pinAt(x: number, y: number, offs: number[]): PinFeature | null {
     let hit: PinFeature | null = null;
-    if (on)
-      for (const p of shown)
+    if (visible())
+      for (const p of list())
         for (const off of offs) if (Math.hypot(o.sx(p.geometry.coordinates[0] + off) - x, o.sy(p.geometry.coordinates[1]) - y) <= R + 2) hit = p;
+    return hit;
+  }
+
+  function hover(x: number, y: number, offs: number[]): void {
+    const hit = pinAt(x, y, offs);
     if (!hit) {
       tip.hidden = true;
       return;
@@ -113,5 +138,22 @@ export function createPinsLayer(o: { pins: () => PinFeature[]; sx: (lon: number)
     o.changed();
   });
   refresh();
-  return { row, tip, on: () => on, draw, hover, refresh };
+  ready = true;
+  return {
+    row,
+    tip,
+    on: visible,
+    draw,
+    hover,
+    refresh,
+    pinAt,
+    setDraft: (d) => {
+      draftPin = d;
+      o.changed();
+    },
+    force: (v) => {
+      forced = v;
+      o.changed();
+    },
+  };
 }
