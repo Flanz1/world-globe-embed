@@ -527,3 +527,13 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
 .rename-url { overflow-wrap: anywhere; word-break: break-all; font-size: 13px; }
 .rename-copy { display: flex; gap: 8px; align-items: center; }
 .rename-dlg input[aria-invalid="true"], .rename-dlg input[aria-invalid="true"]:focus-visible { border-color: var(--md-sys-color-error); outline: 2px solid var(--md-sys-color-error); outline-offset: 0; }
+
+/* Health tab */
+.hl-head { align-items: center; margin-top: 10px; }
+.hl-group { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; background: var(--md-sys-color-surface-container-high); }
+.hl-group > p { margin: 6px 0 8px; }
+.hl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.hl-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.hl-row .link { overflow-wrap: anywhere; }
+.hl-row[data-severity="problem"] > .small:first-child { color: var(--md-sys-color-error); }
+.hl-row[data-severity="notice"] > .small:first-child { color: var(--app-warn); }
