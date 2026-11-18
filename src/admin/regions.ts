@@ -23,7 +23,8 @@ import type { Editing, FileCommit, GitHub } from "./github.ts";
 import { loadMapImage } from "./images.ts";
 import { compareBy, creatorChoices, creatorId, matchesQuery, type Filterable } from "./region-filter.ts";
 import { openHistory } from "./region-history.ts";
-import { openTrash } from "./trash.ts";
+import { openTrash, restoredFile } from "./trash.ts";
+import { showSnackbar } from "./snackbar.ts";
 import { Selection, blockedList, cardBox, groupBox, refreshBoxes, selectionBar } from "./bulk.ts";
 import { TRASH_DAYS } from "../shared/trash.ts";
 import { alertBox, confirmBox, modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
@@ -325,6 +326,14 @@ const collapsed = new Set<string>(
   })(),
 );
 const UNCATEGORIZED = "~uncategorized";
+/** A phone visit that has never opened or closed a folder: the page starts with every folder shut, so a long list is short. */
+let collapseOnFirstVisit = (() => {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === null && window.matchMedia("(max-width: 720px)").matches;
+  } catch {
+    return false;
+  }
+})();
 
 function toggleFolder(id: string, el: HTMLElement): void {
   const open = collapsed.has(id);
@@ -594,7 +603,18 @@ export function renderRegions(): void {
   sel.keepOnly(new Set(entries.map((e) => e.id)));
   $("#r-select").hidden = !entries.length;
   $("#regions-tools").hidden = entries.length === 0;
+  $("#regions-search").hidden = entries.length === 0;
   const cats = categories().categories;
+  if (collapseOnFirstVisit && cats.length) {
+    collapseOnFirstVisit = false;
+    for (const k of cats) collapsed.add(k.id);
+    collapsed.add(UNCATEGORIZED);
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed]));
+    } catch {
+      /* remembering is a convenience */
+    }
+  }
   $<HTMLButtonElement>("#r-new-category").hidden = !entries.length;
   $<HTMLButtonElement>("#r-combine").hidden = !entries.length;
   $<HTMLButtonElement>("#r-new-category").disabled = !canAddCategory();
@@ -1204,8 +1224,29 @@ async function transfer(e: RegionEntry, f: RegionFeature): Promise<void> {
   m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), go);
 }
 
+/** Puts a region deleted a moment ago back, exactly as it was (the snackbar's Undo). */
+function undoDelete(e: RegionEntry): void {
+  const feature = e.feature;
+  if (!feature) return;
+  const text = restoredFile(serialize(feature));
+  if (!text) return;
+  void optimistic({
+    label: `Restore region ${e.id}`,
+    check: () => refusal({ path: e.path, before: null, after: text }),
+    apply: () => {
+      const before = entries;
+      entries = [...entries, e];
+      return before;
+    },
+    undo: (before) => void (entries = before),
+    render: renderRegions,
+    commit: () => deps.gh().commit(`Restore region ${e.id}`, async () => [{ path: e.path, content: text }]),
+  });
+}
+
 function del(e: RegionEntry): void {
   openDelete(e.id, () => {
+    if (e.feature) showSnackbar(`Deleted region ${e.id}`, { label: "Undo", run: () => undoDelete(e) });
     void optimistic({
       label: `Delete region ${e.id}`,
       check: () => refusal({ path: e.path, before: e.feature ? serialize(e.feature) : "", after: null }),

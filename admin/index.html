@@ -20,11 +20,17 @@
     <button type="button" role="tab" id="tab-btn-users" aria-controls="tab-users" aria-selected="false" hidden>Users</button>
   </div>
   <span id="who" class="muted"></span>
-  <span id="branch" class="branch" role="note" hidden></span>
   <span id="theme-ctl" class="theme-ctl" hidden></span>
+  <button id="account" type="button" class="icon account-btn" aria-label="Account" title="Account" aria-haspopup="menu" aria-expanded="false" hidden></button>
   <button id="forget" type="button" class="ghost" hidden>Sign out</button>
+  <div id="account-menu" class="account-menu" popover="auto" role="menu" aria-label="Account">
+    <p id="who-menu" class="muted small"></p>
+    <button id="forget-menu" type="button" role="menuitem" class="ghost text theme-item">Sign out</button>
+  </div>
 </header>
+<div id="branch" class="branch" role="note" hidden></div>
 <main id="app">
+  <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-banner-text"></span><button id="error-banner-close" type="button" class="text" aria-label="Dismiss this message">Dismiss</button></div>
   <section id="signin" class="card" hidden>
     <h2>Sign in</h2>
     <p>Sign in with your GitHub account. You'll only see the parts of the admin page you've been given access to.</p>
@@ -63,6 +69,7 @@
           <label>Map <select name="map" class="map-select" required></select></label>
           <button type="submit">Add slot</button>
         </form>
+        <p id="new-slot-error" class="error" role="alert" hidden></p>
       </details>
     </section>
 
@@ -100,8 +107,10 @@
           <button type="button" id="r-combine" class="ghost" title="Copy several regions into one new region">Combine regions…</button>
           <button type="button" id="r-trash" class="ghost text r-trash" title="Regions and pins deleted in the last 3 days, with a Restore button">Recently deleted…</button>
         </div>
+        <div id="regions-search" class="r-search" hidden>
+          <label><span class="r-search-l">Search</span> <input id="r-search" type="search" placeholder="Name, id or creator" autocomplete="off"></label>
+        </div>
         <div id="regions-tools" class="row r-tools" hidden>
-          <label class="grow">Search <input id="r-search" type="search" placeholder="Name, id or creator" autocomplete="off"></label>
           <label>Slot <select id="r-slot"><option value="">All slots</option></select></label>
           <label>Created by <select id="r-creator"><option value="">Anyone</option></select></label>
           <label>Sort <select id="r-sort"><option value="name">Id</option><option value="updated">Last updated</option><option value="created">Newest first</option><option value="creator">Creator</option></select></label>
@@ -129,10 +138,11 @@
           <label>Access <select id="user-preset"></select></label>
           <button type="submit" class="ghost">Add person</button>
         </form>
-        <div class="row">
+        <p id="users-note" class="muted small" aria-live="polite"></p>
+        <div id="users-bar" class="users-bar" role="group" aria-label="Unsaved changes" hidden>
+          <span class="warn small">Unsaved changes</span>
           <button id="users-save" type="button" disabled>Save changes</button>
           <button id="users-reset" type="button" class="ghost" disabled>Undo changes</button>
-          <span id="users-note" class="muted small" aria-live="polite"></span>
         </div>
       </section>
       <section class="card">
@@ -191,6 +201,8 @@
     </div>
   </div>
 </dialog>
+<div id="snackbar" class="snackbar" role="status" aria-live="polite" hidden><span id="snackbar-text"></span><button id="snackbar-action" type="button" class="text" hidden></button></div>
+<button id="to-top" type="button" class="tonal to-top" hidden>↑ Back to top</button>
 <script type="module" src="../src/admin/main.ts"></script>
 </body>
 </html>
