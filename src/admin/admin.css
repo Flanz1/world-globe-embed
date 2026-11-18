@@ -165,7 +165,9 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .45); }
 .pv-controls .range input[type=number] { flex: 0 0 6.5em; width: 6.5em; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ── Branch banner and tabs ── */
-.branch { font-size: 13px; padding: 4px 10px; border-radius: 8px; background: var(--app-warn-container); color: var(--app-on-warn-container); font-weight: 600; }
+/* Shown under the header, only while writing to a test branch. */
+.branch { font-size: 13px; padding: 6px 16px; background: var(--app-warn-container); color: var(--app-on-warn-container); font-weight: 600; }
+.branch[hidden] { display: none; }
 .tabs { display: flex; gap: 4px; }
 /* Tabs: M3 pill tabs. The selected one is filled and bold, so it isn't shown by colour alone. */
 .tabs { flex-wrap: nowrap; min-width: 0; max-width: 100%; overflow-x: auto; }
@@ -506,7 +508,7 @@ button.ed-pinfolder-toggle.ghost { border-color: transparent; color: var(--md-sy
 .theme-ctl[hidden] { display: none; }
 .theme-colour { display: inline-flex; }
 /* Outlined like .ghost, but not named ghost: the editor's tests (and Close) look for `.pv-head button.ghost`. */
-button.theme-mode, button.theme-swatch { background-color: transparent; color: var(--md-sys-color-primary); border-color: var(--md-sys-color-outline); }
+button.theme-mode, button.theme-swatch, button.account-btn { background-color: transparent; color: var(--md-sys-color-primary); border-color: var(--md-sys-color-outline); }
 button.icon { width: 40px; padding: 0; display: inline-grid; place-items: center; flex: 0 0 auto; }
 dialog.editor button.icon { width: 32px; padding: 0; }
 button.icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -536,3 +538,16 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
 .rename-url { overflow-wrap: anywhere; word-break: break-all; font-size: 13px; }
 .rename-copy { display: flex; gap: 8px; align-items: center; }
 .rename-dlg input[aria-invalid="true"], .rename-dlg input[aria-invalid="true"]:focus-visible { border-color: var(--md-sys-color-error); outline: 2px solid var(--md-sys-color-error); outline-offset: 0; }
+
+/* ── Phones: one header row (title, colour controls, account) and the tabs under it ── */
+.account-menu { display: none; }
+header button.account-btn { display: none; }
+.account-menu:popover-open { display: flex; flex-direction: column; }
+.account-menu .small { padding: 8px 16px 4px; margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  header h1 { order: 1; margin-right: auto; }
+  header .theme-ctl { order: 2; }
+  header button.account-btn:not([hidden]) { display: inline-grid; order: 3; }
+  header .tabs { order: 4; flex-basis: 100%; }
+  header #who, header #forget { display: none; }
+}

@@ -18,6 +18,7 @@ import { can, refusal, setMe } from "./session.ts";
 import { adopt, colourMenu, connectAccount, forgetTheme, initTheme, modeButton, parsePrefs } from "./theme.ts";
 import { needsRenewal, sessionRemembers } from "./session-token.ts";
 import { initUsers, loadUsers } from "./users.ts";
+import { initAccountMenu } from "./account-menu.ts";
 import { setChecks, type Check } from "./status.ts";
 
 declare const __REPO__: string;
@@ -498,6 +499,13 @@ function wireTabs(): void {
   window.addEventListener("hashchange", () => gh && showTab(tabFromHash()));
 }
 
+/** The repository / signed-in line: in the header, and (on phones) in the account menu. */
+let account: ReturnType<typeof initAccountMenu> = { setWho: () => {}, show: () => {} };
+function setWho(text: string): void {
+  $("#who").textContent = text;
+  account.setWho(text);
+}
+
 /** Shows which branch the page writes to whenever it isn't the default branch. */
 function showBranch(client: GitHub): void {
   const el = $("#branch");
@@ -562,9 +570,10 @@ async function signIn(token: string): Promise<void> {
     adopt(parsePrefs(me.prefs));
     connectAccount((p) => client.savePrefs(p), () => setStatus("Couldn't save your colour theme to your account; it only applies in this browser for now.", "error"));
     $("#theme-ctl").hidden = false;
-    $("#who").textContent = `${__REPO__} · signed in as ${me.login}`;
+    setWho(`${__REPO__} · signed in as ${me.login}`);
     showBranch(client);
     $("#forget").hidden = false;
+    account.show(true);
     $("#signin").hidden = true;
     $("#waiting").hidden = true;
     $("#main").hidden = false;
@@ -579,6 +588,7 @@ async function signIn(token: string): Promise<void> {
       // Signed in, but nobody has added them yet: the owner sees them in the Users tab.
       $("#theme-ctl").hidden = false;
       $("#forget").hidden = false;
+      account.show(true);
       $("#signin").hidden = true;
       $("#waiting").hidden = false;
       $("#waiting-who").textContent = e.login;
@@ -628,6 +638,7 @@ if (framed) {
   initTheme();
   $("#theme-ctl").append(modeButton(), colourMenu());
   $("#forget").addEventListener("click", signOut);
+  account = initAccountMenu(signOut);
   $("#waiting-out").addEventListener("click", signOut);
   $("#signin-github").addEventListener("click", signInWithGitHub);
   wireUpload();
@@ -638,7 +649,7 @@ if (framed) {
   initPins({ gh: () => gh!, maps: () => maps, slots: () => slots, act });
   initUsers({ gh: () => gh!, act });
   wireTabs();
-  $("#who").textContent = __REPO__;
+  setWho(__REPO__);
 
   const back = takeFragment();
   if (back.session) store.set(back.session, sessionRemembers(back.session));
