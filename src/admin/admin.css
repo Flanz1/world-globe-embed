@@ -178,7 +178,9 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .45); }
 .pv-controls .range input[type=number] { flex: 0 0 6.5em; width: 6.5em; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ── Branch banner and tabs ── */
-.branch { font-size: 13px; padding: 4px 10px; border-radius: 8px; background: var(--app-warn-container); color: var(--app-on-warn-container); font-weight: 600; }
+/* Shown under the header, only while writing to a test branch. */
+.branch { font-size: 13px; padding: 6px 16px; background: var(--app-warn-container); color: var(--app-on-warn-container); font-weight: 600; }
+.branch[hidden] { display: none; }
 .tabs { display: flex; gap: 4px; }
 /* Tabs: M3 pill tabs. The selected one is filled and bold, so it isn't shown by colour alone. */
 .tabs { flex-wrap: nowrap; min-width: 0; max-width: 100%; overflow-x: auto; }
@@ -633,19 +635,19 @@ button.ed-pinfolder-toggle.ghost { border-color: transparent; color: var(--md-sy
 .theme-ctl[hidden] { display: none; }
 .theme-colour { display: inline-flex; }
 /* Outlined like .ghost, but not named ghost: the editor's tests (and Close) look for `.pv-head button.ghost`. */
-button.theme-mode, button.theme-swatch { background-color: transparent; color: var(--md-sys-color-primary); border-color: var(--md-sys-color-outline); }
+button.theme-mode, button.theme-swatch, button.account-btn { background-color: transparent; color: var(--md-sys-color-primary); border-color: var(--md-sys-color-outline); }
 button.icon { width: 40px; padding: 0; display: inline-grid; place-items: center; flex: 0 0 auto; }
 dialog.editor button.icon { width: 32px; padding: 0; }
 button.icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 button.theme-mode[aria-pressed="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: transparent; }
 .theme-swatch .dot, .theme-item .dot { width: 20px; height: 20px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
 .theme-swatch .dot { background: var(--md-sys-color-primary); box-shadow: 0 0 0 2px var(--md-sys-color-surface), 0 0 0 3px var(--md-sys-color-outline); }
-.theme-menu { position: fixed; inset: auto; margin: 0; width: 248px; max-width: calc(100vw - 16px); max-height: calc(100vh - 80px); overflow: auto; padding: 4px 0; border: 0; border-radius: 12px; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); box-shadow: var(--app-shadow); }
-.theme-menu:popover-open { display: flex; flex-direction: column; }
+.theme-menu, .account-menu { position: fixed; inset: auto; margin: 0; width: 248px; max-width: calc(100vw - 16px); max-height: calc(100vh - 80px); overflow: auto; padding: 4px 0; border: 0; border-radius: 12px; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); box-shadow: var(--app-shadow); }
+.theme-menu:popover-open, .account-menu:popover-open { display: flex; flex-direction: column; }
 .theme-head { padding: 8px 16px 4px; }
 .theme-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; padding: 0 16px; font-size: 14px; text-align: left; justify-content: flex-start; border-radius: 0; color: var(--md-sys-color-on-surface); }
 button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weight: 400; padding: 0 16px; }
-.theme-item:focus-visible, .theme-menu button:focus-visible { outline-offset: -2px; }
+.theme-item:focus-visible, .theme-menu button:focus-visible, .account-menu button:focus-visible { outline-offset: -2px; }
 .theme-item[aria-checked="true"]::after { content: ""; margin-left: auto; width: 16px; height: 16px; background: currentColor; mask: var(--app-tick) center / contain no-repeat; -webkit-mask: var(--app-tick) center / contain no-repeat; }
 .theme-custom { cursor: pointer; }
 .theme-custom:hover { background-image: var(--app-hover); }
@@ -664,6 +666,27 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
 .rename-copy { display: flex; gap: 8px; align-items: center; }
 .rename-dlg input[aria-invalid="true"], .rename-dlg input[aria-invalid="true"]:focus-visible { border-color: var(--md-sys-color-error); outline: 2px solid var(--md-sys-color-error); outline-offset: 0; }
 
+#upload label { min-width: 0; max-width: 100%; display: grid; }
+#upload input[type=file] { width: 100%; max-width: 100%; min-width: 0; }
+
+/* ── Phones: one header row (title, colour controls, account) and the tabs under it ── */
+.account-menu { display: none; }
+header button.account-btn { display: none; }
+.account-menu:popover-open { display: flex; flex-direction: column; }
+.account-menu .small { padding: 8px 16px 4px; margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  header h1 { order: 1; margin-right: auto; }
+  header .theme-ctl { order: 2; }
+  header button.account-btn:not([hidden]) { display: inline-grid; order: 3; }
+  header .tabs { order: 4; flex-basis: 100%; }
+}
+/* On very narrow phones the tab row scrolls inside itself; a 16 px fade on its right edge says there is more. */
+@media (max-width: 359px) {
+  header .tabs { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); }
+}
+@media (max-width: 720px) {
+  header #who, header #forget { display: none; }
+}
 /* ── Snackbar and error banner ── */
 .snackbar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 40; display: flex; align-items: center; gap: 12px; min-height: 48px; max-width: min(560px, calc(100vw - 32px)); width: max-content; padding: 6px 8px 6px 16px; border-radius: 8px; background: var(--md-sys-color-inverse-surface); color: var(--md-sys-color-inverse-on-surface); box-shadow: var(--app-shadow); font-size: 14px; }
 .snackbar[hidden], .error-banner[hidden] { display: none; }
