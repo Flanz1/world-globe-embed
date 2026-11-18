@@ -32,7 +32,7 @@ const CSS = `
 .rl button:focus-visible{outline:2px solid #c9a94e}
 .rl button[aria-pressed=true]{background:#c9a94e;color:#1a1710}
 .rl button:disabled{opacity:.4;cursor:default}
-.rl output{display:block;min-height:1.3em}
+.rl output{display:block;min-height:1.3em;white-space:pre-line}
 .rl select{all:unset;box-sizing:border-box;padding:3px 22px 3px 8px;border-radius:5px;cursor:pointer;background:rgba(255,255,255,.1) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23f3ead8' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 7px center;max-width:100%}
 .rl select:focus-visible{outline:2px solid #c9a94e}
 .rl select option{color:#1a1710;background:#f3ead8}
@@ -130,7 +130,10 @@ export function setupRuler(cfg: { radius: number; controls: boolean; travel?: Tr
         const total = pathKm(pts, radius);
         out.textContent = `Distance: ${formatLength(total, unit)}` + (pts.length > 2 ? ` (last leg ${formatLength(distanceKm(pts[pts.length - 2], pts[pts.length - 1], radius), unit)})` : "");
         const t = travel[speed];
-        if (t) out.textContent += `. Travel time (${t.label}): ${formatDuration(total / t.kmPerDay)}`;
+        if (t) {
+          const text = formatDuration(total / t.kmPerDay, t.label === "On foot" ? "on foot" : `by ${t.label.toLowerCase()}`);
+          out.textContent += `\n${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+        }
       }
     } else if (pts.length < 3) out.textContent = "Click the map to outline a shape (3 points or more).";
     else

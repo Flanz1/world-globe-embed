@@ -78,12 +78,13 @@ describe("travel time", () => {
   it("writes durations from days to years", () => {
     expect(formatDuration(0.4)).toBe("under a day");
     expect(formatDuration(1)).toBe("1 day");
-    expect(formatDuration(3.2)).toBe("3 days");
+    expect(formatDuration(3.2, "on foot")).toBe("3 days on foot");
     expect(formatDuration(14)).toBe("about 2 weeks (14 days)");
-    expect(formatDuration(37)).toBe("about 5 weeks (37 days)");
+    expect(formatDuration(37, "by horse")).toBe("about 5 weeks by horse (37 days)");
     expect(formatDuration(330)).toBe("about 11 months (330 days)");
-    expect(formatDuration(1000)).toBe("about 2.7 years (1,000 days)");
-    expect(formatDuration(500)).toBe("about 16 months (500 days)");
+    expect(formatDuration(400)).toBe("about 1 year (400 days)");
+    expect(formatDuration(526, "on foot")).toBe("about 1.5 years on foot (526 days)");
+    expect(formatDuration(1000)).toBe("about 2.5 years (1,000 days)");
     expect(formatDuration(NaN)).toBe("");
   });
   it("keeps only usable travel speeds, trimmed and capped", () => {

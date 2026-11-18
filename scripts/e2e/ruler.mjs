@@ -125,16 +125,16 @@ await step(E, "ruler button and flat-map measuring", async () => {
 
   // Travel time: the slot's speeds are in a select, the reading follows the choice.
   const days = (t) => {
-    const m = /\((\d[\d,]*) days\)|(\d+) days?\b/.exec(t.split("Travel time")[1] ?? "");
+    const m = /\((\d[\d,]*) days\)|(\d+) days?\b/.exec(t.split("\n")[1] ?? "");
     return Number((m?.[1] ?? m?.[2] ?? "NaN").replace(/,/g, ""));
   };
   const sel = page.locator(".rl select");
   check(E, "two speeds show a labelled select", (await sel.isVisible()) && (await sel.getAttribute("aria-label")) === "Travel by");
   const t1 = await page.locator(".rl output").innerText();
-  check(E, "first speed (on foot) gives the time for the distance", /Travel time \(On foot\): /.test(t1) && Math.abs(days(t1) - want / 30) <= 1, t1);
+  check(E, "first speed (on foot) gives the time for the distance", /\nAbout .* on foot/.test(t1) && Math.abs(days(t1) - want / 30) <= 1, t1);
   await sel.selectOption({ index: 1 });
   const t2 = await page.locator(".rl output").innerText();
-  check(E, "sailing ship is faster", /Travel time \(Sailing ship\): /.test(t2) && Math.abs(days(t2) - want / 100) <= 1, t2);
+  check(E, "sailing ship is faster", /\nAbout .* by sailing ship/.test(t2) && Math.abs(days(t2) - want / 100) <= 1, t2);
   await page.screenshot({ path: path.join(OUT, "embed-flat-travel.png") });
   await sel.selectOption({ index: 0 });
 
