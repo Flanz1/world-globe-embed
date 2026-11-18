@@ -128,6 +128,14 @@ async function settle(page, requested) {
     last = now;
   }
 }
+let stage = "starting";
+// A bare TimeoutError says nothing: name the step and the first lines of Playwright's message (run.mjs prints lines with "Error").
+for (const ev of ["uncaughtException", "unhandledRejection"]) {
+  process.on(ev, (e) => {
+    console.log(`Error: tiles failed during: ${stage}\nError: ${String(e?.message ?? e).split("\n").slice(0, 4).join(" | ")}`);
+    process.exit(1);
+  });
+}
 async function open(query, { context = {}, shots = false, failFirst8192 = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2, ...context });
   const page = await ctx.newPage();
@@ -151,22 +159,28 @@ async function open(query, { context = {}, shots = false, failFirst8192 = false 
     const held = new Promise((r) => (release = r));
     await page.route(/-\d+-\d+-\d+\.webp$/, async (route) => (await held, route.continue()));
   }
+  stage = `${query}: loading the page`;
   await page.goto(`${SITE}/${query}`);
+  stage = `${query}: waiting for the first upgrade (tex 8192 or state hires)`;
   await page.waitForFunction(() => document.documentElement.dataset.tex === "8192" || document.documentElement.dataset.state === "hires", null, { timeout: 120000 });
   const view = query.includes("flat") ? "flat" : "globe";
   if (shots) {
+    stage = `${query}: waiting for tex 8192 (tiles held back)`;
     // A texture that failed to load says so in data-tex-error: report that instead of waiting out the timeout.
     await page.waitForFunction(() => document.documentElement.dataset.tex === "8192" || document.documentElement.dataset.texError === "8192", null, { timeout: 120000 });
     const failed = await page.evaluate(() => document.documentElement.dataset.texError ?? "");
     if (failed) console.log(`[${query}] the ${failed} texture failed to load once (a retry follows); tex now ${await page.evaluate(() => document.documentElement.dataset.tex)}`);
     await page.waitForFunction(() => document.documentElement.dataset.tex === "8192", null, { timeout: 120000 });
     await page.waitForTimeout(900);
+    stage = `${query}: screenshot at 8192`;
     await page.screenshot({ path: path.join(OUT, `${view}-8192.png`) });
     release();
   }
+  stage = `${query}: letting the tiles load (settle)`;
   await settle(page, requested);
   if (shots) {
     await page.waitForTimeout(600);
+    stage = `${query}: screenshot with tiles`;
     await page.screenshot({ path: path.join(OUT, `${view}-tiles.png`) });
   }
   const tilesShown = await page.evaluate(() => document.documentElement.dataset.tiles ?? "");
