@@ -14,6 +14,7 @@ import { hasContestedLayers, legendRowsFor, regionPaintLayers } from "../shared/
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
 import { TILE_BUDGET, TileCache, levelFor, tileRect, tilesAt, tileUrl } from "../shared/tiles.ts";
 import type { FlatStartContext, PreviewMessage } from "./contract.ts";
+import { setupRegionCard } from "./region-card.ts";
 import { setupRuler } from "./ruler.ts";
 import { RELOCK_MS, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
 import { setupPins, watchPreviewPins, type PinLayer } from "./pins.ts";
@@ -109,6 +110,22 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     },
   });
 
+  // Region embeds: clicking a part opens a card with its facts (not in the admin preview, whose region isn't built yet).
+  const card =
+    R && cfg.slug !== "preview"
+      ? setupRegionCard(cfg, {
+      project: (p, nearX) => ruler.project(imageToGlobe(p, frame()), nearX),
+      canvas,
+      stage,
+      region: () => reg,
+      pick(x, y) {
+        const { w, h } = size();
+        const lat = view.cy - (y - h / 2) / (view.k * ky);
+        return lat > 90 || lat < -90 ? null : [view.cx + (x - w / 2) / view.k, lat];
+      },
+    })
+      : null;
+
   /* ── Render on demand ── */
   let raf = 0;
   function render(): void {
@@ -164,6 +181,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       labels?.place(i, x, y, x >= 0 && x <= w && y >= 0 && y <= h);
     });
     ruler.redraw();
+    card?.redraw();
     pinLayer?.place(([plon, plat]) => {
       const x = sx(plon + 360 * Math.round((view.cx - plon) / 360), w);
       const y = sy(plat, h);
@@ -406,7 +424,24 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     schedule();
   };
 
-  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins).then((l) => {
+  /** A cluster of pins was clicked: zoom in on them (false when the view can't zoom in any further). */
+  const zoomToPins = (pts: [number, number][]): boolean => {
+    const { w, h } = size();
+    const lons = pts.map(([lon]) => lon + 360 * Math.round((view.cx - lon) / 360));
+    const lats = pts.map(([, lat]) => lat);
+    const dw = Math.max(...lons) - Math.min(...lons);
+    const dh = Math.max(...lats) - Math.min(...lats);
+    const fit = Math.min((w * 0.6) / Math.max(dw, 1e-3), (h * 0.6) / (Math.max(dh, 1e-3) * ky));
+    const k = clamp(Math.max(fit, view.k * 1.8), flatMinK(aspect, w, h), FLAT_K_MAX);
+    if (k < view.k * 1.05) return false;
+    const to = { ...view, cx: (Math.max(...lons) + Math.min(...lons)) / 2, cy: (Math.max(...lats) + Math.min(...lats)) / 2, k };
+    touched = true;
+    if (reduced.matches) Object.assign(view, to);
+    else ease = { from: { ...view }, to, t0: performance.now() };
+    schedule();
+    return true;
+  };
+  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins, zoomToPins).then((l) => {
     pinLayer = l;
     schedule();
   });
@@ -414,7 +449,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   watchPreviewPins(stage, canvas, (l) => {
     pinLayer = l;
     schedule();
-  });
+  }, zoomToPins);
   const labels = R ? makeLabels(stage) : null;
   const regionKey = R ? makeLegend(stage) : null;
   if (R) {
