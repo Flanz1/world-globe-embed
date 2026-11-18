@@ -1691,9 +1691,9 @@ export function openEditor(o: EditorOptions): void {
     const parts_ = parts().length;
     const what = target === "cut" ? "Cut" : target === "split" ? "Split" : target === "border" ? "Province border" : target === "extend" ? (extendTarget >= 0 ? `Extend part ${extendTarget + 1}` : "Extend") : "";
     let line = `${tool === "select" ? "Select" : tool === "fill" ? "Fill" : `${tool === "polygon" ? "Polygon" : "Freehand"}${what ? ` (${what})` : ""}`} · ${n} vertices`;
+    if (tool === "freehand" && drawing && !lineTarget()) line = `Open line · ${drawing.length} points · tap the first point or press Enter to close`;
     if (tool === "select" && selPart >= 0) line += ` · ${pickHint || `Part ${selPart + 1} selected`}`;
     if (snapHint && snapOn) line += ` · snaps to ${snapName(snapHint.snap, snapHint.rings)}`;
-    if (tool === "freehand" && drawing && !lineTarget()) line += ` · open line, ${drawing.length} points (tap the first point or press Enter to close)`;
     if (tool === "polygon" && drawing && pendingTail()?.traced) line += ` · follows the border${traceFlip ? " the other way" : ""} (Tab: ${traceFlip ? "back" : "other way"})`;
     if (cursor) {
       const lon = ((((cursor[0] + 180) % 360) + 360) % 360) - 180;
