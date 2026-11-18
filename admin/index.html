@@ -25,6 +25,7 @@
   <button id="forget" type="button" class="ghost" hidden>Sign out</button>
 </header>
 <main id="app">
+  <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-banner-text"></span><button id="error-banner-close" type="button" class="text" aria-label="Dismiss this message">Dismiss</button></div>
   <section id="signin" class="card" hidden>
     <h2>Sign in</h2>
     <p>Sign in with your GitHub account. You'll only see the parts of the admin page you've been given access to.</p>
@@ -63,6 +64,7 @@
           <label>Map <select name="map" class="map-select" required></select></label>
           <button type="submit">Add slot</button>
         </form>
+        <p id="new-slot-error" class="error" role="alert" hidden></p>
       </details>
     </section>
 
@@ -194,6 +196,7 @@
     </div>
   </div>
 </dialog>
+<div id="snackbar" class="snackbar" role="status" aria-live="polite" hidden><span id="snackbar-text"></span><button id="snackbar-action" type="button" class="text" hidden></button></div>
 <button id="to-top" type="button" class="tonal to-top" hidden>↑ Back to top</button>
 <script type="module" src="../src/admin/main.ts"></script>
 </body>

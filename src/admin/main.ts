@@ -23,6 +23,7 @@ import { needsRenewal, sessionRemembers } from "./session-token.ts";
 import { initUsers, loadUsers } from "./users.ts";
 import { initBackToTop } from "./back-to-top.ts";
 import { setChecks, type Check } from "./status.ts";
+import { initErrorBanner, initSnackbar, showError, showSnackbar } from "./snackbar.ts";
 
 declare const __REPO__: string;
 /** The admin API (worker/). Set with VITE_ADMIN_API at build time; empty means it isn't set up yet. */
@@ -68,10 +69,28 @@ let gh: GitHub | null = null;
 let maps: MapMeta[] = [];
 let slots: SlotsFile = { slots: {} };
 
+/** An error about a field or form on the page: shown right next to it (not in the top banner). */
+function fieldError(sel: string, text: string | null): void {
+  const el = $(sel);
+  el.textContent = text ?? "";
+  el.classList.toggle("error", !!text);
+  el.classList.toggle("muted", !text && el.id === "upload-info");
+  el.hidden = !text && el.id !== "upload-info";
+}
+
+/**
+ * The Status card keeps the latest line (saving…, results, errors). Successes also pop up as a snackbar so they are seen
+ * wherever you are on the page; errors also show in the banner at the top. A new action clears the old error.
+ */
 function setStatus(text: string, kind: "muted" | "error" | "ok" = "muted"): void {
   const el = $("#status");
   el.textContent = text;
   el.className = kind;
+  if (kind === "error") showError(text);
+  else if (kind === "ok") {
+    showError(null);
+    showSnackbar(text);
+  }
 }
 
 // No ?view= here: the page reads the slot's default view, so changing it later updates embeds already pasted.
@@ -245,9 +264,8 @@ function renderChecks(runs: WorkflowRun[]): void {
   const busy = runs.some((r) => r.status !== "completed");
   const failed = runs.find((r) => r.conclusion === "failure");
   setChecks([
-    deploys
-      ? { id: "branch", label: "Commits go to the live branch", state: "ok", detail: gh?.branch }
-      : { id: "branch", label: "Test branch: changes won't go live", state: "warn", detail: gh?.branch },
+    // On a test branch the header badge already says so; no second warning here.
+    ...(deploys ? [{ id: "branch", label: "Commits go to the live branch", state: "ok" as const, detail: gh?.branch }] : []),
     failed
       ? { id: "workflow", label: "Last workflow failed", state: "error", detail: failed.name }
       : busy
@@ -338,8 +356,8 @@ function pollRuns(): void {
 
 /** After a commit: tell the user, watch the workflows, reload everything. */
 async function afterCommit(sha: string, reload = true): Promise<void> {
-  setStatus(`Committed ${sha.slice(0, 7)} to ${gh!.branch}. Waiting for the workflow to publish it…`, "ok");
-  if (gh!.branch !== gh!.defaultBranch) setStatus(`Committed ${sha.slice(0, 7)} to the test branch ${gh!.branch}. GitHub Pages only deploys ${gh!.defaultBranch}, so it won't go live from here.`, "ok");
+  if (gh!.branch !== gh!.defaultBranch) setStatus(`Saved ${sha.slice(0, 7)} to the test branch ${gh!.branch}. It won't go live from here.`, "ok");
+  else setStatus(`Saved ${sha.slice(0, 7)} to ${gh!.branch}. Publishing…`, "ok");
   pollRuns();
   if (can("users")) void loadUsers();
   if (reload) await loadAll().catch((e) => setStatus((e as Error).message, "error"));
@@ -388,7 +406,8 @@ function wireUpload(): void {
     const id = idInput.value.trim();
     const slot = (form.elements.namedItem("slot") as HTMLSelectElement).value;
     if (!file) return;
-    if (!SLUG.test(id)) return setStatus("Map id: lowercase letters, digits and dashes only.", "error");
+    if (!SLUG.test(id)) return fieldError("#upload-info", "Map id: lowercase letters, digits and dashes only.");
+    fieldError("#upload-info", null);
     const replacing = maps.some((m) => m.id === id);
     if (replacing && !confirm(`A map called "${id}" already exists. Replace its image?`)) return;
     void act("Preparing image…", async () => {
@@ -458,8 +477,9 @@ function wireNewSlot(): void {
     const slug = String(data.get("slug")).trim();
     const title = String(data.get("title") ?? "").trim();
     const map = String(data.get("map"));
-    if (!SLUG.test(slug)) return setStatus("Slot name: lowercase letters, digits and dashes only.", "error");
-    if (slots.slots[slug]) return setStatus(`Slot "${slug}" already exists.`, "error");
+    if (!SLUG.test(slug)) return fieldError("#new-slot-error", "Slot name: lowercase letters, digits and dashes only.");
+    if (slots.slots[slug]) return fieldError("#new-slot-error", `Slot "${slug}" already exists.`);
+    fieldError("#new-slot-error", null);
     void act(`Adding slot ${slug}…`, async () => {
       const sha = await gh!.commit(`Add slot "${slug}" showing map "${map}"`, async () => [
         await slotsChange((s) => {
@@ -646,6 +666,8 @@ if (framed) {
   );
 } else {
   initTheme();
+  initSnackbar();
+  initErrorBanner();
   initBackToTop();
   $("#theme-ctl").append(modeButton(), colourMenu());
   $("#forget").addEventListener("click", signOut);

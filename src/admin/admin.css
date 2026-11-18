@@ -664,6 +664,14 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
 .rename-copy { display: flex; gap: 8px; align-items: center; }
 .rename-dlg input[aria-invalid="true"], .rename-dlg input[aria-invalid="true"]:focus-visible { border-color: var(--md-sys-color-error); outline: 2px solid var(--md-sys-color-error); outline-offset: 0; }
 
+/* ── Snackbar and error banner ── */
+.snackbar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 40; display: flex; align-items: center; gap: 12px; min-height: 48px; max-width: min(560px, calc(100vw - 32px)); width: max-content; padding: 6px 8px 6px 16px; border-radius: 8px; background: var(--md-sys-color-inverse-surface); color: var(--md-sys-color-inverse-on-surface); box-shadow: var(--app-shadow); font-size: 14px; }
+.snackbar[hidden], .error-banner[hidden] { display: none; }
+.snackbar button { background-color: transparent; color: var(--md-sys-color-inverse-on-surface); border: 1px solid var(--md-sys-color-inverse-on-surface); min-height: 32px; font-weight: 600; flex: 0 0 auto; }
+.snackbar button:focus-visible { outline-color: var(--md-sys-color-inverse-on-surface); }
+body.bulk-on .snackbar { bottom: 88px; }
+.error-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 16px; border-radius: 12px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); font-size: 14px; }
+.error-banner button { color: var(--md-sys-color-on-error-container); flex: 0 0 auto; }
 /* Editor toolbar icons (icons.ts): the common tools keep a label, the rest are icon-only (aria-label + tooltip). */
 .ed-toolbar button[data-icon] { display: inline-flex; align-items: center; gap: 6px; }
 .ed-ic { flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
