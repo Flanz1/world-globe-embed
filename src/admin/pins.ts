@@ -338,13 +338,8 @@ async function leave(): Promise<boolean> {
 function renderForm(rebuild: boolean): void {
   const box = el.form;
   if (!draft) {
-    const hint = h("p", { className: "muted small", textContent: can("regions") ? "Press “Place pins” and click the map, or pick a pin on the map or in the list." : "Pick a pin on the map or in the list. You need the “Create regions” permission to place pins." });
+    const hint = h("p", { className: "muted small", textContent: !can("regions") ? "Pick a pin on the map or in the list. You need the “Create regions” permission to place pins." : adding ? "Click the map to drop a pin. Press Done or Esc to stop." : "Press “Place pins” and click the map, or pick a pin on the map or in the list." });
     const empty = h("div", { className: "empty" }, hint);
-    if (can("regions")) {
-      const place = h("button", { type: "button", className: "ghost", dataset: { action: "place-empty" }, textContent: adding ? "Placing pins…" : "Place pins", disabled: !slotMap() });
-      place.addEventListener("click", () => (el.add as HTMLButtonElement).click());
-      empty.append(place);
-    }
     box.replaceChildren(empty);
     return;
   }
@@ -711,7 +706,7 @@ function renderList(): void {
                 { text: "Move…", action: "menu-move-map", onclick: () => moveMapDialog(m), why },
                 { text: "Rename…", action: "menu-rename-map", onclick: () => renameMap(m), why },
                 { text: "Delete…", action: "menu-delete-map", onclick: () => void removeMap(m, all.length), why, danger: true },
-              ]),
+              ], { wrap: "act-more" }),
             )
           : null,
       ),
@@ -750,8 +745,8 @@ function syncControls(): void {
   add.setAttribute("aria-pressed", String(adding));
   (el.placing as HTMLElement).hidden = !adding;
   (el.pane as HTMLElement).dataset.adding = String(adding);
-  const emptyPlace = el.form?.querySelector<HTMLButtonElement>("[data-action=place-empty]");
-  if (emptyPlace) emptyPlace.textContent = adding ? "Placing pins…" : "Place pins";
+  // The empty form's hint changes with the mode (see renderForm).
+  if (!draft) renderForm(false);
   // Size the pane to the map so it has no empty bands (see .pn-pane in admin.css).
   (el.pane as HTMLElement).style.setProperty("--pn-aspect", String(aspect()));
 }

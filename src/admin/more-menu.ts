@@ -1,23 +1,28 @@
 /**
- * A "More…" button with a popover menu of the less used actions of a row (the same look and keyboard behaviour as the region
- * cards' More… menu, styled by .rmenu). Used by the pin map and folder rows on phones, where the full row doesn't fit.
+ * A "More…" button with a popover menu of the less used actions of a row (styled by .rmenu). The one menu used by the region
+ * cards, the pin map rows and the folder rows, so they look and behave the same (arrow keys, Home/End, Escape, flips above the
+ * button when there's no room below).
  */
 import { h } from "./dom.ts";
 
 export interface MoreItem {
   text: string;
-  /** data-action of the menu item (keep it different from the inline button's). */
-  action: string;
+  /** data-action of the menu item (keep it different from the inline button's); defaults to the text in kebab case. */
+  action?: string;
   onclick: () => void;
+  /** Why the item is disabled (shown as its tooltip). */
   why?: string;
+  /** Tooltip of an enabled item. */
+  hint?: string;
   danger?: boolean;
 }
 
-export function moreMenu(label: string, items: readonly MoreItem[]): HTMLElement {
-  const menu = h("div", { className: "rmenu", role: "menu", ariaLabel: label });
+export function moreMenu(label: string, list: readonly (MoreItem | null)[], opts: { data?: Record<string, string>; wrap?: string } = {}): HTMLElement {
+  const items = list.filter((x): x is MoreItem => !!x);
+  const menu = h("div", { className: "rmenu", role: "menu", ariaLabel: label, dataset: opts.data ?? {} });
   menu.setAttribute("popover", "auto");
   const buttons = items.map((x) => {
-    const b = h("button", { type: "button", role: "menuitem", className: `ghost${x.danger ? " danger" : ""}`, textContent: x.text, disabled: !!x.why, title: x.why ?? "", dataset: { action: x.action } });
+    const b = h("button", { type: "button", role: "menuitem", className: `ghost${x.danger ? " danger" : ""}`, textContent: x.text, disabled: !!x.why, title: x.why || x.hint || "", dataset: { action: x.action ?? x.text.toLowerCase().replace(/\W+/g, "-") } });
     b.addEventListener("click", () => {
       menu.hidePopover();
       x.onclick();
@@ -64,5 +69,5 @@ export function moreMenu(label: string, items: readonly MoreItem[]): HTMLElement
     else if (ev.key === "Tab") menu.hidePopover();
   });
   more.addEventListener("click", () => menu.togglePopover());
-  return h("span", { className: "act-more" }, more, menu);
+  return h("span", { className: opts.wrap ?? "rmore" }, more, menu);
 }

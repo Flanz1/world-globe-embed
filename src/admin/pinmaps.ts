@@ -262,7 +262,7 @@ function folderEl(k: Category, o: TreeOptions, pos: { first: boolean; last: bool
         { text: "Move…", action: "menu-move", onclick: () => moveFolder(k), why },
         { text: "Rename…", action: "menu-rename", onclick: () => renameFolder(k), why },
         { text: "Delete…", action: "menu-delete", onclick: () => void removeFolder(k), why, danger: true },
-      ]),
+      ], { wrap: "act-more" }),
     ),
   );
   body.hidden = !open;
