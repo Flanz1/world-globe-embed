@@ -14,6 +14,15 @@ on:
 # Each job asks for what it needs below.
 permissions: {}
 
+# Pushes to main: one Deploy run at a time, plus at most one waiting. A newer push replaces the waiting
+# run (GitHub cancels the older pending one), and the running one is never cancelled, so a burst of
+# region saves runs e2e at most twice instead of once per save, and something always publishes.
+# The waiting run picks its suites only once it starts, against the deploy that just finished, so a
+# save after a deploy runs no e2e at all. Runs called from Process maps keep their own group.
+concurrency:
+  group: ${{ github.workflow == 'Deploy' && github.event_name == 'push' && 'deploy-main-push' || format('deploy-{0}', github.run_id) }}
+  cancel-in-progress: false
+
 # Order: target -> e2e -> build -> deploy. The site only deploys once the e2e suites for everything
 # that changed since the last deploy pass on the exact commit being deployed, so a fast-track merge
 # can't go live before its checks finish. Content-only pushes (region saves, maps) select no suites
