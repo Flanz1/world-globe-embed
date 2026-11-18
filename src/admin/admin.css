@@ -475,6 +475,8 @@ button.link { background: none; border: 0; border-radius: 4px; min-height: 0; pa
 .pn-tools { align-items: end; }
 .pn-tools .grow { flex: 1 1 8em; min-width: 8em; }
 .pn-tools label:not(.grow) { flex: 0 1 11em; }
+.pn-listbar { display: flex; gap: 8px; overflow-x: auto; }
+.pn-listbar > * { flex: 0 0 auto; white-space: nowrap; }
 .pn-actions { display: flex; gap: 8px; flex: 0 0 auto; }
 .act-more { display: none; }
 @media (max-width: 600px) {
