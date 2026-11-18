@@ -19,6 +19,8 @@ export interface RulerHost {
 
 export interface Ruler {
   redraw(): void;
+  /** The host's pick, for other tools that read a position off the map (the region card). */
+  pick: RulerHost["pick"];
 }
 
 const CSS = `
@@ -238,5 +240,5 @@ export function setupRuler(cfg: { radius: number; controls: boolean }, host: Rul
   });
 
   applyRadius();
-  return { redraw: draw };
+  return { redraw: draw, pick: host.pick };
 }

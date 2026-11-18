@@ -31,7 +31,7 @@ World globe embed is a static site plus one small API. Everything readers see is
 
 ## Data flow
 
-**Reading.** `scripts/generate-pages.ts` (after `vite build`) reads `content/` and writes `dist/v/<slot>/index.html`, `dist/regions/<id>.json`, `dist/pins/<slot>.json` and the landing page (`scripts/lib/pages.ts`, `landing.ts`). The viewer only fetches those files and the map textures.
+**Reading.** `scripts/generate-pages.ts` (after `vite build`) reads `content/` and writes `dist/v/<slot>/index.html`, `dist/regions/<id>.json`, `dist/pins/<slot>.json`, `dist/facts/<id>.json` (area, borders and pins per part; read only when a reader clicks a part) and the landing page (`scripts/lib/pages.ts`, `landing.ts`). The viewer only fetches those files and the map textures.
 
 **Writing.** The admin page builds a Git tree in the browser (blobs → tree → commit) through the API's `/gh/…` proxy, then asks to move `main` to that commit. The API checks, for every changed file, that the person may change it (`src/shared/access.ts`) and that the JSON matches its schema (`schema/*.json`, compiled to `worker/src/generated/validators.js`). Only then does it fast-forward `main`. `main` is also protected on GitHub (PR + `check` required, only the App and admins bypass). See [admin-access.md](admin-access.md).
 

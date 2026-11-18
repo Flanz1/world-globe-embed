@@ -14,6 +14,7 @@ import { hasContestedLayers, legendRowsFor, regionPaintLayers } from "../shared/
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
 import { TILE_BUDGET, TileCache, levelFor, tileRect, tilesAt, tileUrl } from "../shared/tiles.ts";
 import type { FlatStartContext, PreviewMessage } from "./contract.ts";
+import { setupRegionCard } from "./region-card.ts";
 import { setupRuler } from "./ruler.ts";
 import { RELOCK_MS, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
 import { setupPins, watchPreviewPins, type PinLayer } from "./pins.ts";
@@ -108,6 +109,19 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       return { x, y: sy(lat, h), ok: true };
     },
   });
+
+  // Region embeds: clicking a part opens a card with its facts (not in the admin preview, whose region isn't built yet).
+  if (R && cfg.slug !== "preview")
+    setupRegionCard(cfg, {
+      canvas,
+      stage,
+      region: () => reg,
+      pick(x, y) {
+        const { w, h } = size();
+        const lat = view.cy - (y - h / 2) / (view.k * ky);
+        return lat > 90 || lat < -90 ? null : [view.cx + (x - w / 2) / view.k, lat];
+      },
+    });
 
   /* ── Render on demand ── */
   let raf = 0;

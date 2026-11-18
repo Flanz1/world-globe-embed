@@ -39,13 +39,14 @@ import {
   WebGLRenderer,
 } from "three";
 import { BASE_DISTANCE, FOV_DEG, MAX_DISTANCE, MIN_DISTANCE, clamp, clampPadding, distanceForZoom, parseHex } from "../shared/params.ts";
-import { imageToGlobe, polygonsOf, type Position } from "../shared/geo.ts";
+import { globeToImage, imageToGlobe, polygonsOf, type Position } from "../shared/geo.ts";
 import { regionFit, regionLabelPoints, type RegionData } from "../shared/region.ts";
 import { paintLayerStack, type PaintLayer } from "../shared/raster.ts";
 import { hasContestedLayers, legendRowsFor, regionPaintLayers } from "../shared/region-paint.ts";
 import { deviceLimit, deviceMemory, nextTier } from "../shared/tiers.ts";
 import { createGlobeTiles } from "./globe-tiles.ts";
 import type { PreviewMessage, StartContext } from "./contract.ts";
+import { setupRegionCard } from "./region-card.ts";
 import { setupRuler } from "./ruler.ts";
 import { RELOCK_MS, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
 import { setupPins, watchPreviewPins, type PinLayer } from "./pins.ts";
@@ -430,6 +431,18 @@ export async function start(ctx: StartContext): Promise<void> {
       return { x: ((rulerV.x + 1) / 2) * stage.clientWidth, y: ((1 - rulerV.y) / 2) * stage.clientHeight, ok };
     },
   });
+
+  // Region embeds: clicking a part opens a card with its facts (not in the admin preview, whose region isn't built yet).
+  if (R && cfg.slug !== "preview")
+    setupRegionCard(cfg, {
+      canvas,
+      stage,
+      region: () => (reg ? visible.of(reg) : null),
+      pick(x, y) {
+        const g = ruler.pick(x, y);
+        return g && globeToImage(g, { north: pad.north, south: pad.south, shift });
+      },
+    });
 
   /** Map pins (?pins=…): markers placed like the labels, on the far side of the globe hidden. */
   let pinLayer: PinLayer | null = null;
