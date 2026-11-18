@@ -205,6 +205,7 @@ const EDGE_HIT = 6;
 const SNAP_PX = 10;
 const SNAP_COLOUR = "#4dd0e1";
 const SNAP_PREF = "wge.editor.snap";
+const KEEP_OPEN_PREF = "wge.editor.keepopen";
 /** Gaps up to this many screen pixels between an Extend shape and its part are filled. */
 const EXTEND_GAP_PX = 12;
 const COAST_PREF = "wge.editor.coast";
@@ -247,7 +248,8 @@ export const SHORTCUT_GROUPS: { title: string; rows: [string, string][] }[] = [
     rows: [
       ["Click", "Add a point (polygon)"],
       ["Double-click / Enter", "Finish the outline"],
-      ["Click the lit-up first point", "Close the outline (freehand closes on release)"],
+      ["Click the lit-up first point", "Close the outline (freehand closes on release, unless Keep open is on)"],
+      ["K", "Freehand: keep the line open between strokes; the next stroke continues from its end"],
       ["Backspace / right-click", "Remove the last point (repeat to go back to the start)"],
       ["Tab", "Follow a border the other way round"],
       ["Esc", "Cancel the outline, or clear the selection"],
@@ -499,6 +501,13 @@ export function openEditor(o: EditorOptions): void {
     () => toggleSnap(),
     "snap",
   );
+  const keepOpenBtn = btn(
+    "Keep open",
+    "Freehand: lifting the pointer doesn't close the outline. The line stays and the next stroke continues from its end, until you close it: finish a stroke near the first point, tap that point, or press Enter (K). Backspace or right-click takes back the last stroke.",
+    () => toggleKeepOpen(),
+    "keep-open",
+  );
+  keepOpenBtn.hidden = true;
   const coastBtn = btn(
     "Coast",
     "Also snap to the map's coastline (shown in amber) where no part or region is in reach, and follow it between two clicks (O). Rivers, lakes and marshes count as land.",
@@ -682,6 +691,7 @@ export function openEditor(o: EditorOptions): void {
       h("span", { className: "sep" }),
       snapBtn,
       coastBtn,
+      keepOpenBtn,
       gridBtn,
       btn("?", "Keyboard shortcuts", () => showHelp(), "help"),
       h("span", { className: "ed-toolbar-end" }, overlays.button),
@@ -906,6 +916,15 @@ export function openEditor(o: EditorOptions): void {
   } catch {
     /* storage blocked: default on */
   }
+  /** Freehand keeps the line open between strokes until it is closed (K, or the Keep open button); remembered per browser. */
+  let keepOpen = false;
+  try {
+    keepOpen = localStorage.getItem(KEEP_OPEN_PREF) === "on";
+  } catch {
+    /* storage blocked: default off */
+  }
+  /** Where each freehand stroke of the open line starts in `drawing` (Backspace takes back one stroke). */
+  let strokeAt: number[] = [];
   /** The map's coastline (loaded after the editor opens; null when the map has none). */
   let coast: Coast | null = null;
   /** Snapping to the coastline too (O, or the Coast button); remembered per browser. Only with snapping on. */
@@ -1323,6 +1342,14 @@ export function openEditor(o: EditorOptions): void {
       g.beginPath();
       pts.forEach((pt, i) => (i ? g.lineTo(sx(pt[0]), sy(pt[1])) : g.moveTo(sx(pt[0]), sy(pt[1]))));
       g.stroke();
+      if (drawing && drag?.kind === "free") {
+        // The stroke being drawn, joined to the open line's end.
+        const last = drawing[drawing.length - 1];
+        g.beginPath();
+        g.moveTo(sx(last[0]), sy(last[1]));
+        for (const pt of drag.pts) g.lineTo(sx(pt[0]), sy(pt[1]));
+        g.stroke();
+      }
       // From the last point to the pointer, along a border where the next click would trace one.
       const tail = drawing ? pendingTail() : null;
       if (tail && drawing) {
@@ -1343,7 +1370,7 @@ export function openEditor(o: EditorOptions): void {
         }
       }
       g.fillStyle = "#fff";
-      if (drawing && cursor && tool === "polygon" && closesAt(sx(cursor[0]), sy(cursor[1]))) {
+      if (drawing && cursor && (tool === "polygon" || tool === "freehand") && closesAt(sx(cursor[0]), sy(cursor[1]))) {
         // The next click closes the outline: light the first point up.
         g.save();
         g.strokeStyle = SNAP_COLOUR;
@@ -1632,6 +1659,7 @@ export function openEditor(o: EditorOptions): void {
     let line = `${tool === "select" ? "Select" : tool === "fill" ? "Fill" : `${tool === "polygon" ? "Polygon" : "Freehand"}${what ? ` (${what})` : ""}`} · ${n} vertices`;
     if (tool === "select" && selPart >= 0) line += ` · ${pickHint || `Part ${selPart + 1} selected`}`;
     if (snapHint && snapOn) line += ` · snaps to ${snapName(snapHint.snap, snapHint.rings)}`;
+    if (tool === "freehand" && drawing && !lineTarget()) line += ` · open line, ${drawing.length} points (tap the first point or press Enter to close)`;
     if (tool === "polygon" && drawing && pendingTail()?.traced) line += ` · follows the border${traceFlip ? " the other way" : ""} (Tab: ${traceFlip ? "back" : "other way"})`;
     if (cursor) {
       const lon = ((((cursor[0] + 180) % 360) + 360) % 360) - 180;
@@ -1643,6 +1671,8 @@ export function openEditor(o: EditorOptions): void {
     for (const b of dlg.querySelectorAll<HTMLButtonElement>("button.tool")) b.setAttribute("aria-pressed", String(b.dataset.tool === tool));
     gridBtn.setAttribute("aria-pressed", String(gridOn));
     snapBtn.setAttribute("aria-pressed", String(snapOn));
+    keepOpenBtn.hidden = tool !== "freehand" || lineTarget();
+    keepOpenBtn.setAttribute("aria-pressed", String(keepOpen));
     coastBtn.setAttribute("aria-pressed", String(coastActive()));
     // The spherical area is skipped mid-drag (it costs a few ms at 2,000 vertices) and refreshed on release.
     if (!hist.dragging || lastArea < 0) lastArea = parts_ ? areaPercent(mapGeometry(toGeometry(parts()), (p) => imageToGlobe(p, frame))) : 0;
@@ -2388,7 +2418,7 @@ export function openEditor(o: EditorOptions): void {
   /** The drawing tool Add part, Cut and Split use: freehand until the polygon tool is picked. */
   let drawTool: "polygon" | "freehand" = "freehand";
   function setTool(t: Tool): void {
-    if (drawing && t !== "polygon") drawing = null;
+    if (drawing && t !== "polygon" && !(t === "freehand" && keepOpen)) drawing = null;
     tool = t;
     if (t === "polygon" || t === "freehand") drawTool = t;
     if (t !== "polygon" && t !== "freehand") target = "part";
@@ -2407,6 +2437,13 @@ export function openEditor(o: EditorOptions): void {
     canvas.style.cursor = "crosshair";
     setMsg("");
     changed();
+  }
+
+  /** Closes the open freehand line into an outline (a stroke overshooting the start is trimmed back to the loop). */
+  function closeOpenLine(): void {
+    if (!drawing) return;
+    const ring = drawing.length > 1 ? trimStrokeOvershoot(drawing.map((q) => [...q] as Position), ky) : drawing;
+    if (!finishRing(ring)) draw();
   }
 
   /** Validates and adds a closed outline from the polygon or freehand tool. */
@@ -2936,6 +2973,16 @@ export function openEditor(o: EditorOptions): void {
     setMsg(snapOn ? "Snapping on: points snap to other parts' and regions' vertices and lines. Hold Ctrl to place one freely." : "Snapping off.");
     draw();
   }
+  function toggleKeepOpen(): void {
+    keepOpen = !keepOpen;
+    try {
+      localStorage.setItem(KEEP_OPEN_PREF, keepOpen ? "on" : "off");
+    } catch {
+      /* not remembered: fine */
+    }
+    setMsg(keepOpen ? "Keep open on: freehand strokes join into one line. Finish a stroke near the first point, tap it, or press Enter to close the outline." : "Keep open off: a freehand stroke closes when you let go.");
+    changed();
+  }
   /** Vertices of the region's own rings that sit on the same spot as another (attached), per state. */
   let glueCache: { version: number; index: ReturnType<typeof vertexIndex>; glued: Set<string> } = { version: -1, index: new Map(), glued: new Set() };
   function glue(): typeof glueCache {
@@ -3249,6 +3296,8 @@ export function openEditor(o: EditorOptions): void {
       return draw();
     }
     if (tool === "freehand") {
+      // An open line (Keep open): tapping its first point closes it.
+      if (drawing && !lineTarget() && closesAt(x, y)) return void closeOpenLine();
       drag = { kind: "free", pts: [w0] };
       return draw();
     }
@@ -3544,6 +3593,29 @@ export function openEditor(o: EditorOptions): void {
         if (!finishLine(line)) draw();
         return;
       }
+      if (!lineTarget() && (keepOpen || drawing)) {
+        // Keep open: the stroke joins the open line, and closes it when it ends at the first point.
+        if (d.pts.length < 2) return draw();
+        const part = follow ? traced(false) : simple(d.pts);
+        if (part.length < 2) return draw();
+        const sxs = part.map((q) => sx(q[0]));
+        const sys = part.map((q) => sy(q[1]));
+        if (!drawing && Math.max(Math.max(...sxs) - Math.min(...sxs), Math.max(...sys) - Math.min(...sys)) < MIN_STROKE) {
+          setMsg("That stroke was too short to be an outline, so nothing was drawn.", "error");
+          return draw();
+        }
+        if (!drawing) {
+          drawing = [];
+          strokeAt = [];
+        }
+        strokeAt.push(drawing.length);
+        drawing.push(...part);
+        drawSnaps = drawing.map(() => null);
+        const end = drawing[drawing.length - 1];
+        if (drawing.length >= 4 && Math.hypot(sx(drawing[0][0]) - sx(end[0]), sy(drawing[0][1]) - sy(end[1])) <= CLOSE_R) return void closeOpenLine();
+        setMsg("");
+        return changed();
+      }
       if (d.pts.length < 3) return draw();
       const xs = d.pts.map((q) => sx(q[0]));
       const ys = d.pts.map((q) => sy(q[1]));
@@ -3623,7 +3695,8 @@ export function openEditor(o: EditorOptions): void {
   /** Backspace or right-click while drawing: take back the last point (repeatable, back to nothing). */
   function undoDrawPoint(): void {
     if (!drawing) return;
-    drawing.pop();
+    if (tool === "freehand" && strokeAt.length) drawing.length = Math.min(drawing.length, strokeAt.pop()!);
+    else drawing.pop();
     drawSnaps.length = drawing.length;
     if (!drawing.length) drawing = null;
     draw();
@@ -3729,6 +3802,7 @@ export function openEditor(o: EditorOptions): void {
     else if (k === "b") setTool("fill");
     else if (k === "g") toggleGrid();
     else if (k === "s") toggleSnap();
+    else if (k === "k" && tool === "freehand" && !lineTarget()) toggleKeepOpen();
     else if (k === "l" && selPart >= 0) togglePartLock(selPart);
     else if ((e.key === "]" || e.key === "[") && selPart >= 0 && !drawing) moveLayer(selPart, e.key === "]" ? 1 : -1);
     else if (k === "c" && !drawing) openCombine();
