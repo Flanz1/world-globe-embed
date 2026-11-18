@@ -597,8 +597,8 @@ export function openEditor(o: EditorOptions): void {
       "div",
       { className: "ed-toolbar", role: "toolbar" },
       iconify(toolBtn("select", "Select", "V", ": click a part to select it, drag inside it to move it, Ctrl+drag to move the whole region, Alt+click for the next part where parts overlap"), "select", true),
-      iconify(toolBtn("polygon", "Polygon", "P"), "polygon", true),
-      iconify(toolBtn("freehand", "Freehand", "F"), "freehand", true),
+      iconify(toolBtn("polygon", "Polygon", "P", ": click points to draw a part; double-click or click the first point to close it"), "polygon", true),
+      iconify(toolBtn("freehand", "Freehand", "F", ": drag to draw a part freehand"), "freehand", true),
       iconify(toolBtn("fill", "Fill", "B", ": click inside an area (an island, a province between borders) to trace it out to the coast and to the borders of other parts and regions"), "fill", true),
       h("span", { className: "sep" }),
       iconify(btn("Add part", "Draw another polygon (an island or exclave), in the default colour; a colour's + Part draws one in that colour", () => ((newPartStyle = OWN_COLOUR), (newPartOccupied = false), startDraw("part")), "add-part"), "add-part", false),
@@ -3763,7 +3763,7 @@ export function openEditor(o: EditorOptions): void {
             ...named.flatMap((b) => {
               const name = b.getAttribute("aria-label") ?? (b.textContent ?? "").trim();
               const key = /\(([^)]{1,14})\)/.exec(b.title)?.[1];
-              return [h("dt", {}, b.querySelector("svg")!.cloneNode(true), name, key ? h("kbd", { textContent: key }) : null), h("dd", { textContent: b.title.replace(/^[^(:]*(\([^)]*\))?:?\s*/, "").replace(/^./, (c) => c.toUpperCase()) })];
+              return [h("dt", {}, b.querySelector("svg")!.cloneNode(true), name, key ? h("kbd", { textContent: key }) : null), h("dd", { textContent: b.title.replace(/^[^(:]*(\([^)]*\))?:?\s*/, "").replace(/\s*\([^)]{1,14}\)\s*$/, "").replace(/^./, (c) => c.toUpperCase()) })];
             }),
           ),
         ),
