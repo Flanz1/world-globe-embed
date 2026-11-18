@@ -518,7 +518,20 @@ button.link { background: none; border: 0; border-radius: 4px; min-height: 0; pa
 .sug-row .actions { display: flex; gap: 8px; }
 /* Pins tab */
 .pn-tools { margin-bottom: 10px; }
-.pn-tools .grow { flex: 1 1 180px; }
+.pn-tools { align-items: end; }
+.pn-tools .grow { flex: 1 1 8em; min-width: 8em; }
+.pn-tools label:not(.grow) { flex: 0 1 11em; }
+.pn-listbar { display: flex; gap: 8px; overflow-x: auto; }
+.pn-listbar > * { flex: 0 0 auto; white-space: nowrap; }
+.pn-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+.act-more { display: none; }
+@media (max-width: 600px) {
+  .pn-tools { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .pn-actions { overflow-x: auto; padding-bottom: 4px; }
+  .pn-actions > * { flex: 0 0 auto; white-space: nowrap; }
+  .act-extra { display: none; }
+  .act-more { display: inline-flex; }
+}
 .pn-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
 .pn-pane { position: relative; width: min(100%, calc(70vh * var(--pn-aspect, 2))); aspect-ratio: var(--pn-aspect, 2); max-height: 70vh; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; overflow: hidden; background: var(--app-map-bg); touch-action: none; cursor: grab; outline-offset: 2px; }
 .pn-pane[data-adding=true] { cursor: crosshair; }
@@ -527,6 +540,17 @@ button.link { background: none; border: 0; border-radius: 4px; min-height: 0; pa
 .pn-marker { position: absolute; left: 0; top: 0; width: 26px; height: 26px; min-height: 0; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .92); box-shadow: 0 1px 4px rgba(0, 0, 0, .6); pointer-events: auto; cursor: pointer; }
 .pn-marker[aria-pressed=true] { box-shadow: 0 0 0 3px rgba(255, 255, 255, .6), 0 1px 4px rgba(0, 0, 0, .6); z-index: 2; }
 .pn-zoom { position: absolute; right: 8px; top: 8px; display: flex; gap: 4px; }
+.pn-zoom button[aria-pressed="true"]::before, .pn-tools button[aria-pressed="true"]::before { content: ""; display: inline-block; width: 14px; height: 14px; margin: 0 4px -2px -2px; background: currentColor; -webkit-mask: var(--app-tick) center / contain no-repeat; mask: var(--app-tick) center / contain no-repeat; }
+.pn-tools button[aria-pressed="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: var(--md-sys-color-outline); }
+.pn-placing { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.pn-placing[hidden] { display: none; }
+.pn-label { display: none; position: absolute; left: 30px; top: 3px; padding: 1px 6px; border-radius: 6px; background: rgba(20, 18, 14, .82); color: #ece2d0; font-size: 12px; white-space: nowrap; pointer-events: none; }
+.pn-layer[data-labels="true"] .pn-label { display: block; }
+.pn-kinds, .pn-kindbar { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); }
+.pn-kind { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; box-shadow: inset 0 -3px 0 var(--kind); }
+.pn-kind[aria-checked="true"], .pn-kind[aria-pressed="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: var(--md-sys-color-outline); }
+.pn-kind[aria-checked="true"]::before, .pn-kind[aria-pressed="true"]::before { content: ""; width: 12px; height: 12px; background: currentColor; -webkit-mask: var(--app-tick) center / contain no-repeat; mask: var(--app-tick) center / contain no-repeat; }
+.pn-field { display: grid; gap: 2px; }
 /* On the dark map in both themes, so fixed map-overlay colours rather than theme roles. */
 .pn-zoom button { background-color: rgba(20, 18, 14, .8); color: #ece2d0; border-color: rgba(255, 255, 255, .3); min-width: 32px; }
 .pn-side { display: grid; gap: 10px; align-content: start; }
