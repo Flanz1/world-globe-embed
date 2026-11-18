@@ -152,6 +152,12 @@
         "turpador"
       ],
       "parent": "ilrakhan"
+    },
+    {
+      "id": "sertova",
+      "name": "Sertova",
+      "regions": [],
+      "parent": "ilrakhan"
     }
   ]
 }
