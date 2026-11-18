@@ -595,7 +595,7 @@ export function openWarp(deps: WarpDeps, slug: string, slot: Slot): void {
           { className: `wp-point${i === selected ? " selected" : ""}${done ? "" : " open"}`, dataset: { index: String(i) } },
           styled(h("button", { type: "button", className: "wp-num ghost", textContent: String(i + 1), ariaLabel: `Select point ${i + 1}`, ariaPressed: String(i === selected), onclick: () => select(i) }), { "--wp-c": colourOf(i) }),
           info,
-          h("button", { type: "button", className: "ghost tiny", textContent: "Delete", ariaLabel: `Delete point ${i + 1}`, onclick: () => remove(i) }),
+          h("button", { type: "button", className: "ghost danger tiny", textContent: "Delete", ariaLabel: `Delete point pair ${i + 1}`, onclick: () => remove(i) }),
         );
         return row;
       }),

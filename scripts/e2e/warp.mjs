@@ -45,6 +45,8 @@ writeFileSync(path.join(dir, `content/maps/${NEW}.json`), JSON.stringify({ ...me
 const slotsFile = path.join(dir, "content/slots.json");
 const slots = JSON.parse(readFileSync(slotsFile, "utf8"));
 slots.slots[SLOT.slug].map = NEW;
+// A world size, so errors read in km.
+slots.slots[SLOT.slug].radius = 6000;
 writeFileSync(slotsFile, JSON.stringify(slots, null, 2) + "\n");
 // One pin on the slot, on the old map.
 writeFileSync(
@@ -148,12 +150,12 @@ try {
   await clickAt(page, "old", PAIRS[3][0]);
   await clickAt(page, "new", PAIRS[3][1]);
   let errs = await page.locator("dialog.warp .wp-point").allTextContents();
-  check("from 4 pairs every pair shows its error (all 0 for a clean move)", errs.length === 4 && errs.every((t) => /Error 0 /.test(t)) && !errs.some((t) => /Largest/.test(t)), errs.join(" | "));
+  check("from 4 pairs every pair shows its error (all 0 for a clean move)", errs.length === 4 && errs.every((t) => /Error 0 km/.test(t)) && !errs.some((t) => /Largest/.test(t)), errs.join(" | "));
   // A misplaced fifth pair (5° off) stands out by name, in text.
   await clickAt(page, "old", [-100, -20]);
   await clickAt(page, "new", [-85, -25]);
   errs = await page.locator("dialog.warp .wp-point").allTextContents();
-  check("a misplaced pair is flagged as the largest error, in text", /Largest error/.test(errs[4] ?? "") && errs.filter((t) => /Largest/.test(t)).length === 1, errs.join(" | "));
+  check("a misplaced pair is flagged as the largest error, in text and km", /Largest error: [\d.]+ km/.test(errs[4] ?? "") && errs.filter((t) => /Largest/.test(t)).length === 1, errs.join(" | "));
 
   // Keyboard: a marker nudges with the arrows, and Delete removes its pair.
   const mark = page.locator('dialog.warp .wp-col-new .wp-mark[data-index="4"]');
