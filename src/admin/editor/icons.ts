@@ -64,3 +64,10 @@ export function iconify<T extends HTMLButtonElement>(b: T, name: IconName, label
   b.dataset.icon = name;
   return b;
 }
+
+/** Put an icon in front of a button that keeps its own content (a label and a live count): the caller updates the rest. */
+export function withIcon<T extends HTMLButtonElement>(b: T, name: IconName): T {
+  b.prepend(icon(name));
+  b.dataset.icon = name;
+  return b;
+}

@@ -146,7 +146,12 @@ for (const view of ["flat", "globe"]) {
     const harbour = page.locator('.wpin[data-name="Magenta Harbour"]');
     const label = page.locator(".rlabel:not([hidden])").first();
     const d = dist(await centre(harbour), await centre(label));
-    check(E, `${view}: the pin sits on the landmark it marks, with the region drawn there`, d < 14, `${d.toFixed(1)}px from the region's label`);
+    // The label is nudged clear of the pin (below, above or beside it), so it sits near the pin, not on it.
+    check(E, `${view}: the pin sits on the landmark it marks, with the region drawn there`, d < 70, `${d.toFixed(1)}px from the region's label`);
+    const pb = await harbour.boundingBox();
+    const lb = await label.boundingBox();
+    const overlap = !!pb && !!lb && pb.x < lb.x + lb.width && lb.x < pb.x + pb.width && pb.y < lb.y + lb.height && lb.y < pb.y + pb.height;
+    check(E, `${view}: the region's label doesn't cover the pin`, !overlap, JSON.stringify({ pb, lb }));
     await page.screenshot({ path: path.join(OUT, `embed-${view}-region.png`) });
 
     // A region that includes a pin map shows its pins by itself; ?pins= overrides, ?pins=0 turns them off.

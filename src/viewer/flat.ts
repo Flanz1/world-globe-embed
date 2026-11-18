@@ -7,8 +7,8 @@
  * Region embeds start locked on the region; unlocked, drag pans and wheel/pinch zoom.
  */
 import { clamp, clampPadding } from "../shared/params.ts";
-import { geometryBounds, globeToImage, imageToGlobe, polygonsOf, type Position } from "../shared/geo.ts";
-import { FLAT_K_MAX, flatFit, flatMinK, regionLabelPoints, type FlatView, type RegionData } from "../shared/region.ts";
+import { geometryBounds, globeToImage, imageToGlobe, polygonsOf } from "../shared/geo.ts";
+import { FLAT_K_MAX, flatFit, flatMinK, regionLabelPoints, type FlatView, type LabelPoint, type RegionData } from "../shared/region.ts";
 import { paintLayerStack, type PaintLayer } from "../shared/raster.ts";
 import { hasContestedLayers, legendRowsFor, regionPaintLayers } from "../shared/region-paint.ts";
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
@@ -16,7 +16,7 @@ import { TILE_BUDGET, TileCache, levelFor, tileRect, tilesAt, tileUrl } from "..
 import type { FlatStartContext, PreviewMessage } from "./contract.ts";
 import { setupRegionCard } from "./region-card.ts";
 import { setupRuler } from "./ruler.ts";
-import { RELOCK_MS, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
+import { RELOCK_MS, labelOnScreen, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
 import { setupPins, watchPreviewPins, type PinLayer } from "./pins.ts";
 
 type Img = ImageBitmap | HTMLImageElement;
@@ -58,7 +58,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   let reg: RegionData | null = null;
   /** How to paint the region (colours, overlapping layers, borders), worked out once per region rather than per frame. */
   let spec: PaintLayer[] | null = null;
-  let labelAt: Position[] = [];
+  let labelAt: LabelPoint[] = [];
   /** Map pins (?pins=…). */
   let pinLayer: PinLayer | null = null;
   let gridOn = cfg.grid;
@@ -173,12 +173,11 @@ export async function start(ctx: FlatStartContext): Promise<void> {
         dim: !!R?.dim,
       }, { w, h });
     }
-    labelAt.forEach((at, i) => {
+    labelAt.forEach((pt, i) => {
       // The copy of the label point nearest the middle of the view.
-      const lon = at[0] + 360 * Math.round((view.cx - at[0]) / 360);
-      const x = sx(lon, w);
-      const y = sy(at[1], h);
-      labels?.place(i, x, y, x >= 0 && x <= w && y >= 0 && y <= h);
+      const shift = 360 * Math.round((view.cx - pt.at[0]) / 360);
+      const { x, y, fit } = labelOnScreen(pt, ([lon, lat]) => ({ x: sx(lon + shift, w), y: sy(lat, h) }));
+      labels?.place(i, x, y, x >= 0 && x <= w && y >= 0 && y <= h, fit);
     });
     ruler.redraw();
     card?.redraw();
@@ -187,6 +186,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       const y = sy(plat, h);
       return { x, y, visible: x >= -12 && x <= w + 12 && y >= -12 && y <= h + 12 };
     });
+    labels?.settle(stage);
     maybeUpgrade();
     maybeTiles();
   }
@@ -452,6 +452,9 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   }, zoomToPins);
   const labels = R ? makeLabels(stage) : null;
   const regionKey = R ? makeLegend(stage) : null;
+  // The legend opening, collapsing or resizing changes what labels must stay clear of: lay them out again.
+  const keyBox = stage.querySelector(".rstack");
+  if (keyBox) new ResizeObserver(() => schedule()).observe(keyBox);
   if (R) {
     lock = setupLock(canvas, R.lock, (locked) => {
       if (!locked) return;
@@ -467,7 +470,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       spec = regionPaintLayers(r);
       regionKey?.set(R.key ? legendRowsFor(r) : [], r.legendTitle, R.key && hasContestedLayers(spec));
       const pts = (R.label ?? r.label) ? regionLabelPoints(r, R.label === true) : [];
-      labelAt = pts.map((p) => p.at);
+      labelAt = pts;
       labels?.set(pts.map((p) => p.text));
     };
     const fitTo = (r: RegionData, animate: boolean, focus = -1) => {
@@ -540,7 +543,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   render();
   requestAnimationFrame(() => {
     root.classList.add("ready");
-    root.dataset.state = "interactive";
+    if (root.dataset.state !== "hires") root.dataset.state = "interactive"; // a texture upgrade may already have finished
     performance.mark("wge-interactive");
   });
 }
