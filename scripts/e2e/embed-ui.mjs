@@ -11,8 +11,6 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { makeFixture, SLOT } from "./fixture.mjs";
-import { MockGitHub } from "./mock-github.mjs";
-import { useAdminApi } from "./admin-api.mjs";
 
 import { port } from "./ports.mjs";
 const require = createRequire(import.meta.url);
