@@ -202,6 +202,43 @@ describe("admin API sign-in", () => {
     expect(me).toEqual({ ...ANN, owner: false, permissions: ["regions"], prefs: null });
   });
 
+  it("keeps a remembered sign-in for 30 days and renews it without storing anything", async () => {
+    const NONCE = "r".repeat(24);
+    const login = async (remember: boolean) => {
+      const start = await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}&nonce=${NONCE}${remember ? "&remember=1" : ""}`);
+      const state = new URL(start.headers.get("Location")!).searchParams.get("state")!;
+      const back = await call(`${API}/auth/callback?code=${mock.oauthCode("carto-ann")}&state=${encodeURIComponent(state)}`);
+      return back.headers.get("Location")!.split("#session=")[1].split("&")[0];
+    };
+    const plain = await verify<{ m?: number; exp: number }>(await login(false), KEY);
+    expect(plain!.m).toBeUndefined();
+    expect(plain!.exp - Date.now() / 1000).toBeLessThanOrEqual(12 * 3600 + 5);
+
+    const kept = await login(true);
+    const k = await verify<{ m?: number; exp: number }>(kept, KEY);
+    expect(k!.m).toBe(1);
+    expect(k!.exp - Date.now() / 1000).toBeGreaterThan(29 * 86400);
+
+    // Renewing a session that has 2 days left gives a fresh 30 days, for the same person.
+    const old = await sign({ ...ANN, m: 1, exp: Math.floor(Date.now() / 1000) + 2 * 86400 }, KEY);
+    const r = await call(`${API}/session/refresh`, { method: "POST", headers: { Authorization: `Bearer ${old}` } });
+    expect(r.status).toBe(200);
+    const fresh = ((await r.json()) as { session: string }).session;
+    const f = await verify<{ id: number; login: string; m?: number; exp: number }>(fresh, KEY);
+    expect(f).toMatchObject({ ...ANN, m: 1 });
+    expect(f!.exp - Date.now() / 1000).toBeGreaterThan(29 * 86400);
+
+    // A 12-hour session never grows, and expired or forged ones can't be renewed.
+    const short = await session(ANN);
+    const same = await call(`${API}/session/refresh`, { method: "POST", headers: { Authorization: `Bearer ${short}` } });
+    expect(((await same.json()) as { session: string }).session).toBe(short);
+    for (const t of [await sign({ ...ANN, m: 1, exp: Math.floor(Date.now() / 1000) - 5 }, KEY), await sign({ ...ANN, m: 1, exp: 9e9 }, "x".repeat(40))]) {
+      expect((await call(`${API}/session/refresh`, { method: "POST", headers: { Authorization: `Bearer ${t}` } })).status).toBe(401);
+    }
+    // Someone removed from the list is still refused with a renewed session.
+    expect((await call(`${API}/session`, { headers: { Authorization: `Bearer ${await sign({ ...STRANGER, m: 1, exp: 9e9 }, KEY)}` } })).status).toBe(403);
+  });
+
   it("rejects forged, tampered and expired sessions", async () => {
     const good = await session(ANN);
     const [body] = good.split(".");

@@ -57,6 +57,8 @@ export interface Content {
   maps: Map<string, MapMeta>;
   /** Region id → region. Optional so older callers (and tests) that build Content by hand still work. */
   regions?: Map<string, RegionFeature>;
+  /** content/categories.json, when present (the atlas page groups by it). */
+  categories?: CategoriesFile;
   /** Pin id → pin (content/pins/). Optional like regions. */
   pins?: Map<string, PinFeature>;
   /** Pin maps and their folders (content/pinmaps.json). Optional. */
@@ -293,12 +295,14 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
 
   // Region categories (optional). A region id that no longer exists is only a warning: deleting a region leaves its id behind until the next category change tidies it up.
   const categoriesFile = path.join(paths.content, "categories.json");
+  let categories: CategoriesFile | undefined;
   if (existsSync(categoriesFile)) {
     try {
       const data = readJson(categoriesFile);
       if (!validateCategories(data)) errors.push(...describe("content/categories.json", validateCategories.errors));
       else {
         errors.push(...checkCategories(data).map((e) => `content/categories.json: ${e}`));
+        categories = data as CategoriesFile;
         for (const k of (data as CategoriesFile).categories)
           for (const r of k.regions)
             if (!regionFiles.includes(`${r}.json`)) warnings.push(`content/categories.json: category "${k.name}" lists the region "${r}", which doesn't exist (it was probably deleted).`);
@@ -308,5 +312,5 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
     }
   }
 
-  return { content: errors.length || !slots ? null : { slots, maps, regions, pins, pinMaps }, errors, warnings };
+  return { content: errors.length || !slots ? null : { slots, maps, regions, pins, pinMaps, categories }, errors, warnings };
 }
