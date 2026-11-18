@@ -39,7 +39,6 @@
       "id": "ilrakhan",
       "name": "Ilrakhan",
       "regions": [
-        "albesan",
         "erlmondy",
         "erlmondy-combined",
         "martella",
@@ -138,7 +137,9 @@
     {
       "id": "cevoli",
       "name": "Cevoli",
-      "regions": [],
+      "regions": [
+        "albesan"
+      ],
       "parent": "ilrakhan"
     }
   ]
