@@ -315,17 +315,32 @@ content/
   slots.json            which map each embed shows, plus per-slot defaults
   maps/<map-id>.json    map metadata (written by process-maps)
   regions/<id>.json     region outlines (GeoJSON Features, written by the admin editor)
+  pins/<id>.json        map pins (one GeoJSON Point per file, written by the Pins tab)
+  pinmaps.json          pin maps and their folders
+  categories.json       region folders (admin only)
+  access.json           who may use the admin page and what they may do
   incoming/             drop new images here
-public/maps/<map-id>/   processed WebPs: <hash>-1024.webp, -2048, -4096, -8192, and tiles <hash>-16384-<col>-<row>.webp, -32768-… (written by process-maps)
-schema/                 JSON schemas for slots.json, map metadata and regions
-src/viewer/boot.ts      tiny inline boot script (poster, params, starts loading)
-src/viewer/globe.ts     Three.js globe, loaded with import() after first paint
-src/viewer/flat.ts      flat 2D map viewer (view=flat), no Three.js
-src/shared/             types, query params, the per-slot page template
-src/admin/              admin page code (admin/index.html is the page); editor/ is the region editor
-scripts/                processing, validation, page generation, sample, measurement
-.github/workflows/      process-maps.yml, deploy.yml, ci.yml (PR checks)
+public/maps/<map-id>/   processed WebPs: <hash>-1024.webp, -2048, -4096, -8192, tiles <hash>-16384-<col>-<row>.webp, -32768-…, and the coast file (written by process-maps)
+schema/                 JSON schemas for every content file
+src/viewer/             the embed: boot.ts (tiny inline script), globe.ts (Three.js, loaded with import()), flat.ts (2D, no Three.js), pins, ruler
+src/shared/             code used by the viewer, admin page, Worker and build: geometry, region painting, access rules, page template
+src/admin/              the admin page (admin/index.html is the page); editor/ is the region editor
+worker/                 the admin API (Cloudflare Worker): sign-in, permission checks, the only writer to the repo
+scripts/                processing, validation, page generation, sample, measurement; scripts/e2e/ are the browser suites
+tests/                  unit tests (vitest)
+docs/                   see below
+.github/workflows/      ci.yml (PR checks), e2e.yml, deploy.yml, process-maps.yml, admin-api.yml
 ```
+
+### More documentation
+
+- [docs/architecture.md](docs/architecture.md): how the viewer, admin page, Admin API and build fit together, and how data flows.
+- [docs/content-model.md](docs/content-model.md): every content file and how slots, maps, regions, pins, categories and access relate.
+- [docs/worker-api.md](docs/worker-api.md): the Admin API's routes, rules, bindings and limits.
+- [docs/modules.md](docs/modules.md): one line per source file.
+- [docs/admin-access.md](docs/admin-access.md): setting up and using contributor roles.
+- [docs/parallel-work.md](docs/parallel-work.md): working on several branches at once, adding e2e suites.
+- [docs/design-guide.md](docs/design-guide.md): the admin page's design rules.
 
 ### How a page loads
 
