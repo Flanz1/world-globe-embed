@@ -527,3 +527,13 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
 .rename-url { overflow-wrap: anywhere; word-break: break-all; font-size: 13px; }
 .rename-copy { display: flex; gap: 8px; align-items: center; }
 .rename-dlg input[aria-invalid="true"], .rename-dlg input[aria-invalid="true"]:focus-visible { border-color: var(--md-sys-color-error); outline: 2px solid var(--md-sys-color-error); outline-offset: 0; }
+
+/* Editor toolbar icons (icons.ts): the common tools keep a label, the rest are icon-only (aria-label + tooltip). */
+.ed-toolbar button[data-icon] { display: inline-flex; align-items: center; gap: 6px; }
+.ed-ic { flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+dialog.editor .ed-toolbar button.icon-only { position: relative; justify-content: center; min-width: 40px; padding: 0; }
+/* A pressed icon-only button keeps the tick, small, on the icon's corner. */
+.ed-toolbar button.icon-only[aria-pressed="true"]::before { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; margin: 0; }
+.sc-icons { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; align-items: center; margin: 0; }
+.sc-icons dt { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.sc-icons dd { margin: 0; }

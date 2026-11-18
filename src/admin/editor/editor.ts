@@ -62,6 +62,7 @@ import { clampPadding } from "../../shared/params.ts";
 import { TEXTURE_WIDTHS, type MapMeta, type SlotsFile, type TextureWidth } from "../../shared/types.ts";
 import { deviceLimit, nextTier } from "../../shared/tiers.ts";
 import { h } from "../dom.ts";
+import { iconify } from "./icons.ts";
 import { mapLimit, type GitHub } from "../github.ts";
 import { childrenOf, regionsPerCommit } from "../../shared/categories.ts";
 import { loadMapImage } from "../images.ts";
@@ -479,24 +480,24 @@ export function openEditor(o: EditorOptions): void {
     for (const t of ["pointerdown", "mousedown", "wheel"] as const) el.addEventListener(t, (e) => e.stopPropagation());
     return { el, label, fwd, back };
   })();
-  const undoBtn = btn("Undo", "Undo (Ctrl+Z)", () => undo(), "undo");
-  const redoBtn = btn("Redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)", () => redo(), "redo");
-  const gridBtn = btn("Grid", "Show the globe's 15° grid (G)", () => toggleGrid(), "grid");
-  const snapBtn = btn(
+  const undoBtn = iconify(btn("Undo", "Undo (Ctrl+Z)", () => undo(), "undo"), "undo", true);
+  const redoBtn = iconify(btn("Redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)", () => redo(), "redo"), "redo", true);
+  const gridBtn = iconify(btn("Grid", "Show the globe's 15° grid (G)", () => toggleGrid(), "grid"), "grid", false);
+  const snapBtn = iconify(btn(
     "Snap",
     "Snap to the vertices and lines of other parts and regions while drawing and dragging, so borders are shared exactly (S). Hold Ctrl to place a point freely.",
     () => toggleSnap(),
     "snap",
-  );
-  const coastBtn = btn(
+  ), "snap", true);
+  const coastBtn = iconify(btn(
     "Coast",
     "Also snap to the map's coastline (shown in amber) where no part or region is in reach, and follow it between two clicks (O). Rivers, lakes and marshes count as land.",
     () => toggleCoast(),
     "coast",
-  );
+  ), "coast", false);
   coastBtn.hidden = true;
-  const simplifyBtn = btn("Simplify…", "Fewer vertices, same shape", () => toggleSimplify(), "simplify");
-  const smoothBtn = btn("Smooth", "Round the corners (one Chaikin pass; doubles the vertices)", () => smooth(), "smooth");
+  const simplifyBtn = iconify(btn("Simplify…", "Fewer vertices, same shape", () => toggleSimplify(), "simplify"), "simplify", false);
+  const smoothBtn = iconify(btn("Smooth", "Round the corners (one Chaikin pass; doubles the vertices)", () => smooth(), "smooth"), "smooth", false);
 
   const idIn = h("input", { type: "text", maxLength: 64, spellcheck: false, value: id, name: "id", pattern: "[a-z0-9][a-z0-9\\-]{0,63}" });
   const colorIn = h("input", { type: "color", value: hist.state.props.color, name: "color", ariaLabel: "Colour of the Default colour folder" });
@@ -591,22 +592,22 @@ export function openEditor(o: EditorOptions): void {
     h(
       "div",
       { className: "ed-toolbar", role: "toolbar" },
-      toolBtn("select", "Select", "V", ": click a part to select it, drag inside it to move it, Ctrl+drag to move the whole region, Alt+click for the next part where parts overlap"),
-      toolBtn("polygon", "Polygon", "P"),
-      toolBtn("freehand", "Freehand", "F"),
-      toolBtn("fill", "Fill", "B", ": click inside an area (an island, a province between borders) to trace it out to the coast and to the borders of other parts and regions"),
+      iconify(toolBtn("select", "Select", "V", ": click a part to select it, drag inside it to move it, Ctrl+drag to move the whole region, Alt+click for the next part where parts overlap"), "select", true),
+      iconify(toolBtn("polygon", "Polygon", "P"), "polygon", true),
+      iconify(toolBtn("freehand", "Freehand", "F"), "freehand", true),
+      iconify(toolBtn("fill", "Fill", "B", ": click inside an area (an island, a province between borders) to trace it out to the coast and to the borders of other parts and regions"), "fill", true),
       h("span", { className: "sep" }),
-      btn("Add part", "Draw another polygon (an island or exclave), in the default colour; a colour's + Part draws one in that colour", () => ((newPartStyle = OWN_COLOUR), (newPartOccupied = false), startDraw("part")), "add-part"),
-      btn("Cut", "Draw a shape to cut away: inside a part it makes a hole, across a part's edge it bites it, right across it splits it into separate parts", () => startDraw("cut"), "cut-hole"),
-      btn("Split", "Draw a line right across a part to split it into separate parts", () => startDraw("split"), "split"),
-      btn("Combine…", "Combine the parts you picked (click one, Shift+click the others) into one part, filling small gaps (C)", () => openCombine(), "combine"),
-      btn("Extend", "Draw a shape that touches the selected part to add it to that part (E)", () => startExtend(), "extend"),
-      btn(
+      iconify(btn("Add part", "Draw another polygon (an island or exclave), in the default colour; a colour's + Part draws one in that colour", () => ((newPartStyle = OWN_COLOUR), (newPartOccupied = false), startDraw("part")), "add-part"), "add-part", false),
+      iconify(btn("Cut", "Draw a shape to cut away: inside a part it makes a hole, across a part's edge it bites it, right across it splits it into separate parts", () => startDraw("cut"), "cut-hole"), "cut", false),
+      iconify(btn("Split", "Draw a line right across a part to split it into separate parts", () => startDraw("split"), "split"), "split", false),
+      iconify(btn("Combine…", "Combine the parts you picked (click one, Shift+click the others) into one part, filling small gaps (C)", () => openCombine(), "combine"), "combine", false),
+      iconify(btn("Extend", "Draw a shape that touches the selected part to add it to that part (E)", () => startExtend(), "extend"), "extend", false),
+      iconify(btn(
         "Province border",
         "Draw a province border inside the region: a dashed line in the embed, shown only inside the parts. It doesn't change the parts. Click a border to select it; Delete removes it.",
         () => startDraw("border"),
         "province-border",
-      ),
+      ), "province-border", false),
       h("span", { className: "sep" }),
       undoBtn,
       redoBtn,
@@ -3743,6 +3744,17 @@ export function openEditor(o: EditorOptions): void {
     for (const g of SHORTCUT_GROUPS)
       m.body.append(
         h("section", { className: "sc-group" }, h("h3", { textContent: g.title }), h("dl", { className: "shortcuts" }, ...g.rows.flatMap(([k, v]) => [h("dt", {}, h("kbd", { textContent: k })), h("dd", { textContent: v })]))),
+      );
+    // Icon-only toolbar buttons, named (touch screens have no tooltips).
+    const named = [...dlg.querySelectorAll<HTMLButtonElement>(".ed-toolbar button.icon-only")];
+    if (named.length)
+      m.body.append(
+        h(
+          "section",
+          { className: "sc-group" },
+          h("h3", { textContent: "Toolbar icons" }),
+          h("dl", { className: "sc-icons" }, ...named.flatMap((b) => [h("dt", {}, b.querySelector("svg")!.cloneNode(true), b.getAttribute("aria-label") ?? ""), h("dd", { textContent: b.title })])),
+        ),
       );
     m.body.append(
       h("section", { className: "sc-group" }, h("h3", { textContent: "How it works" }), h("dl", { className: "sc-notes" }, ...SHORTCUT_NOTES.flatMap(([k, v]) => [h("dt", { textContent: k }), h("dd", { textContent: v })]))),
