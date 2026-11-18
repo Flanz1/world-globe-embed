@@ -122,6 +122,7 @@ import {
 } from "./model.ts";
 import { pinMaps as allPinMaps } from "../pinmaps.ts";
 import { pinEntries } from "../pins.ts";
+import { createPinsLayer } from "./pins-layer.ts";
 import { keepPinsSent, sendPins } from "../preview-pins.ts";
 import { REGION_PINMAPS_MAX, mapsOfSlot, treeOf, type PinMap } from "../../shared/pinmaps.ts";
 import { clearDraft, draftKey, loadDraft, saveDraft, type Draft } from "./draft.ts";
@@ -334,7 +335,16 @@ export function openEditor(o: EditorOptions): void {
     layerBar.fwd.disabled = p >= n - 1;
     layerBar.back.disabled = p <= 0;
   }
+  // The slot's pins, painted on the canvas under the region's handles (positions come from the view helpers below).
+  const pinPos = { sx: (lon: number) => lon * 0, sy: (lat: number) => lat * 0 };
+  const pinsLayer = createPinsLayer({
+    pins: () => pinEntries().flatMap((e) => (e.feature && e.feature.properties.slot === slotName ? [e.feature] : [])),
+    sx: (lon) => pinPos.sx(lon),
+    sy: (lat) => pinPos.sy(lat),
+    changed: () => draw(),
+  });
   const overlays = createOverlayFilter({
+    extra: pinsLayer.row,
     items: neighbours.map((n, index) => ({
       categoryId: null,
       id: n.id as string,
@@ -623,7 +633,7 @@ export function openEditor(o: EditorOptions): void {
     h(
       "div",
       { className: "ed-body" },
-      h("div", { className: "ed-canvas-wrap" }, canvas, overlays.panel, layerBar.el, ctxMenu, tip, simpPanel, combPanel, status),
+      h("div", { className: "ed-canvas-wrap" }, canvas, pinsLayer.tip, overlays.panel, layerBar.el, ctxMenu, tip, simpPanel, combPanel, status),
       h(
         "div",
         { className: "ed-side" },
@@ -708,6 +718,8 @@ export function openEditor(o: EditorOptions): void {
   const size = () => cssSize;
   const sx = (lon: number) => (lon - view.cx) * view.k + size().w / 2;
   const sy = (lat: number) => (view.cy - lat) * view.k * ky + size().h / 2;
+  pinPos.sx = sx;
+  pinPos.sy = sy;
   const wx = (x: number) => view.cx + (x - size().w / 2) / view.k;
   const wy = (y: number) => view.cy - (y - size().h / 2) / (view.k * ky);
   const nearest = (lon: number, near: number) => lon + 360 * Math.round((near - lon) / 360);
@@ -1280,6 +1292,7 @@ export function openEditor(o: EditorOptions): void {
         g.restore();
       }
     }
+    pinsLayer.draw(g, offs);
     if (combine) drawCombine(offs);
     if (tool === "select" && !simplifyPreview && !combine) {
       drawHandles(offs);
@@ -3348,6 +3361,8 @@ export function openEditor(o: EditorOptions): void {
   });
 
   canvas.addEventListener("pointermove", (e) => {
+    const cr = canvas.getBoundingClientRect();
+    pinsLayer.hover(e.clientX - cr.left, e.clientY - cr.top, offsets());
     const { x, y } = local(e);
     cursor = [wx(x), wy(y)];
     const pt = pointers.get(e.pointerId);

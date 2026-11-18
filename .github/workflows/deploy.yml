@@ -11,20 +11,65 @@ on:
         type: string
         default: ""
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+# Each job asks for what it needs below.
+permissions: {}
 
+# Order: target -> e2e -> build -> deploy. The site only deploys once the e2e suites for everything
+# that changed since the last deploy pass on the exact commit being deployed, so a fast-track merge
+# can't go live before its checks finish. Content-only pushes (region saves, maps) select no suites
+# and deploy within a minute or two.
 jobs:
-  build:
+  target:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      sha: ${{ steps.find.outputs.sha }}
+      base: ${{ steps.find.outputs.base }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+          fetch-depth: 0
+      # base = the newest successfully deployed commit this one builds on. If none is found
+      # (or the API can't be read), base stays empty and e2e runs every suite.
+      - name: Find the commit to deploy and the last deployed one
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          SHA=$(git rev-parse HEAD)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          BASE=""
+          for c in $(gh api "repos/$REPO/actions/workflows/deploy.yml/runs?branch=main&status=success&per_page=20" --jq '.workflow_runs[].head_sha' 2>/dev/null || true); do
+            if git merge-base --is-ancestor "$c" "$SHA" 2>/dev/null; then BASE=$c; break; fi
+          done
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "Deploying $SHA; last deploy ${BASE:-not found, so all suites run}"
+
+  e2e:
+    needs: target
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e.yml
+    with:
+      ref: ${{ needs.target.outputs.sha }}
+      base: ${{ needs.target.outputs.base }}
+
+  build:
+    needs: [target, e2e]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       pending: ${{ steps.pending.outputs.pending }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.target.outputs.sha }}
           persist-credentials: false
 
       # If this push added images to content/incoming/, "Process maps" will convert them
@@ -74,9 +119,13 @@ jobs:
           path: dist
 
   deploy:
-    needs: build
-    if: needs.build.outputs.pending != 'true'
+    needs: [target, build]
+    # Only main deploys: a run on another branch (e.g. to test this workflow) stops after the build.
+    if: needs.build.outputs.pending != 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     concurrency:
       group: pages
       cancel-in-progress: false
@@ -84,5 +133,19 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # If main moved on while e2e ran, the newer run deploys (its e2e covers this commit's changes too),
+      # so an older commit never overwrites a newer site.
+      - name: Skip if a newer commit is on main
+        id: latest
+        env:
+          SHA: ${{ needs.target.outputs.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          TIP=$(git ls-remote "https://github.com/$REPO.git" refs/heads/main | cut -f1)
+          if [ "$TIP" = "$SHA" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Superseded::main is now at $TIP, and that run deploys instead of $SHA."
+          fi
       - id: deployment
+        if: steps.latest.outputs.go == 'true'
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

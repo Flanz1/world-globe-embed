@@ -1,6 +1,6 @@
 # Admin API reference
 
-`worker/` is a Cloudflare Worker at `https://admin-api.garmeley.com` (config: `worker/wrangler.toml`; auto-deployed by `.github/workflows/admin-api.yml`). It is the only thing that writes to the repository. The code is in `worker/src/handler.ts` (routes), `proposals.ts`, `presence.ts`, `ratelimit.ts`, `crypto.ts`; `index.ts` is the Worker entry and the Durable Object class.
+`worker/` is a Cloudflare Worker at `https://admin-api.garmeley.com` (config: `worker/wrangler.toml`; auto-deployed by `.github/workflows/admin-api.yml`). It is the only thing that writes to the repository. The code is in `worker/src/handler.ts` (routes), `proposals.ts`, `comments.ts`, `presence.ts`, `ratelimit.ts`, `crypto.ts`; `index.ts` is the Worker entry and the Durable Object class.
 
 Authentication: `Authorization: Bearer <session token>`, a token signed with `SESSION_KEY`, valid for a short time, issued after GitHub sign-in. The WebSocket route sends the token in `Sec-WebSocket-Protocol` instead. Every route except `/`, `/auth/*` and `OPTIONS` needs a session. Errors are JSON `{ "message": "…" }` with the HTTP status. CORS allows the origins in `ADMIN_URLS`.
 
@@ -24,6 +24,10 @@ Rate limit, per caller IP: 20 requests a minute on `/auth/*` and 900 a minute on
 | `GET /proposals/<id>` | listed user | One suggestion. |
 | `POST /proposals/<id>/accepted`, `…/declined` | reviewer | Mark a suggestion decided (declined takes `{ reason }`). Accepting only records it; the reviewer then saves the region normally. |
 | `DELETE /proposals/<id>` | proposer; or a reviewer once it is decided | Withdraw a suggestion, or clear a decided one. |
+| `GET /comments` | listed user | Reviewer comments you may see (your own, and those on regions you may edit). Query `region` narrows it. One KV read, never a list. |
+| `POST /comments` | listed user | Drops a comment `{ region, text (240 chars), lon, lat }`. Up to 20 open per person. |
+| `POST /comments/<id>/resolved`, `…/open` | may edit the region | Ticks a comment off / reopens it. |
+| `DELETE /comments/<id>` | author, or may edit the region | Deletes a comment. |
 | `GET/POST/PATCH /gh/repos/<repo>/…` | see below | Allow-listed copy of the GitHub REST API. |
 
 ## `/gh/` proxy
@@ -49,6 +53,7 @@ Problems come back as `403` with `errors: [...]`; a clean commit moves the branc
 | `SESSION_KEY` | secret (32+ chars) | Signs sessions. Changing it signs everyone out. |
 | `WAITING` (KV) | optional | Waiting list; also the fallback store for prefs and proposals. |
 | `PREFS`, `PROPOSALS` (KV) | optional | Themes, suggested changes. |
+| `COMMENTS` (KV) | optional | Reviewer comments (one value, `comments`); falls back to `PROPOSALS`, then `WAITING`. |
 | `RATE_LIMITER` | optional binding | Cross-instance rate limit. |
 | `EDITING_ROOM` | Durable Object | "X is editing" presence. No storage; pings are auto-answered while hibernating. |
 

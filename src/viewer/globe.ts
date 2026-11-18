@@ -460,7 +460,23 @@ export async function start(ctx: StartContext): Promise<void> {
       return { x: ((tmpV.x + 1) / 2) * stage.clientWidth, y: ((1 - tmpV.y) / 2) * stage.clientHeight, visible: facing };
     });
   }
-  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins).then((l) => {
+  /** A cluster of pins was clicked: turn to them and move closer (false when the view can't zoom in any further). */
+  const zoomToPins = (pts: [number, number][]): boolean => {
+    if (view.distance <= MIN_DISTANCE * 1.05) return false;
+    const gs = pts.map((at) => imageToGlobe(at, { north: pad.north, south: pad.south, shift }));
+    // Mean of the pins' longitudes (taken round the first so a cluster over the date line stays together) and latitudes.
+    const lon0 = gs[0][0];
+    const lon = lon0 + gs.reduce((a, [l]) => a + ((((l - lon0 + 180) % 360) + 360) % 360) - 180, 0) / gs.length;
+    const lat = gs.reduce((a, [, l]) => a + l, 0) / gs.length;
+    const to = { yaw: -Math.PI / 2 - lon * DEG, pitch: lat * DEG, distance: Math.max(MIN_DISTANCE, 1 + (view.distance - 1) * 0.45) };
+    to.yaw = view.yaw + Math.atan2(Math.sin(to.yaw - view.yaw), Math.cos(to.yaw - view.yaw));
+    spinning = false;
+    if (reducedMotion.matches) Object.assign(view, to);
+    else ease = { from: { ...view }, to, t0: performance.now() };
+    invalidate();
+    return true;
+  };
+  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins, zoomToPins).then((l) => {
     pinLayer = l;
     invalidate();
   });
@@ -468,7 +484,7 @@ export async function start(ctx: StartContext): Promise<void> {
   watchPreviewPins(stage, canvas, (l) => {
     pinLayer = l;
     invalidate();
-  });
+  }, zoomToPins);
 
   /* ── View state ── */
   const view = { yaw: 0, pitch: 0, distance: BASE_DISTANCE };
