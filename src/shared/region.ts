@@ -1,12 +1,12 @@
 /** Region types and helpers shared by the build, the viewer and the admin page. */
 import { BASE_DISTANCE, FOV_DEG, ZOOM_MAX, ZOOM_MIN, clamp } from "./params.ts";
+import { largestPart, partPlacements, type LabelPlacement } from "./label-place.ts";
 import {
   MAX_VERTICES,
   boundingCap,
   geometryBounds,
   imageToGlobe,
   mapGeometry,
-  partAnchors,
   polygonsOf,
   sphericalCentroid,
   type GlobeFrame,
@@ -419,15 +419,20 @@ export function checkLegend(p: RegionProperties, g: RegionGeometry, where: strin
 export function regionLabelPoints(
   r: Pick<RegionData, "name" | "labels" | "geometry"> & { labelHidden?: boolean[]; label?: boolean; members?: RegionData[] },
   forced = false,
-): { text: string; at: Position }[] {
+): LabelPoint[] {
   // Stacked regions: each labels itself, unless it has labels switched off (and label=1 wasn't given).
   if (r.members) return r.members.flatMap((m) => (forced || m.label ? regionLabelPoints(m) : []));
-  if (r.labels.some((t) => t.trim())) {
-    const at = partAnchors(r.geometry);
-    return r.labels.flatMap((t, i) => (t.trim() && at[i] && r.labelHidden?.[i] !== true ? [{ text: t, at: at[i]! }] : []));
-  }
-  return r.name.trim() ? [{ text: r.name, at: sphericalCentroid(r.geometry) }] : [];
+  const at = partPlacements(r.geometry);
+  if (r.labels.some((t) => t.trim()))
+    return r.labels.flatMap((t, i) => (t.trim() && at[i] && r.labelHidden?.[i] !== true ? [{ text: t, ...at[i]! }] : []));
+  if (!r.name.trim()) return [];
+  // The name goes on the largest part, so it sits where most of the region is.
+  const big = at[largestPart(r.geometry)];
+  return [big ? { text: r.name, ...big } : { text: r.name, at: sphericalCentroid(r.geometry), angle: 0, length: 0, width: 0, tilted: false }];
 }
+
+/** A label to draw: its text and where/how it sits (`length`/`width` 0 when unknown: draw at the normal size). */
+export type LabelPoint = { text: string } & LabelPlacement;
 
 /** A region as fill layers: its parts grouped by colour, region colour first, then legend order. */
 export function regionLayers(r: Pick<RegionData, "color" | "legend" | "parts" | "geometry">): { color: string; geometry: RegionGeometry }[] {
