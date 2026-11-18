@@ -81,7 +81,7 @@ const MAX_SLIDE = 110;
 const TILT_MAX = (70 * Math.PI) / 180;
 
 /** An HTML label (textContent only) that is kept clear of the control buttons. */
-export function makeLabel(stage: HTMLElement): { setText(t: string): void; place(x: number, y: number, visible: boolean, fit?: LabelFit): void; el: HTMLDivElement; box: { x0: number; y0: number; x1: number; y1: number } | null; rank: number; shove(dx: number, dy: number): void } {
+export function makeLabel(stage: HTMLElement): { setText(t: string): void; place(x: number, y: number, visible: boolean, fit?: LabelFit): void; el: HTMLDivElement; box: { x0: number; y0: number; x1: number; y1: number } | null; rank: number; shove(dx: number, dy: number): void; shrink(): boolean } {
   const el = document.createElement("div");
   el.className = "rlabel";
   el.hidden = true;
@@ -90,7 +90,7 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
   let text = "";
   let natural: { w: number; h: number } | null = null;
   let size = 0;
-  let last: { cx: number; cy: number; w: number; h: number; a: number; box: { x0: number; y0: number; x1: number; y1: number } } | null = null;
+  let last: { cx: number; cy: number; w: number; h: number; a: number; min: number; box: { x0: number; y0: number; x1: number; y1: number } } | null = null;
   const self = {
     el,
     box: null as { x0: number; y0: number; x1: number; y1: number } | null,
@@ -100,6 +100,23 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
       if (!self.box || !last) return;
       el.style.transform = `translate(${Math.round(last.cx + dx - last.w / 2)}px,${Math.round(last.cy + dy - last.h / 2)}px) rotate(${(-last.a).toFixed(4)}rad)`;
       self.box = { x0: last.box.x0 + dx, y0: last.box.y0 + dy, x1: last.box.x1 + dx, y1: last.box.y1 + dy };
+    },
+    /** One even-pixel step smaller (down to the minimum), about the same centre. False when already at the minimum. */
+    shrink() {
+      if (!self.box || !last || size - 2 < last.min) return false;
+      size -= 2;
+      el.style.fontSize = `${size}px`;
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      const a = last.a;
+      const hw = (Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a))) / 2;
+      const hh = (Math.abs(w * Math.sin(a)) + Math.abs(h * Math.cos(a))) / 2;
+      const cx = (self.box.x0 + self.box.x1) / 2;
+      const cy = (self.box.y0 + self.box.y1) / 2;
+      el.style.transform = `translate(${Math.round(cx - w / 2)}px,${Math.round(cy - h / 2)}px) rotate(${(-a).toFixed(4)}rad)`;
+      self.box = { x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh };
+      last = { cx, cy, w, h, a, min: last.min, box: self.box };
+      return true;
     },
     setText(t: string) {
       text = t;
@@ -151,7 +168,7 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
       }
       el.style.transform = `translate(${Math.round(cx - w / 2)}px,${Math.round(cy - h / 2)}px) rotate(${(-a).toFixed(4)}rad)`;
       self.box = { x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh };
-      last = { cx, cy, w, h, a, box: self.box };
+      last = { cx, cy, w, h, a, min: fit && fit.len > 0 && fit.wid > 0 && Math.abs(a) > 0.01 ? LABEL_MIN_TILT : LABEL_MIN, box: self.box };
       el.style.opacity = "";
     },
   };
@@ -306,38 +323,48 @@ export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; pl
       const placed: Box[] = [];
       for (const l of [...pool].filter((l) => l.box).sort((a, b) => b.rank - a.rank)) {
         const clear = (b: Box) => b.x0 >= 0 && b.y0 >= 0 && b.x1 <= W && b.y1 <= H && ![...fixed, ...placed].some((k) => hit(b, k));
+        // At its size, then one step smaller at a time down to the minimum: stay put, else slide clear of the panel/pins, else shrink; fade only when nothing fits.
         let b = l.box!;
-        if (!clear(b)) {
-          // Only the legend, buttons and pins make a label slide; a clash with another label fades the smaller one.
+        let ok = false;
+        for (;;) {
+          if (clear(b)) {
+            ok = true;
+            break;
+          }
+          // Only the legend, buttons and pins make a label slide; a clash with another label shrinks, then fades the smaller one.
           const obstacles = fixed.filter((k) => hit(b, k));
-          const tries: [number, number][] = obstacles.flatMap((k): [number, number][] => [
-            [k.x1 - b.x0, 0],
-            [k.x0 - b.x1, 0],
-            [0, k.y1 - b.y0],
-            [0, k.y0 - b.y1],
-          ]);
-          if (!obstacles.length) {
-            l.el.style.opacity = "0";
-            continue;
+          if (obstacles.length) {
+            const tries: [number, number][] = obstacles.flatMap((k): [number, number][] => [
+              [k.x1 - b.x0, 0],
+              [k.x0 - b.x1, 0],
+              [0, k.y1 - b.y0],
+              [0, k.y0 - b.y1],
+            ]);
+            // Also the sides of the obstacles' joint box, for a spot that clears several at once.
+            const joint = {
+              x0: Math.min(...obstacles.map((k) => k.x0)),
+              y0: Math.min(...obstacles.map((k) => k.y0)),
+              x1: Math.max(...obstacles.map((k) => k.x1)),
+              y1: Math.max(...obstacles.map((k) => k.y1)),
+            };
+            tries.push([joint.x1 - b.x0, 0], [joint.x0 - b.x1, 0], [0, joint.y1 - b.y0], [0, joint.y0 - b.y1]);
+            const moved = tries
+              .map(([dx, dy]) => ({ dx, dy, m: { x0: b.x0 + dx, y0: b.y0 + dy, x1: b.x1 + dx, y1: b.y1 + dy } }))
+              .filter((t) => Math.hypot(t.dx, t.dy) <= MAX_SLIDE && clear(t.m))
+              .sort((p, q) => Math.hypot(p.dx, p.dy) - Math.hypot(q.dx, q.dy))[0];
+            if (moved) {
+              l.shove(moved.dx, moved.dy);
+              b = moved.m;
+              ok = true;
+              break;
+            }
           }
-          // Also the corners of the obstacles' joint box, for a spot that clears several at once.
-          const joint = {
-            x0: Math.min(...obstacles.map((k) => k.x0)),
-            y0: Math.min(...obstacles.map((k) => k.y0)),
-            x1: Math.max(...obstacles.map((k) => k.x1)),
-            y1: Math.max(...obstacles.map((k) => k.y1)),
-          };
-          tries.push([joint.x1 - b.x0, 0], [joint.x0 - b.x1, 0], [0, joint.y1 - b.y0], [0, joint.y0 - b.y1]);
-          const moved = tries
-            .map(([dx, dy]) => ({ dx, dy, m: { x0: b.x0 + dx, y0: b.y0 + dy, x1: b.x1 + dx, y1: b.y1 + dy } }))
-            .filter((t) => Math.hypot(t.dx, t.dy) <= MAX_SLIDE && clear(t.m))
-            .sort((p, q) => Math.hypot(p.dx, p.dy) - Math.hypot(q.dx, q.dy))[0];
-          if (!moved) {
-            l.el.style.opacity = "0";
-            continue;
-          }
-          l.shove(moved.dx, moved.dy);
-          b = moved.m;
+          if (!l.shrink()) break;
+          b = l.box!;
+        }
+        if (!ok) {
+          l.el.style.opacity = "0";
+          continue;
         }
         l.el.style.opacity = "";
         placed.push(b);
