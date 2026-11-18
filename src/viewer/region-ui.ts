@@ -72,7 +72,7 @@ export interface LabelFit {
   wid: number;
 }
 /** Label text size bounds, px: scaled to the part's size between these. */
-const LABEL_MIN = 11;
+const LABEL_MIN = 12;
 const LABEL_MIN_TILT = 12;
 const LABEL_MAX = 26;
 const LABEL_BASE = 12;
