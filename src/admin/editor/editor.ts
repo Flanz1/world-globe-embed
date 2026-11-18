@@ -481,6 +481,10 @@ export function openEditor(o: EditorOptions): void {
     return { el, label, fwd, back };
   })();
   const undoBtn = iconify(btn("Undo", "Undo (Ctrl+Z)", () => undo(), "undo"), "undo", true);
+  const histTitles = (): void => {
+    undoBtn.title = hist.canUndo ? "Undo (Ctrl+Z)" : "Nothing to undo";
+    redoBtn.title = hist.canRedo ? "Redo (Ctrl+Shift+Z or Ctrl+Y)" : "Nothing to redo";
+  };
   const redoBtn = iconify(btn("Redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)", () => redo(), "redo"), "redo", true);
   const gridBtn = iconify(btn("Grid", "Show the globe's 15° grid (G)", () => toggleGrid(), "grid"), "grid", false);
   const snapBtn = iconify(btn(
@@ -1613,6 +1617,7 @@ export function openEditor(o: EditorOptions): void {
     status.textContent = line;
     undoBtn.disabled = !hist.canUndo;
     redoBtn.disabled = !hist.canRedo;
+    histTitles();
     for (const b of dlg.querySelectorAll<HTMLButtonElement>("button.tool")) b.setAttribute("aria-pressed", String(b.dataset.tool === tool));
     gridBtn.setAttribute("aria-pressed", String(gridOn));
     snapBtn.setAttribute("aria-pressed", String(snapOn));
@@ -2325,6 +2330,7 @@ export function openEditor(o: EditorOptions): void {
   function typed(): void {
     undoBtn.disabled = !hist.canUndo;
     redoBtn.disabled = !hist.canRedo;
+    histTitles();
     window.clearTimeout(typingTimer);
     typingTimer = window.setTimeout(() => {
       typingTimer = 0;
@@ -2339,6 +2345,7 @@ export function openEditor(o: EditorOptions): void {
       if (combine && combine.version !== hist.version) closeCombine(true);
       undoBtn.disabled = !hist.canUndo;
       redoBtn.disabled = !hist.canRedo;
+    histTitles();
       return;
     }
     // Drop selections that no longer exist.
@@ -2351,6 +2358,7 @@ export function openEditor(o: EditorOptions): void {
     if (!hist.dragging) syncPanel();
     undoBtn.disabled = !hist.canUndo;
     redoBtn.disabled = !hist.canRedo;
+    histTitles();
     draw();
     sendPreview();
   }
@@ -3741,20 +3749,28 @@ export function openEditor(o: EditorOptions): void {
 
   function showHelp(): void {
     const m = modal("Keyboard shortcuts", "help-dlg");
-    for (const g of SHORTCUT_GROUPS)
-      m.body.append(
-        h("section", { className: "sc-group" }, h("h3", { textContent: g.title }), h("dl", { className: "shortcuts" }, ...g.rows.flatMap(([k, v]) => [h("dt", {}, h("kbd", { textContent: k })), h("dd", { textContent: v })]))),
-      );
-    // Icon-only toolbar buttons, named (touch screens have no tooltips).
-    const named = [...dlg.querySelectorAll<HTMLButtonElement>(".ed-toolbar button.icon-only")];
+    // The toolbar's icons, named (touch screens have no tooltips): icon, name, shortcut and what it does.
+    const named = [...dlg.querySelectorAll<HTMLButtonElement>(".ed-toolbar button[data-icon]")].filter((b) => !b.hidden);
     if (named.length)
       m.body.append(
         h(
           "section",
           { className: "sc-group" },
-          h("h3", { textContent: "Toolbar icons" }),
-          h("dl", { className: "sc-icons" }, ...named.flatMap((b) => [h("dt", {}, b.querySelector("svg")!.cloneNode(true), b.getAttribute("aria-label") ?? ""), h("dd", { textContent: b.title })])),
+          h("h3", { textContent: "Toolbar" }),
+          h(
+            "dl",
+            { className: "sc-icons" },
+            ...named.flatMap((b) => {
+              const name = b.getAttribute("aria-label") ?? (b.textContent ?? "").trim();
+              const key = /\(([^)]{1,14})\)/.exec(b.title)?.[1];
+              return [h("dt", {}, b.querySelector("svg")!.cloneNode(true), name, key ? h("kbd", { textContent: key }) : null), h("dd", { textContent: b.title.replace(/^[^(:]*(\([^)]*\))?:?\s*/, "").replace(/^./, (c) => c.toUpperCase()) })];
+            }),
+          ),
         ),
+      );
+    for (const g of SHORTCUT_GROUPS)
+      m.body.append(
+        h("section", { className: "sc-group" }, h("h3", { textContent: g.title }), h("dl", { className: "shortcuts" }, ...g.rows.flatMap(([k, v]) => [h("dt", {}, h("kbd", { textContent: k })), h("dd", { textContent: v })]))),
       );
     m.body.append(
       h("section", { className: "sc-group" }, h("h3", { textContent: "How it works" }), h("dl", { className: "sc-notes" }, ...SHORTCUT_NOTES.flatMap(([k, v]) => [h("dt", { textContent: k }), h("dd", { textContent: v })]))),

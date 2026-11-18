@@ -246,7 +246,7 @@ dialog.small-dlg::backdrop, dialog.editor::backdrop { background: rgba(0, 0, 0, 
 .embed-opts input[type=number] { width: 6em; }
 dialog.rpreview { width: min(980px, calc(100vw - 32px)); }
 .rp-frame { width: 100%; height: min(60vh, 520px); border: 0; border-radius: 12px; background: var(--app-map-bg); display: block; }
-.shortcuts { display: grid; grid-template-columns: 14em 1fr; align-items: baseline; gap: 6px 14px; margin: 0; font-size: 14px; }
+.shortcuts { display: grid; grid-template-columns: minmax(auto, 12em) minmax(0, 1fr); align-items: baseline; gap: 6px 14px; margin: 0; font-size: 14px; }
 .shortcuts dd { margin: 0; }
 .sc-group h3 { margin: 4px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--md-sys-color-on-surface-variant); }
 .sc-group + .sc-group { border-top: 1px solid var(--md-sys-color-outline-variant); padding-top: 10px; }
@@ -534,6 +534,10 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
 dialog.editor .ed-toolbar button.icon-only { position: relative; justify-content: center; min-width: 40px; padding: 0; }
 /* A pressed icon-only button keeps the tick, small, on the icon's corner. */
 .ed-toolbar button.icon-only[aria-pressed="true"]::before { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; margin: 0; }
-.sc-icons { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; align-items: center; margin: 0; }
-.sc-icons dt { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.shortcuts kbd { white-space: normal; }
+dialog.help-dlg { width: min(640px, calc(100vw - 32px)); }
+.sc-icons { display: grid; grid-template-columns: minmax(auto, 14em) minmax(0, 1fr); gap: 6px 12px; align-items: center; margin: 0; }
+.sc-icons dt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-weight: 500; }
+.sc-icons dd { overflow-wrap: anywhere; font-size: 13px; color: var(--md-sys-color-on-surface-variant); }
 .sc-icons dd { margin: 0; }
+@media (max-width: 560px) { .sc-icons { grid-template-columns: minmax(0, 1fr); gap: 2px 0; } .sc-icons dd { margin-bottom: 8px; } .sc-icons dd:empty { display: none; } }
