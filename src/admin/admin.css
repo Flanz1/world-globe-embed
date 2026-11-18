@@ -268,7 +268,7 @@ dialog.small-dlg::backdrop, dialog.editor::backdrop { background: rgba(0, 0, 0, 
 .embed-opts input[type=number] { width: 6em; }
 dialog.rpreview { width: min(980px, calc(100vw - 32px)); }
 .rp-frame { width: 100%; height: min(60vh, 520px); border: 0; border-radius: 12px; background: var(--app-map-bg); display: block; }
-.shortcuts { display: grid; grid-template-columns: 14em 1fr; align-items: baseline; gap: 6px 14px; margin: 0; font-size: 14px; }
+.shortcuts { display: grid; grid-template-columns: minmax(auto, 12em) minmax(0, 1fr); align-items: baseline; gap: 6px 14px; margin: 0; font-size: 14px; }
 .shortcuts dd { margin: 0; }
 .sc-group h3 { margin: 4px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--md-sys-color-on-surface-variant); }
 .sc-group + .sc-group { border-top: 1px solid var(--md-sys-color-outline-variant); padding-top: 10px; }
@@ -446,6 +446,10 @@ dialog.editor .ed-sec-toggle { width: 100%; justify-content: flex-start; padding
 .ed-ov-panel[hidden] { display: none; }
 .ed-layer-bar { position: absolute; right: 8px; top: 8px; z-index: 3; display: flex; align-items: center; gap: 6px; padding: 6px 8px 6px 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); border: 0; box-shadow: var(--app-shadow); }
 .ed-layer-bar[hidden] { display: none; }
+.ed-opt-bar { position: absolute; left: 8px; top: 8px; z-index: 3; display: flex; padding: 4px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); box-shadow: var(--app-shadow); }
+.ed-opt-bar[hidden] { display: none; }
+.ed-opt-bar button { min-height: 40px; }
+.ed-opt-bar button[aria-pressed="true"]::before { content: "\2713\00a0"; }
 .ed-layer-name { font-size: 12px; color: var(--md-sys-color-on-surface-variant); white-space: nowrap; }
 .ed-ov-panel .row { display: flex; flex-wrap: wrap; gap: 6px; }
 .ed-ov-panel select { flex: 1 1 90px; min-width: 0; }
@@ -608,6 +612,20 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
 .rename-copy { display: flex; gap: 8px; align-items: center; }
 .rename-dlg input[aria-invalid="true"], .rename-dlg input[aria-invalid="true"]:focus-visible { border-color: var(--md-sys-color-error); outline: 2px solid var(--md-sys-color-error); outline-offset: 0; }
 
+/* Editor toolbar icons (icons.ts): the common tools keep a label, the rest are icon-only (aria-label + tooltip). */
+.ed-toolbar button[data-icon] { display: inline-flex; align-items: center; gap: 6px; }
+.ed-ic { flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+dialog.editor .ed-toolbar button.icon-only { position: relative; justify-content: center; min-width: 40px; padding: 0; }
+/* A pressed icon-only button keeps the tick, small, on the icon's corner. */
+.ed-toolbar button.icon-only[aria-pressed="true"]::before { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; margin: 0; }
+.shortcuts kbd { white-space: normal; }
+dialog.help-dlg { width: min(640px, calc(100vw - 32px)); }
+.sc-icons { display: grid; grid-template-columns: minmax(auto, 14em) minmax(0, 1fr); gap: 6px 12px; align-items: center; margin: 0; }
+.sc-icons dt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-weight: 500; }
+.sc-icons dd { overflow-wrap: anywhere; font-size: 13px; color: var(--md-sys-color-on-surface-variant); }
+.sc-icons dd { margin: 0; }
+@media (max-width: 560px) { .sc-icons { grid-template-columns: minmax(0, 1fr); gap: 2px 0; } .sc-icons dd { margin-bottom: 8px; } .sc-icons dd:empty { display: none; } }
+
 /* ── Bulk selection (Regions, Pins): checkboxes on cards and a bar docked at the bottom ── */
 .bulk-box { width: 20px; height: 20px; margin: 0; accent-color: var(--md-sys-color-primary); cursor: pointer; flex: 0 0 auto; }
 .rcard.selectable { position: relative; cursor: pointer; }
@@ -669,3 +687,19 @@ body.bulk-on { padding-bottom: 96px; }
 .ed-cm-pop textarea { width: 100%; resize: vertical; }
 .ed-cm-count { display: inline-block; min-width: 16px; height: 16px; margin-left: 6px; padding: 0 4px; border-radius: 8px; font-size: 11px; line-height: 16px; text-align: center; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
 .ed-cm-count[hidden] { display: none; }
+
+/* Narrower desktops: keep "Other regions" in view. Undo, Redo, Snap (and below 1400 px Pin) become icon-only; the label stays
+   as visually hidden text, so the buttons keep their names. */
+@media (max-width: 1600px) {
+  .ed-toolbar [data-act="undo"] .ed-lbl, .ed-toolbar [data-act="redo"] .ed-lbl, .ed-toolbar [data-act="snap"] .ed-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  dialog.editor .ed-toolbar [data-act="undo"], dialog.editor .ed-toolbar [data-act="redo"], dialog.editor .ed-toolbar [data-act="snap"] { position: relative; justify-content: center; min-width: 40px; padding: 0; }
+  .ed-toolbar [data-act="snap"][aria-pressed="true"]::before { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; margin: 0; }
+}
+@media (max-width: 1400px) {
+  .ed-toolbar [data-act="pin-tool"] .ed-lbl, .ed-toolbar [data-act="comment-tool"] .ed-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  dialog.editor .ed-toolbar [data-act="pin-tool"], dialog.editor .ed-toolbar [data-act="comment-tool"] { position: relative; justify-content: center; min-width: 40px; padding: 0; }
+  .ed-toolbar [data-act="pin-tool"][aria-pressed="true"]::before { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; margin: 0; }
+  /* Icon-only Comments: the open count stays, as a small pill on the icon's top right. */
+  .ed-toolbar [data-act="comment-tool"] .ed-cm-count { position: absolute; top: 1px; right: 1px; min-width: 14px; height: 14px; margin: 0; padding: 0 3px; font-size: 10px; line-height: 14px; }
+  .ed-toolbar [data-act="comment-tool"][aria-pressed="true"]::before { position: absolute; top: 3px; left: 3px; width: 10px; height: 10px; margin: 0; }
+}
