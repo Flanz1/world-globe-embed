@@ -4,6 +4,8 @@ name: E2E
 #  - Pull requests: only when code that can affect them changes (content/ and docs PRs skip it),
 #    and only the suites scripts/e2e/select.mjs picks for the changed files.
 #  - Nightly: the full suite on main.  By hand: all suites, or the ones you name.
+#  - Called by Deploy before every deploy of main: the suites for what changed since the last deploy,
+#    so main is never deployed while a fast-track merge's checks are still unknown.
 on:
   pull_request:
     paths:
@@ -24,13 +26,25 @@ on:
         description: "Suites to run, space separated (empty = all)"
         required: false
         default: ""
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to test
+        type: string
+        required: true
+      base:
+        description: Pick the suites for the changes since this commit (empty = all suites)
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
+# Pull requests: a new push cancels the older run. Deploy's and nightly runs each get their own group
+# (a cancelled pre-deploy run would block that deploy).
 concurrency:
-  group: e2e-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'pull_request' && format('e2e-{0}', github.ref) || format('e2e-run-{0}-{1}', github.run_id, inputs.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   e2e:
@@ -39,6 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
           fetch-depth: 0
       # select.mjs imports esbuild, so dependencies must be installed before it runs.
@@ -53,15 +68,21 @@ jobs:
           EVENT: ${{ github.event_name }}
           INPUT: ${{ github.event.inputs.suites }}
           BASE: ${{ github.base_ref }}
+          CALLED: ${{ inputs.ref && 'true' || 'false' }}
+          SINCE: ${{ inputs.base }}
         run: |
           git fetch -q origin main
-          if [ "$EVENT" = pull_request ]; then
+          SELECTED=no
+          if [ "$CALLED" = true ]; then
+            # From Deploy: the suites for what changed since the last deploy; no base = all suites.
+            if [ -n "$SINCE" ]; then SUITES=$(node scripts/e2e/select.mjs "$SINCE"); SELECTED=yes; else SUITES=""; fi
+          elif [ "$EVENT" = pull_request ]; then
             git fetch -q origin "$BASE"
-            SUITES=$(node scripts/e2e/select.mjs "origin/$BASE")
+            SUITES=$(node scripts/e2e/select.mjs "origin/$BASE"); SELECTED=yes
           else
             SUITES="$INPUT"
           fi
-          echo "run=$([ "$EVENT" = pull_request ] && [ -z "$SUITES" ] && echo no || echo yes)" >> "$GITHUB_OUTPUT"
+          echo "run=$([ "$SELECTED" = yes ] && [ -z "$SUITES" ] && echo no || echo yes)" >> "$GITHUB_OUTPUT"
           echo "suites=$SUITES" >> "$GITHUB_OUTPUT"
           echo "Suites: ${SUITES:-all}"
       - if: steps.pick.outputs.run == 'yes'
