@@ -7,6 +7,9 @@ on:
   schedule:
     - cron: "0 6 * * 1" # Mondays 06:00 UTC
   workflow_dispatch:
+  # Changes to this workflow check themselves on their PR (report only, no issue).
+  pull_request:
+    paths: [".github/workflows/health.yml", "scripts/content-health.ts"]
 
 permissions: {}
 
@@ -46,6 +49,7 @@ jobs:
   # A separate job without npm, so third-party packages never run next to a token that can write issues.
   issue:
     needs: check
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       issues: write
