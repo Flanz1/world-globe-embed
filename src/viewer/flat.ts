@@ -226,6 +226,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   /* ── Textures: the 1024 the boot script already fetched, then 2048, or 4096 when the crop is small on a
    * big screen, and 8192 when zoomed in further on a desktop, always after the 4096 has shown (see nextTier). ── */
   let loading = false;
+  const failedTiers = new Set<number>();
   const texLimit = deviceLimit(mobile);
   function maybeUpgrade(): void {
     if (loading || !img) return;
@@ -250,10 +251,17 @@ export async function start(ctx: FlatStartContext): Promise<void> {
         root.dataset.tex = String(pick.w);
         schedule(); // the render calls maybeUpgrade again: the next stage (8192 after 4096), if this view wants it
       })
-      .catch(() => {
-        imgW = pick.w; // don't retry this size
+      .catch((e) => {
+        console.warn("[wge] texture upgrade failed", pick.w, e);
+        root.dataset.texError = String(pick.w);
         loading = false;
-        root.dataset.state = "hires";
+        if (failedTiers.has(pick.w)) {
+          imgW = pick.w; // failed twice: don't retry this size
+          root.dataset.state = "hires";
+        } else {
+          failedTiers.add(pick.w); // a transient failure (network, memory under load) gets one retry
+          setTimeout(schedule, 1500);
+        }
       });
   }
 

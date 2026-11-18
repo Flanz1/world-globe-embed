@@ -128,17 +128,23 @@ async function settle(page, requested) {
     last = now;
   }
 }
-async function open(query, { context = {}, shots = false } = {}) {
+async function open(query, { context = {}, shots = false, failFirst8192 = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2, ...context });
   const page = await ctx.newPage();
   const errors = [];
   const requested = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+  page.on("console", (m) => m.type() === "warning" && console.log(`[browser warning] ${m.text()}`));
   page.on("request", (r) => {
     const l = label(r.url());
     if (l) requested.push(l);
   });
+  // A transient failure of the 8192 download: the first request is cut, the viewer retries once.
+  if (failFirst8192) {
+    let cut = false;
+    await page.route(/-8192\.webp$/, (route) => (cut ? route.continue() : ((cut = true), route.abort())));
+  }
   // Hold the tiles back until the 8192 stage is captured.
   let release = () => {};
   if (shots) {
@@ -149,6 +155,10 @@ async function open(query, { context = {}, shots = false } = {}) {
   await page.waitForFunction(() => document.documentElement.dataset.tex === "8192" || document.documentElement.dataset.state === "hires", null, { timeout: 120000 });
   const view = query.includes("flat") ? "flat" : "globe";
   if (shots) {
+    // A texture that failed to load says so in data-tex-error: report that instead of waiting out the timeout.
+    await page.waitForFunction(() => document.documentElement.dataset.tex === "8192" || document.documentElement.dataset.texError === "8192", null, { timeout: 120000 });
+    const failed = await page.evaluate(() => document.documentElement.dataset.texError ?? "");
+    if (failed) console.log(`[${query}] the ${failed} texture failed to load once (a retry follows); tex now ${await page.evaluate(() => document.documentElement.dataset.tex)}`);
     await page.waitForFunction(() => document.documentElement.dataset.tex === "8192", null, { timeout: 120000 });
     await page.waitForTimeout(900);
     await page.screenshot({ path: path.join(OUT, `${view}-8192.png`) });
@@ -206,6 +216,15 @@ for (const view of ["globe", "flat"]) {
   const phone = await open(q, { context: devices["Pixel 7"] });
   check(`${view}: a phone loads no tiles and no 8192`, phone.requested.every((x) => !x.includes(":") && x !== "8192"), phone.requested.join(" "));
   await phone.ctx.close();
+}
+
+// A cut 8192 download is retried once, not given up on for good.
+for (const view of ["globe", "flat"]) {
+  const q = `v/tiles/?region=close-up&zoom=99${view === "flat" ? "&view=flat" : ""}`;
+  const e = await open(q, { failFirst8192: true });
+  const tex = await e.page.evaluate(() => document.documentElement.dataset.tex);
+  check(`${view}: a cut 8192 download is retried and shown`, tex === "8192", `data-tex=${tex}, requested ${whole(e.requested).join(" → ")}`);
+  await e.ctx.close();
 }
 
 // The admin region editor: zoomed far in, it goes 2048 → 4096 → 8192, then the tiles under the view.
