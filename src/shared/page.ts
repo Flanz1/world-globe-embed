@@ -47,11 +47,11 @@ transition:opacity .4s ease}
 .ready #globe{opacity:1}.ready #poster{opacity:0}
 .flat{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .note{position:absolute;inset:auto 16px;top:45%;margin:0;text-align:center;font-size:14px;color:#9d927b}
-#ui{position:fixed;right:8px;bottom:8px;display:flex;gap:4px;opacity:.55;transition:opacity .2s}
+#ui{position:fixed;right:8px;bottom:8px;display:flex;gap:4px}
 #ui:hover,#ui:focus-within{opacity:1}
-#ui button{all:unset;box-sizing:border-box;width:28px;height:28px;display:grid;place-items:center;border-radius:6px;cursor:pointer;color:#e8dcc8;background:rgba(20,18,14,.55)}
+#ui button{all:unset;box-sizing:border-box;width:28px;height:28px;display:grid;place-items:center;border-radius:6px;cursor:pointer;color:#e8dcc8;background:rgba(20,18,14,.72);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 #ui button:focus-visible{outline:2px solid #c9a94e}
-#ui button[aria-pressed=true]{color:#e8c44a;background:rgba(20,18,14,.8)}
+#ui button[aria-pressed=true]{color:#e8c44a;background:rgba(20,18,14,.88)}
 #ui button{position:relative}
 #ui button::after{content:attr(aria-label);position:absolute;right:0;bottom:calc(100% + 6px);padding:3px 8px;border-radius:5px;background:rgba(20,18,14,.92);color:#f3ead8;font:600 12px/1.3 system-ui,sans-serif;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .12s}
 @media (hover:hover){#ui button:hover::after{opacity:1;transition-delay:.4s}}
