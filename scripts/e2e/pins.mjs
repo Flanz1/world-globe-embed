@@ -512,7 +512,27 @@ await step(A, "owner places, moves and deletes a pin", async () => {
       await page.setViewportSize({ width: w, height: hgt });
       await page.emulateMedia({ colorScheme: scheme });
       await page.waitForTimeout(300);
+      await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({ path: path.join(OUT, `pins-tab-${w}-${scheme}.png`), fullPage: true });
+      if (w !== 768) {
+        const bar = page.locator("#tab-pins .pn-tools");
+        const top = page.locator("#tab-pins .pn-actions button:has-text('Place pins')");
+        await top.click();
+        await page.waitForSelector(".pn-placing:not([hidden])");
+        const box = await page.locator("#tab-pins h2").boundingBox();
+        await page.screenshot({ path: path.join(OUT, `pins-placing-${w}-${scheme}.png`), clip: { x: 0, y: Math.max(0, box.y - 10), width: w, height: Math.min(520, hgt - box.y) } });
+        if (w === 375 && scheme === "light") {
+          const b = await bar.boundingBox();
+          check(A, "at 375 the header actions sit under the fields on a row of their own", b.width <= 375);
+          const more = page.locator('.pinmap[data-pinmap="battles"] .act-more button[data-action="more"]');
+          check(A, "at 375 a pin map row keeps Embed code… and moves the rest into More…", (await page.locator('.pinmap[data-pinmap="battles"] button[data-action="embed-map"]').isVisible()) && !(await page.locator('.pinmap[data-pinmap="battles"] button[data-action="rename-map"]').isVisible()) && (await more.isVisible()));
+          await more.click();
+          check(A, "…the menu has Move, Rename and Delete", (await page.locator('.rmenu:popover-open button').allTextContents()).join("|") === "Move…|Rename…|Delete…");
+          await page.keyboard.press("Escape");
+          check(A, "folder reorder buttons have names", (await page.locator('.rfolder button[data-action="up"]').first().getAttribute("aria-label")) !== null);
+        }
+        if (await page.locator("#tab-pins button[data-action=place-done]").isVisible()) await page.click("#tab-pins button[data-action=place-done]");
+      }
     }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ colorScheme: "light" });
@@ -523,6 +543,7 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   await page.click('.pn-zoom button[data-action="pin-labels"]');
   await page.click('.pn-zoom button[data-action="pin-regions"]');
   // Arrow keys nudge the selected marker.
+  await page.locator(".pn-row", { hasText: "Test Harbour" }).click();
   await page.locator(".pn-marker[aria-pressed=true]").focus();
   for (let i = 0; i < 5; i++) await page.keyboard.press("ArrowRight");
   const posAfter = await page.textContent(".pn-pos");

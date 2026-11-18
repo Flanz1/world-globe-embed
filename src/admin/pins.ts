@@ -21,6 +21,7 @@ import { confirmBox, modal } from "./region-dialogs.ts";
 import { canOrganise, initPinMaps, loadPinMaps, moveMapDialog, newFolder, newMap, pinMaps, removeMap, renameMap, renderTree } from "./pinmaps.ts";
 import { mapById, mapsOfSlot, type PinMap } from "../shared/pinmaps.ts";
 import { account, can, canDelete, canEdit, refusal } from "./session.ts";
+import { moreMenu } from "./more-menu.ts";
 
 export interface PinsDeps {
   gh: () => GitHub;
@@ -703,9 +704,14 @@ function renderList(): void {
               "div",
               { className: "actions" },
               small("Embed code…", "embed-map", () => embedDialog(m.id)),
-              small("Move", "move-map", () => moveMapDialog(m), why),
-              small("Rename", "rename-map", () => renameMap(m), why),
-              small("Delete", "delete-map", () => void removeMap(m, all.length), why, "ghost danger"),
+              small("Move", "move-map", () => moveMapDialog(m), why, "ghost act-extra"),
+              small("Rename", "rename-map", () => renameMap(m), why, "ghost act-extra"),
+              small("Delete", "delete-map", () => void removeMap(m, all.length), why, "ghost danger act-extra"),
+              moreMenu(`More actions for pin map ${m.name}`, [
+                { text: "Move…", action: "menu-move-map", onclick: () => moveMapDialog(m), why },
+                { text: "Rename…", action: "menu-rename-map", onclick: () => renameMap(m), why },
+                { text: "Delete…", action: "menu-delete-map", onclick: () => void removeMap(m, all.length), why, danger: true },
+              ]),
             )
           : null,
       ),
@@ -939,7 +945,7 @@ function build(): void {
       { className: "card" },
       h("h2", { textContent: "Map pins" }),
       h("p", { className: "muted", textContent: "Mark cities, ruins, battle sites and other places on a slot's map. Group pins into pin maps (“Holy sites”, “Battles”) and sort those into folders, like regions. An embed shows one pin map (?pins=holy-sites), or every pin (?pins=1), and a region can include pin maps so their pins show on its embed. A pin can link to its note in the vault." }),
-      h("div", { className: "row pn-tools" }, h("label", {}, "Slot", slotSel), h("label", { className: "grow" }, "Search", searchBox), add, embed, addMap, addFolder),
+      h("div", { className: "row pn-tools" }, h("label", {}, "Slot", slotSel), h("label", { className: "grow" }, "Search", searchBox), h("div", { className: "pn-actions" }, add, embed, addMap, addFolder)),
       placing,
       h("div", { className: "pn-body" }, pane, h("div", { className: "pn-side" }, form)),
       h("div", { className: "pn-below" }, count, kindBar, list),
