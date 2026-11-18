@@ -611,6 +611,7 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
   dialog.editor .ed-toolbar button { min-height: 40px; }
   dialog.editor .ed-toolbar button::after { height: 44px; }
   .ed-toolbar { padding-bottom: 6px; }
+}
 
 /* ── Warp regions (Maps & slots → slot → More… → Warp regions…) ── */
 dialog.warp { width: calc(100vw - 16px); height: calc(100vh - 16px); max-width: none; max-height: none; padding: 0; border: 0; border-radius: 16px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-shadow: var(--app-shadow); overflow: hidden; }
