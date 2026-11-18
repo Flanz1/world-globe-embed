@@ -96,6 +96,7 @@ One line per source file: what it is for. The first comment in each file says mo
 
 | File | Purpose |
 |---|---|
+| `worker/src/comments.ts` | Reviewer comments: anyone on the admin list can drop a short comment at a spot on a region; people who may edit the region see it and tick it off. Kept in one KV value, never listed. |
 | `worker/src/crypto.ts` | Signing helpers for the admin API: HMAC-signed session and state tokens, and the GitHub App's RS256 JWT. |
 | `worker/src/handler.ts` | The admin API: a Cloudflare Worker that is the only thing allowed to write to the repository. |
 | `worker/src/index.ts` | Cloudflare Worker entry for the admin API (see handler.ts), and the Durable Object behind "X is editing" (presence.ts). |

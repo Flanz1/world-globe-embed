@@ -139,7 +139,7 @@ function renderSlots(): void {
       const select = h("select", { className: "map-select", ariaLabel: `Map for ${slug}` });
       mapOptions(select, slot.map);
       let img = thumb(current);
-      const save = h("button", { type: "button", textContent: "Switch map", disabled: true });
+      const save = h("button", { type: "button", textContent: "Switch map", disabled: true, title: "Pick a different map first" });
       const copy = h("button", { type: "button", className: "ghost", textContent: "Copy embed code" });
       const preview = h("button", { type: "button", className: "ghost", textContent: "Preview" });
       preview.addEventListener("click", () =>
@@ -156,10 +156,11 @@ function renderSlots(): void {
               patch.south === (slot.south ?? 0) &&
               patch.pole.toLowerCase() === (slot.pole ?? "#e8dcc8").toLowerCase() &&
               patch.shift === (slot.shift ?? 0) &&
-              patch.radius === (slot.radius ?? 0);
+              patch.radius === (slot.radius ?? 0) &&
+              JSON.stringify(patch.travel) === JSON.stringify(slot.travel ?? []);
             if (unchanged) return setStatus("Nothing changed.");
             void act(`Saving ${slug}…`, () =>
-              gh!.commit(`Update slot "${slug}": map "${patch.map}", ${patch.view} view, padding N ${patch.north}% / S ${patch.south}%, prime meridian ${patch.shift}°, world radius ${patch.radius ? `${patch.radius} km` : "none"}`, async () => [
+              gh!.commit(`Update slot "${slug}": map "${patch.map}", ${patch.view} view, padding N ${patch.north}% / S ${patch.south}%, prime meridian ${patch.shift}°, world radius ${patch.radius ? `${patch.radius} km` : "none"}${patch.travel.length ? `, travel speeds ${patch.travel.map((t) => `${t.label} ${t.kmPerDay} km/day`).join(", ")}` : ""}`, async () => [
                 await slotsChange((s) => {
                   const cur = s.slots[slug];
                   if (!cur) throw new Error(`Slot "${slug}" no longer exists.`);
@@ -172,6 +173,8 @@ function renderSlots(): void {
                     if (patch[k]) cur[k] = patch[k];
                     else delete cur[k];
                   }
+                  if (patch.travel.length) cur.travel = patch.travel;
+                  else delete cur.travel;
                   if (patch.north || patch.south || cur.pole) cur.pole = patch.pole;
                 }),
               ]),
@@ -181,6 +184,7 @@ function renderSlots(): void {
       );
       select.addEventListener("change", () => {
         save.disabled = select.value === slot.map;
+        save.title = save.disabled ? "Pick a different map first" : "";
         const next = thumb(maps.find((m) => m.id === select.value));
         img.replaceWith(next);
         img = next;
@@ -226,7 +230,8 @@ function renderSlots(): void {
           h("code", { textContent: slug }),
           " ",
           h("a", { href: new URL(`v/${slug}/`, SITE).href, target: "_blank", rel: "noopener", textContent: "open" }),
-          h("div", { className: "actions" }, select, save, preview, copy),
+          h("div", { className: "slot-map" }, select),
+          h("div", { className: "actions" }, save, preview, copy),
         ),
       );
     }),
