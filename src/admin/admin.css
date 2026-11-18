@@ -153,7 +153,7 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .45); }
 .pv-tr label.inline { flex: 1 1 auto; min-width: 0; }
 .pv-tr input[type=text] { flex: 1 1 0; min-width: 0; width: 100%; }
 .pv-km { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; color: var(--md-sys-color-on-surface-variant); }
-.pv-km input { width: 6ch; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.pv-km input { width: 8ch; padding-inline: 6px; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .pv-travel:disabled { opacity: .6; }
 .pv-view { display: grid; gap: 6px; justify-items: start; }
 .pv-controls label.inline { display: flex; align-items: center; gap: 8px; }
