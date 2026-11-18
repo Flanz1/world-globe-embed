@@ -459,6 +459,94 @@ async function save_(err: HTMLElement): Promise<void> {
   });
 }
 
+/**
+ * Saves a pin on behalf of another screen (the region editor's Pin tool): the same checks, the same one commit per
+ * pin, and it shows at once. Returns why it can't be saved, or null when it is on its way.
+ */
+export async function savePinFrom(draft: PinFeature, isNew: boolean): Promise<string | null> {
+  const me = account();
+  const now = stamp();
+  const gh = deps.gh();
+  const f: PinFeature = structuredClone(draft);
+  f.properties.name = f.properties.name.trim();
+  if (!f.properties.name) return "Give the pin a name.";
+  if (f.properties.link && !safeLink(f.properties.link)) return "The link must be a full https:// address.";
+  if (f.properties.link) f.properties.link = safeLink(f.properties.link)!;
+  const before = isNew ? null : entryOf(f.id)?.feature ?? null;
+  if (isNew) f.id = freshId(f.properties.name);
+  if (!PIN_ID.test(f.id)) return "Couldn't make an id from that name.";
+  f.properties.updatedBy = me;
+  f.properties.updated = now;
+  if (isNew) {
+    f.properties.createdBy = me;
+    f.properties.created = now;
+  }
+  const problems = checkPin(f);
+  if (problems.length) return problems[0].replace(/^pin "[^"]*": /, "");
+  const path = pinPath(f.id);
+  const text = serialize(f);
+  const why = refusal({ path, before: before ? serialize(before) : null, after: text });
+  if (why) return why;
+  const label = isNew ? `Place pin "${f.properties.name}"` : `Update pin "${f.properties.name}"`;
+  const baseSha = entryOf(f.id)?.sha;
+  const followsOwnSave = (inFlight.get(f.id) ?? 0) > 0;
+  inFlight.set(f.id, (inFlight.get(f.id) ?? 0) + 1);
+  await optimistic<PinEntry[]>({
+    label,
+    apply: () => {
+      const was = entries;
+      const entry: PinEntry = { id: f.id, path, sha: baseSha ?? "", feature: f };
+      entries = isNew ? [...entries, entry].sort((a, b) => a.id.localeCompare(b.id)) : entries.map((x) => (x.id === f.id ? entry : x));
+      return was;
+    },
+    undo: (was) => void (entries = was),
+    render: () => {
+      if (!built) return;
+      renderList();
+      redraw();
+    },
+    commit: async () => {
+      try {
+        if (!isNew && baseSha && !followsOwnSave) {
+          if ((await gh.fileSha(path)) !== baseSha) throw new Error(`"${f.properties.name}" was changed by someone else since you opened it. Close it and open it again.`);
+        }
+        if (isNew && (await gh.fileSha(path)) !== null) throw new Error(`A pin with the id "${f.id}" already exists. Try a different name.`);
+        return await gh.commit(`${label} on slot "${f.properties.slot}"`, async () => [{ path, content: text }]);
+      } finally {
+        const n = (inFlight.get(f.id) ?? 1) - 1;
+        if (n > 0) inFlight.set(f.id, n);
+        else inFlight.delete(f.id);
+      }
+    },
+  });
+  return null;
+}
+
+/** Deletes a saved pin on behalf of another screen (the caller has already asked the person). Returns why not, or null. */
+export async function deletePinById(id: string): Promise<string | null> {
+  const e = entryOf(id);
+  if (!e?.feature) return "That pin is already gone.";
+  const why = refusal({ path: e.path, before: serialize(e.feature), after: null });
+  if (why) return why;
+  const name = e.feature.properties.name;
+  await optimistic<PinEntry[]>({
+    label: `Delete pin "${name}"`,
+    apply: () => {
+      const was = entries;
+      entries = entries.filter((x) => x !== e);
+      return was;
+    },
+    undo: (was) => void (entries = was),
+    render: () => {
+      if (!built) return;
+      renderList();
+      redraw();
+    },
+    commit: () => deps.gh().commit(`Delete pin "${name}"`, async () => [{ path: e.path, content: "", delete: true }]),
+  });
+  return null;
+}
+
 async function remove_(): Promise<void> {
   const e = entryOf(selected);
   if (!e?.feature) return;
