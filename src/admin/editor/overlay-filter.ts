@@ -153,9 +153,9 @@ export function createOverlayFilter(o: { items: OverlayItem[]; categories: Overl
       h("button", { type: "button", className: "ghost", textContent: "Hide listed", title: "Turn off every region the search and filters list", dataset: { act: "overlays-hide" }, onclick: () => set(listed(), false) }),
       h("button", { type: "button", className: "ghost", textContent: "Hide all", dataset: { act: "overlays-hide-all" }, onclick: () => set(o.items, false) }),
     ),
-    ...(o.extra ? [o.extra] : []),
     info,
     list,
+    ...(o.extra ? [h("div", { className: "ed-ov-layers" }, h("strong", { className: "small", textContent: "Layers" }), o.extra)] : []),
   );
   for (const el of [search, cat, who, sort]) el.addEventListener(el === search ? "input" : "change", render);
 
@@ -163,6 +163,8 @@ export function createOverlayFilter(o: { items: OverlayItem[]; categories: Overl
     panel.hidden = !open;
     button.ariaExpanded = String(open);
     if (open) render();
+    // The layer-order bar hides while the panel is open.
+    o.onChange();
   };
   button.addEventListener("click", () => toggle());
   panel.addEventListener("keydown", (e) => {

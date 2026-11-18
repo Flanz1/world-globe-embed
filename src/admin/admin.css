@@ -362,7 +362,8 @@ dialog.editor .ed-folder-head button { padding: 0 8px; }
 
 /* Editor: "Other regions" tool (button at the toolbar's right end, panel at the top right of the map) */
 .ed-toolbar-end { margin-left: auto; display: flex; }
-.ed-ov-panel { position: absolute; right: 8px; top: 8px; z-index: 3; display: grid; gap: 6px; width: min(340px, calc(100% - 16px)); max-height: min(70vh, 520px); grid-template-rows: auto auto auto auto auto auto minmax(0, 1fr); padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); border: 0; box-shadow: var(--app-shadow); }
+.ed-ov-panel { position: absolute; right: 8px; top: 8px; z-index: 3; display: grid; gap: 6px; width: min(340px, calc(100% - 16px)); max-height: min(70vh, 520px); grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); border: 0; box-shadow: var(--app-shadow); }
+.ed-ov-layers { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid var(--md-sys-color-outline-variant); }
 .ed-pin-tip { position: absolute; z-index: 4; pointer-events: none; padding: 4px 8px; border-radius: 8px; font-size: 12px; white-space: nowrap; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); border: 1px solid var(--md-sys-color-outline-variant); box-shadow: var(--app-shadow); }
 .ed-pin-tip[hidden] { display: none; }
 .ed-ov-panel[hidden] { display: none; }
