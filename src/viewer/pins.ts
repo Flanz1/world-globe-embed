@@ -6,7 +6,8 @@
  * first (links must be https), and the markers are plain DOM: no extra canvas, no WebGL.
  */
 import { pinIcon, inkFor } from "../shared/pin-icons.ts";
-import { PIN_ID, kindInfo, markerSize, parsePinsFile, parsePinsParam, pinColor, pinShown, safeLink, type PinData } from "../shared/pins.ts";
+import { leftStack } from "./stack.ts";
+import { PIN_ID, PIN_KINDS, kindInfo, markerSize, parsePinsFile, parsePinsParam, pinColor, pinShown, safeLink, type PinData } from "../shared/pins.ts";
 
 /** Where a pin is on screen, or that it can't be seen (far side of the globe, outside the flat view). */
 export interface PinPoint {
@@ -14,6 +15,9 @@ export interface PinPoint {
   y: number;
   visible: boolean;
 }
+
+/** Asks the viewer to zoom in on these pins ([lon, lat] in the map image's frame); false if it can't zoom in any further. */
+export type ZoomTo = (points: [number, number][]) => boolean;
 
 export interface PinLayer {
   /** Positions every marker. `project` gets a pin's [lon, lat] in the map image's frame. */
@@ -40,11 +44,35 @@ const CSS = `
 .wpin-card a:focus-visible,.wpin-card .x:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .wpin-card .x{all:unset;position:absolute;right:6px;top:6px;width:22px;height:22px;display:grid;place-items:center;border-radius:5px;cursor:pointer;font-size:16px;line-height:1}
 .wpin-card .x:hover{background:rgba(255,255,255,.15)}
+.wpin.wcl{border-color:rgba(243,234,216,.9);background:rgba(20,18,14,.92);color:#f3ead8;font:700 12px/1 system-ui,sans-serif;box-shadow:0 0 0 3px var(--ring,rgba(243,234,216,.3)),0 1px 4px rgba(0,0,0,.55)}
+.wcl-list{position:absolute;z-index:3;box-sizing:border-box;width:min(240px,calc(100% - 16px));max-height:50%;overflow:auto;padding:4px;border-radius:8px;background:rgba(20,18,14,.92);color:#f3ead8;font:13px/1.3 system-ui,sans-serif;pointer-events:auto}
+.wcl-list[hidden]{display:none}
+.wcl-list button{all:unset;box-sizing:border-box;display:block;width:100%;padding:6px 8px;border-radius:5px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wcl-list button:hover{background:rgba(255,255,255,.15)}
+.wcl-list button:focus-visible{outline:2px solid #f3ead8;outline-offset:-2px}
+.wpl{border-radius:6px;background:rgba(20,18,14,.8);color:#f3ead8;font:12px/1.3 system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden;order:2}
+.wpl[hidden]{display:none}
+.wpl-head{all:unset;box-sizing:border-box;display:block;width:100%;padding:4px 8px;font-weight:600;cursor:pointer}
+.wpl-head::after{content:"▾";margin-left:6px;opacity:.7}.wpl-head[aria-expanded=false]::after{content:"▸"}
+.wpl-chips{display:flex;flex-direction:column;gap:3px;padding:0 6px 6px;overflow:auto;max-height:calc(6 * 31px)}
+.wpl-chips[hidden]{display:none}
+.wpl-chip{all:unset;box-sizing:border-box;display:flex;align-items:center;min-height:28px;cursor:pointer}
+.wpl-pill{flex:1;min-width:0;display:flex;align-items:center;gap:6px;min-height:28px;padding:0 8px;border-radius:14px;border:1px solid rgba(243,234,216,.45);background:rgba(243,234,216,.16);white-space:nowrap}
+.wpl-pill i{flex:none;display:grid;place-items:center;width:18px;height:18px;border-radius:50%}
+.wpl-pill span{overflow:hidden;text-overflow:ellipsis}
+.wpl-pill .n{margin-left:auto;padding-left:8px;opacity:.75;text-decoration:none}
+.wpl-pill::after{content:"✓";flex:none;width:12px;text-align:center}
+.wpl-chip[aria-pressed=false] .wpl-pill{background:none;border-color:rgba(243,234,216,.3)}
+.wpl-chip[aria-pressed=false] .wpl-pill::after{content:""}
+.wpl-chip[aria-pressed=false] .wpl-pill span:not(.n){text-decoration:line-through;opacity:.8}
+.wpl-chip:focus-visible .wpl-pill,.wpl-head:focus-visible{outline:2px solid #f3ead8;outline-offset:1px}
+.wpl-head:focus-visible{outline-offset:-2px}
+@media (pointer:coarse){.wpl-chips{max-height:none;gap:0}.wpl-chip{min-height:44px}}
 `.replace(/\n/g, "");
 
 /** Fetches and draws this slot's pins if the page asked for them (?pins=…); null when it didn't or there is nothing to show. */
 /** `fallback` is what a region embed asks for by itself (the region's pin maps) when the URL has no ?pins=. */
-export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: string, search = location.search, fallback?: string): Promise<PinLayer | null> {
+export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: string, search = location.search, fallback?: string, zoomTo?: ZoomTo): Promise<PinLayer | null> {
   const sel = parsePinsParam(new URLSearchParams(search).get("pins") ?? fallback);
   // The admin preview page has no pins file of its own: it gets them from the admin page (watchPreviewPins).
   if (!sel || !PIN_ID.test(slug)) return null;
@@ -55,27 +83,27 @@ export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: s
   } catch {
     file = null;
   }
-  return buildPins(stage, canvas, file, sel);
+  return buildPins(stage, canvas, file, sel, zoomTo);
 }
 
 /**
  * Admin preview only: the admin page sends the pins to show ({ type: "wge-pins", file, show }), as it has them
  * before they are deployed. Only same-origin messages from the parent count; the data is validated like a fetched file.
  */
-export function watchPreviewPins(stage: HTMLElement, canvas: HTMLElement, set: (layer: PinLayer | null) => void): void {
+export function watchPreviewPins(stage: HTMLElement, canvas: HTMLElement, set: (layer: PinLayer | null) => void, zoomTo?: ZoomTo): void {
   let layer: PinLayer | null = null;
   window.addEventListener("message", (e: MessageEvent) => {
     if (e.origin !== location.origin || e.source !== window.parent || e.data?.type !== "wge-pins") return;
     layer?.destroy();
     const sel = parsePinsParam(typeof e.data.show === "string" ? e.data.show : null);
-    layer = sel ? buildPins(stage, canvas, parsePinsFile(e.data.file), sel) : null;
+    layer = sel ? buildPins(stage, canvas, parsePinsFile(e.data.file), sel, zoomTo) : null;
     set(layer);
   });
   // The viewer starts after the page has loaded, so the admin page can't know when it's listening: ask for the pins.
   if (window.parent !== window) window.parent.postMessage({ type: "wge-pins-wanted" }, location.origin);
 }
 
-function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typeof parsePinsFile>, sel: NonNullable<ReturnType<typeof parsePinsParam>>): PinLayer | null {
+function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typeof parsePinsFile>, sel: NonNullable<ReturnType<typeof parsePinsParam>>, zoomTo?: ZoomTo): PinLayer | null {
   const mapName = new Map((file?.maps ?? []).map((m) => [m.id, m.name]));
   const labelOf = (p: PinData) => (p.pinMap && mapName.get(p.pinMap)) || "";
   const pins = (file?.pins ?? []).filter((p) => pinShown(sel, p));
@@ -175,24 +203,208 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
     b.append(pinIcon(p.kind, Math.round(size * 0.6)));
     b.addEventListener("click", () => show(b, p));
     layer.append(b);
-    return { b, p };
+    return { b, p, x: 0, y: 0, on: false };
   });
 
-  const half = size / 2;
+  /* ── Kind filter: one toggle chip per kind present, in the top-left stack ── */
+  const off = new Set<string>();
+  const counts = new Map<string, number>();
+  for (const p of pins) counts.set(p.kind, (counts.get(p.kind) ?? 0) + 1);
+  let lastProject: ((at: [number, number]) => PinPoint) | null = null;
+  let panel: HTMLElement | null = null;
+  if (counts.size >= 2) {
+    panel = document.createElement("div");
+    panel.className = "wpl";
+    const head = document.createElement("button");
+    head.type = "button";
+    head.className = "wpl-head";
+    head.textContent = "Pins";
+    const chips = document.createElement("div");
+    chips.className = "wpl-chips";
+    chips.id = "wpl-chips";
+    head.setAttribute("aria-controls", chips.id);
+    const fold = (open: boolean) => {
+      head.setAttribute("aria-expanded", String(open));
+      head.title = open ? "Hide pin filter" : "Show pin filter";
+      chips.hidden = !open;
+    };
+    fold(stage.clientWidth >= 420);
+    head.addEventListener("click", () => fold(head.getAttribute("aria-expanded") !== "true"));
+    for (const k of PIN_KINDS) {
+      const n = counts.get(k.id);
+      if (!n) continue;
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "wpl-chip";
+      chip.setAttribute("aria-pressed", "true");
+      chip.setAttribute("aria-label", `${k.label}, ${n} ${n === 1 ? "pin" : "pins"}`);
+      const sw = document.createElement("i");
+      sw.style.background = k.color;
+      sw.style.color = inkFor(k.color);
+      sw.append(pinIcon(k.id, 12));
+      const label = document.createElement("span");
+      const count = document.createElement("span");
+      count.className = "n";
+      count.textContent = String(n);
+      label.textContent = k.label;
+      const pill = document.createElement("span");
+      pill.className = "wpl-pill";
+      pill.append(sw, label, count);
+      chip.append(pill);
+      chip.addEventListener("click", () => {
+        const now = !off.has(k.id);
+        if (now) off.add(k.id);
+        else off.delete(k.id);
+        chip.setAttribute("aria-pressed", String(!now));
+        closeList();
+        if (open && off.has(markers.find((m) => m.b === open)!.p.kind)) close();
+        if (lastProject) cluster(lastProject);
+      });
+      chips.append(chip);
+    }
+    panel.append(head, chips);
+    for (const t of ["pointerdown", "wheel"] as const) panel.addEventListener(t, (e) => e.stopPropagation());
+    leftStack(stage).append(panel);
+  }
+
+  /* ── Clusters: markers that would overlap merge into one numbered marker ── */
+  const gap = size * 1.1;
+  const csize = size + 8;
+  const clusterEls: HTMLButtonElement[] = [];
+  const list = document.createElement("div");
+  list.className = "wcl-list";
+  list.hidden = true;
+  stage.append(list);
+  function closeList(): void {
+    list.hidden = true;
+  }
+  const showList = (members: { p: PinData; b: HTMLButtonElement }[], x: number, y: number) => {
+    list.replaceChildren(
+      ...members.map(({ p, b }) => {
+        const it = document.createElement("button");
+        it.type = "button";
+        it.textContent = p.name;
+        it.addEventListener("click", () => {
+          closeList();
+          b.hidden = false;
+          show(b, p);
+          b.focus();
+        });
+        return it;
+      }),
+    );
+    list.style.left = `${Math.max(8, Math.min(x - 120, stage.clientWidth - 248))}px`;
+    list.style.top = `${Math.max(8, Math.min(y + csize / 2 + 4, stage.clientHeight - 60))}px`;
+    list.hidden = false;
+    (list.firstElementChild as HTMLElement | null)?.focus();
+  };
+  stage.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key === "Escape" && !list.hidden) closeList();
+    },
+    { signal: gone.signal },
+  );
+  canvas.addEventListener("pointerdown", closeList, { signal: gone.signal });
+
+  const clusterBtn = (i: number): HTMLButtonElement => {
+    let c = clusterEls[i];
+    if (!c) {
+      c = document.createElement("button");
+      c.type = "button";
+      c.className = "wpin wcl";
+      c.style.width = c.style.height = `${csize}px`;
+      layer.append(c);
+      clusterEls[i] = c;
+    }
+    return c;
+  };
+  const clusterData = new Map<HTMLButtonElement, { members: typeof markers; x: number; y: number }>();
+  layer.addEventListener("click", (e) => {
+    const c = (e.target as Element).closest<HTMLButtonElement>(".wcl");
+    const d = c && clusterData.get(c);
+    if (!d) return;
+    closeList();
+    const pts = d.members.map((m) => m.p.at);
+    const spread = Math.max(...pts.map((a) => Math.abs(a[0] - pts[0][0]) + Math.abs(a[1] - pts[0][1])));
+    if (spread < 1e-4 || !zoomTo || !zoomTo(pts)) showList(d.members, d.x, d.y);
+  });
+
+  /** Positions every marker and merges those that would overlap. */
+  function cluster(project: (at: [number, number]) => PinPoint): void {
+    lastProject = project;
+    const cell = gap;
+    const grid = new Map<string, { x: number; y: number; members: typeof markers }[]>();
+    const groups: { x: number; y: number; members: typeof markers }[] = [];
+    const keyOf = (cx: number, cy: number) => `${cx},${cy}`;
+    for (const m of markers) {
+      const pt = project(m.p.at);
+      m.on = pt.visible && Number.isFinite(pt.x) && Number.isFinite(pt.y) && !off.has(m.p.kind);
+      m.x = pt.x;
+      m.y = pt.y;
+      if (!m.on) continue;
+      // The open marker stays a single pin so its card keeps pointing at something.
+      let g: (typeof groups)[number] | undefined;
+      if (m.b !== open) {
+        const cx = Math.floor(m.x / cell);
+        const cy = Math.floor(m.y / cell);
+        search: for (let dx = -1; dx <= 1; dx++)
+          for (let dy = -1; dy <= 1; dy++)
+            for (const c of grid.get(keyOf(cx + dx, cy + dy)) ?? []) {
+              if (Math.hypot(c.x - m.x, c.y - m.y) < gap && c.members[0].b !== open) {
+                g = c;
+                break search;
+              }
+            }
+      }
+      if (g) {
+        g.members.push(m);
+        continue;
+      }
+      g = { x: m.x, y: m.y, members: [m] };
+      groups.push(g);
+      const k = keyOf(Math.floor(m.x / cell), Math.floor(m.y / cell));
+      const a = grid.get(k);
+      if (a) a.push(g);
+      else grid.set(k, [g]);
+    }
+    let ci = 0;
+    clusterData.clear();
+    for (const g of groups) {
+      if (g.members.length === 1) {
+        const m = g.members[0];
+        if (m.b.hidden) m.b.hidden = false;
+        m.b.style.transform = `translate(${Math.round(m.x - size / 2)}px,${Math.round(m.y - size / 2)}px)`;
+        continue;
+      }
+      // Cluster centre: the mean of its members.
+      const x = g.members.reduce((a, m) => a + m.x, 0) / g.members.length;
+      const y = g.members.reduce((a, m) => a + m.y, 0) / g.members.length;
+      const c = clusterBtn(ci++);
+      const n = g.members.length;
+      const kinds = new Set(g.members.map((m) => m.p.kind));
+      c.textContent = String(n);
+      c.dataset.name = `${n} pins`;
+      c.setAttribute("aria-label", `${n} pins, zoom in`);
+      c.style.setProperty("--ring", kinds.size === 1 ? kindInfo([...kinds][0]).color : "rgba(243,234,216,.3)");
+      c.hidden = false;
+      c.style.transform = `translate(${Math.round(x - csize / 2)}px,${Math.round(y - csize / 2)}px)`;
+      clusterData.set(c, { members: g.members, x, y });
+      for (const m of g.members) m.b.hidden = true;
+    }
+    for (let i = ci; i < clusterEls.length; i++) clusterEls[i].hidden = true;
+    for (const m of markers) if (!m.on && !m.b.hidden) m.b.hidden = true;
+  }
+
   return {
     destroy() {
       gone.abort();
       layer.remove();
       card.remove();
+      list.remove();
+      panel?.remove();
       style.remove();
     },
-    place(project) {
-      for (const { b, p } of markers) {
-        const pt = project(p.at);
-        const on = pt.visible && Number.isFinite(pt.x) && Number.isFinite(pt.y);
-        if (b.hidden === on) b.hidden = !on;
-        if (on) b.style.transform = `translate(${Math.round(pt.x - half)}px,${Math.round(pt.y - half)}px)`;
-      }
-    },
+    place: cluster,
   };
 }

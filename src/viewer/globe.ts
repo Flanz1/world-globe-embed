@@ -39,15 +39,16 @@ import {
   WebGLRenderer,
 } from "three";
 import { BASE_DISTANCE, FOV_DEG, MAX_DISTANCE, MIN_DISTANCE, clamp, clampPadding, distanceForZoom, parseHex } from "../shared/params.ts";
-import { imageToGlobe, polygonsOf, type Position } from "../shared/geo.ts";
-import { regionFit, regionLabelPoints, type RegionData } from "../shared/region.ts";
+import { globeToImage, imageToGlobe, polygonsOf, type Position } from "../shared/geo.ts";
+import { regionFit, regionLabelPoints, type LabelPoint, type RegionData } from "../shared/region.ts";
 import { paintLayerStack, type PaintLayer } from "../shared/raster.ts";
 import { hasContestedLayers, legendRowsFor, regionPaintLayers } from "../shared/region-paint.ts";
 import { deviceLimit, deviceMemory, nextTier } from "../shared/tiers.ts";
 import { createGlobeTiles } from "./globe-tiles.ts";
 import type { PreviewMessage, StartContext } from "./contract.ts";
+import { setupRegionCard } from "./region-card.ts";
 import { setupRuler } from "./ruler.ts";
-import { RELOCK_MS, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
+import { RELOCK_MS, labelOnScreen, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
 import { setupPins, watchPreviewPins, type PinLayer } from "./pins.ts";
 
 const DEG = Math.PI / 180;
@@ -243,7 +244,7 @@ export async function start(ctx: StartContext): Promise<void> {
   /* ── Region overlay: the region rasterised into the same equirectangular UV space as the map,
    * on a band with the same padding and the same shift offset, so the two line up exactly. ── */
   let reg: RegionData | null = null;
-  let labelAt: Position[] = [];
+  let labelAt: LabelPoint[] = [];
   let overlay: { mesh: Mesh; canvas: HTMLCanvasElement; tex: CanvasTexture; mat: MeshPhongMaterial; dimCaps: Group } | null = null;
   const dimMat = new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5, depthWrite: false });
   const dimOn = () => !!R?.dim;
@@ -331,7 +332,7 @@ export async function start(ctx: StartContext): Promise<void> {
     o.tex.needsUpdate = true;
     uploadQueued = true;
     const pts = (R?.label ?? vis.label) ? regionLabelPoints(vis, R?.label === true) : [];
-    labelAt = pts.map((p) => p.at);
+    labelAt = pts;
     labels?.set(pts.map((p) => p.text));
     regionKey?.set(R?.key ? legendRowsFor(vis) : [], vis.legendTitle, !!R?.key && hasContestedLayers(spec!));
   }
@@ -382,10 +383,13 @@ export async function start(ctx: StartContext): Promise<void> {
   let specFor: RegionData | null = null;
   const labels = R ? makeLabels(stage) : null;
   const regionKey = R ? makeLegend(stage) : null;
+  // The legend opening, collapsing or resizing changes what labels must stay clear of: lay them out again.
+  const keyBox = stage.querySelector(".rstack");
+  if (keyBox) new ResizeObserver(() => invalidate()).observe(keyBox);
   const tmpV = new Vector3();
   function placeLabel(): void {
     if (!labels) return;
-    labelAt.forEach((at, i) => {
+    const toScreen = (at: Position): { x: number; y: number; facing: boolean } => {
       const [lon, lat] = imageToGlobe(at, { north: pad.north, south: pad.south, shift });
       // Same lat/lon → xyz convention as buildGrid.
       const c = Math.cos(lat * DEG);
@@ -394,7 +398,12 @@ export async function start(ctx: StartContext): Promise<void> {
       // Visible when it's on the camera's side of the horizon (cos θ > 1/d for a unit sphere).
       const facing = tmpV.z / OVERLAY_R > 1 / view.distance + 0.04;
       tmpV.project(camera);
-      labels.place(i, ((tmpV.x + 1) / 2) * stage.clientWidth, ((1 - tmpV.y) / 2) * stage.clientHeight, facing);
+      return { x: ((tmpV.x + 1) / 2) * stage.clientWidth, y: ((1 - tmpV.y) / 2) * stage.clientHeight, facing };
+    };
+    labelAt.forEach((pt, i) => {
+      const { x, y, facing } = toScreen(pt.at);
+      const { fit } = labelOnScreen(pt, (p) => toScreen(p));
+      labels.place(i, x, y, facing, fit);
     });
   }
 
@@ -431,6 +440,21 @@ export async function start(ctx: StartContext): Promise<void> {
     },
   });
 
+  // Region embeds: clicking a part opens a card with its facts (not in the admin preview, whose region isn't built yet).
+  const card =
+    R && cfg.slug !== "preview"
+      ? setupRegionCard(cfg, {
+      project: (p) => ruler.project(imageToGlobe(p, { north: pad.north, south: pad.south, shift })),
+      canvas,
+      stage,
+      region: () => (reg ? visible.of(reg) : null),
+      pick(x, y) {
+        const g = ruler.pick(x, y);
+        return g && globeToImage(g, { north: pad.north, south: pad.south, shift });
+      },
+    })
+      : null;
+
   /** Map pins (?pins=…): markers placed like the labels, on the far side of the globe hidden. */
   let pinLayer: PinLayer | null = null;
   function placePins(): void {
@@ -444,7 +468,23 @@ export async function start(ctx: StartContext): Promise<void> {
       return { x: ((tmpV.x + 1) / 2) * stage.clientWidth, y: ((1 - tmpV.y) / 2) * stage.clientHeight, visible: facing };
     });
   }
-  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins).then((l) => {
+  /** A cluster of pins was clicked: turn to them and move closer (false when the view can't zoom in any further). */
+  const zoomToPins = (pts: [number, number][]): boolean => {
+    if (view.distance <= MIN_DISTANCE * 1.05) return false;
+    const gs = pts.map((at) => imageToGlobe(at, { north: pad.north, south: pad.south, shift }));
+    // Mean of the pins' longitudes (taken round the first so a cluster over the date line stays together) and latitudes.
+    const lon0 = gs[0][0];
+    const lon = lon0 + gs.reduce((a, [l]) => a + ((((l - lon0 + 180) % 360) + 360) % 360) - 180, 0) / gs.length;
+    const lat = gs.reduce((a, [, l]) => a + l, 0) / gs.length;
+    const to = { yaw: -Math.PI / 2 - lon * DEG, pitch: lat * DEG, distance: Math.max(MIN_DISTANCE, 1 + (view.distance - 1) * 0.45) };
+    to.yaw = view.yaw + Math.atan2(Math.sin(to.yaw - view.yaw), Math.cos(to.yaw - view.yaw));
+    spinning = false;
+    if (reducedMotion.matches) Object.assign(view, to);
+    else ease = { from: { ...view }, to, t0: performance.now() };
+    invalidate();
+    return true;
+  };
+  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins, zoomToPins).then((l) => {
     pinLayer = l;
     invalidate();
   });
@@ -452,7 +492,7 @@ export async function start(ctx: StartContext): Promise<void> {
   watchPreviewPins(stage, canvas, (l) => {
     pinLayer = l;
     invalidate();
-  });
+  }, zoomToPins);
 
   /* ── View state ── */
   const view = { yaw: 0, pitch: 0, distance: BASE_DISTANCE };
@@ -559,7 +599,9 @@ export async function start(ctx: StartContext): Promise<void> {
       fenceUpload();
       placeLabel();
       ruler.redraw();
+      card?.redraw();
       placePins();
+      labels?.settle(stage);
       dirty = false;
       // The view moved: once it settles, see whether it needs a sharper texture or other tiles.
       if (!spinning && !fade) onZoom();
@@ -760,7 +802,7 @@ export async function start(ctx: StartContext): Promise<void> {
   // Show the canvas on the frame after the first real render, so the poster crossfade has pixels to reveal.
   requestAnimationFrame(() => {
     root.classList.add("ready");
-    root.dataset.state = "interactive";
+    if (root.dataset.state !== "hires") root.dataset.state = "interactive"; // a texture upgrade may already have finished
     performance.mark("wge-interactive");
   });
 

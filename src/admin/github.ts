@@ -109,6 +109,23 @@ export interface Suggestion extends SuggestionSummary {
   feature: import("../shared/region.ts").RegionFeature;
 }
 
+/** A reviewer comment at a spot on a region (worker/src/comments.ts). */
+export interface MapComment {
+  /** `<region>~<8 hex>` */
+  id: string;
+  region: string;
+  by: { id: number; login: string };
+  at: string;
+  text: string;
+  lon: number;
+  lat: number;
+  /** Account id of the region's creator when it was posted. */
+  owner: number;
+  status: "open" | "resolved";
+  resolvedBy?: string;
+  resolvedAt?: string;
+}
+
 /** People who signed in but aren't on the list yet. */
 export interface Editing {
   id: number;
@@ -288,6 +305,23 @@ export class GitHub {
 
   async removeSuggestion(id: string): Promise<void> {
     await this.send(`/proposals/${encodeURIComponent(id)}`, { method: "DELETE" }, this.root);
+  }
+
+  /** Reviewer comments this person may see (one region, or all). One read on the API's side; never poll it. */
+  async comments(region?: string): Promise<MapComment[]> {
+    return (await this.send<MapComment[]>(`/comments${region ? `?region=${encodeURIComponent(region)}` : ""}`, {}, this.root)).data;
+  }
+
+  async addComment(region: string, text: string, lon: number, lat: number): Promise<MapComment> {
+    return (await this.send<MapComment>("/comments", { method: "POST", body: JSON.stringify({ region, text, lon, lat }) }, this.root)).data;
+  }
+
+  async setCommentStatus(id: string, status: "open" | "resolved"): Promise<MapComment> {
+    return (await this.send<MapComment>(`/comments/${encodeURIComponent(id)}/${status}`, { method: "POST", body: "{}" }, this.root)).data;
+  }
+
+  async removeComment(id: string): Promise<void> {
+    await this.send(`/comments/${encodeURIComponent(id)}`, { method: "DELETE" }, this.root);
   }
 
   async readText(path: string): Promise<string> {

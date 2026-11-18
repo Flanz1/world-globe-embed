@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
 import { buildBoot } from "./lib/build-boot.ts";
+import { generateFactsFiles } from "./lib/facts.ts";
 import { loadContent } from "./lib/content.ts";
 import { generateAtlasPages } from "./lib/atlas.ts";
 import { renderLanding } from "./lib/landing.ts";
@@ -62,6 +63,12 @@ for (const r of regionFiles) {
   mkdirSync(path.dirname(out), { recursive: true });
   writeFileSync(out, r.json);
 }
+const factsFiles = generateFactsFiles(content);
+for (const f of factsFiles) {
+  const out = path.join(dist, f.path);
+  mkdirSync(path.dirname(out), { recursive: true });
+  writeFileSync(out, f.json);
+}
 const pinFiles = generatePinFiles(content);
 for (const f of pinFiles) {
   const out = path.join(dist, f.path);
@@ -89,6 +96,7 @@ console.log(`Total globe path JS: ${kb(viewerGz + bootGz)} gzipped`);
 console.log(`Flat viewer JS (no Three.js): ${kb(flatGz)} gzipped (${flatFiles.join(", ")})`);
 console.log(`Total flat path JS: ${kb(flatGz + bootGz)} gzipped`);
 if (pinFiles.length) console.log(`Pins: ${pinFiles.length} file(s): ${pinFiles.map((f) => `${f.path} (${kb(f.json.length)})`).join(", ")}`);
+if (factsFiles.length) console.log(`Facts: ${factsFiles.length} file(s); largest ${kb(Math.max(...factsFiles.map((f) => f.json.length)))}`);
 if (regionFiles.length) {
   const sizes = regionFiles.map((r) => r.json.length).sort((a, b) => a - b);
   const mid = regionFiles.find((r) => r.json.length === sizes[Math.floor(sizes.length / 2)])!;
