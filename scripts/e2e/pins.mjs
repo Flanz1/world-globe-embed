@@ -271,6 +271,46 @@ await step(A, "the region editor lists pin maps in collapsible folders", async (
   await ctx.close();
 });
 
+await step(A, "the region editor can show the slot's pins over the map", async () => {
+  const { ctx, page, errors } = await adminPage("Flanz1");
+  await page.goto(`${SITE}/admin/#regions`);
+  await page.waitForSelector('[data-region="landmark-disc"] [data-action="edit"]', { timeout: 15000 });
+  await page.click('[data-region="landmark-disc"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
+  check(A, "pins are hidden in the editor until switched on", !(await page.locator("dialog.editor .ed-pin-tip").isVisible()));
+  await page.click('dialog.editor [data-act="overlays"]');
+  const sw = page.locator('dialog.editor input[name="ed-pins-show"]');
+  check(A, "the Other regions panel has a Show pins switch", await sw.isEnabled());
+  await sw.check();
+  await page.waitForTimeout(300);
+  await page.click('dialog.editor [data-act="overlays"]');
+  // Pins are painted on the canvas (under the region's handles), so find the marker by hovering its position.
+  const at = await page.evaluate(([lon, lat]) => document.querySelector("dialog.editor").wgeEditor.toScreen(lon, lat), [DISC.lon, DISC.lat]);
+  const cv = await page.locator("dialog.editor canvas.ed-canvas").boundingBox();
+  await page.mouse.move(cv.x + at[0], cv.y + at[1]);
+  const tip = page.locator("dialog.editor .ed-pin-tip");
+  check(A, "hovering a pin shows its name and kind", (await tip.isVisible()) && /Magenta Harbour · City/.test((await tip.textContent()) ?? ""), await tip.textContent());
+  await page.mouse.move(cv.x + 5, cv.y + 5);
+  check(A, "the tooltip goes away off the pin", !(await tip.isVisible()));
+  // A pin never takes the click: the part under it is still selected by clicking there.
+  await page.mouse.click(cv.x + at[0], cv.y + at[1]);
+  check(A, "clicking a pin passes through to the map", (await page.evaluate(() => document.querySelector("dialog.editor").wgeEditor.selectedPart())) >= 0);
+  for (const [w, hgt] of [[1440, 900], [768, 900], [375, 800]])
+    for (const scheme of ["light", "dark"]) {
+      await page.setViewportSize({ width: w, height: hgt });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: path.join(OUT, `editor-pins-layer-${w}-${scheme}.png`) });
+      await page.click('dialog.editor [data-act="overlays"]');
+      await page.waitForTimeout(150);
+      await page.screenshot({ path: path.join(OUT, `editor-pins-panel-${w}-${scheme}.png`) });
+      await page.click('dialog.editor [data-act="overlays"]');
+    }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+});
+
 await step(A, "owner places, moves and deletes a pin", async () => {
   const { ctx, page, errors } = await adminPage("Flanz1");
   check(A, "the list shows the slot's saved pins", (await page.locator(".pn-row").count()) === SEED.length, String(await page.locator(".pn-row").count()));
