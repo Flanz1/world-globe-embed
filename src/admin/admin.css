@@ -527,3 +527,21 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
 .rename-url { overflow-wrap: anywhere; word-break: break-all; font-size: 13px; }
 .rename-copy { display: flex; gap: 8px; align-items: center; }
 .rename-dlg input[aria-invalid="true"], .rename-dlg input[aria-invalid="true"]:focus-visible { border-color: var(--md-sys-color-error); outline: 2px solid var(--md-sys-color-error); outline-offset: 0; }
+
+/* Touch: keep the 28-32 px look, but give every small button a 44 px hit area (an invisible ::after centred on the
+   button). The editor toolbar buttons get 40 px for real. Fine pointers (mouse) are untouched. */
+@media (pointer: coarse) {
+  .slot .actions button, .map button, .rcard .actions button, .rfolder-head .actions button, .pinmap-head .actions button,
+  .urow button, .sug-row button, .pn-zoom button, dialog.editor button, button.tiny, .rcard .rpin-btn, .theme-seg button,
+  .ed-pinfolder-toggle, .ed-folder-head button { position: relative; }
+  .slot .actions button::after, .map button::after, .rcard .actions button::after, .rfolder-head .actions button::after,
+  .pinmap-head .actions button::after, .urow button::after, .sug-row button::after, .pn-zoom button::after,
+  dialog.editor button::after, button.tiny::after, .rcard .rpin-btn::after, .theme-seg button::after,
+  .ed-pinfolder-toggle::after, .ed-folder-head button::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+  dialog.editor .ed-toolbar button { min-height: 40px; }
+  dialog.editor .ed-toolbar button::after { height: 44px; }
+  .ed-toolbar { padding-bottom: 6px; }
+}
