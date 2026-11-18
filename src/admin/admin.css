@@ -152,7 +152,7 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .45); }
 .pv-view { display: grid; gap: 6px; justify-items: start; }
 .pv-controls label.inline { display: flex; align-items: center; gap: 8px; }
 .small { font-size: 12px; margin: 0; }
-.pv-foot { position: sticky; bottom: 0; display: grid; gap: 6px; justify-items: start; margin: 4px -24px 0 -16px; padding: 12px 24px 16px 16px; background: var(--md-sys-color-surface-container-high); border-top: 1px solid var(--md-sys-color-outline-variant); }
+.pv-foot { position: sticky; bottom: 0; display: grid; gap: 6px; justify-items: end; margin: 4px -24px 0 -16px; padding: 12px 24px 16px 16px; background: var(--md-sys-color-surface-container-high); border-top: 1px solid var(--md-sys-color-outline-variant); box-shadow: 0 -6px 8px -6px rgba(0, 0, 0, .18); }
 /* Phone: the globe is a fixed ~35% of the screen and the whole body scrolls under it, with Save pinned at the bottom. */
 @media (max-width: 720px) {
   dialog#preview[open] { height: auto; max-height: calc(100vh - 32px); }
