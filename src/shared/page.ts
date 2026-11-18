@@ -49,7 +49,7 @@ transition:opacity .4s ease}
 .note{position:absolute;inset:auto 16px;top:45%;margin:0;text-align:center;font-size:14px;color:#9d927b}
 #ui{position:fixed;right:8px;bottom:8px;display:flex;gap:4px}
 #ui:hover,#ui:focus-within{opacity:1}
-#ui button{all:unset;box-sizing:border-box;width:28px;height:28px;display:grid;place-items:center;border-radius:6px;cursor:pointer;color:#e8dcc8;background:rgba(20,18,14,.72);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+#ui button{all:unset;box-sizing:border-box;width:28px;height:28px;display:grid;place-items:center;border-radius:6px;cursor:pointer;color:#e8dcc8;background:var(--embed-panel);-webkit-backdrop-filter:var(--embed-blur);backdrop-filter:var(--embed-blur)}
 #ui button:focus-visible{outline:2px solid #c9a94e}
 #ui button[aria-pressed=true]{color:#e8c44a;background:rgba(20,18,14,.88)}
 #ui button{position:relative}
