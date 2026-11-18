@@ -76,6 +76,8 @@ const LABEL_MIN = 11;
 const LABEL_MIN_TILT = 12;
 const LABEL_MAX = 26;
 const LABEL_BASE = 12;
+/** Farthest a label slides to clear the legend, buttons or a pin, px; past this it fades instead. */
+const MAX_SLIDE = 110;
 const TILT_MAX = (70 * Math.PI) / 180;
 
 /** An HTML label (textContent only) that is kept clear of the control buttons. */
@@ -119,9 +121,9 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
         }
         const k = Math.min((fit.len * 0.85) / Math.max(1, natural.w), (fit.wid * 0.7) / Math.max(1, natural.h));
         const tilt = Math.abs(fit.angle) > 0.01;
-        px = Math.round(Math.min(LABEL_MAX, Math.max(tilt ? LABEL_MIN_TILT : LABEL_MIN, LABEL_BASE * k)));
-        // Whole-pixel steps with a little hysteresis: a one-pixel wobble while zooming keeps the old size.
-        if (size && Math.abs(px - size) < 2 && px >= (tilt ? LABEL_MIN_TILT : LABEL_MIN) && size >= (tilt ? LABEL_MIN_TILT : LABEL_MIN)) px = size;
+        // Even-pixel steps: the same view always gives the same size (no history), and a one-pixel wobble while zooming doesn't change it.
+        const min = tilt ? LABEL_MIN_TILT : LABEL_MIN;
+        px = Math.min(LABEL_MAX, Math.max(min, Math.round((LABEL_BASE * k) / 2) * 2));
         self.rank = fit.len * fit.wid;
       }
       if (px !== size) {
@@ -282,49 +284,63 @@ export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; pl
     place(i, x, y, visible, fit) {
       pool[i]?.place(x, y, visible, fit);
     },
-    /** After placing every label: where two pills overlap, the one on the larger part stays and the other fades; nothing sits under the legend or buttons. */
+    /**
+     * After placing every label: a label under the legend, the corner buttons or a pin marker slides to the nearest
+     * clear spot beside it, and fades only when there is none. Where two pills overlap, the one on the larger
+     * part stays and the other slides or fades.
+     */
     settle(root) {
+      type Box = { x0: number; y0: number; x1: number; y1: number };
       const s = root.getBoundingClientRect();
-      const keep: { x0: number; y0: number; x1: number; y1: number }[] = [];
-      for (const sel of [".rkey", "#ui"]) {
-        const e = root.querySelector<HTMLElement>(sel) ?? document.querySelector<HTMLElement>(sel);
-        if (!e || e.hidden) continue;
+      const fixed: Box[] = [];
+      const add = (e: Element | null | undefined) => {
+        if (!e || (e as HTMLElement).hidden) return;
         const r = e.getBoundingClientRect();
-        keep.push({ x0: r.left - s.left, y0: r.top - s.top, x1: r.right - s.left, y1: r.bottom - s.top });
-      }
-      const hit = (a: { x0: number; y0: number; x1: number; y1: number }, b: typeof a) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
-      // Visible pin markers are obstacles too: a label that would cover one is nudged clear (below, above, or along its axis).
-      const pins = [...root.querySelectorAll<HTMLElement>(".wpin")]
-        .map((e) => ({ e, r: e.getBoundingClientRect() }))
-        .filter(({ e, r }) => !e.hidden && r.width > 0 && r.height > 0)
-        .map(({ r }) => ({ x0: r.left - s.left - 2, y0: r.top - s.top - 2, x1: r.right - s.left + 2, y1: r.bottom - s.top + 2 }));
+        if (r.width > 0 && r.height > 0) fixed.push({ x0: r.left - s.left - 2, y0: r.top - s.top - 2, x1: r.right - s.left + 2, y1: r.bottom - s.top + 2 });
+      };
+      for (const sel of [".rkey", "#ui"]) add(root.querySelector(sel) ?? document.querySelector(sel));
+      root.querySelectorAll(".wpin").forEach(add);
       const W = root.clientWidth;
       const H = root.clientHeight;
+      const hit = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+      const placed: Box[] = [];
       for (const l of [...pool].filter((l) => l.box).sort((a, b) => b.rank - a.rank)) {
-        const free = (b: { x0: number; y0: number; x1: number; y1: number }) => !keep.some((k) => hit(b, k)) && b.x0 >= 0 && b.y0 >= 0 && b.x1 <= W && b.y1 <= H;
-        if (pins.some((k) => hit(l.box!, k))) {
-          const b = l.box!;
-          const w = b.x1 - b.x0;
-          const h = b.y1 - b.y0;
-          const hitPins = pins.filter((k) => hit(b, k));
-          const below = Math.max(...hitPins.map((k) => k.y1)) - b.y0;
-          const above = Math.min(...hitPins.map((k) => k.y0)) - b.y1;
-          const right = Math.max(...hitPins.map((k) => k.x1)) - b.x0;
-          const left = Math.min(...hitPins.map((k) => k.x0)) - b.x1;
-          const tries: [number, number][] = [[0, below], [0, above], [right, 0], [left, 0], [right, below], [left, above]];
-          const ok = tries.find(([dx, dy]) => {
-            const m = { x0: b.x0 + dx, y0: b.y0 + dy, x1: b.x1 + dx, y1: b.y1 + dy };
-            return free(m) && !pins.some((k) => hit(m, k)) && w + h > 0;
-          });
-          if (ok) l.shove(ok[0], ok[1]);
-          else {
+        const clear = (b: Box) => b.x0 >= 0 && b.y0 >= 0 && b.x1 <= W && b.y1 <= H && ![...fixed, ...placed].some((k) => hit(b, k));
+        let b = l.box!;
+        if (!clear(b)) {
+          // Only the legend, buttons and pins make a label slide; a clash with another label fades the smaller one.
+          const obstacles = fixed.filter((k) => hit(b, k));
+          const tries: [number, number][] = obstacles.flatMap((k): [number, number][] => [
+            [k.x1 - b.x0, 0],
+            [k.x0 - b.x1, 0],
+            [0, k.y1 - b.y0],
+            [0, k.y0 - b.y1],
+          ]);
+          if (!obstacles.length) {
             l.el.style.opacity = "0";
             continue;
           }
+          // Also the corners of the obstacles' joint box, for a spot that clears several at once.
+          const joint = {
+            x0: Math.min(...obstacles.map((k) => k.x0)),
+            y0: Math.min(...obstacles.map((k) => k.y0)),
+            x1: Math.max(...obstacles.map((k) => k.x1)),
+            y1: Math.max(...obstacles.map((k) => k.y1)),
+          };
+          tries.push([joint.x1 - b.x0, 0], [joint.x0 - b.x1, 0], [0, joint.y1 - b.y0], [0, joint.y0 - b.y1]);
+          const moved = tries
+            .map(([dx, dy]) => ({ dx, dy, m: { x0: b.x0 + dx, y0: b.y0 + dy, x1: b.x1 + dx, y1: b.y1 + dy } }))
+            .filter((t) => Math.hypot(t.dx, t.dy) <= MAX_SLIDE && clear(t.m))
+            .sort((p, q) => Math.hypot(p.dx, p.dy) - Math.hypot(q.dx, q.dy))[0];
+          if (!moved) {
+            l.el.style.opacity = "0";
+            continue;
+          }
+          l.shove(moved.dx, moved.dy);
+          b = moved.m;
         }
-        const clash = keep.some((k) => hit(l.box!, k));
-        l.el.style.opacity = clash ? "0" : "";
-        if (!clash) keep.push(l.box!);
+        l.el.style.opacity = "";
+        placed.push(b);
       }
     },
   };
