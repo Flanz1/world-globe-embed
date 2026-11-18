@@ -55,7 +55,7 @@ export interface OverlayFilter {
   close: () => void;
 }
 
-export function createOverlayFilter(o: { items: OverlayItem[]; categories: OverlayCategory[]; meId: number | undefined; onChange: () => void; pinned?: ReadonlySet<number> }): OverlayFilter {
+export function createOverlayFilter(o: { items: OverlayItem[]; categories: OverlayCategory[]; meId: number | undefined; onChange: () => void; pinned?: ReadonlySet<number>; extra?: HTMLElement }): OverlayFilter {
   // Pinned regions (a suggestion's current version) are always drawn and aren't in the list.
   const pinned = o.pinned ?? new Set<number>();
   const all = o.items;
@@ -153,6 +153,7 @@ export function createOverlayFilter(o: { items: OverlayItem[]; categories: Overl
       h("button", { type: "button", className: "ghost", textContent: "Hide listed", title: "Turn off every region the search and filters list", dataset: { act: "overlays-hide" }, onclick: () => set(listed(), false) }),
       h("button", { type: "button", className: "ghost", textContent: "Hide all", dataset: { act: "overlays-hide-all" }, onclick: () => set(o.items, false) }),
     ),
+    ...(o.extra ? [o.extra] : []),
     info,
     list,
   );
