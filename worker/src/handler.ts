@@ -59,6 +59,9 @@ export type Upstream = (url: string, init?: RequestInit) => Promise<Response>;
 const API = "https://api.github.com";
 const WEB = "https://github.com";
 const SESSION_HOURS = 12;
+/** "Keep me signed in": a longer session that the admin page renews as it is used (POST /session/refresh), so people who keep coming back never get signed out. */
+const REMEMBER_DAYS = 30;
+const sessionSeconds = (remember: boolean) => (remember ? REMEMBER_DAYS * 86400 : SESSION_HOURS * 3600);
 /** A part of a big map upload is 8 MB, ~11 MB as base64 JSON. */
 const MAX_BLOB_REQUEST = 16 * 1024 * 1024;
 const MAX_CHANGED_FILES = 400;
@@ -75,6 +78,8 @@ export interface Session {
   id: number;
   login: string;
   exp: number;
+  /** 1 when the person ticked "Keep me signed in". */
+  m?: 1;
 }
 
 class HttpError extends Error {
@@ -277,7 +282,7 @@ async function authLogin(req: Request, env: Env): Promise<Response> {
   // The admin page keeps a random value for this tab and gets it back with the session, so a session link from somewhere else is refused.
   const tab = url.searchParams.get("nonce") ?? "";
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(tab)) return new Response("This sign-in link doesn't come from the admin page.", { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });
-  const state = await sign({ r: ret, n: nonce(), c: tab, exp: Math.floor(Date.now() / 1000) + 600 }, env.SESSION_KEY);
+  const state = await sign({ r: ret, n: nonce(), c: tab, ...(url.searchParams.get("remember") === "1" ? { m: 1 } : {}), exp: Math.floor(Date.now() / 1000) + 600 }, env.SESSION_KEY);
   const to = new URL(`${WEB}/login/oauth/authorize`);
   to.searchParams.set("client_id", env.APP_CLIENT_ID);
   to.searchParams.set("redirect_uri", new URL("/auth/callback", url).href);
@@ -288,7 +293,7 @@ async function authLogin(req: Request, env: Env): Promise<Response> {
 
 async function authCallback(req: Request, env: Env, up: Upstream): Promise<Response> {
   const url = new URL(req.url);
-  const st = await verify<{ r: string; c?: string; exp: number }>(url.searchParams.get("state") ?? "", env.SESSION_KEY);
+  const st = await verify<{ r: string; c?: string; m?: 1; exp: number }>(url.searchParams.get("state") ?? "", env.SESSION_KEY);
   if (!st || !returnAllowed(st.r, env)) return new Response("This sign-in link has expired. Go back to the admin page and sign in again.", { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   const back = (fragment: string) => new Response(null, { status: 302, headers: { Location: `${st.r.split("#")[0]}#${fragment}&nonce=${st.c ?? ""}`, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
   const code = url.searchParams.get("code");
@@ -304,8 +309,20 @@ async function authCallback(req: Request, env: Env, up: Upstream): Promise<Respo
   const u = await readJson<{ id?: number; login?: string }>(me);
   if (!me.ok || !Number.isSafeInteger(u.id) || typeof u.login !== "string") return back(`signin-error=${encodeURIComponent("Couldn't read your GitHub account. Try again.")}`);
   // The user's GitHub token isn't kept: the API only needed to learn who they are.
-  const s: Session = { id: u.id!, login: u.login, exp: Math.floor(Date.now() / 1000) + SESSION_HOURS * 3600 };
+  const s: Session = { id: u.id!, login: u.login, ...(st.m ? { m: 1 as const } : {}), exp: Math.floor(Date.now() / 1000) + sessionSeconds(!!st.m) };
   return back(`session=${await sign(s, env.SESSION_KEY)}`);
+}
+
+/**
+ * Renews a "Keep me signed in" session for another 30 days. It is stateless (nothing stored, so no KV use) and only
+ * works while the old session is still valid; sessions without the tick are returned unchanged and never grow.
+ * Access is still checked on every real request, so someone removed from the list loses access at once.
+ */
+async function refreshSession(req: Request, env: Env): Promise<Response> {
+  const s = await session(req, env);
+  if (!s.m) return json(200, { session: req.headers.get("Authorization")!.slice(7), exp: s.exp });
+  const exp = Math.floor(Date.now() / 1000) + sessionSeconds(true);
+  return json(200, { session: await sign({ id: s.id, login: s.login, m: 1, exp }, env.SESSION_KEY), exp });
 }
 
 /* ── Save log ── */
@@ -792,6 +809,7 @@ export async function handle(req: Request, env: Env, up: Upstream): Promise<Resp
     if (req.method === "GET" && p === "/auth/callback") return await authCallback(req, env, up);
     let m: RegExpExecArray | null;
     if (req.method === "GET" && p === "/session") return withCors(await sessionInfo(req, env, up));
+    if (req.method === "POST" && p === "/session/refresh") return withCors(await refreshSession(req, env));
     if (req.method === "GET" && (m = /^\/users\/([^/]+)$/.exec(p))) return withCors(await lookupUser(req, env, up, decodeURIComponent(m[1])));
     if (req.method === "PUT" && p === "/prefs") return withCors(await savePrefs(req, env, up));
     if (req.method === "GET" && p === "/history") return withCors(await history(req, env, up, url));
