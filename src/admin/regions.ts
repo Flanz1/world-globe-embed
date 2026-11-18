@@ -379,6 +379,14 @@ const collapsed = new Set<string>(
   })(),
 );
 const UNCATEGORIZED = "~uncategorized";
+/** A phone visit that has never opened or closed a folder: the page starts with every folder shut, so a long list is short. */
+let collapseOnFirstVisit = (() => {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === null && window.matchMedia("(max-width: 720px)").matches;
+  } catch {
+    return false;
+  }
+})();
 
 function toggleFolder(id: string, el: HTMLElement): void {
   const open = collapsed.has(id);
@@ -645,7 +653,18 @@ export function renderRegions(): void {
     .sort((a, b) => compareBy(sort, filterable(a), filterable(b)));
   $("#regions-empty").hidden = entries.length > 0;
   $("#regions-tools").hidden = entries.length === 0;
+  $("#regions-search").hidden = entries.length === 0;
   const cats = categories().categories;
+  if (collapseOnFirstVisit && cats.length) {
+    collapseOnFirstVisit = false;
+    for (const k of cats) collapsed.add(k.id);
+    collapsed.add(UNCATEGORIZED);
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed]));
+    } catch {
+      /* remembering is a convenience */
+    }
+  }
   $<HTMLButtonElement>("#r-new-category").hidden = !entries.length;
   $<HTMLButtonElement>("#r-combine").hidden = !entries.length;
   $<HTMLButtonElement>("#r-new-category").disabled = !canAddCategory();

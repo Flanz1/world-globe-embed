@@ -168,6 +168,16 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .45); }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 .grow { flex: 1 1 200px; }
 .r-tools { margin: 10px 0; }
+.r-search { margin: 10px 0 0; }
+.r-search label { display: block; }
+.r-search input { width: 100%; }
+/* Phones: the search row is the one sticky bar; Back to top is a small pill that appears after the first screen. */
+.to-top { display: none; }
+@media (max-width: 720px) {
+  .r-search { position: sticky; top: 0; z-index: 5; margin: 10px -16px 0; padding: 8px 16px; background: var(--md-sys-color-surface-container-low); border-bottom: 1px solid var(--md-sys-color-outline-variant); }
+  .to-top:not([hidden]) { display: inline-flex; position: fixed; right: 16px; bottom: 16px; z-index: 6; box-shadow: var(--app-shadow); }
+  body.bulk-on .to-top { display: none; }
+}
 .r-new-row { margin-bottom: 6px; }
 .r-new-row { align-items: end; }
 .r-tools .grow { flex: 1 1 140px; min-width: 0; }
