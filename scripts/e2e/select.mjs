@@ -60,13 +60,19 @@ export function readSuites(dir = HERE) {
     const roots = tokens.flatMap((t) => GROUPS[t] ?? [t]);
     const editor = tokens.includes("EDITOR");
     const cut = attrs.cut ? attrs.cut.split(",").filter(Boolean) : editor ? EDITOR_CUT : [];
-    suites.push({ name: m[1], roots, editor, cut, weight: Number(attrs.weight) || 1 });
+    suites.push({ name: m[1], roots, editor, cut, weight: Number(attrs.weight) || 1, quarantine: attrs.quarantine ?? "" });
   }
   return suites.sort((a, b) => b.weight - a.weight || a.name.localeCompare(b.name));
 }
 
-const SUITES = readSuites();
-/** Every suite, slowest first. */
+const EVERY = readSuites();
+/**
+ * Quarantined suites (header `quarantine=<issue>`): known-flaky, skipped by path selection and full runs until
+ * their issue is fixed. They still run when named: `npm run e2e tiles`. Name -> issue number.
+ */
+export const QUARANTINED = Object.fromEntries(EVERY.filter((s) => s.quarantine).map((s) => [s.name, s.quarantine]));
+const SUITES = EVERY.filter((s) => !s.quarantine);
+/** Every suite that runs by default, slowest first. */
 export const ALL = SUITES.map((s) => s.name);
 /** Entry files each suite exercises. Editor suites cut the graph at EDITOR_CUT. */
 export const SUITE_ROOTS = Object.fromEntries(SUITES.map((s) => [s.name, s.roots]));

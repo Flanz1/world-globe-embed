@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Slowest first, so the long ones start immediately and short ones fill the gaps.
-import { ALL, select } from "./select.mjs";
+import { ALL, QUARANTINED, select } from "./select.mjs";
 
 const args = process.argv.slice(2);
 let jobs = Math.max(1, Math.min(4, Math.floor(availableParallelism() / 2)));
@@ -38,8 +38,11 @@ for (let i = 0; i < args.length; i++) {
   } else names.push(args[i]);
 }
 const suites = names.length ? names : ALL;
+for (const [s, issue] of Object.entries(QUARANTINED)) {
+  if (!suites.includes(s)) console.log(`SKIP ${s} (quarantined, see issue #${issue}; run it by name to try it)`);
+}
 for (const s of suites) {
-  if (ALL.includes(s)) continue;
+  if (ALL.includes(s) || s in QUARANTINED) continue;
   console.error(`unknown suite: ${s} (have: ${ALL.join(", ")})`);
   process.exit(2);
 }

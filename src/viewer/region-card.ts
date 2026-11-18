@@ -27,6 +27,7 @@ const CSS = `
 .wfact{position:absolute;left:8px;bottom:8px;z-index:3;box-sizing:border-box;width:min(300px,calc(100% - 16px));max-height:60%;overflow:auto;padding:10px 12px;border-radius:8px;background:rgba(20,18,14,.9);color:#f3ead8;font:13px/1.4 system-ui,sans-serif;pointer-events:auto}
 .wfact[hidden]{display:none}
 @media (max-width:420px){.wfact{bottom:44px}}
+@media (max-width:420px) and (pointer:coarse){.wfact{bottom:60px}}
 .wfact h3{margin:0 34px 2px 0;font:700 14px/1.3 system-ui,sans-serif;overflow-wrap:anywhere}
 .wfact .sub,.wfact .muted{margin:0 0 6px;font-size:12px;color:#c9bfab}
 .wfact dl{margin:6px 0 0;display:grid;gap:6px;border-top:1px solid #c9a94e;padding-top:6px}

@@ -62,6 +62,7 @@ import { clampPadding } from "../../shared/params.ts";
 import { TEXTURE_WIDTHS, type MapMeta, type SlotsFile, type TextureWidth } from "../../shared/types.ts";
 import { deviceLimit, nextTier } from "../../shared/tiers.ts";
 import { h } from "../dom.ts";
+import { iconify, withIcon } from "./icons.ts";
 import { sidePanel } from "./sheet.ts";
 import { mapLimit, type GitHub } from "../github.ts";
 import { childrenOf, regionsPerCommit } from "../../shared/categories.ts";
@@ -209,6 +210,7 @@ const EDGE_HIT = 6;
 const SNAP_PX = 10;
 const SNAP_COLOUR = "#4dd0e1";
 const SNAP_PREF = "wge.editor.snap";
+const KEEP_OPEN_PREF = "wge.editor.keepopen";
 /** Gaps up to this many screen pixels between an Extend shape and its part are filled. */
 const EXTEND_GAP_PX = 12;
 const COAST_PREF = "wge.editor.coast";
@@ -251,7 +253,8 @@ export const SHORTCUT_GROUPS: { title: string; rows: [string, string][] }[] = [
     rows: [
       ["Click", "Add a point (polygon)"],
       ["Double-click / Enter", "Finish the outline"],
-      ["Click the lit-up first point", "Close the outline (freehand closes on release)"],
+      ["Click the lit-up first point", "Close the outline (freehand closes on release, unless Keep open is on)"],
+      ["K", "Freehand: Open line, so the next stroke continues from the end of the last"],
       ["Backspace / right-click", "Remove the last point (repeat to go back to the start)"],
       ["Tab", "Follow a border the other way round"],
       ["Esc", "Cancel the outline, or clear the selection"],
@@ -496,24 +499,36 @@ export function openEditor(o: EditorOptions): void {
     for (const t of ["pointerdown", "mousedown", "wheel"] as const) el.addEventListener(t, (e) => e.stopPropagation());
     return { el, label, fwd, back };
   })();
-  const undoBtn = btn("Undo", "Undo (Ctrl+Z)", () => undo(), "undo");
-  const redoBtn = btn("Redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)", () => redo(), "redo");
-  const gridBtn = btn("Grid", "Show the globe's 15° grid (G)", () => toggleGrid(), "grid");
-  const snapBtn = btn(
+  const undoBtn = iconify(btn("Undo", "Undo (Ctrl+Z)", () => undo(), "undo"), "undo", true);
+  const histTitles = (): void => {
+    undoBtn.title = hist.canUndo ? "Undo (Ctrl+Z)" : "Nothing to undo";
+    redoBtn.title = hist.canRedo ? "Redo (Ctrl+Shift+Z or Ctrl+Y)" : "Nothing to redo";
+  };
+  const redoBtn = iconify(btn("Redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)", () => redo(), "redo"), "redo", true);
+  const gridBtn = iconify(btn("Grid", "Show the globe's 15° grid (G)", () => toggleGrid(), "grid"), "grid", false);
+  const snapBtn = iconify(btn(
     "Snap",
     "Snap to the vertices and lines of other parts and regions while drawing and dragging, so borders are shared exactly (S). Hold Ctrl to place a point freely.",
     () => toggleSnap(),
     "snap",
+  ), "snap", true);
+  const keepOpenBtn = btn(
+    "Open line",
+    "Don't close the shape when you lift the pen. Tap the first point or press Enter to close. (K)",
+    () => toggleKeepOpen(),
+    "keep-open",
   );
-  const coastBtn = btn(
+  /** Top left of the map while Freehand is active: its option, so the toolbar row never changes. */
+  const optBar = h("div", { className: "ed-opt-bar", hidden: true, role: "toolbar", ariaLabel: "Freehand option" }, keepOpenBtn);
+  const coastBtn = iconify(btn(
     "Coast",
     "Also snap to the map's coastline (shown in amber) where no part or region is in reach, and follow it between two clicks (O). Rivers, lakes and marshes count as land.",
     () => toggleCoast(),
     "coast",
-  );
+  ), "coast", false);
   coastBtn.hidden = true;
-  const simplifyBtn = btn("Simplify…", "Fewer vertices, same shape", () => toggleSimplify(), "simplify");
-  const smoothBtn = btn("Smooth", "Round the corners (one Chaikin pass; doubles the vertices)", () => smooth(), "smooth");
+  const simplifyBtn = iconify(btn("Simplify…", "Fewer vertices, same shape", () => toggleSimplify(), "simplify"), "simplify", false);
+  const smoothBtn = iconify(btn("Smooth", "Round the corners (one Chaikin pass; doubles the vertices)", () => smooth(), "smooth"), "smooth", false);
 
   const idIn = h("input", { type: "text", maxLength: 64, spellcheck: false, value: id, name: "id", pattern: "[a-z0-9][a-z0-9\\-]{0,63}" });
   const colorIn = h("input", { type: "color", value: hist.state.props.color, name: "color", ariaLabel: "Colour of the Default colour folder" });
@@ -724,25 +739,25 @@ export function openEditor(o: EditorOptions): void {
     h(
       "div",
       { className: "ed-toolbar", role: "toolbar" },
-      toolBtn("select", "Select", "V", ": click a part to select it, drag inside it to move it, Ctrl+drag to move the whole region, Alt+click for the next part where parts overlap"),
-      toolBtn("polygon", "Polygon", "P"),
-      toolBtn("freehand", "Freehand", "F"),
-      toolBtn("fill", "Fill", "B", ": click inside an area (an island, a province between borders) to trace it out to the coast and to the borders of other parts and regions"),
+      iconify(toolBtn("select", "Select", "V", ": click a part to select it, drag inside it to move it, Ctrl+drag to move the whole region, Alt+click for the next part where parts overlap"), "select", true),
+      iconify(toolBtn("polygon", "Polygon", "P", ": click points to draw a part; double-click or click the first point to close it"), "polygon", true),
+      iconify(toolBtn("freehand", "Freehand", "F", ": drag to draw a part freehand"), "freehand", true),
+      iconify(toolBtn("fill", "Fill", "B", ": click inside an area (an island, a province between borders) to trace it out to the coast and to the borders of other parts and regions"), "fill", true),
       h("span", { className: "sep" }),
-      pinTool.button,
-      commentTool.button,
+      iconify(pinTool.button, "pin", true),
+      withIcon(commentTool.button, "comment"),
       h("span", { className: "sep" }),
-      btn("Add part", "Draw another polygon (an island or exclave), in the default colour; a colour's + Part draws one in that colour", () => ((newPartStyle = OWN_COLOUR), (newPartOccupied = false), startDraw("part")), "add-part"),
-      btn("Cut", "Draw a shape to cut away: inside a part it makes a hole, across a part's edge it bites it, right across it splits it into separate parts", () => startDraw("cut"), "cut-hole"),
-      btn("Split", "Draw a line right across a part to split it into separate parts", () => startDraw("split"), "split"),
-      btn("Combine…", "Combine the parts you picked (click one, Shift+click the others) into one part, filling small gaps (C)", () => openCombine(), "combine"),
-      btn("Extend", "Draw a shape that touches the selected part to add it to that part (E)", () => startExtend(), "extend"),
-      btn(
+      iconify(btn("Add part", "Draw another polygon (an island or exclave), in the default colour; a colour's + Part draws one in that colour", () => ((newPartStyle = OWN_COLOUR), (newPartOccupied = false), startDraw("part")), "add-part"), "add-part", false),
+      iconify(btn("Cut", "Draw a shape to cut away: inside a part it makes a hole, across a part's edge it bites it, right across it splits it into separate parts", () => startDraw("cut"), "cut-hole"), "cut", false),
+      iconify(btn("Split", "Draw a line right across a part to split it into separate parts", () => startDraw("split"), "split"), "split", false),
+      iconify(btn("Combine…", "Combine the parts you picked (click one, Shift+click the others) into one part, filling small gaps (C)", () => openCombine(), "combine"), "combine", false),
+      iconify(btn("Extend", "Draw a shape that touches the selected part to add it to that part (E)", () => startExtend(), "extend"), "extend", false),
+      iconify(btn(
         "Province border",
         "Draw a province border inside the region: a dashed line in the embed, shown only inside the parts. It doesn't change the parts. Click a border to select it; Delete removes it.",
         () => startDraw("border"),
         "province-border",
-      ),
+      ), "province-border", false),
       h("span", { className: "sep" }),
       undoBtn,
       redoBtn,
@@ -759,7 +774,7 @@ export function openEditor(o: EditorOptions): void {
     h(
       "div",
       { className: "ed-body" },
-      h("div", { className: "ed-canvas-wrap" }, canvas, pinsLayer.tip, commentTool.markers, pinTool.popover, commentTool.popover, overlays.panel, layerBar.el, ctxMenu, tip, simpPanel, combPanel, status),
+      h("div", { className: "ed-canvas-wrap" }, canvas, pinsLayer.tip, commentTool.markers, pinTool.popover, commentTool.popover, overlays.panel, layerBar.el, optBar, ctxMenu, tip, simpPanel, combPanel, status),
       side.el,
     ),
   );
@@ -976,6 +991,15 @@ export function openEditor(o: EditorOptions): void {
   } catch {
     /* storage blocked: default on */
   }
+  /** Freehand keeps the line open between strokes until it is closed (K, or the Keep open button); remembered per browser. */
+  let keepOpen = false;
+  try {
+    keepOpen = localStorage.getItem(KEEP_OPEN_PREF) === "on";
+  } catch {
+    /* storage blocked: default off */
+  }
+  /** Where each freehand stroke of the open line starts in `drawing` (Backspace takes back one stroke). */
+  let strokeAt: number[] = [];
   /** The map's coastline (loaded after the editor opens; null when the map has none). */
   let coast: Coast | null = null;
   /** Snapping to the coastline too (O, or the Coast button); remembered per browser. Only with snapping on. */
@@ -1395,6 +1419,14 @@ export function openEditor(o: EditorOptions): void {
       g.beginPath();
       pts.forEach((pt, i) => (i ? g.lineTo(sx(pt[0]), sy(pt[1])) : g.moveTo(sx(pt[0]), sy(pt[1]))));
       g.stroke();
+      if (drawing && drag?.kind === "free") {
+        // The stroke being drawn, joined to the open line's end.
+        const last = drawing[drawing.length - 1];
+        g.beginPath();
+        g.moveTo(sx(last[0]), sy(last[1]));
+        for (const pt of drag.pts) g.lineTo(sx(pt[0]), sy(pt[1]));
+        g.stroke();
+      }
       // From the last point to the pointer, along a border where the next click would trace one.
       const tail = drawing ? pendingTail() : null;
       if (tail && drawing) {
@@ -1415,7 +1447,7 @@ export function openEditor(o: EditorOptions): void {
         }
       }
       g.fillStyle = "#fff";
-      if (drawing && cursor && tool === "polygon" && closesAt(sx(cursor[0]), sy(cursor[1]))) {
+      if (drawing && cursor && (tool === "polygon" || tool === "freehand") && closesAt(sx(cursor[0]), sy(cursor[1]))) {
         // The next click closes the outline: light the first point up.
         g.save();
         g.strokeStyle = SNAP_COLOUR;
@@ -1702,6 +1734,7 @@ export function openEditor(o: EditorOptions): void {
     const parts_ = parts().length;
     const what = target === "cut" ? "Cut" : target === "split" ? "Split" : target === "border" ? "Province border" : target === "extend" ? (extendTarget >= 0 ? `Extend part ${extendTarget + 1}` : "Extend") : "";
     let line = `${tool === "select" ? "Select" : tool === "fill" ? "Fill" : `${tool === "polygon" ? "Polygon" : "Freehand"}${what ? ` (${what})` : ""}`} · ${n} vertices`;
+    if (tool === "freehand" && drawing && !lineTarget()) line = `Open line · ${drawing.length} points · tap the first point or press Enter to close`;
     if (tool === "select" && selPart >= 0) line += ` · ${pickHint || `Part ${selPart + 1} selected`}`;
     if (snapHint && snapOn) line += ` · snaps to ${snapName(snapHint.snap, snapHint.rings)}`;
     if (tool === "polygon" && drawing && pendingTail()?.traced) line += ` · follows the border${traceFlip ? " the other way" : ""} (Tab: ${traceFlip ? "back" : "other way"})`;
@@ -1714,9 +1747,12 @@ export function openEditor(o: EditorOptions): void {
     status.textContent = line;
     undoBtn.disabled = !hist.canUndo;
     redoBtn.disabled = !hist.canRedo;
+    histTitles();
     for (const b of dlg.querySelectorAll<HTMLButtonElement>("button.tool")) b.setAttribute("aria-pressed", String(b.dataset.tool === tool && !pinTool.active() && !commentTool.active()));
     gridBtn.setAttribute("aria-pressed", String(gridOn));
     snapBtn.setAttribute("aria-pressed", String(snapOn));
+    optBar.hidden = tool !== "freehand" || lineTarget();
+    keepOpenBtn.setAttribute("aria-pressed", String(keepOpen));
     coastBtn.setAttribute("aria-pressed", String(coastActive()));
     // The spherical area is skipped mid-drag (it costs a few ms at 2,000 vertices) and refreshed on release.
     if (!hist.dragging || lastArea < 0) lastArea = parts_ ? areaPercent(mapGeometry(toGeometry(parts()), (p) => imageToGlobe(p, frame))) : 0;
@@ -2426,6 +2462,7 @@ export function openEditor(o: EditorOptions): void {
   function typed(): void {
     undoBtn.disabled = !hist.canUndo;
     redoBtn.disabled = !hist.canRedo;
+    histTitles();
     window.clearTimeout(typingTimer);
     typingTimer = window.setTimeout(() => {
       typingTimer = 0;
@@ -2440,6 +2477,7 @@ export function openEditor(o: EditorOptions): void {
       if (combine && combine.version !== hist.version) closeCombine(true);
       undoBtn.disabled = !hist.canUndo;
       redoBtn.disabled = !hist.canRedo;
+    histTitles();
       return;
     }
     // Drop selections that no longer exist.
@@ -2452,6 +2490,7 @@ export function openEditor(o: EditorOptions): void {
     if (!hist.dragging) syncPanel();
     undoBtn.disabled = !hist.canUndo;
     redoBtn.disabled = !hist.canRedo;
+    histTitles();
     draw();
     sendPreview();
   }
@@ -2464,7 +2503,7 @@ export function openEditor(o: EditorOptions): void {
   function setTool(t: Tool): void {
     if (pinTool.active()) pinTool.toggle(false);
     if (commentTool.active()) commentTool.toggle(false);
-    if (drawing && t !== "polygon") drawing = null;
+    if (drawing && t !== "polygon" && !(t === "freehand" && keepOpen)) drawing = null;
     tool = t;
     if (t === "polygon" || t === "freehand") drawTool = t;
     if (t !== "polygon" && t !== "freehand") target = "part";
@@ -2485,6 +2524,13 @@ export function openEditor(o: EditorOptions): void {
     canvas.style.cursor = "crosshair";
     setMsg("");
     changed();
+  }
+
+  /** Closes the open freehand line into an outline (a stroke overshooting the start is trimmed back to the loop). */
+  function closeOpenLine(): void {
+    if (!drawing) return;
+    const ring = drawing.length > 1 ? trimStrokeOvershoot(drawing.map((q) => [...q] as Position), ky) : drawing;
+    if (!finishRing(ring)) draw();
   }
 
   /** Validates and adds a closed outline from the polygon or freehand tool. */
@@ -3014,6 +3060,17 @@ export function openEditor(o: EditorOptions): void {
     setMsg(snapOn ? "Snapping on: points snap to other parts' and regions' vertices and lines. Hold Ctrl to place one freely." : "Snapping off.");
     draw();
   }
+  function toggleKeepOpen(): void {
+    keepOpen = !keepOpen;
+    // Shown at once: the status refresh waits for the next animation frame, which lags on a busy machine.
+    keepOpenBtn.setAttribute("aria-pressed", String(keepOpen));
+    try {
+      localStorage.setItem(KEEP_OPEN_PREF, keepOpen ? "on" : "off");
+    } catch {
+      /* not remembered: fine */
+    }
+    changed();
+  }
   /** Vertices of the region's own rings that sit on the same spot as another (attached), per state. */
   let glueCache: { version: number; index: ReturnType<typeof vertexIndex>; glued: Set<string> } = { version: -1, index: new Map(), glued: new Set() };
   function glue(): typeof glueCache {
@@ -3327,6 +3384,8 @@ export function openEditor(o: EditorOptions): void {
       return draw();
     }
     if (tool === "freehand") {
+      // An open line (Keep open): tapping its first point closes it.
+      if (drawing && !lineTarget() && closesAt(x, y)) return void closeOpenLine();
       drag = { kind: "free", pts: [w0] };
       return draw();
     }
@@ -3622,6 +3681,29 @@ export function openEditor(o: EditorOptions): void {
         if (!finishLine(line)) draw();
         return;
       }
+      if (!lineTarget() && (keepOpen || drawing)) {
+        // Keep open: the stroke joins the open line, and closes it when it ends at the first point.
+        if (d.pts.length < 2) return draw();
+        const part = follow ? traced(false) : simple(d.pts);
+        if (part.length < 2) return draw();
+        const sxs = part.map((q) => sx(q[0]));
+        const sys = part.map((q) => sy(q[1]));
+        if (!drawing && Math.max(Math.max(...sxs) - Math.min(...sxs), Math.max(...sys) - Math.min(...sys)) < MIN_STROKE) {
+          setMsg("That stroke was too short to be an outline, so nothing was drawn.", "error");
+          return draw();
+        }
+        if (!drawing) {
+          drawing = [];
+          strokeAt = [];
+        }
+        strokeAt.push(drawing.length);
+        drawing.push(...part);
+        drawSnaps = drawing.map(() => null);
+        const end = drawing[drawing.length - 1];
+        if (drawing.length >= 4 && Math.hypot(sx(drawing[0][0]) - sx(end[0]), sy(drawing[0][1]) - sy(end[1])) <= CLOSE_R) return void closeOpenLine();
+        setMsg("");
+        return changed();
+      }
       if (d.pts.length < 3) return draw();
       const xs = d.pts.map((q) => sx(q[0]));
       const ys = d.pts.map((q) => sy(q[1]));
@@ -3701,7 +3783,8 @@ export function openEditor(o: EditorOptions): void {
   /** Backspace or right-click while drawing: take back the last point (repeatable, back to nothing). */
   function undoDrawPoint(): void {
     if (!drawing) return;
-    drawing.pop();
+    if (tool === "freehand" && strokeAt.length) drawing.length = Math.min(drawing.length, strokeAt.pop()!);
+    else drawing.pop();
     drawSnaps.length = drawing.length;
     if (!drawing.length) drawing = null;
     draw();
@@ -3815,6 +3898,7 @@ export function openEditor(o: EditorOptions): void {
     else if (k === "b") setTool("fill");
     else if (k === "g") toggleGrid();
     else if (k === "s") toggleSnap();
+    else if (k === "k" && tool === "freehand" && !lineTarget()) toggleKeepOpen();
     else if (k === "l" && selPart >= 0) togglePartLock(selPart);
     else if ((e.key === "]" || e.key === "[") && selPart >= 0 && !drawing) moveLayer(selPart, e.key === "]" ? 1 : -1);
     else if (k === "c" && !drawing) openCombine();
@@ -3856,6 +3940,25 @@ export function openEditor(o: EditorOptions): void {
 
   function showHelp(): void {
     const m = modal("Keyboard shortcuts", "help-dlg");
+    // The toolbar's icons, named (touch screens have no tooltips): icon, name, shortcut and what it does.
+    const named = [...dlg.querySelectorAll<HTMLButtonElement>(".ed-toolbar button[data-icon]")].filter((b) => !b.hidden);
+    if (named.length)
+      m.body.append(
+        h(
+          "section",
+          { className: "sc-group" },
+          h("h3", { textContent: "Toolbar" }),
+          h(
+            "dl",
+            { className: "sc-icons" },
+            ...named.flatMap((b) => {
+              const name = b.getAttribute("aria-label") ?? (b.textContent ?? "").trim();
+              const key = /\(([^)]{1,14})\)/.exec(b.title)?.[1];
+              return [h("dt", {}, b.querySelector("svg")!.cloneNode(true), name, key ? h("kbd", { textContent: key }) : null), h("dd", { textContent: b.title.replace(/^[^(:]*(\([^)]*\))?:?\s*/, "").replace(/\s*\([^)]{1,14}\)\s*$/, "").replace(/^./, (c) => c.toUpperCase()) })];
+            }),
+          ),
+        ),
+      );
     for (const g of SHORTCUT_GROUPS)
       m.body.append(
         h("section", { className: "sc-group" }, h("h3", { textContent: g.title }), h("dl", { className: "shortcuts" }, ...g.rows.flatMap(([k, v]) => [h("dt", {}, h("kbd", { textContent: k })), h("dd", { textContent: v })]))),

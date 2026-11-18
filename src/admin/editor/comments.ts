@@ -193,6 +193,7 @@ export function createCommentTool(o: CommentToolOptions): CommentTool {
       });
       form.addEventListener("keydown", (e) => {
         e.stopPropagation();
+        if (e.key === "Escape") e.preventDefault(); // otherwise the dialog's own Esc (cancel) closes the whole editor as well
         if (e.key === "Escape") void okToLeave().then((go) => go && close());
       });
       sync();
@@ -218,6 +219,7 @@ export function createCommentTool(o: CommentToolOptions): CommentTool {
     );
     form.addEventListener("keydown", (e) => {
       e.stopPropagation();
+      if (e.key === "Escape") e.preventDefault();
       if (e.key === "Escape") close();
     });
     popover.append(form);

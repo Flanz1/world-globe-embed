@@ -10,7 +10,8 @@ import { GitHub, GitHubError, NotListed, type FileChange, type WorkflowRun } fro
 import { hasPendingSaves, initOptimistic, optimistic } from "./optimistic.ts";
 import { openPreview } from "./preview.ts";
 import { $, SITE, h } from "./dom.ts";
-import { initRegions, loadRegions, openRegionById, regionDisplayName, renderRegions, watchEditing } from "./regions.ts";
+import { initRegions, item, loadRegions, moreMenu, openRegionById, regionDisplayName, renderRegions, watchEditing } from "./regions.ts";
+import { canWarp, openWarp } from "./warp.ts";
 import { initPins, loadPins, renderPins } from "./pins.ts";
 import { initHealth, renderHealth } from "./health.ts";
 import { initActivity, loadActivity } from "./activity.ts";
@@ -214,7 +215,15 @@ function renderSlots(): void {
           " ",
           h("a", { href: new URL(`v/${slug}/`, SITE).href, target: "_blank", rel: "noopener", textContent: "open" }),
           h("div", { className: "slot-map" }, select),
-          h("div", { className: "actions" }, save, preview, copy),
+          h(
+            "div",
+            { className: "actions" },
+            save,
+            preview,
+            copy,
+            // Opt-in: only from here, never prompted when a map changes.
+            canWarp() ? moreMenu(slug, [item("Warp regions…", () => openWarp({ gh: () => gh!, maps: () => maps, afterCommit }, slug, slots.slots[slug] ?? slot), "", "Move this slot's regions and pins onto a redrawn map by matching points")]) : null,
+          ),
         ),
       );
     }),
