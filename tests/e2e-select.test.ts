@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { select, ALL, GROUPS, readSuites } from "../scripts/e2e/select.mjs";
+import { select, ALL, GROUPS, QUARANTINED, readSuites } from "../scripts/e2e/select.mjs";
 
 const E2E = path.resolve(import.meta.dirname, "../scripts/e2e");
 
@@ -10,7 +10,7 @@ describe("e2e suite selection", () => {
     expect(select(["README.md", "docs/x.md", "tests/a.test.ts", "content/regions/a.json"])).toEqual([]);
   });
   it("a Regions tab / categories change runs only the admin-page suites", () => {
-    expect(select(["src/admin/regions.ts", "src/admin/categories.ts", "src/shared/categories.ts", "src/admin/admin.css", "admin/index.html", "schema/categories.schema.json", "worker/src/handler.ts", "scripts/lib/content.ts"])).toEqual(ALL.filter((x) => ["regions", "rename", "roles", "theme", "live", "live-many", "trash", "header"].includes(x)));
+    expect(select(["src/admin/regions.ts", "src/admin/categories.ts", "src/shared/categories.ts", "src/admin/admin.css", "admin/index.html", "schema/categories.schema.json", "worker/src/handler.ts", "scripts/lib/content.ts"])).toEqual(ALL.filter((x) => ["regions", "comments", "rename", "roles", "theme", "live", "live-many", "trash", "health", "bulk", "warp", "header"].includes(x)));
   });
   it("an editor change runs the editor suites", () => {
     const s = select(["src/admin/editor/snap.ts"]);
@@ -54,6 +54,13 @@ describe("e2e suite registry (the header line of each scripts/e2e/<name>.mjs)", 
       const src = readFileSync(path.join(E2E, file), "utf8");
       if (!/makeFixture\(/.test(src)) continue;
       expect(/^\/\/ e2e-(suite|tool):/.test(src), `${file}: add a "// e2e-suite: roots=..." first line (or "// e2e-tool:" if it is run by hand)`).toBe(true);
+    }
+  });
+  it("quarantined suites name their issue and are never selected", () => {
+    for (const [name, issue] of Object.entries(QUARANTINED)) {
+      expect(issue, `${name}: quarantine= must be an issue number`).toMatch(/^\d+$/);
+      expect(ALL).not.toContain(name);
+      expect(select(["scripts/e2e/fixture.mjs"])).not.toContain(name);
     }
   });
 });

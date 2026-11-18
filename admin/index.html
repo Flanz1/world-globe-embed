@@ -16,6 +16,7 @@
     <button type="button" role="tab" id="tab-btn-maps" aria-controls="tab-maps" aria-selected="true">Maps &amp; slots</button>
     <button type="button" role="tab" id="tab-btn-regions" aria-controls="tab-regions" aria-selected="false">Regions</button>
     <button type="button" role="tab" id="tab-btn-pins" aria-controls="tab-pins" aria-selected="false">Pins</button>
+    <button type="button" role="tab" id="tab-btn-health" aria-controls="tab-health" aria-selected="false">Health</button>
     <button type="button" role="tab" id="tab-btn-users" aria-controls="tab-users" aria-selected="false" hidden>Users</button>
   </div>
   <span id="who" class="muted"></span>
@@ -100,11 +101,14 @@
           <label>New region on slot <select id="r-new-slot"></select></label>
           <button type="button" class="r-new">New region</button>
           <button type="button" id="r-new-category" class="ghost" title="Add a folder to sort regions into">+ Folder</button>
+          <button type="button" id="r-select" class="ghost" aria-pressed="false" title="Tick several regions to move, recolour or delete them together" hidden>Select regions</button>
           <button type="button" id="r-combine" class="ghost" title="Copy several regions into one new region">Combine regions…</button>
           <button type="button" id="r-trash" class="ghost text r-trash" title="Regions and pins deleted in the last 3 days, with a Restore button">Recently deleted…</button>
         </div>
+        <div id="regions-search" class="r-search" hidden>
+          <label><span class="r-search-l">Search</span> <input id="r-search" type="search" placeholder="Name, id or creator" autocomplete="off"></label>
+        </div>
         <div id="regions-tools" class="row r-tools" hidden>
-          <label class="grow">Search <input id="r-search" type="search" placeholder="Name, id or creator" autocomplete="off"></label>
           <label>Slot <select id="r-slot"><option value="">All slots</option></select></label>
           <label>Created by <select id="r-creator"><option value="">Anyone</option></select></label>
           <label>Sort <select id="r-sort"><option value="name">Id</option><option value="updated">Last updated</option><option value="created">Newest first</option><option value="creator">Creator</option></select></label>
@@ -119,6 +123,8 @@
     </div>
 
     <div id="tab-pins" role="tabpanel" aria-labelledby="tab-btn-pins" class="tabpanel" hidden></div>
+
+    <div id="tab-health" role="tabpanel" aria-labelledby="tab-btn-health" class="tabpanel" hidden></div>
 
     <div id="tab-users" role="tabpanel" aria-labelledby="tab-btn-users" class="tabpanel" hidden>
       <section class="card">
@@ -192,6 +198,7 @@
     </div>
   </div>
 </dialog>
+<button id="to-top" type="button" class="tonal to-top" hidden>↑ Back to top</button>
 <script type="module" src="../src/admin/main.ts"></script>
 </body>
 </html>

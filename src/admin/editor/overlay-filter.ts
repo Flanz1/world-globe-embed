@@ -55,7 +55,7 @@ export interface OverlayFilter {
   close: () => void;
 }
 
-export function createOverlayFilter(o: { items: OverlayItem[]; categories: OverlayCategory[]; meId: number | undefined; onChange: () => void; pinned?: ReadonlySet<number> }): OverlayFilter {
+export function createOverlayFilter(o: { items: OverlayItem[]; categories: OverlayCategory[]; meId: number | undefined; onChange: () => void; pinned?: ReadonlySet<number>; extra?: HTMLElement }): OverlayFilter {
   // Pinned regions (a suggestion's current version) are always drawn and aren't in the list.
   const pinned = o.pinned ?? new Set<number>();
   const all = o.items;
@@ -155,6 +155,7 @@ export function createOverlayFilter(o: { items: OverlayItem[]; categories: Overl
     ),
     info,
     list,
+    ...(o.extra ? [h("div", { className: "ed-ov-layers" }, h("strong", { className: "small", textContent: "Layers" }), o.extra)] : []),
   );
   for (const el of [search, cat, who, sort]) el.addEventListener(el === search ? "input" : "change", render);
 
@@ -162,6 +163,8 @@ export function createOverlayFilter(o: { items: OverlayItem[]; categories: Overl
     panel.hidden = !open;
     button.ariaExpanded = String(open);
     if (open) render();
+    // The layer-order bar hides while the panel is open.
+    o.onChange();
   };
   button.addEventListener("click", () => toggle());
   panel.addEventListener("keydown", (e) => {
