@@ -82,25 +82,25 @@ const cats = () => onBranch("content/categories.json")?.categories ?? [];
 try {
   const owner = await adminPage("Flanz1");
   const { page } = owner;
-  check("no checkboxes or bar before 'Select regions'", (await page.locator("input.bulk-box").count()) === 0 && (await page.locator(".bulk-bar").isHidden()));
+  check("no checkboxes or bar before 'Select regions'", (await page.locator("input.bulk-box").count()) === 0 && (await page.locator(".bulk-bar:not([hidden])").isHidden()));
   await page.click("#r-select");
-  check("the button is pressed and the bar shows", (await page.getAttribute("#r-select", "aria-pressed")) === "true" && (await page.locator(".bulk-bar").isVisible()));
-  check("with nothing ticked every action is disabled", (await page.locator('.bulk-bar [data-action="bulk-move"]').isDisabled()) && (await page.locator('.bulk-bar [data-action="bulk-delete"]').isDisabled()));
+  check("the button is pressed and the bar shows", (await page.getAttribute("#r-select", "aria-pressed")) === "true" && (await page.locator(".bulk-bar:not([hidden])").isVisible()));
+  check("with nothing ticked every action is disabled", (await page.locator('.bulk-bar:not([hidden]) [data-action="bulk-move"]').isDisabled()) && (await page.locator('.bulk-bar:not([hidden]) [data-action="bulk-delete"]').isDisabled()));
   await tick(page, A);
   await tick(page, B);
-  check("the bar counts the ticked regions", (await page.locator(".bulk-count").textContent()) === "2 selected");
+  check("the bar counts the ticked regions", (await page.locator(".bulk-bar:not([hidden]) .bulk-count").textContent()) === "2 selected");
   await page.screenshot({ path: path.join(OUT, "selected.png") });
 
   let n = mock.log.length;
-  await page.click('.bulk-bar [data-action="bulk-move"]');
+  await page.click('.bulk-bar:not([hidden]) [data-action="bulk-move"]');
   await page.selectOption('dialog select[data-field="bulk-folder"]', "north");
   await page.click('dialog [data-action="confirm-bulk-move"]');
   await waitCommit(page, n);
   check("moving both to a folder is one commit", mock.log.length === n + 1 && JSON.stringify(cats()[0]?.regions?.slice().sort()) === JSON.stringify([B, A].sort()), mock.log.slice(n).map((c) => c.message).join(","));
-  check("the ticks survive the save", (await page.locator(".bulk-count").textContent()) === "2 selected");
+  check("the ticks survive the save", (await page.locator(".bulk-bar:not([hidden]) .bulk-count").textContent()) === "2 selected");
 
   n = mock.log.length;
-  await page.click('.bulk-bar [data-action="bulk-colour"]');
+  await page.click('.bulk-bar:not([hidden]) [data-action="bulk-colour"]');
   await page.fill('dialog input[data-field="bulk-colour"]', "#00aa00");
   await page.click('dialog [data-action="confirm-bulk-colour"]');
   await waitCommit(page, n);
@@ -110,27 +110,27 @@ try {
   const ann = await adminPage("carto-ann");
   await ann.page.click("#r-select");
   await tick(ann.page, A);
-  const why = await ann.page.locator('.bulk-bar [data-action="bulk-colour"]').getAttribute("title");
-  check("a contributor can't recolour the owner's region: disabled, with the reason", (await ann.page.locator('.bulk-bar [data-action="bulk-colour"]').isDisabled()) && /can't change the colour/.test(why ?? ""), why);
-  check("…or delete it", (await ann.page.locator('.bulk-bar [data-action="bulk-delete"]').isDisabled()) && /can't delete/.test((await ann.page.locator('.bulk-bar [data-action="bulk-delete"]').getAttribute("title")) ?? ""));
+  const why = await ann.page.locator('.bulk-bar:not([hidden]) [data-action="bulk-colour"]').getAttribute("title");
+  check("a contributor can't recolour the owner's region: disabled, with the reason", (await ann.page.locator('.bulk-bar:not([hidden]) [data-action="bulk-colour"]').isDisabled()) && /can't change the colour/.test(why ?? ""), why);
+  check("…or delete it", (await ann.page.locator('.bulk-bar:not([hidden]) [data-action="bulk-delete"]').isDisabled()) && /can't delete/.test((await ann.page.locator('.bulk-bar:not([hidden]) [data-action="bulk-delete"]').getAttribute("title")) ?? ""));
   check("no errors in the contributor's page", ann.errors.length === 0, ann.errors.join(" | "));
   await ann.ctx.close();
 
   n = mock.log.length;
-  await page.click('.bulk-bar [data-action="bulk-delete"]');
+  await page.click('.bulk-bar:not([hidden]) [data-action="bulk-delete"]');
   check("the delete dialog lists the regions and the trash", /landmark-disc/.test(await page.locator("dialog[open]").textContent()) && /Recently deleted/.test(await page.locator("dialog[open]").textContent()));
   await page.screenshot({ path: path.join(OUT, "delete-dialog.png") });
   await page.click('dialog [data-action="confirm-bulk-delete"]');
   await waitCommit(page, n);
   check("deleting both is one commit", mock.log.length === n + 1 && !onBranch(`content/regions/${A}.json`) && !onBranch(`content/regions/${B}.json`), mock.log.slice(n).map((c) => c.message).join(","));
-  check("the cards are gone and the selection is empty", (await page.locator(`#regions .rcard[data-region="${A}"]`).count()) === 0 && (await page.locator(".bulk-count").textContent()) !== "2 selected");
+  check("the cards are gone and the selection is empty", (await page.locator(`#regions .rcard[data-region="${A}"]`).count()) === 0 && (await page.locator(".bulk-bar:not([hidden]) .bulk-count").textContent()) !== "2 selected");
 
   await page.click("#r-trash");
   await page.waitForSelector("dialog .hist-list li", { timeout: 15000 });
   check("both are in 'Recently deleted'", (await page.locator("dialog .hist-list li", { hasText: A }).count()) === 1 && (await page.locator("dialog .hist-list li", { hasText: B }).count()) === 1);
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
-  check("Esc leaves selection mode", (await page.getAttribute("#r-select", "aria-pressed")) === "false" && (await page.locator(".bulk-bar").isHidden()) && (await page.locator("input.bulk-box").count()) === 0);
+  check("Esc leaves selection mode", (await page.getAttribute("#r-select", "aria-pressed")) === "false" && (await page.locator(".bulk-bar:not([hidden])").isHidden()) && (await page.locator("input.bulk-box").count()) === 0);
   check("no errors in the admin page", owner.errors.length === 0, owner.errors.join(" | "));
   await owner.ctx.close();
 } catch (e) {

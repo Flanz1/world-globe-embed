@@ -10,7 +10,7 @@ describe("e2e suite selection", () => {
     expect(select(["README.md", "docs/x.md", "tests/a.test.ts", "content/regions/a.json"])).toEqual([]);
   });
   it("a Regions tab / categories change runs only the admin-page suites", () => {
-    expect(select(["src/admin/regions.ts", "src/admin/categories.ts", "src/shared/categories.ts", "src/admin/admin.css", "admin/index.html", "schema/categories.schema.json", "worker/src/handler.ts", "scripts/lib/content.ts"])).toEqual(ALL.filter((x) => ["regions", "comments", "rename", "roles", "theme", "live", "live-many", "trash", "health", "bulk", "warp"].includes(x)));
+    expect(select(["src/admin/regions.ts", "src/admin/categories.ts", "src/shared/categories.ts", "src/admin/admin.css", "admin/index.html", "schema/categories.schema.json", "worker/src/handler.ts", "scripts/lib/content.ts"])).toEqual(ALL.filter((x) => ["regions", "comments", "rename", "roles", "theme", "live", "live-many", "trash", "health", "bulk", "bulk-pins", "warp"].includes(x)));
   });
   it("an editor change runs the editor suites", () => {
     const s = select(["src/admin/editor/snap.ts"]);
