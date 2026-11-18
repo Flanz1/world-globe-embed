@@ -356,6 +356,7 @@ await step(A, "the region editor's Pin tool places, moves, edits and deletes pin
   await page.waitForTimeout(200);
   check(A, "a two-finger pinch zooms the map while Pin is on", k1 > k0 * 1.3, `${k0} -> ${k1}`);
   check(A, "…and the pinch does not place a pin", (await pop.locator("strong").textContent()) === "New pin");
+  check(A, "the status line names the Pin mode", /^Pin · click the map/.test((await page.textContent("dialog.editor .ed-status")) ?? ""), await page.textContent("dialog.editor .ed-status"));
   check(A, "kinds are a radiogroup of chips", (await pop.locator('[role=radiogroup] [role=radio]').count()) === 10);
   await pop.locator('input[name="pin-name"]').fill("Editor Port");
   for (const [w, hgt] of [[1440, 900], [768, 900], [375, 800]])

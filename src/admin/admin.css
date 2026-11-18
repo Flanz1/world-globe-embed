@@ -372,7 +372,7 @@ dialog.editor .ed-folder-head button { padding: 0 8px; }
 .ed-pin-body label { display: grid; gap: 2px; }
 .ed-pin-foot { display: flex; align-items: center; gap: 8px; padding: 8px 12px 12px; border-top: 1px solid var(--md-sys-color-outline-variant); }
 .ed-pin-foot .grow { flex: 1; }
-.ed-pin-kinds { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; }
+.ed-pin-kinds { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); }
 .ed-pin-kinds .ed-kind { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; box-shadow: inset 0 -3px 0 var(--kind); }
 .ed-pin-kinds .ed-kind[aria-checked="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: var(--md-sys-color-outline); }
 .ed-pin-kinds .ed-kind[aria-checked="true"]::before { content: ""; width: 12px; height: 12px; margin: 0; background: currentColor; -webkit-mask: var(--app-tick) center / contain no-repeat; mask: var(--app-tick) center / contain no-repeat; }

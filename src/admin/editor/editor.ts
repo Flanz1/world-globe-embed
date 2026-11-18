@@ -1656,6 +1656,7 @@ export function openEditor(o: EditorOptions): void {
       const lon = ((((cursor[0] + 180) % 360) + 360) % 360) - 180;
       line += ` · lon ${round(lon, 3)}, lat ${round(cursor[1], 3)}`;
     }
+    if (pinTool.active()) line = `Pin · click the map to place a pin, click a pin to edit it${cursor ? line.slice(line.indexOf(" · lon ")) : ""}`;
     status.textContent = line;
     undoBtn.disabled = !hist.canUndo;
     redoBtn.disabled = !hist.canRedo;
