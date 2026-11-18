@@ -138,9 +138,19 @@ for (const view of ["flat", "globe"]) {
     check(E, "lists the pin inside, with its kind", /Hostile Harbour/.test(r.join(" ")) && /Port/.test(r.join(" ")), r.join(" | "));
     check(E, "facts were fetched once, on the click", requests.filter((u) => u.includes("/facts/")).length === 1);
     await page.screenshot({ path: path.join(OUT, `embed-${view}-card.png`) });
+    const inked = () => page.evaluate(() => {
+      const cv = document.querySelector(".wfact-hl");
+      const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+      for (let i = 3; i < d.length; i += 4) if (d[i]) return true;
+      return false;
+    });
+    check(E, "the part is outlined while the card is open", await inked());
+    const xb = await page.locator(".wfact .x").boundingBox();
+    check(E, "× is a 32px button labelled Close", xb.width >= 32 && xb.height >= 32 && (await page.locator(".wfact .x").getAttribute("aria-label")) === "Close", `${xb.width}x${xb.height}`);
 
     await page.keyboard.press("Escape");
     check(E, "Esc closes it", !(await card(page).isVisible()));
+    check(E, "…and the outline goes", !(await inked()));
     await page.mouse.click(c.x, c.y);
     await card(page).waitFor({ state: "visible" });
     await page.locator(".wfact .x").click();

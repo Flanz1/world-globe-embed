@@ -433,8 +433,10 @@ export async function start(ctx: StartContext): Promise<void> {
   });
 
   // Region embeds: clicking a part opens a card with its facts (not in the admin preview, whose region isn't built yet).
-  if (R && cfg.slug !== "preview")
-    setupRegionCard(cfg, {
+  const card =
+    R && cfg.slug !== "preview"
+      ? setupRegionCard(cfg, {
+      project: (p) => ruler.project(imageToGlobe(p, { north: pad.north, south: pad.south, shift })),
       canvas,
       stage,
       region: () => (reg ? visible.of(reg) : null),
@@ -442,7 +444,8 @@ export async function start(ctx: StartContext): Promise<void> {
         const g = ruler.pick(x, y);
         return g && globeToImage(g, { north: pad.north, south: pad.south, shift });
       },
-    });
+    })
+      : null;
 
   /** Map pins (?pins=…): markers placed like the labels, on the far side of the globe hidden. */
   let pinLayer: PinLayer | null = null;
@@ -572,6 +575,7 @@ export async function start(ctx: StartContext): Promise<void> {
       fenceUpload();
       placeLabel();
       ruler.redraw();
+      card?.redraw();
       placePins();
       dirty = false;
       // The view moved: once it settles, see whether it needs a sharper texture or other tiles.

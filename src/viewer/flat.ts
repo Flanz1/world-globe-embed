@@ -111,8 +111,10 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   });
 
   // Region embeds: clicking a part opens a card with its facts (not in the admin preview, whose region isn't built yet).
-  if (R && cfg.slug !== "preview")
-    setupRegionCard(cfg, {
+  const card =
+    R && cfg.slug !== "preview"
+      ? setupRegionCard(cfg, {
+      project: (p, nearX) => ruler.project(imageToGlobe(p, frame()), nearX),
       canvas,
       stage,
       region: () => reg,
@@ -121,7 +123,8 @@ export async function start(ctx: FlatStartContext): Promise<void> {
         const lat = view.cy - (y - h / 2) / (view.k * ky);
         return lat > 90 || lat < -90 ? null : [view.cx + (x - w / 2) / view.k, lat];
       },
-    });
+    })
+      : null;
 
   /* ── Render on demand ── */
   let raf = 0;
@@ -178,6 +181,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       labels?.place(i, x, y, x >= 0 && x <= w && y >= 0 && y <= h);
     });
     ruler.redraw();
+    card?.redraw();
     pinLayer?.place(([plon, plat]) => {
       const x = sx(plon + 360 * Math.round((view.cx - plon) / 360), w);
       const y = sy(plat, h);

@@ -5,7 +5,7 @@
  * Everything from the data is set with textContent. A press that moves more than a few pixels stays a drag, and
  * clicks are ignored while the ruler is on.
  */
-import { pointInPolygon, polygonsOf, type Position } from "../shared/geo.ts";
+import { pointInPolygon, polygonsOf, type Position, type Ring } from "../shared/geo.ts";
 import { nameFromId, parseFacts, type FactsFile } from "../shared/facts.ts";
 import { sphereAreaKm2, validRadius } from "../shared/measure.ts";
 import { pinIcon } from "../shared/pin-icons.ts";
@@ -19,13 +19,15 @@ export interface RegionCardHost {
   pick(x: number, y: number): Position | null;
   /** The region as it is drawn now (stacked regions that were switched off are already out of it), or null before it has loaded. */
   region(): RegionData | null;
+  /** Stage-local position of a position in the map image's frame (`nearX`: the previous point's x, so the flat map picks the right repeat). */
+  project(p: Position, nearX?: number): { x: number; y: number; ok: boolean };
 }
 
 const CSS = `
 .wfact{position:absolute;left:8px;bottom:8px;z-index:3;box-sizing:border-box;width:min(300px,calc(100% - 16px));max-height:60%;overflow:auto;padding:10px 12px;border-radius:8px;background:rgba(20,18,14,.9);color:#f3ead8;font:13px/1.4 system-ui,sans-serif;pointer-events:auto}
 .wfact[hidden]{display:none}
 @media (max-width:420px){.wfact{bottom:44px}}
-.wfact h3{margin:0 24px 2px 0;font:700 14px/1.3 system-ui,sans-serif;overflow-wrap:anywhere}
+.wfact h3{margin:0 34px 2px 0;font:700 14px/1.3 system-ui,sans-serif;overflow-wrap:anywhere}
 .wfact .sub,.wfact .muted{margin:0 0 6px;font-size:12px;color:#c9bfab}
 .wfact dl{margin:6px 0 0;display:grid;gap:6px;border-top:1px solid #c9a94e;padding-top:6px}
 .wfact dt{font-size:11px;font-weight:600;letter-spacing:.02em;color:#c9bfab}
@@ -34,7 +36,7 @@ const CSS = `
 .wfact li{display:flex;align-items:center;gap:6px;min-width:0}
 .wfact li svg{flex:none}
 .wfact li small{color:#c9bfab}
-.wfact .x{all:unset;position:absolute;right:6px;top:6px;width:22px;height:22px;display:grid;place-items:center;border-radius:5px;cursor:pointer;font-size:16px;line-height:1}
+.wfact .x{all:unset;position:absolute;right:4px;top:4px;width:32px;height:32px;display:grid;place-items:center;border-radius:6px;cursor:pointer;font-size:20px;line-height:1}\n@media (pointer:coarse){.wfact .x{width:44px;height:44px;right:0;top:0}}\n.wfact-hl{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .wfact .x:hover{background:rgba(255,255,255,.15)}
 .wfact .x:focus-visible{outline:2px solid #fff;outline-offset:2px}
 `.replace(/\n/g, "");
@@ -63,7 +65,7 @@ export function hitPart(r: RegionData, at: Position): { region: RegionData; part
   return null;
 }
 
-export function setupRegionCard(cfg: { radius: number; pins?: string }, host: RegionCardHost, search = location.search): void {
+export function setupRegionCard(cfg: { radius: number; pins?: string }, host: RegionCardHost, search = location.search): { redraw(): void } {
   const radius = validRadius(cfg.radius) ? cfg.radius : 0;
   // Pins show in the card only if the embed shows them (?pins=…, or the region's own pin maps).
   const pinSel = parsePinsParam(new URLSearchParams(search).get("pins") ?? cfg.pins);
@@ -75,7 +77,47 @@ export function setupRegionCard(cfg: { radius: number; pins?: string }, host: Re
   card.className = "wfact";
   card.hidden = true;
   card.setAttribute("role", "dialog");
-  host.stage.append(card);
+  const hl = document.createElement("canvas");
+  hl.className = "wfact-hl";
+  hl.setAttribute("aria-hidden", "true");
+  host.stage.append(hl, card);
+  // The part the card is about, outlined on the map; redrawn whenever the view moves.
+  let shown: Ring[] | null = null;
+  const redraw = (): void => {
+    if (!shown && !hl.width) return;
+    const w = Math.max(1, host.stage.clientWidth);
+    const h = Math.max(1, host.stage.clientHeight);
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    if (hl.width !== Math.round(w * d) || hl.height !== Math.round(h * d)) {
+      hl.width = Math.round(w * d);
+      hl.height = Math.round(h * d);
+    }
+    const g = hl.getContext("2d")!;
+    g.setTransform(d, 0, 0, d, 0, 0);
+    g.clearRect(0, 0, w, h);
+    if (!shown) return;
+    g.lineJoin = g.lineCap = "round";
+    for (const [width, color] of [[6, "rgba(255,255,255,.55)"], [2.5, "#ffd36a"]] as const) {
+      g.lineWidth = width;
+      g.strokeStyle = color;
+      for (const ring of shown) {
+        g.beginPath();
+        let pen = false;
+        let prev: number | undefined;
+        for (const p of ring) {
+          const s = host.project(p, prev);
+          prev = s.x;
+          if (!s.ok) pen = false;
+          else if (pen) g.lineTo(s.x, s.y);
+          else {
+            g.moveTo(s.x, s.y);
+            pen = true;
+          }
+        }
+        g.stroke();
+      }
+    }
+  };
 
   const cache = new Map<string, Promise<FactsFile | null>>();
   const load = (id: string, parts: number): Promise<FactsFile | null> => {
@@ -95,6 +137,8 @@ export function setupRegionCard(cfg: { radius: number; pins?: string }, host: Re
   const close = (): void => {
     token++;
     card.hidden = true;
+    shown = null;
+    redraw();
   };
   const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text = "", cls = ""): HTMLElementTagNameMap[K] => {
     const e = document.createElement(tag);
@@ -143,12 +187,14 @@ export function setupRegionCard(cfg: { radius: number; pins?: string }, host: Re
     const x = el("button", "×");
     x.type = "button";
     x.className = "x";
-    x.setAttribute("aria-label", "Close facts");
+    x.setAttribute("aria-label", "Close");
     x.addEventListener("click", close);
     const body = el("p", "Loading facts…", "muted");
     card.replaceChildren(x, el("h3", title), ...(label && label !== regionName ? [el("p", regionName, "sub")] : []), body);
     card.setAttribute("aria-label", `${title} facts`);
     card.hidden = false;
+    shown = polygonsOf(r.geometry)[hit.part] ?? null;
+    redraw();
     // Touch moves focus to × (after the click the browser sends next, which would otherwise take it back to the page).
     if (viaTouch) {
       const stop = new AbortController();
@@ -203,4 +249,5 @@ export function setupRegionCard(cfg: { radius: number; pins?: string }, host: Re
     },
     true,
   );
+  return { redraw };
 }
