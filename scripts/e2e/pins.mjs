@@ -1,4 +1,4 @@
-// e2e-suite: roots=VIEWER,src/viewer/pins.ts,src/admin/pins.ts,src/admin/preview-pins.ts cut=src/admin/session.ts,src/admin/github.ts,src/shared/access.ts,src/shared/categories.ts,src/admin/pinmaps.ts,src/shared/pinmaps.ts weight=2
+// e2e-suite: roots=VIEWER,src/viewer/pins.ts,src/admin/pins.ts,src/admin/editor/pin-tool.ts,src/admin/editor/pins-layer.ts,src/admin/preview-pins.ts cut=src/admin/session.ts,src/admin/github.ts,src/shared/access.ts,src/shared/categories.ts,src/admin/pinmaps.ts,src/shared/pinmaps.ts weight=2
 /**
  * Browser checks for map pins, in headless Chromium.
  *
@@ -307,6 +307,109 @@ await step(A, "the region editor can show the slot's pins over the map", async (
       await page.click('dialog.editor [data-act="overlays"]');
     }
   await page.setViewportSize({ width: 1440, height: 900 });
+  check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+});
+
+await step(A, "the region editor's Pin tool places, moves, edits and deletes pins", async () => {
+  const { ctx, page, errors } = await adminPage("Flanz1");
+  await page.goto(`${SITE}/admin/#regions`);
+  await page.waitForSelector('[data-region="landmark-disc"] [data-action="edit"]', { timeout: 15000 });
+  await page.click('[data-region="landmark-disc"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
+  const tool = page.locator('dialog.editor [data-act="pin-tool"]');
+  check(A, "the toolbar has a Pin toggle, off at first", (await tool.getAttribute("aria-pressed")) === "false");
+  await tool.click();
+  check(A, "turning it on shows the pins and presses the toggle", (await tool.getAttribute("aria-pressed")) === "true");
+  const cv = await page.locator("dialog.editor canvas.ed-canvas").boundingBox();
+  const toScreen = (lon, lat) => page.evaluate(([a, b]) => document.querySelector("dialog.editor").wgeEditor.toScreen(a, b), [lon, lat]);
+  // Click an empty spot (the map's top-left corner area) to place a pin.
+  const n0 = mock.log.length;
+  await page.mouse.click(cv.x + 40, cv.y + 60);
+  const pop = page.locator("dialog.editor .ed-pin-pop");
+  await pop.waitFor({ state: "visible", timeout: 5000 });
+  check(A, "clicking the map opens the new-pin popover with Name focused", (await pop.locator("strong").textContent()) === "New pin" && (await page.evaluate(() => document.activeElement?.getAttribute("name"))) === "pin-name");
+  check(A, "kinds are a radiogroup of chips", (await pop.locator('[role=radiogroup] [role=radio]').count()) === 10);
+  await pop.locator('input[name="pin-name"]').fill("Editor Port");
+  for (const [w, hgt] of [[1440, 900], [768, 900], [375, 800]])
+    for (const scheme of ["light", "dark"]) {
+      await page.setViewportSize({ width: w, height: hgt });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(OUT, `editor-pin-tool-${w}-${scheme}.png`) });
+    }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.waitForTimeout(300);
+  await pop.locator('[data-kind="port"]').click();
+  check(A, "choosing a kind checks its chip", (await pop.locator('[data-kind="port"]').getAttribute("aria-checked")) === "true" && (await pop.locator('[data-kind="city"]').getAttribute("aria-checked")) === "false");
+  await pop.locator('select[name="pin-map"]').selectOption("battles");
+  await pop.locator('input[name="pin-link"]').fill(NOTE);
+  await pop.locator('[data-act="pin-save"]').click();
+  await waitCommit(page, n0);
+  const c = mock.log.slice(n0);
+  check(A, "Save pin is one commit of just that pin (the region isn't saved)", c.length === 1 && c[0].changes.length === 1 && c[0].changes[0].path === "content/pins/editor-port.json", JSON.stringify(c.map((x) => x.changes.map((y) => y.path))));
+  const f = onBranch("content/pins/editor-port.json");
+  const p = f?.properties;
+  check(A, "the file has the popover's values", p?.name === "Editor Port" && p.kind === "port" && p.pinMap === "battles" && p.link === NOTE && p.slot === SLOT.slug && p.createdBy?.login === "Flanz1", JSON.stringify(p));
+  check(A, "the popover closes after saving", !(await pop.isVisible()));
+  // Place another: it starts with the last kind and pin map.
+  await page.mouse.click(cv.x + 90, cv.y + 60);
+  await pop.waitFor({ state: "visible" });
+  check(A, "the next pin starts with the last kind and pin map", (await pop.locator('[data-kind="port"]').getAttribute("aria-checked")) === "true" && (await pop.locator('select[name="pin-map"]').inputValue()) === "battles");
+  // Unsaved changes ask before they are lost.
+  await pop.locator('input[name="pin-name"]').fill("Half done");
+  await tool.click();
+  await page.waitForSelector("dialog.small-dlg.danger[open]");
+  check(A, "turning the tool off asks before dropping an unsaved pin", /Unsaved pin/.test((await page.textContent("dialog.small-dlg.danger[open]")) ?? ""));
+  await page.click("dialog.small-dlg.danger[open] button:has-text('Keep editing')");
+  check(A, "Keep editing leaves the popover as it was", (await pop.isVisible()) && (await pop.locator('input[name="pin-name"]').inputValue()) === "Half done");
+  // A new pin map from the popover.
+  const nm = mock.log.length;
+  await pop.locator('select[name="pin-map"]').selectOption({ label: "New pin map…" });
+  await page.fill('dialog[open] input[data-field="pinmap-name"]', "Fresh map");
+  await page.click('dialog[open] button[data-action="confirm-pinmap"]');
+  await waitCommit(page, nm);
+  await page.waitForFunction(() => /Fresh map/.test(document.querySelector('dialog.editor select[name="pin-map"]')?.selectedOptions[0]?.textContent ?? ""), null, { timeout: 5000 });
+  check(A, "New pin map… creates the map and picks it", !!(onBranch("content/pinmaps.json")?.maps ?? []).find((m) => m.name === "Fresh map"));
+  await pop.locator('[data-act="pin-save"]').click();
+  await waitCommit(page, nm + 1);
+  check(A, "…and the pin is saved into it", onBranch("content/pins/half-done.json")?.properties.pinMap === "fresh-map", JSON.stringify(onBranch("content/pins/half-done.json")?.properties));
+  // Click a pin to edit it, drag to move it.
+  const [px, py] = await toScreen(...onBranch("content/pins/editor-port.json").geometry.coordinates);
+  await page.mouse.click(cv.x + px, cv.y + py);
+  await pop.waitFor({ state: "visible" });
+  check(A, "clicking a pin opens it for editing", (await pop.locator('input[name="pin-name"]').inputValue()) === "Editor Port" && (await pop.locator("strong").textContent()) === "Pin");
+  const n1 = mock.log.length;
+  await page.mouse.move(cv.x + px, cv.y + py);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) await page.mouse.move(cv.x + px + (40 * i) / 6, cv.y + py + (20 * i) / 6);
+  await page.mouse.up();
+  check(A, "dragging a pin moves it without saving yet", mock.log.length === n1);
+  await pop.locator('[data-act="pin-save"]').click();
+  await waitCommit(page, n1);
+  const g = onBranch("content/pins/editor-port.json");
+  check(A, "Save pin writes the new position and keeps who placed it", g.geometry.coordinates[0] !== f.geometry.coordinates[0] && g.properties.created === p.created, JSON.stringify(g.geometry));
+  // Delete.
+  const n2 = mock.log.length;
+  await page.mouse.click(cv.x + (await toScreen(...g.geometry.coordinates))[0], cv.y + (await toScreen(...g.geometry.coordinates))[1]);
+  await pop.waitFor({ state: "visible" });
+  await pop.locator('[data-act="pin-delete"]').click();
+  await page.click("dialog.small-dlg.danger[open] button:has-text('Delete pin')");
+  await waitCommit(page, n2);
+  check(A, "Delete pin removes the file in one commit", !onBranch("content/pins/editor-port.json") && mock.log.length === n2 + 1);
+  // Tidy up: the second pin goes too.
+  const [hx, hy] = await toScreen(...onBranch("content/pins/half-done.json").geometry.coordinates);
+  await page.mouse.click(cv.x + hx, cv.y + hy);
+  await pop.waitFor({ state: "visible" });
+  const n3 = mock.log.length;
+  await pop.locator('[data-act="pin-delete"]').click();
+  await page.click("dialog.small-dlg.danger[open] button:has-text('Delete pin')");
+  await waitCommit(page, n3);
+  // Escape leaves the tool.
+  await page.keyboard.press("Escape");
+  check(A, "Escape turns the tool off", (await tool.getAttribute("aria-pressed")) === "false");
+  await page.screenshot({ path: path.join(OUT, "editor-pin-tool.png") });
   check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));
   await ctx.close();
 });
