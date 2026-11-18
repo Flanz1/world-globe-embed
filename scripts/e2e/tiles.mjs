@@ -257,11 +257,15 @@ for (const view of ["globe", "flat"]) {
     const l = label(r.url());
     if (l) requested.push(l);
   });
+  stage = "admin editor: opening the region list";
   await page.goto(`${SITE}/admin/#regions`);
-  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  // The list can start with cards inside a collapsed folder (not "visible"); the suite only needs the page loaded.
+  await page.waitForSelector("#regions .rcard", { state: "attached", timeout: 15000 });
+  stage = "admin editor: opening a new region";
   await page.selectOption("#r-new-slot", "tiles");
   await page.locator(".r-new-row .r-new").click();
   await page.waitForSelector("dialog.editor[open]");
+  stage = "admin editor: zooming in until the finest tiles show";
   await page.waitForTimeout(1500);
   const shown = () => page.evaluate(() => document.querySelector("dialog.editor")?.dataset.tiles ?? "");
   await page.evaluate(([cx, cy]) => document.querySelector("dialog.editor").wgeEditor.setView(cx, cy, 36), [(w0 + e0) / 2, (s0 + n0) / 2]); // just past the 16384 threshold on a 1x screen
