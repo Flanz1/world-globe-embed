@@ -351,9 +351,15 @@ dialog.editor .ed-folder-head button { padding: 0 8px; }
 .ed-sec-head { margin: 0; font-size: 14px; }
 .ed-sec-body { display: grid; gap: 10px; min-width: 0; }
 .ed-sec.collapsed > .ed-sec-body { display: none; }
-dialog.editor .ed-sec-toggle { width: 100%; justify-content: flex-start; text-align: left; padding: 0 4px; gap: 6px; font-size: 14px; font-weight: 600; color: var(--md-sys-color-on-surface); }
-.ed-sec-toggle::before { content: ""; display: inline-block; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); margin: -3px 5px 0 3px; flex: none; }
-.ed-sec.collapsed .ed-sec-toggle::before { transform: rotate(-45deg); margin: 0 5px 0 1px; }
+dialog.editor .ed-sec-toggle { width: 100%; justify-content: flex-start; padding: 0 10px 0 4px; }
+/* Inside a section the section title is the heading: no box or legend of its own for these fieldsets. */
+.ed-sec-body > fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.ed-sec-body > fieldset > legend { padding: 0; }
+.ed-sec-body > .ed-colours > legend, .ed-sec-body > .ed-under > legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ed-sec-body > .ed-overlaps > legend, .ed-sec-body > .ed-pinmaps > legend { margin-bottom: 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--md-sys-color-on-surface-variant); }
+.ed-sec.closed .rfolder-arrow { transform: rotate(-90deg); }
+.ed-thumb { display: contents; }
+.ed-thumb-hit { display: none; }
 .ed-sub { margin: 4px 0 -4px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--md-sys-color-on-surface-variant); }
 @media (max-width: 860px) {
   .ed-body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) var(--ed-sheet, 112px); overflow: hidden; }
@@ -365,12 +371,14 @@ dialog.editor .ed-sec-toggle { width: 100%; justify-content: flex-start; text-al
   .ed-handle-bar { width: 32px; height: 4px; border-radius: 2px; background: var(--md-sys-color-on-surface-variant); }
   .ed-handle:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: -4px; }
   .ed-peek { display: flex; gap: 10px; align-items: center; padding: 0 12px 8px; }
-  .ed-peek .ed-globe { width: 84px; flex: none; max-height: none; }
   .ed-tabs { display: flex; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; touch-action: pan-x; }
   .ed-tabs > * { flex: 0 0 auto; white-space: nowrap; }
-  dialog.editor .ed-tab { padding: 0 10px; background-color: transparent; color: var(--md-sys-color-on-surface); border-color: var(--md-sys-color-outline); }
-  dialog.editor .ed-tab[aria-selected="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
-  .ed-tab[aria-selected="true"]::before { content: ""; display: inline-block; width: 14px; height: 14px; margin: 0 4px -2px -2px; background: currentColor; -webkit-mask: var(--app-tick) center / contain no-repeat; mask: var(--app-tick) center / contain no-repeat; }
+  dialog.editor .ed-tab { padding: 0 14px; background-color: transparent; color: var(--md-sys-color-on-surface-variant); border-color: transparent; }
+  dialog.editor .ed-tab[aria-selected="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); font-weight: 600; }
+  /* The minimap: the globe cropped (the embed's own corner buttons are cut off), tap it to open or close the panel. */
+  .ed-thumb { display: block; position: relative; flex: none; width: 84px; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 12px; background: var(--app-map-bg); }
+  .ed-thumb .ed-globe { position: absolute; left: -19px; top: -14px; width: 320px; height: 240px; max-height: none; aspect-ratio: auto; transform: scale(.38); transform-origin: 0 0; pointer-events: none; border-radius: 0; }
+  .ed-thumb-hit { display: block; position: absolute; inset: 0; width: 100%; min-height: 0; padding: 0; border: 0; border-radius: 12px; background: transparent; }
   .ed-side-body { display: grid; gap: 10px; align-content: start; flex: 1; min-height: 0; overflow: auto; padding: 4px 12px calc(12px + env(safe-area-inset-bottom)); }
   .ed-sec, .ed-sec + .ed-sec { display: none; border-top: 0; padding-top: 0; }
   .ed-sec.active { display: grid; }

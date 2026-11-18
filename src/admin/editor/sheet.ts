@@ -43,7 +43,7 @@ export function sidePanel(opts: { frame: HTMLElement; banners: HTMLElement[]; se
     tab.setAttribute("role", "tab");
     tab.setAttribute("aria-controls", bodyId);
     tab.dataset.sec = s.id;
-    const toggle = h("button", { type: "button", className: "ed-sec-toggle text", textContent: s.title });
+    const toggle = h("button", { type: "button", className: "rfolder-toggle ghost ed-sec-toggle" }, h("span", { className: "rfolder-arrow", ariaHidden: "true", textContent: "▾" }), h("span", { textContent: s.title }));
     toggle.setAttribute("aria-controls", bodyId);
     const body = h("div", { className: "ed-sec-body", id: bodyId }, ...s.children);
     const head = h("h3", { className: "ed-sec-head" }, toggle);
@@ -52,6 +52,7 @@ export function sidePanel(opts: { frame: HTMLElement; banners: HTMLElement[]; se
     const collapsed = read(localStorage, SEC_KEY(s.id)) === "closed";
     const setOpen = (open: boolean) => {
       sec.classList.toggle("collapsed", !open);
+      sec.classList.toggle("closed", !open); // .closed turns the arrow, as in the folder trees
       toggle.setAttribute("aria-expanded", String(open));
     };
     setOpen(!collapsed);
@@ -64,7 +65,10 @@ export function sidePanel(opts: { frame: HTMLElement; banners: HTMLElement[]; se
     return { s, tab, sec, body, toggle };
   });
 
-  const peek = h("div", { className: "ed-peek" }, opts.frame, tabs);
+  // The minimap: the globe preview cropped to its globe (no corner buttons), with a tap target that opens the sheet.
+  const thumbHit = h("button", { type: "button", className: "ed-thumb-hit", ariaLabel: "Show or hide the panel", title: "Show or hide the panel" });
+  const thumb = h("div", { className: "ed-thumb" }, opts.frame, thumbHit);
+  const peek = h("div", { className: "ed-peek" }, thumb, tabs);
   const scroll = h("div", { className: "ed-side-body" }, ...opts.banners, ...secs.map((x) => x.sec));
   el.append(h("div", { className: "ed-sheet-head" }, handle, peek), scroll);
 
@@ -126,6 +130,7 @@ export function sidePanel(opts: { frame: HTMLElement; banners: HTMLElement[]; se
       show(x.s.id);
       if (snap === "peek") setSnap("half");
     });
+  thumbHit.addEventListener("click", () => setSnap(snap === "peek" ? "half" : "peek"));
   tabs.addEventListener("keydown", (e) => {
     const shown = secs.filter((x) => !x.tab.hidden);
     const i = shown.findIndex((x) => x.tab === document.activeElement);
