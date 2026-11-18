@@ -60,8 +60,8 @@ export function createCommentTool(o: CommentToolOptions): CommentTool {
   let text = "";
   let busy = false;
 
-  const label = h("span", { textContent: "Comments" });
-  const button = h("button", { type: "button", className: "ghost", ariaPressed: "false", dataset: { act: "comment-tool" } }, label);
+  const count = h("span", { className: "ed-cm-count", ariaHidden: "true", hidden: true });
+  const button = h("button", { type: "button", className: "ghost", ariaPressed: "false", dataset: { act: "comment-tool" } }, "Comments", count);
   const popover = h("div", { className: "ed-cm-pop", hidden: true, role: "dialog", ariaLabel: "Comment" });
   const markers = h("div", { className: "ed-cm-markers" });
   for (const t of ["pointerdown", "pointerup", "mousedown", "wheel", "dblclick", "contextmenu"] as const) popover.addEventListener(t, (e) => e.stopPropagation());
@@ -78,7 +78,8 @@ export function createCommentTool(o: CommentToolOptions): CommentTool {
 
   function syncButton(): void {
     const n = o.region ? openCountFor(o.region) : 0;
-    label.textContent = n ? `Comments ${n}` : "Comments";
+    count.textContent = n ? String(n) : "";
+    count.hidden = !n;
     button.setAttribute("aria-label", n ? `Comments, ${n} open` : "Comments");
     button.disabled = !o.region;
     button.title = o.region ? "Comments: click the map to leave a comment at that spot, click a numbered marker to read it" : o.why;

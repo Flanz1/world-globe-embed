@@ -635,3 +635,5 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
 .ed-cm-mark.new { pointer-events: none; background: var(--md-sys-color-secondary); color: var(--md-sys-color-on-secondary); }
 .ed-cm-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ed-cm-pop textarea { width: 100%; resize: vertical; }
+.ed-cm-count { display: inline-block; min-width: 16px; height: 16px; margin-left: 6px; padding: 0 4px; border-radius: 8px; font-size: 11px; line-height: 16px; text-align: center; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+.ed-cm-count[hidden] { display: none; }

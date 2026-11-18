@@ -100,7 +100,7 @@ await step(G, "a contributor comments on someone else's region", async () => {
   await ann.page.click(`${card(REGION)} [data-action="suggest-changes"]`);
   await ann.page.waitForSelector("dialog.editor", { timeout: 15000 });
   const tool = ann.page.locator('dialog.editor [data-act="comment-tool"]');
-  check(G, "the toolbar has a Comments button (no count yet)", (await tool.textContent()) === "Comments" && (await tool.getAttribute("aria-label")) === "Comments");
+  check(G, "the toolbar has a Comments button (no count yet)", ((await tool.textContent()) ?? "").trim() === "Comments" && (await tool.getAttribute("aria-label")) === "Comments");
   await tool.click();
   check(G, "pressing it turns the tool on", (await tool.getAttribute("aria-pressed")) === "true");
   // Pin and Comment exclude each other.
