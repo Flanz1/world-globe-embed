@@ -306,6 +306,14 @@ export async function start(ctx: StartContext): Promise<void> {
     world.add(mesh, dimCaps);
     return overlay;
   }
+  /** Border width in texture pixels that shows as FLAT_LINE_PX CSS pixels on screen at the current zoom (same as the flat map). */
+  const FLAT_LINE_PX = 1.2;
+  let drawnLineW = 0;
+  function overlayLineWidth(W: number): number {
+    const fCss = stage.clientHeight / 2 / Math.tan((camera.fov * DEG) / 2);
+    const screenPxPerRad = fCss / Math.max(0.05, view.distance - 1);
+    return (FLAT_LINE_PX * (W / (2 * Math.PI))) / screenPxPerRad;
+  }
   function drawRegion(): void {
     if (!reg) return;
     const o = ensureOverlay();
@@ -313,6 +321,7 @@ export async function start(ctx: StartContext): Promise<void> {
     const H = o.canvas.height;
     const g = o.canvas.getContext("2d")!;
     g.clearRect(0, 0, W, H);
+    drawnLineW = overlayLineWidth(W);
     // Clashes are worked out once per region (or live update), not per redraw.
     const vis = visible.of(reg);
     if (specFor !== vis) {
@@ -326,7 +335,7 @@ export async function start(ctx: StartContext): Promise<void> {
       (lon) => ((lon + 180) / 360) * W,
       (lat) => ((90 - lat) / 180) * H,
       [-360, 0, 360],
-      { lineWidth: (W / 2048) * 1.5, dim: dimOn() },
+      { lineWidth: drawnLineW, dim: dimOn() },
       { w: W, h: H },
     );
     o.tex.needsUpdate = true;
@@ -904,6 +913,8 @@ export async function start(ctx: StartContext): Promise<void> {
         overlay.canvas.height = overlay.canvas.width / 2;
         overlay.tex.dispose();
         drawRegion();
+      } else if (overlay && reg && Math.abs(overlayLineWidth(overlay.canvas.width) / drawnLineW - 1) > 0.08) {
+        drawRegion(); // keep the borders the same on-screen thickness as the flat map
       }
     }, 250);
   };
