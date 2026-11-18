@@ -1,5 +1,5 @@
 /**
- * Selection mode for the admin lists (Regions now, Pins later): tick cards, then act on all of them from a bar
+ * Selection mode for the admin lists (Regions and Pins): tick cards, then act on all of them from a bar
  * docked at the bottom of the screen. This file holds the selection state and the bar; what each action does
  * (and who may do it) is passed in by the tab.
  */
@@ -46,7 +46,7 @@ export function refreshBoxes(root: ParentNode, sel: Selection): void {
       box.setAttribute("aria-checked", box.indeterminate ? "mixed" : String(box.checked));
     } else if (box.dataset.id) {
       box.checked = sel.has(box.dataset.id);
-      box.closest(".rcard")?.classList.toggle("selected", box.checked);
+      box.closest(".rcard, .pn-item")?.classList.toggle("selected", box.checked);
     }
   }
 }
@@ -70,7 +70,7 @@ export function groupBox(sel: Selection, ids: string[], label: string, rerender:
 let lastClicked: string | null = null;
 
 /** The checkbox on a card. Shift+click ticks everything between this card and the one ticked before it (in list order). */
-export function cardBox(sel: Selection, id: string, order: () => string[], rerender: () => void): HTMLElement {
+export function cardBox(sel: Selection, id: string, order: () => string[], rerender: () => void, cls = "rsel"): HTMLElement {
   const box = h("input", { type: "checkbox", className: "bulk-box", ariaLabel: `Select ${id}`, dataset: { action: "select", id } });
   box.checked = sel.has(id);
   let shift = false;
@@ -84,7 +84,7 @@ export function cardBox(sel: Selection, id: string, order: () => string[], reren
     lastClicked = id;
     rerender();
   });
-  return h("label", { className: "rsel", title: `Select ${id}` }, box);
+  return h("label", { className: cls, title: `Select ${id}` }, box);
 }
 
 /**
@@ -107,9 +107,12 @@ export function selectionBar(sel: Selection, noun: string, actions: BulkAction[]
   close.classList.add("bulk-done");
   const update = () => {
     el.hidden = !sel.on;
-    document.body.classList.toggle("bulk-on", sel.on);
+    // Two bars exist (Regions, Pins): the page keeps its bottom padding while either is showing.
+    document.body.classList.toggle("bulk-on", !!document.querySelector(".bulk-bar:not([hidden])"));
     const ids = [...sel.ids];
-    count.textContent = ids.length ? `${ids.length} selected` : `Tick ${noun}s to act on them`;
+    const shown = new Set(shownIds());
+    const hidden = ids.filter((id) => !shown.has(id)).length;
+    count.textContent = ids.length ? `${ids.length} selected${hidden ? ` · ${hidden} hidden by filters` : ""}` : `Tick ${noun}s to act on them`;
     actions.forEach((a, i) => {
       const why = ids.length ? a.why(ids) : `Select at least one ${noun} first.`;
       buttons[i].disabled = !!why;
