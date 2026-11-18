@@ -72,7 +72,11 @@
 
     <section class="card">
       <h2>Upload a map</h2>
-      <p class="muted">An equirectangular map, ideally twice as wide as tall. Anything from square to 4:1 works, and pole padding fills the rest. Bigger maps stay sharp when zoomed in: 8192 px wide or more gets an extra-sharp version, and 16384 or 32768 px wide also gets close-up detail. Maps over 16384 px wide are uploaded unchanged, so save them as JPEG (quality 80–90) and keep them under 100 MB.</p>
+      <p class="muted">An equirectangular map, ideally twice as wide as tall (square to 4:1 works).</p>
+      <details class="size-tips">
+        <summary>Size tips</summary>
+        <p class="muted">Pole padding fills any space above and below the map. Bigger maps stay sharp when zoomed in: 8192 px wide or more gets an extra-sharp version, and 16384 or 32768 px wide also gets close-up detail. Maps over 16384 px wide are uploaded unchanged, so save them as JPEG (quality 80–90) and keep them under 100 MB.</p>
+      </details>
       <form id="upload" class="row">
         <label>Image <input name="file" type="file" accept="image/png,image/jpeg,image/webp" required></label>
         <label>Map id <input name="id" required pattern="[a-z0-9][a-z0-9\-]{0,63}" placeholder="from the file name"></label>
@@ -170,6 +174,15 @@
       <label class="inline"><input id="pv-grid" type="checkbox"> Show grid</label>
       <label>Prime meridian <span class="range"><input id="pv-shift" type="range" min="-180" max="180" step="0.01" aria-label="Prime meridian slider"><input id="pv-shift-n" type="number" min="-180" max="180" step="0.01" inputmode="decimal" aria-label="Prime meridian in degrees"><span aria-hidden="true">°</span></span><span class="muted small">← West · East →. Line the red grid line up with your map's prime meridian.</span></label>
       <label>World size <span class="range"><input id="pv-radius" type="number" min="0" step="any" inputmode="decimal" placeholder="Radius" aria-label="World radius"><select id="pv-radius-unit" aria-label="Radius unit"><option value="km">km</option><option value="mi">mi</option></select><button id="pv-earth" type="button" class="ghost" title="Earth's radius, 6,371 km">Earth</button></span><span id="pv-radius-hint" class="muted small"></span></label>
+      <fieldset id="pv-travel" class="pv-travel">
+        <legend>Travel speeds</legend>
+        <div class="pv-tr"><label class="inline"><input id="pv-tr-foot" type="checkbox"> On foot</label><span class="pv-km"><input id="pv-tr-foot-km" type="number" min="0" step="any" inputmode="decimal" aria-label="On foot, km per day"><span aria-hidden="true">km/day</span></span></div>
+        <div class="pv-tr"><label class="inline"><input id="pv-tr-horse" type="checkbox"> Horse</label><span class="pv-km"><input id="pv-tr-horse-km" type="number" min="0" step="any" inputmode="decimal" aria-label="Horse, km per day"><span aria-hidden="true">km/day</span></span></div>
+        <div class="pv-tr"><label class="inline"><input id="pv-tr-cart" type="checkbox"> Cart</label><span class="pv-km"><input id="pv-tr-cart-km" type="number" min="0" step="any" inputmode="decimal" aria-label="Cart, km per day"><span aria-hidden="true">km/day</span></span></div>
+        <div class="pv-tr"><label class="inline"><input id="pv-tr-ship" type="checkbox"> Sailing ship</label><span class="pv-km"><input id="pv-tr-ship-km" type="number" min="0" step="any" inputmode="decimal" aria-label="Sailing ship, km per day"><span aria-hidden="true">km/day</span></span></div>
+        <div class="pv-tr"><label class="inline"><input id="pv-tr-custom" type="checkbox" aria-label="Use a custom speed"><input id="pv-tr-custom-name" type="text" maxlength="24" placeholder="Custom" aria-label="Custom travel name"></label><span class="pv-km"><input id="pv-tr-custom-km" type="number" min="0" step="any" inputmode="decimal" aria-label="Custom, km per day"><span aria-hidden="true">km/day</span></span></div>
+        <span id="pv-travel-hint" class="muted small"></span>
+      </fieldset>
       <button id="pv-fit" type="button" class="ghost">Fit padding to image</button>
       <p id="pv-hint" class="muted small"></p>
       <p id="pv-note" class="muted small" aria-live="polite"></p>
