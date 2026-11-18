@@ -73,11 +73,13 @@ export interface LabelFit {
 }
 /** Label text size bounds, px: scaled to the part's size between these. */
 const LABEL_MIN = 11;
+const LABEL_MIN_TILT = 12;
 const LABEL_MAX = 26;
 const LABEL_BASE = 12;
+const TILT_MAX = (70 * Math.PI) / 180;
 
 /** An HTML label (textContent only) that is kept clear of the control buttons. */
-export function makeLabel(stage: HTMLElement): { setText(t: string): void; place(x: number, y: number, visible: boolean, fit?: LabelFit): void; el: HTMLDivElement } {
+export function makeLabel(stage: HTMLElement): { setText(t: string): void; place(x: number, y: number, visible: boolean, fit?: LabelFit): void; el: HTMLDivElement; box: { x0: number; y0: number; x1: number; y1: number } | null; rank: number } {
   const el = document.createElement("div");
   el.className = "rlabel";
   el.hidden = true;
@@ -86,8 +88,10 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
   let text = "";
   let natural: { w: number; h: number } | null = null;
   let size = 0;
-  return {
+  const self = {
     el,
+    box: null as { x0: number; y0: number; x1: number; y1: number } | null,
+    rank: 0,
     setText(t: string) {
       text = t;
       el.textContent = t;
@@ -96,6 +100,7 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
     },
     place(x: number, y: number, visible: boolean, fit?: LabelFit) {
       el.hidden = !visible || !text;
+      self.box = null;
       if (el.hidden) return;
       // Size: the largest text that fits the part (with a margin), kept between the bounds. Measured once at the base size.
       let px = LABEL_BASE;
@@ -106,7 +111,11 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
           natural = { w: el.offsetWidth, h: el.offsetHeight };
         }
         const k = Math.min((fit.len * 0.85) / Math.max(1, natural.w), (fit.wid * 0.7) / Math.max(1, natural.h));
-        px = Math.round(Math.min(LABEL_MAX, Math.max(LABEL_MIN, LABEL_BASE * k)));
+        const tilt = Math.abs(fit.angle) > 0.01;
+        px = Math.round(Math.min(LABEL_MAX, Math.max(tilt ? LABEL_MIN_TILT : LABEL_MIN, LABEL_BASE * k)));
+        // Whole-pixel steps with a little hysteresis: a one-pixel wobble while zooming keeps the old size.
+        if (size && Math.abs(px - size) < 2 && px >= (tilt ? LABEL_MIN_TILT : LABEL_MIN) && size >= (tilt ? LABEL_MIN_TILT : LABEL_MIN)) px = size;
+        self.rank = fit.len * fit.wid;
       }
       if (px !== size) {
         el.style.fontSize = `${px}px`;
@@ -132,8 +141,11 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
         if (cx + hw > ux && cy + hh > uy) cy = uy - hh;
       }
       el.style.transform = `translate(${Math.round(cx - w / 2)}px,${Math.round(cy - h / 2)}px) rotate(${(-a).toFixed(4)}rad)`;
+      self.box = { x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh };
+      el.style.opacity = "";
     },
   };
+  return self;
 }
 
 
@@ -242,12 +254,14 @@ export function labelOnScreen(pt: LabelPoint, project: (p: Position) => { x: num
     angle = Math.atan2(-(pu.y - p0.y), pu.x - p0.x);
     if (angle > Math.PI / 2) angle -= Math.PI;
     else if (angle <= -Math.PI / 2) angle += Math.PI;
+    // Never steeper than 70° from level.
+    angle = Math.max(-TILT_MAX, Math.min(TILT_MAX, angle));
   }
   return { ...p0, fit: { angle, len: pt.length * Math.hypot(pu.x - p0.x, pu.y - p0.y), wid: pt.width * Math.hypot(pv.x - p0.x, pv.y - p0.y) } };
 }
 
 /** Several labels (one per labelled part), each placed like makeLabel's. */
-export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; place(i: number, x: number, y: number, visible: boolean, fit?: LabelFit): void } {
+export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; place(i: number, x: number, y: number, visible: boolean, fit?: LabelFit): void; settle(stage: HTMLElement): void } {
   const pool: ReturnType<typeof makeLabel>[] = [];
   return {
     set(texts) {
@@ -259,6 +273,23 @@ export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; pl
     },
     place(i, x, y, visible, fit) {
       pool[i]?.place(x, y, visible, fit);
+    },
+    /** After placing every label: where two pills overlap, the one on the larger part stays and the other fades; nothing sits under the legend or buttons. */
+    settle(root) {
+      const s = root.getBoundingClientRect();
+      const keep: { x0: number; y0: number; x1: number; y1: number }[] = [];
+      for (const sel of [".rkey", "#ui"]) {
+        const e = root.querySelector<HTMLElement>(sel) ?? document.querySelector<HTMLElement>(sel);
+        if (!e || e.hidden) continue;
+        const r = e.getBoundingClientRect();
+        keep.push({ x0: r.left - s.left, y0: r.top - s.top, x1: r.right - s.left, y1: r.bottom - s.top });
+      }
+      const hit = (a: { x0: number; y0: number; x1: number; y1: number }, b: typeof a) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+      for (const l of [...pool].filter((l) => l.box).sort((a, b) => b.rank - a.rank)) {
+        const clash = keep.some((k) => hit(l.box!, k));
+        l.el.style.opacity = clash ? "0" : "";
+        if (!clash) keep.push(l.box!);
+      }
     },
   };
 }
