@@ -103,7 +103,7 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
 }
 
 /**
- * The region's legend: a colour swatch and a label per entry, top left, folded and unfolded with its
+ * The region's legend: a colour swatch and a label per entry, top centre, folded and unfolded with its
  * header button. Labels are set with textContent; colours are validated #rgb/#rrggbb before they get here.
  */
 export function makeLegend(stage: HTMLElement): {
@@ -127,7 +127,8 @@ export function makeLegend(stage: HTMLElement): {
   box.append(head, layerBox, list);
   leftStack(stage).append(box);
   let count = 0;
-  let open = true;
+  // Short embeds (the 360x240 Obsidian size) start folded so the legend doesn't cover the map.
+  let open = innerHeight >= 300;
   const apply = () => {
     head.setAttribute("aria-expanded", String(open));
     head.title = open ? "Hide legend" : "Show legend";

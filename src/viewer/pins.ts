@@ -50,7 +50,7 @@ const CSS = `
 .wcl-list button{all:unset;box-sizing:border-box;display:block;width:100%;padding:6px 8px;border-radius:5px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wcl-list button:hover{background:rgba(255,255,255,.15)}
 .wcl-list button:focus-visible{outline:2px solid #f3ead8;outline-offset:-2px}
-.wpl{border-radius:6px;background:rgba(20,18,14,.8);color:#f3ead8;font:12px/1.3 system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden;order:2}
+.wpl{border-radius:10px;background:var(--embed-panel,rgba(20,18,14,.8));-webkit-backdrop-filter:var(--embed-blur);backdrop-filter:var(--embed-blur);color:#f3ead8;font:12px/1.3 system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden;order:2}
 .wpl[hidden]{display:none}
 .wpl-head{all:unset;box-sizing:border-box;display:block;width:100%;padding:4px 8px;font-weight:600;cursor:pointer}
 .wpl-head::after{content:"▾";margin-left:6px;opacity:.7}.wpl-head[aria-expanded=false]::after{content:"▸"}
