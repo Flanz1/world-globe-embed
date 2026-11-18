@@ -63,7 +63,7 @@ export const serialize = (f: RegionFeature) => stringifyCompact(f) + "\n";
 let deps: RegionsDeps;
 let entries: RegionEntry[] = [];
 
-/** Every loaded region (the warp tool reads them). */
+/** The regions as loaded (the Health tab and the warp tool read them). */
 export const regionEntries = (): RegionEntry[] => entries;
 
 /** Parsed region files by blob SHA: a blob never changes, so a reload after a save only reads the file that changed. */

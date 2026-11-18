@@ -29,7 +29,7 @@ export interface Ruler {
 const CSS = `
 #globe[data-ruler=on]{cursor:crosshair}
 .rl-cv{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.rl{position:absolute;right:8px;top:8px;display:grid;gap:6px;padding:6px;max-width:min(260px,calc(100% - 16px));border-radius:6px;background:rgba(20,18,14,.72);color:#f3ead8;font:12px/1.3 system-ui,sans-serif}
+.rl{position:absolute;right:8px;top:8px;display:grid;gap:6px;padding:6px;max-width:min(260px,calc(100% - 16px));border-radius:6px;background:var(--embed-panel,rgba(20,18,14,.72));-webkit-backdrop-filter:var(--embed-blur);backdrop-filter:var(--embed-blur);color:#f3ead8;font:12px/1.3 system-ui,sans-serif}
 .rl[hidden]{display:none}
 .rl-row{display:flex;gap:4px;flex-wrap:wrap}
 .rl button{all:unset;box-sizing:border-box;padding:3px 8px;border-radius:5px;cursor:pointer;background:rgba(255,255,255,.1)}
@@ -223,6 +223,7 @@ export function setupRuler(cfg: { radius: number; controls: boolean; travel?: Tr
     panel.hidden = !on;
     btn?.setAttribute("aria-pressed", String(on));
     host.canvas.dataset.ruler = on ? "on" : "off";
+    host.stage.dataset.ruler = on ? "on" : "off";
     if (!on) pts = [];
     update();
   }

@@ -30,6 +30,7 @@ One line per source file: what it is for. The first comment in each file says mo
 | `src/shared/combine.ts` | Combining several saved regions into one new region. |
 | `src/shared/embed.ts` | Embed snippets for regions. |
 | `src/shared/geo.ts` | Small geometry toolkit for regions, shared by the validator, the page generator, the viewer and the admin editor. |
+| `src/shared/health.ts` | Content health check: finds regions on another map than their slot shows, pins outside the regions that show their pin map, unused pin maps, regions in no folder, empty colour folders and regions near the vertex limit. Pure; the Health tab and scripts/content-health.ts both use it. |
 | `src/shared/hct.ts` | HCT colour space (hue and chroma from CAM16, tone = CIE L*) and the Material You (M3) colour scheme the admin page and editor use. |
 | `src/shared/history.ts` | The save log: who changed what in content/, and when, as the admin API's GET /history serves it. |
 | `src/shared/json.ts` | Region files as text: pretty-printed JSON, except that a position stays on one line. |
@@ -60,6 +61,7 @@ One line per source file: what it is for. The first comment in each file says mo
 | `src/admin/categories.ts` | Region folders (categories) on the admin page: the state (content/categories.json), who may change what, and the dialogs to add, rename, reorder, move and delete folders and to move regions between them. |
 | `src/admin/dom.ts` | Tiny DOM helpers for the admin page. |
 | `src/admin/editing.ts` | A live link to the admin API's "who has a region open" room (worker/src/presence.ts). |
+| `src/admin/health.ts` | Health tab: lists what the content health check finds, from the regions, pins and folders already loaded (no extra requests). |
 | `src/admin/github.ts` | Minimal GitHub REST client for the admin page. |
 | `src/admin/images.ts` | Same-origin map images for the admin page's canvases (thumbnails and the region editor), cached. |
 | `src/admin/main.ts` | Admin page: list maps and slots, upload a map, switch a slot's map, draw regions, manage users. |
@@ -113,6 +115,7 @@ One line per source file: what it is for. The first comment in each file says mo
 | File | Purpose |
 |---|---|
 | `scripts/build-worker-validators.ts` | Generates worker/src/generated/validators.js: the region, pin, access, categories, slots, map and prefs JSON schemas compiled to plain functions, because Cloudflare Workers can't compile schemas at run time (no eval). |
+| `scripts/content-health.ts` | CLI: the content health check over content/, as a Markdown report (also to the Actions job summary): npm run health, add --fail to exit 1 when a problem is found. |
 | `scripts/coast.ts` | Builds (or rebuilds) the coast file of maps that are already processed, from their textures: npm run coast                 every map npm run coast -- my-map    one map npm run coast -- my-map --mask out/mask.png   also write the… |
 | `scripts/generate-pages.ts` | Post-build step: writes dist/v/<slug>/index.html for every slot, plus the landing page. |
 | `scripts/import-map.ts` | Adds a map straight from a local image, for originals too big to upload to GitHub (over 100 MB, or wider than the admin page can take). |
