@@ -18,6 +18,7 @@ import { HISTORY_MAX_LIMIT, HISTORY_MAX_WITH_FILES, type HistoryEntry, type Hist
 import { appJwt, nonce, sign, verify } from "./crypto.ts";
 import { validateAccess, validateCategories, validateMap, validatePin, validatePinMaps, validatePrefs, validateRegion, validateSlots, type ValidateFn } from "./generated/validators.js";
 import { rateLimited, type RateLimiter } from "./ratelimit.ts";
+import * as comments from "./comments.ts";
 import * as proposals from "./proposals.ts";
 
 export interface KV {
@@ -50,6 +51,8 @@ export interface Env {
   PREFS?: KV;
   /** Where suggested changes are kept (src/proposals.ts). Optional; the waiting list's namespace is used when it isn't bound. */
   PROPOSALS?: proposals.ProposalKV;
+  /** Where reviewer comments are kept (src/comments.ts). Optional; falls back to the proposals store, then the waiting list's. */
+  COMMENTS?: comments.CommentKV;
   /** The EditingRoom Durable Object (index.ts, presence.ts). Optional: without it there are no "X is editing" notices. */
   EDITING_ROOM?: { idFromName(name: string): unknown; get(id: unknown): { fetch(req: Request): Promise<Response> } };
 }
@@ -449,6 +452,21 @@ async function editingLive(req: Request, env: Env, up: Upstream): Promise<Respon
   );
 }
 
+/** A region as it is on the branch now: its blob SHA and creator's id, or null when there is none. */
+async function regionInfo(env: Env, up: Upstream, id: string): Promise<{ sha: string; owner: number } | null> {
+  const r = await gh(env, up, `${repoPath(env)}/contents/content/regions/${id}.json?ref=${encodeURIComponent(branchOf(env))}`);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new HttpError(502, `Couldn't read the region ${id} (${r.status}).`);
+  const f = await readJson<{ content?: string; sha: string }>(r);
+  let text = f.content ? utf8(f.content) : "";
+  if (!text) text = await blobText(env, up, f.sha);
+  try {
+    return { sha: f.sha, owner: regionOwner(JSON.parse(text) as { properties?: { createdBy?: { id: number; login: string } } }, ownerId(env)) };
+  } catch {
+    return { sha: f.sha, owner: ownerId(env) };
+  }
+}
+
 /* ── Suggested changes (worker/src/proposals.ts) ── */
 
 async function suggestions(req: Request, env: Env, up: Upstream, p: string): Promise<Response | null> {
@@ -459,19 +477,7 @@ async function suggestions(req: Request, env: Env, up: Upstream, p: string): Pro
     actor,
     ownerId: ownerId(env),
     schemaProblem: (data) => schemaError(validateRegion, data, "the region"),
-    region: async (id) => {
-      const r = await gh(env, up, `${repoPath(env)}/contents/content/regions/${id}.json?ref=${encodeURIComponent(branchOf(env))}`);
-      if (r.status === 404) return null;
-      if (!r.ok) throw new HttpError(502, `Couldn't read the region ${id} (${r.status}).`);
-      const f = await readJson<{ content?: string; sha: string }>(r);
-      let text = f.content ? utf8(f.content) : "";
-      if (!text) text = await blobText(env, up, f.sha);
-      try {
-        return { sha: f.sha, owner: regionOwner(JSON.parse(text) as { properties?: { createdBy?: { id: number; login: string } } }, ownerId(env)) };
-      } catch {
-        return { sha: f.sha, owner: ownerId(env) };
-      }
-    },
+    region: (id) => regionInfo(env, up, id),
   };
   try {
     let m: RegExpExecArray | null;
@@ -497,6 +503,35 @@ async function suggestions(req: Request, env: Env, up: Upstream, p: string): Pro
     }
   } catch (e) {
     if (e instanceof proposals.ProposalError) throw new HttpError(e.status, e.message);
+    throw e;
+  }
+  throw new HttpError(404, "Not found.");
+}
+
+/* ── Reviewer comments (worker/src/comments.ts) ── */
+
+async function commentRoutes(req: Request, env: Env, up: Upstream, p: string): Promise<Response | null> {
+  if (p !== "/comments" && !p.startsWith("/comments/")) return null;
+  const actor = await listedActor(req, env, up);
+  const ctx: comments.CommentCtx = {
+    kv: env.COMMENTS ?? env.PROPOSALS ?? (env.WAITING as comments.CommentKV | undefined),
+    actor,
+    region: async (id) => {
+      const r = await regionInfo(env, up, id);
+      return r && { owner: r.owner };
+    },
+  };
+  try {
+    let m: RegExpExecArray | null;
+    if (req.method === "GET" && p === "/comments") return json(200, await comments.listComments(ctx, new URL(req.url).searchParams.get("region") ?? undefined));
+    if (req.method === "POST" && p === "/comments") return json(201, await comments.postComment(ctx, await readJson(req)));
+    if (req.method === "POST" && (m = /^\/comments\/([^/]+)\/(open|resolved)$/.exec(p))) return json(200, await comments.setStatus(ctx, decodeURIComponent(m[1]), m[2] as "open" | "resolved"));
+    if (req.method === "DELETE" && (m = /^\/comments\/([^/]+)$/.exec(p))) {
+      await comments.removeComment(ctx, decodeURIComponent(m[1]));
+      return new Response(null, { status: 204 });
+    }
+  } catch (e) {
+    if (e instanceof comments.CommentError) throw new HttpError(e.status, e.message);
     throw e;
   }
   throw new HttpError(404, "Not found.");
@@ -800,6 +835,7 @@ export async function handle(req: Request, env: Env, up: Upstream): Promise<Resp
     // Not wrapped in withCors: copying the response would lose its WebSocket.
     if (req.method === "GET" && p === "/editing/live") return await editingLive(req, env, up);
     if (p === "/proposals" || p.startsWith("/proposals/")) return withCors((await suggestions(req, env, up, p))!);
+    if (p === "/comments" || p.startsWith("/comments/")) return withCors((await commentRoutes(req, env, up, p))!);
     if (p.startsWith("/gh/")) return withCors(await proxy(req, env, up, p.slice(3), url));
     if (p === "/") return new Response("World globe admin API. Sign in from the admin page.", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
     throw new HttpError(404, "Not found.");
