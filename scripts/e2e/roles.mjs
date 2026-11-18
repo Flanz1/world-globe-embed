@@ -289,8 +289,16 @@ await step(U, "Users tab", async () => {
   check(U, "the presets offered are only ones they can give", JSON.stringify(await page.locator("#user-preset option").allTextContents()) === JSON.stringify(["Contributor", "Editor"]), (await page.locator("#user-preset option").allTextContents()).join(","));
   await page.screenshot({ path: path.join(OUT, "users.png"), fullPage: true });
 
+  // Each person shows a role and a one-line summary; the permission boxes sit behind "Permissions…" until the role is Custom.
+  const annRow = page.locator('#users [data-user="carto-ann"]');
+  check(U, "a role has a one-line summary and its boxes are folded away", /^Create regions$/.test((await annRow.locator("[data-summary]").textContent()) ?? "") && !(await annRow.locator('[data-perm="regions"]').isVisible()));
+  check(U, "the Save / Undo bar is hidden while nothing changed", !(await visible(page, "#users-bar")));
+  await annRow.locator("summary").click();
+  check(U, "Permissions… opens the boxes", await annRow.locator('[data-perm="regions"]').isVisible());
+  await annRow.locator("summary").click();
   // Make carto-ann an Editor and add someone new, in one save.
   await page.selectOption('#users [data-user="carto-ann"] select', "Editor");
+  check(U, "a change shows the Save / Undo bar and the new summary", (await visible(page, "#users-bar")) && /^Create regions, edit others'$/.test((await annRow.locator("[data-summary]").textContent()) ?? ""), await annRow.locator("[data-summary]").textContent());
   await page.fill("#user-login", "nobody-at-all");
   await page.click('#user-add button[type="submit"]');
   await waitFor(page, async () => /no GitHub account/.test((await page.textContent("#users-note")) ?? ""));
