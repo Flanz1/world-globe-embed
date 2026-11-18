@@ -112,7 +112,7 @@ function renderSlots(): void {
       const select = h("select", { className: "map-select", ariaLabel: `Map for ${slug}` });
       mapOptions(select, slot.map);
       let img = thumb(current);
-      const save = h("button", { type: "button", textContent: "Switch map", disabled: true });
+      const save = h("button", { type: "button", textContent: "Switch map", disabled: true, title: "Pick a different map first" });
       const copy = h("button", { type: "button", className: "ghost", textContent: "Copy embed code" });
       const preview = h("button", { type: "button", className: "ghost", textContent: "Preview" });
       preview.addEventListener("click", () =>
@@ -154,6 +154,7 @@ function renderSlots(): void {
       );
       select.addEventListener("change", () => {
         save.disabled = select.value === slot.map;
+        save.title = save.disabled ? "Pick a different map first" : "";
         const next = thumb(maps.find((m) => m.id === select.value));
         img.replaceWith(next);
         img = next;

@@ -132,6 +132,8 @@ form.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-t
 .map div { font-size: 13px; }
 .runs { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 4px; font-size: 13px; }
 code { font-size: 12px; }
+details.size-tips { margin: 0 0 10px; }
+details.size-tips p { margin: 6px 0 0; }
 details summary { cursor: pointer; color: var(--md-sys-color-primary); font-weight: 500; }
 @media (max-width: 520px) { .slot { grid-template-columns: 1fr; } .thumb { width: 100%; } }
 label.check { display: flex; align-items: center; gap: 6px; font-size: 14px; }
