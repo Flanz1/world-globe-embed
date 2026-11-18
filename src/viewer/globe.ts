@@ -382,6 +382,9 @@ export async function start(ctx: StartContext): Promise<void> {
   let specFor: RegionData | null = null;
   const labels = R ? makeLabels(stage) : null;
   const regionKey = R ? makeLegend(stage) : null;
+  // The legend opening, collapsing or resizing changes what labels must stay clear of: lay them out again.
+  const keyBox = stage.querySelector(".rkey");
+  if (keyBox) new ResizeObserver(() => invalidate()).observe(keyBox);
   const tmpV = new Vector3();
   function placeLabel(): void {
     if (!labels) return;

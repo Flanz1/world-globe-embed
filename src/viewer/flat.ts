@@ -417,6 +417,9 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   });
   const labels = R ? makeLabels(stage) : null;
   const regionKey = R ? makeLegend(stage) : null;
+  // The legend opening, collapsing or resizing changes what labels must stay clear of: lay them out again.
+  const keyBox = stage.querySelector(".rkey");
+  if (keyBox) new ResizeObserver(() => schedule()).observe(keyBox);
   if (R) {
     lock = setupLock(canvas, R.lock, (locked) => {
       if (!locked) return;
