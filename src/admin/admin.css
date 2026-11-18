@@ -585,3 +585,8 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
   dialog.editor .ed-toolbar button::after { height: 44px; }
   .ed-toolbar { padding-bottom: 6px; }
 }
+
+/* Touch: each permission checkbox row gets the 44 px minimum hit height. */
+@media (pointer: coarse) {
+  .uperms .check { min-height: 44px; }
+}
