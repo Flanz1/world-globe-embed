@@ -24,6 +24,8 @@ import { loadMapImage } from "./images.ts";
 import { compareBy, creatorChoices, creatorId, matchesQuery, type Filterable } from "./region-filter.ts";
 import { openHistory } from "./region-history.ts";
 import { openTrash } from "./trash.ts";
+import { Selection, blockedList, cardBox, groupBox, refreshBoxes, selectionBar } from "./bulk.ts";
+import { TRASH_DAYS } from "../shared/trash.ts";
 import { alertBox, confirmBox, modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
 import { initComments, loadComments, onCommentsChange, openCountFor } from "./comments.ts";
 import { declineSuggestion, initSuggestions, loadSuggestions, markAccepted, pendingFor } from "./suggestions.ts";
@@ -236,7 +238,8 @@ function card(e: RegionEntry): HTMLElement {
   const noCreate = can("regions") ? "" : "You don't have permission to create regions.";
   return h(
     "div",
-    { className: "rcard", dataset: { region: e.id }, draggable: can("regions") && !!categories().categories.length, title: "" },
+    { className: `rcard${sel.on ? " selectable" : ""}${sel.on && sel.has(e.id) ? " selected" : ""}`, dataset: { region: e.id }, draggable: !sel.on && can("regions") && !!categories().categories.length, title: "" },
+    sel.on ? cardBox(sel, e.id, domOrder, refreshSelection) : null,
     thumbnail(f, map),
     h(
       "div",
@@ -528,7 +531,8 @@ function folder(id: string, title: string, members: RegionEntry[], k: Category |
   const noEdit = k && !edit ? "You don't have permission to change folders." : "";
   const head = h(
     "div",
-    { className: "rfolder-head", draggable: edit },
+    { className: "rfolder-head", draggable: edit && !sel.on },
+    sel.on ? groupBox(sel, members.filter((m) => m.feature).map((m) => m.id), `Select all regions in ${title}`, refreshSelection) : null,
     h(
       "button",
       { type: "button", className: "rfolder-toggle ghost", onclick: () => toggleFolder(id, el), ariaExpanded: "true", title: "Open or close this folder" },
@@ -647,6 +651,8 @@ export function renderRegions(): void {
     .filter((e) => matchesQuery(q, filterable(e)))
     .sort((a, b) => compareBy(sort, filterable(a), filterable(b)));
   $("#regions-empty").hidden = entries.length > 0;
+  sel.keepOnly(new Set(entries.map((e) => e.id)));
+  $("#r-select").hidden = !entries.length;
   $("#regions-tools").hidden = entries.length === 0;
   const cats = categories().categories;
   $<HTMLButtonElement>("#r-new-category").hidden = !entries.length;
@@ -679,6 +685,7 @@ export function renderRegions(): void {
     if (rest.length) out.push(folder(UNCATEGORIZED, "Uncategorized", rest, null, { first: true, last: true }, filtering));
   }
   $("#regions").replaceChildren(...out);
+  bar?.update();
 }
 
 /** What the search, creator filter and sorting see of a region (shared with the editor's overlay panel). */
@@ -1274,10 +1281,182 @@ function del(e: RegionEntry): void {
   });
 }
 
+/* ── Bulk actions: tick several region cards, then move, recolour or delete them together ── */
+
+const sel = new Selection();
+let bar: ReturnType<typeof selectionBar> | undefined;
+const refreshSelection = (): void => {
+  refreshBoxes($("#regions"), sel);
+  bar?.update();
+};
+/** The ids of the region cards on screen, top to bottom (for "select all shown" and shift+click ranges). */
+const domOrder = (): string[] => [...document.querySelectorAll<HTMLElement>("#regions .rcard[data-region]:not(.broken)")].map((c) => c.dataset.region ?? "");
+const byIds = (ids: string[]): RegionEntry[] => ids.map((id) => entries.find((x) => x.id === id)).filter((e): e is RegionEntry => !!e?.feature);
+const perCommit = (): number => regionsPerCommit(!!currentUser()?.owner);
+const plural = (n: number, what: string) => `${n} ${what}${n === 1 ? "" : "s"}`;
+const nameOf = (part: RegionEntry[]) => (part.length === 1 ? `region ${part[0].id}` : `${part.length} regions`);
+
+function setSelecting(on: boolean): void {
+  sel.on = on;
+  if (!on) sel.clear();
+  const b = $("#r-select");
+  b.setAttribute("aria-pressed", String(on));
+  renderRegions();
+}
+
+const hex6 = (c: string) => (/^#[0-9a-f]{3}$/i.test(c) ? `#${[...c.slice(1)].map((x) => x + x).join("")}` : c).toLowerCase();
+const withColour = (f: RegionFeature, color: string): RegionFeature => {
+  const properties = { ...f.properties, color, updatedBy: account(), updated: stamp() };
+  if (!properties.createdBy && currentUser()?.owner) properties.createdBy = account();
+  return { ...f, properties };
+};
+
+const bulkWhy = {
+  move: () => (!can("regions") ? "You don't have permission to create regions." : categories().categories.length ? "" : "There are no folders yet: add one with + Folder first."),
+  colour: (ids: string[]) =>
+    blockedList("region", "change the colour of", ids.filter((id) => { const f = byIds([id])[0]?.feature; return !f || !!f.properties.linked || !canEdit(f); })),
+  delete: (ids: string[]) => blockedList("region", "delete", ids.filter((id) => { const f = byIds([id])[0]?.feature; return !f || !canDelete(f); })),
+};
+
+function bulkMove(ids: string[]): void {
+  const m = modal("Move to folder");
+  const cats = categories().categories;
+  const select = h("select", { ariaLabel: "Folder", dataset: { field: "bulk-folder" } }, h("option", { value: "", textContent: "Uncategorized (no folder)" }), ...cats.map((k) => h("option", { value: k.id, textContent: pathName(categories(), k.id) })));
+  const go = h("button", { type: "button", textContent: `Move ${plural(ids.length, "region")}`, dataset: { action: "confirm-bulk-move" } });
+  go.addEventListener("click", () => {
+    m.close();
+    void moveRegions(ids, select.value || null);
+  });
+  m.body.append(h("p", { className: "muted small", textContent: `Puts ${plural(ids.length, "region")} in one folder${ids.length > 24 ? ` (several saves, ${24} at a time)` : ""}. The regions themselves don't change.` }), h("label", {}, "Folder ", select));
+  m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), go);
+  select.focus();
+}
+
+function bulkColour(ids: string[]): void {
+  const m = modal("Change colour");
+  const first = byIds(ids)[0]?.feature?.properties.color;
+  const input = h("input", { type: "color", value: hex6(typeof first === "string" && REGION_COLOR.test(first) ? first : "#888888"), ariaLabel: "New colour", dataset: { field: "bulk-colour" } });
+  const go = h("button", { type: "button", textContent: `Change ${plural(ids.length, "region")}`, dataset: { action: "confirm-bulk-colour" } });
+  go.addEventListener("click", () => {
+    m.close();
+    void recolour(ids, input.value.toLowerCase());
+  });
+  m.body.append(h("p", { className: "muted small", textContent: `Sets the main colour of ${plural(ids.length, "region")} in one save. Parts that have their own colour keep it.` }), h("label", {}, "Colour ", input));
+  m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), go);
+  input.focus();
+}
+
+async function recolour(ids: string[], color: string): Promise<void> {
+  const all = byIds(ids);
+  for (let i = 0; i < all.length; i += perCommit()) {
+    const part = all.slice(i, i + perCommit());
+    const message = `Change colour of ${nameOf(part)} to ${color}`;
+    await optimistic({
+      label: message,
+      check: () => {
+        for (const e of part) {
+          const why = refusal({ path: e.path, before: serialize(e.feature!), after: serialize(withColour(e.feature!, color)) });
+          if (why) return `Can't change the colour of ${e.id}: ${why}`;
+        }
+        return null;
+      },
+      apply: () => {
+        const before = entries;
+        entries = entries.map((e) => (part.includes(e) ? { ...e, feature: withColour(e.feature!, color) } : e));
+        return before;
+      },
+      undo: (before) => void (entries = before),
+      render: renderRegions,
+      commit: () =>
+        deps.gh().commit(message, async () => {
+          const out: FileChange[] = [];
+          for (const e of part) out.push({ path: e.path, content: serialize(withColour(JSON.parse((await deps.gh().readFile(e.path)).text) as RegionFeature, color)) });
+          return out;
+        }),
+    });
+  }
+}
+
+function bulkDelete(ids: string[]): void {
+  const m = modal(`Delete ${plural(ids.length, "region")}`, "danger");
+  const shown = ids.slice(0, 10);
+  const go = h("button", { type: "button", className: "danger", textContent: `Delete ${plural(ids.length, "region")}`, dataset: { action: "confirm-bulk-delete" } });
+  go.addEventListener("click", () => {
+    m.close();
+    void removeMany(ids);
+  });
+  const cancel = h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close });
+  m.body.append(
+    h("p", {}, `This deletes ${plural(ids.length, "region")}${ids.length > perCommit() ? ` (in several saves, ${perCommit()} at a time)` : " in one save"}:`),
+    h("ul", { className: "bulk-list" }, ...shown.map((id) => h("li", {}, h("code", { textContent: id }))), ids.length > shown.length ? h("li", { className: "muted", textContent: `and ${ids.length - shown.length} more` }) : null),
+    h(
+      "div",
+      { className: "rename-note", role: "note" },
+      h("span", { className: "rename-note-icon", ariaHidden: "true", textContent: "⚠" }),
+      h("div", {}, h("strong", { textContent: "Embeds that show these regions will stop showing them." }), " They fall back to the plain globe with a small “Region not found” note."),
+    ),
+    h("p", { className: "muted small", textContent: `They stay in Recently deleted for ${TRASH_DAYS} days, where you can restore them.` }),
+  );
+  m.foot.append(cancel, go);
+  cancel.focus();
+}
+
+async function removeMany(ids: string[]): Promise<void> {
+  const all = byIds(ids);
+  for (let i = 0; i < all.length; i += perCommit()) {
+    const part = all.slice(i, i + perCommit());
+    const message = `Delete ${nameOf(part)}`;
+    await optimistic({
+      label: message,
+      check: () => {
+        for (const e of part) {
+          const why = refusal({ path: e.path, before: serialize(e.feature!), after: null });
+          if (why) return `Can't delete ${e.id}: ${why}`;
+        }
+        return null;
+      },
+      apply: () => {
+        const before = entries;
+        entries = entries.filter((x) => !part.includes(x));
+        return before;
+      },
+      undo: (before) => void (entries = before),
+      render: renderRegions,
+      commit: () => deps.gh().commit(message, async () => part.map((e) => ({ path: e.path, content: "", delete: true }))),
+    });
+  }
+}
+
 export function initRegions(d: RegionsDeps): void {
   deps = d;
   initComments(() => d.gh());
   onCommentsChange(() => renderRegions());
+  bar = selectionBar(
+    sel,
+    "region",
+    [
+      { text: "Move to folder…", action: "bulk-move", why: bulkWhy.move, run: bulkMove },
+      { text: "Change colour…", action: "bulk-colour", why: bulkWhy.colour, run: bulkColour },
+      { text: "Delete…", action: "bulk-delete", why: bulkWhy.delete, run: bulkDelete, danger: true },
+    ],
+    domOrder,
+    refreshSelection,
+    () => setSelecting(false),
+  );
+  document.body.append(bar.el);
+  $("#r-select").addEventListener("click", () => setSelecting(!sel.on));
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && sel.on && !document.querySelector("dialog[open]") && !ev.defaultPrevented) setSelecting(false);
+  });
+  // Clicking a card (not one of its buttons) ticks it while selecting.
+  $("#regions").addEventListener("click", (ev) => {
+    if (!sel.on) return;
+    const t = ev.target as HTMLElement;
+    const c = t.closest<HTMLElement>(".rcard[data-region]:not(.broken)");
+    if (!c || t.closest("button, a, input, select, label, summary, [popover], textarea")) return;
+    sel.toggle(c.dataset.region ?? "");
+    refreshSelection();
+  });
   initSuggestions({ gh: d.gh, review: (s) => void reviewSuggestion(s).catch((e: Error) => alertBox("Couldn't open the suggestion", e.message)) });
   ui.search().addEventListener("input", renderRegions);
   ui.slot().addEventListener("change", renderRegions);
