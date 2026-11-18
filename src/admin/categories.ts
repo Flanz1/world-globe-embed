@@ -20,7 +20,6 @@ import {
   cleanName,
   emptyCategories,
   nameProblem,
-  placements,
   pruneRegions,
   removeCategory,
   renameCategory,
@@ -124,8 +123,6 @@ export const pin = (k: Category, regionId: string, on: boolean): Promise<void> =
 /** Puts pinned region `id` before (or after) pinned region `other`. */
 export const reorderPin = (k: Category, id: string, other: string, after = false): Promise<void> =>
   save(`Reorder pinned regions in category ${k.name}`, (c) => movePin(c, k.id, id, other, after));
-
-export const placementOf = (regionId: string): string | null => placements(current).get(regionId) ?? null;
 
 export function shift(k: Category, by: -1 | 1): Promise<void> {
   return save(`Move category ${k.name} ${by < 0 ? "up" : "down"}`, (c) => shiftCategory(c, k.id, by));

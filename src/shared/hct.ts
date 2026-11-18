@@ -310,7 +310,3 @@ export const schemeFromSeed = (seed: string, dark: boolean): Scheme => {
     "app-ok": k(tone(40, 80)),
   };
 };
-
-/** CSS custom-property declarations for a scheme (`--md-sys-color-primary: #…;` …), as admin.css writes them. */
-export const schemeDeclarations = (scheme: Scheme): string =>
-  ROLES.map((r) => `--${r.startsWith("app-") ? r : `md-sys-color-${r}`}: ${scheme[r]};`).join(" ");
