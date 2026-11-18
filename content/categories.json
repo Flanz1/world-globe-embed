@@ -39,7 +39,6 @@
       "id": "ilrakhan",
       "name": "Ilrakhan",
       "regions": [
-        "erlmondy",
         "martella",
         "nahr",
         "ravland",
@@ -156,6 +155,7 @@
       "id": "sertova",
       "name": "Sertova",
       "regions": [
+        "erlmondy",
         "erlmondy-combined"
       ],
       "parent": "ilrakhan"
