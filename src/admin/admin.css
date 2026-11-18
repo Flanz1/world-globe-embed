@@ -138,20 +138,29 @@ label.check { display: flex; align-items: center; gap: 6px; font-size: 14px; }
 label.check input { margin: 0; }
 
 dialog#preview { width: min(1000px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; border: 0; border-radius: 28px; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); box-shadow: var(--app-shadow); }
+/* Desktop: the dialog has a fixed height; the globe fills the left pane and the controls scroll on the right, Save stays at the bottom. */
+dialog#preview[open] { display: flex; flex-direction: column; height: min(760px, calc(100vh - 32px)); overflow: hidden; }
 dialog#preview::backdrop { background: rgba(0, 0, 0, .45); }
 .pv-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 12px 24px; margin: 0; }
 .pv-head h2 { margin: 0; font-size: 20px; font-weight: 600; }
-.pv-body { display: grid; grid-template-columns: minmax(0, 1fr) 290px; }
-#pv-frame { width: 100%; height: min(70vh, 560px); border: 0; background: var(--app-map-bg); display: block; }
-.pv-controls { display: grid; gap: 12px; align-content: start; padding: 4px 24px 16px 16px; }
+.pv-body { display: grid; grid-template-columns: minmax(0, 1fr) 290px; grid-template-rows: minmax(0, 1fr); flex: 1 1 auto; min-height: 0; }
+#pv-frame { width: 100%; height: 100%; border: 0; background: var(--app-map-bg); display: block; }
+.pv-controls { display: grid; gap: 12px; align-content: start; padding: 4px 24px 0 16px; overflow-y: auto; min-height: 0; }
 .pv-controls .range { display: flex; gap: 8px; align-items: center; }
 .pv-controls .range input { flex: 1; min-width: 0; }
 .pv-controls output { width: 3.2em; text-align: right; color: var(--md-sys-color-on-surface); font-variant-numeric: tabular-nums; }
 .pv-view { display: grid; gap: 6px; justify-items: start; }
 .pv-controls label.inline { display: flex; align-items: center; gap: 8px; }
 .small { font-size: 12px; margin: 0; }
-.pv-foot { position: sticky; bottom: 0; display: grid; gap: 6px; justify-items: start; margin: 4px -24px -16px -16px; padding: 12px 24px 16px 16px; background: var(--md-sys-color-surface-container-high); border-top: 1px solid var(--md-sys-color-outline-variant); }
-@media (max-width: 720px) { .pv-body { grid-template-columns: 1fr; } #pv-frame { height: 50vh; } }
+.pv-foot { position: sticky; bottom: 0; display: grid; gap: 6px; justify-items: end; margin: 4px -24px 0 -16px; padding: 12px 24px 16px 16px; background: var(--md-sys-color-surface-container-high); border-top: 1px solid var(--md-sys-color-outline-variant); box-shadow: 0 -6px 8px -6px rgba(0, 0, 0, .18); }
+/* Phone: the globe is a fixed ~35% of the screen and the whole body scrolls under it, with Save pinned at the bottom. */
+@media (max-width: 720px) {
+  dialog#preview[open] { height: auto; max-height: calc(100vh - 32px); }
+  .pv-body { display: block; overflow-y: auto; }
+  #pv-frame { height: 35vh; min-height: 200px; }
+  .pv-controls { overflow: visible; padding: 8px 16px 0; }
+  .pv-foot { margin: 4px -16px 0; padding: 12px 16px 16px; }
+}
 .map button { margin: 6px 0 2px; }
 .pv-controls .range input[type=number] { flex: 0 0 6.5em; width: 6.5em; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
 
