@@ -21,6 +21,7 @@ import { can, refusal, setMe } from "./session.ts";
 import { adopt, colourMenu, connectAccount, forgetTheme, initTheme, modeButton, parsePrefs } from "./theme.ts";
 import { needsRenewal, sessionRemembers } from "./session-token.ts";
 import { initUsers, loadUsers } from "./users.ts";
+import { initBackToTop } from "./back-to-top.ts";
 import { setChecks, type Check } from "./status.ts";
 
 declare const __REPO__: string;
@@ -645,6 +646,7 @@ if (framed) {
   );
 } else {
   initTheme();
+  initBackToTop();
   $("#theme-ctl").append(modeButton(), colourMenu());
   $("#forget").addEventListener("click", signOut);
   $("#waiting-out").addEventListener("click", signOut);
