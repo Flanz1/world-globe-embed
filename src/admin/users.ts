@@ -4,7 +4,7 @@
  * The admin API checks the same rules on save (src/shared/access.ts): someone who isn't the owner can't
  * change their own entry or the owner's, and can only give or take away permissions they hold themselves.
  */
-import { ACCESS_PATH, LOGIN, PERMISSIONS, PERMISSION_LABELS, PRESETS, presetOf, type AccessFile, type AccessUser, type Permission } from "../shared/access.ts";
+import { ACCESS_PATH, LOGIN, PERMISSIONS, PERMISSION_LABELS, PRESETS, presetOf, summaryOf, type AccessFile, type AccessUser, type Permission } from "../shared/access.ts";
 import { $, h } from "./dom.ts";
 import { GitHubError, type GitHub } from "./github.ts";
 import { OWNER_ID, can, currentUser } from "./session.ts";
@@ -24,6 +24,9 @@ const stamp = () => new Date().toISOString().replace(/\.\d+Z$/, "Z");
 const clone = (u: AccessUser[]) => u.map((x) => ({ ...x, permissions: [...x.permissions] }));
 const sortPerms = (p: Permission[]) => PERMISSIONS.filter((x) => p.includes(x));
 const dirty = () => JSON.stringify(draft) !== JSON.stringify(loaded.users);
+
+/** Whose "Permissions…" list the person opened (kept across redraws). Custom roles always show it. */
+const openPerms = new Set<string>();
 
 const note = (text: string, cls = "muted small") => {
   const el = $("#users-note");
@@ -77,6 +80,13 @@ function row(u: AccessUser): HTMLElement {
     ),
   );
   const isNew = !loaded.users.some((x) => x.id === u.id);
+  // The individual permissions sit behind "Permissions…"; a Custom role (no preset fits) shows them at once.
+  const permsList = h("details", { className: "uperm-more", dataset: { perms: u.login } }, h("summary", { textContent: "Permissions…" }), h("div", { className: "uperms" }, ...boxes));
+  permsList.open = !current || openPerms.has(u.login);
+  permsList.addEventListener("toggle", () => {
+    if (permsList.open) openPerms.add(u.login);
+    else openPerms.delete(u.login);
+  });
   return h(
     "div",
     { className: `urow${isNew ? " new" : ""}`, dataset: { user: u.login } },
@@ -89,7 +99,14 @@ function row(u: AccessUser): HTMLElement {
       isNew ? h("span", { className: "badge warn", textContent: "not saved" }) : null,
     ),
     isOwner ? h("span", { className: "muted small", textContent: "Can always do everything." }) : preset,
-    isOwner ? null : h("div", { className: "uperms" }, ...boxes),
+    isOwner
+      ? null
+      : h(
+          "div",
+          { className: "uaccess" },
+          h("p", { className: "usummary small", textContent: summaryOf(u.permissions), dataset: { summary: "1" } }),
+          permsList,
+        ),
     isOwner
       ? null
       : h("button", {
@@ -115,7 +132,8 @@ function render(): void {
   const d = dirty();
   $<HTMLButtonElement>("#users-save").disabled = !d;
   $<HTMLButtonElement>("#users-reset").disabled = !d;
-  if (d) note("Unsaved changes.", "warn small");
+  // The Save / Undo bar only shows while something is unsaved.
+  $("#users-bar").hidden = !d;
   // Presets in the add form: only those the signed-in person can hand out.
   const sel = $<HTMLSelectElement>("#user-preset");
   const keep = sel.value;
