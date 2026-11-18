@@ -3017,7 +3017,6 @@ export function openEditor(o: EditorOptions): void {
     } catch {
       /* not remembered: fine */
     }
-    setMsg(keepOpen ? "Keep open on: freehand strokes join into one line. Finish a stroke near the first point, tap it, or press Enter to close the outline." : "Keep open off: a freehand stroke closes when you let go.");
     changed();
   }
   /** Vertices of the region's own rings that sit on the same spot as another (attached), per state. */
