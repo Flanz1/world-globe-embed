@@ -283,6 +283,43 @@ await step(E, "closing a polygon or freehand outline is deliberate", async () =>
   s = await ed.state();
   check(E, "a tiny freehand stroke doesn't make a part", s.parts.length === n0 + 2, `${s.parts.length} parts`);
   await page.keyboard.press("Escape");
+
+  // Keep open (K): strokes join into one open line that closes only near its first point.
+  const drag = async (pts) => {
+    await page.mouse.move(x0 + pts[0][0], y0 + 300 + pts[0][1]);
+    await page.mouse.down();
+    for (let i = 1; i < pts.length; i++) for (let t = 1; t <= 8; t++) await page.mouse.move(x0 + pts[i - 1][0] + ((pts[i][0] - pts[i - 1][0]) * t) / 8, y0 + 300 + pts[i - 1][1] + ((pts[i][1] - pts[i - 1][1]) * t) / 8);
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+  };
+  const open = () => page.evaluate(() => document.querySelector("dialog.editor").wgeEditor.drawing());
+  const pressed = () => page.getAttribute('dialog.editor button[data-act="keep-open"]', "aria-pressed");
+  await page.keyboard.press("f");
+  await page.keyboard.press("k");
+  await page.waitForTimeout(100);
+  let pr = await pressed();
+  check(E, "K turns Open line on", pr === "true", String(pr));
+  await drag([[0, 0], [150, 0], [150, 150]]);
+  s = await ed.state();
+  let o = await open();
+  check(E, "Keep open: a stroke stays an open line, nothing is added", s.parts.length === n0 + 2 && o && o.length >= 3, `${s.parts.length} parts, ${o && o.length} points`);
+  const n1 = o.length;
+  await drag([[160, 160], [0, 150]]);
+  o = await open();
+  s = await ed.state();
+  check(E, "the next stroke continues the same line", s.parts.length === n0 + 2 && o && o.length > n1, `${s.parts.length} parts, ${o && o.length} points`);
+  await page.keyboard.press("Backspace");
+  o = await open();
+  check(E, "Backspace takes back the last stroke", o && o.length === n1, `${o && o.length} points`);
+  await drag([[160, 160], [0, 150], [0, 6]]);
+  s = await ed.state();
+  check(E, "a stroke ending near the first point closes the outline", s.parts.length === n0 + 3 && !(await open()), `${s.parts.length} parts; ${await ed.msg()}`);
+  await page.keyboard.press("f");
+  await page.keyboard.press("k");
+  await page.waitForTimeout(100);
+  pr = await pressed();
+  check(E, "K turns Open line off again", pr === "false", String(pr));
+  await page.keyboard.press("Escape");
 });
 
 check(E, "main untouched", mock.refs.get("main") === mainAtStart);
