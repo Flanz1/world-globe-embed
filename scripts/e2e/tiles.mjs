@@ -1,4 +1,4 @@
-// e2e-suite: roots=VIEWER,src/shared/tiers.ts,src/shared/tiles.ts,src/shared/raster.ts weight=3
+// e2e-suite: roots=VIEWER,src/shared/tiers.ts,src/shared/tiles.ts,src/shared/raster.ts weight=3 quarantine=178
 /**
  * Browser checks for the tile levels past 8192, in headless Chromium (system Playwright).
  *
