@@ -1267,6 +1267,9 @@ function del(e: RegionEntry): void {
   });
 }
 
+/** The saved regions' features (for drawing their outlines elsewhere, e.g. behind the pins). */
+export const regionFeatures = (): RegionFeature[] => entries.flatMap((e) => (e.feature ? [e.feature] : []));
+
 export function initRegions(d: RegionsDeps): void {
   deps = d;
   initSuggestions({ gh: d.gh, review: (s) => void reviewSuggestion(s).catch((e: Error) => alertBox("Couldn't open the suggestion", e.message)) });

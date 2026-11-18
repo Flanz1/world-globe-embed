@@ -8,8 +8,10 @@
 import { escapeHtml } from "../shared/page.ts";
 import { stringifyCompact } from "../shared/json.ts";
 import { pinIcon, inkFor } from "../shared/pin-icons.ts";
-import { PIN_DESCRIPTION_MAX, PIN_KINDS, PIN_NAME_MAX, PIN_ID, checkPin, isPinKind, kindInfo, pinColor, pinPath, safeLink, type PinFeature } from "../shared/pins.ts";
+import { PIN_DESCRIPTION_MAX, PIN_KINDS, PIN_NAME_MAX, PIN_ID, checkPin, isPinKind, kindInfo, pinColor, pinPath, safeLink, type PinFeature, type PinKind } from "../shared/pins.ts";
+import { traceGeometry } from "../shared/raster.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
+import type { RegionFeature } from "../shared/region.ts";
 import { clamp } from "../shared/params.ts";
 import { $, SITE, h } from "./dom.ts";
 import type { GitHub } from "./github.ts";
@@ -25,6 +27,8 @@ export interface PinsDeps {
   maps: () => MapMeta[];
   slots: () => SlotsFile;
   act: (label: string, fn: () => Promise<string>) => Promise<void>;
+  /** The saved regions, to show their outlines behind the pins. */
+  regions?: () => RegionFeature[];
 }
 
 export interface PinEntry {
@@ -104,6 +108,13 @@ let slot = "";
 let selected: string | null = null;
 let draft: PinFeature | null = null;
 let adding = false;
+/** The kind and pin map of the last pin, so placing several in a row doesn't mean choosing them each time. */
+let lastKind: PinKind = "city";
+let lastPinMap = "";
+let showLabels = false;
+let showRegions = false;
+/** Kinds the list is narrowed to (none ticked: all). */
+const kindFilter = new Set<PinKind>();
 let search = "";
 let view: View = { cx: 0, cy: 0, k: 1 };
 let img: HTMLImageElement | null = null;
@@ -161,6 +172,17 @@ function draw(): void {
     g.imageSmoothingQuality = "high";
     g.drawImage(img, sx(-180), sy(90), 360 * view.k, 180 * view.k * ky());
   }
+  if (showRegions) {
+    g.save();
+    g.lineWidth = 1;
+    g.strokeStyle = "rgba(255,255,255,.7)";
+    g.setLineDash([4, 3]);
+    g.beginPath();
+    for (const r of deps.regions?.() ?? []) if (r.properties.slot === slot) traceGeometry(g, r.geometry, sx, sy, [0]);
+    g.stroke();
+    g.restore();
+  }
+  (el.layer as HTMLElement).dataset.labels = String(showLabels);
   // Markers: the draft, or every saved pin of this slot.
   const items: { id: string; f: PinFeature }[] = slotPins().map((e) => ({ id: e.id, f: draft && selected === e.id ? draft : e.feature! }));
   if (draft && selected === "new") items.push({ id: "new", f: draft });
@@ -179,8 +201,12 @@ function draw(): void {
     b.style.color = inkFor(bg);
     if (b.dataset.kind !== p.kind) {
       b.dataset.kind = p.kind;
-      b.replaceChildren(pinIcon(p.kind, 14));
+      const label = document.createElement("span");
+      label.className = "pn-label";
+      b.replaceChildren(pinIcon(p.kind, 14), label);
     }
+    const lab = b.querySelector<HTMLElement>(".pn-label");
+    if (lab) lab.textContent = p.name;
     b.title = `${p.name || "(unnamed)"}, ${kindInfo(p.kind).label}`;
     b.setAttribute("aria-label", b.title);
     b.setAttribute("aria-pressed", String(selected === id));
@@ -204,6 +230,10 @@ function makeMarker(id: string): HTMLButtonElement {
   let drag: { x: number; y: number; moved: boolean; start: [number, number] } | null = null;
   b.addEventListener("pointerdown", (e) => {
     e.stopPropagation();
+    if (id !== selected && dirty()) {
+      void leave().then((ok) => ok && select(id));
+      return;
+    }
     b.setPointerCapture(e.pointerId);
     select(id);
     const f = draft;
@@ -222,6 +252,17 @@ function makeMarker(id: string): HTMLButtonElement {
   b.addEventListener("pointercancel", () => (drag = null));
   b.addEventListener("keydown", (e) => {
     if (e.key === "Delete" || e.key === "Backspace") e.preventDefault();
+    // Arrow keys nudge the selected pin by 1 screen pixel (10 with Shift).
+    const dx = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    const dy = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
+    if ((dx || dy) && draft && selected === id && editable()) {
+      e.preventDefault();
+      const step = e.shiftKey ? 10 : 1;
+      const [lon, lat] = draft.geometry.coordinates;
+      draft.geometry.coordinates = [Math.round(clamp(lon + (dx * step) / view.k, -180, 180) * 10000) / 10000, Math.round(clamp(lat - (dy * step) / (view.k * ky()), -90, 90) * 10000) / 10000];
+      renderForm(false);
+      redraw();
+    }
   });
   return b;
 }
@@ -258,7 +299,7 @@ function blankPin(at: [number, number]): PinFeature {
     $schema: "../../schema/pin.schema.json",
     type: "Feature",
     id: "",
-    properties: { slot, map: map?.id ?? "", name: "", kind: "city" },
+    properties: { slot, map: map?.id ?? "", name: "", kind: lastKind, ...(lastPinMap && mapsOfSlot(pinMaps(), slot).some((m) => m.id === lastPinMap) ? { pinMap: lastPinMap } : {}) },
     geometry: { type: "Point", coordinates: at },
   };
 }
@@ -287,13 +328,19 @@ const dirty = (): boolean => {
   return !was || JSON.stringify(was.properties) !== JSON.stringify(draft.properties) || JSON.stringify(was.geometry) !== JSON.stringify(draft.geometry);
 };
 
+/** Asks before an unsaved pin form is thrown away; true when it is fine to carry on. */
+async function leave(): Promise<boolean> {
+  if (!dirty()) return true;
+  return confirmBox("Unsaved pin", "The pin you are editing has changes that aren't saved. Discard them?", "Discard pin", "Keep editing", true);
+}
+
 function renderForm(rebuild: boolean): void {
   const box = el.form;
   if (!draft) {
-    const hint = h("p", { className: "muted small", textContent: can("regions") ? "Press “Place a pin” and click the map, or pick a pin on the map or in the list." : "Pick a pin on the map or in the list. You need the “Create regions” permission to place pins." });
+    const hint = h("p", { className: "muted small", textContent: can("regions") ? "Press “Place pins” and click the map, or pick a pin on the map or in the list." : "Pick a pin on the map or in the list. You need the “Create regions” permission to place pins." });
     const empty = h("div", { className: "empty" }, hint);
     if (can("regions")) {
-      const place = h("button", { type: "button", className: "ghost", dataset: { action: "place-empty" }, textContent: adding ? "Click the map… (Esc to cancel)" : "Place a pin", disabled: !slotMap() });
+      const place = h("button", { type: "button", className: "ghost", dataset: { action: "place-empty" }, textContent: adding ? "Placing pins…" : "Place pins", disabled: !slotMap() });
       place.addEventListener("click", () => (el.add as HTMLButtonElement).click());
       empty.append(place);
     }
@@ -311,7 +358,32 @@ function renderForm(rebuild: boolean): void {
     return;
   }
   const name = h("input", { type: "text", maxLength: PIN_NAME_MAX, value: p.name, required: true, disabled: !ok, autocomplete: "off", ariaLabel: "Name" });
-  const kind = h("select", { disabled: !ok, ariaLabel: "Kind" }, ...PIN_KINDS.map((k) => h("option", { value: k.id, textContent: k.label, selected: k.id === p.kind })));
+  const kind = h(
+    "div",
+    { className: "pn-kinds", role: "radiogroup", ariaLabel: "Kind (decides the icon)" },
+    ...PIN_KINDS.map((k) => {
+      const b = h("button", { type: "button", className: "ghost tiny pn-kind", role: "radio", ariaChecked: String(k.id === p.kind), tabIndex: k.id === p.kind ? 0 : -1, disabled: !ok, dataset: { kind: k.id }, title: k.label }, pinIcon(k.id, 14), h("span", { textContent: k.label }));
+      b.style.setProperty("--kind", k.color);
+      b.addEventListener("click", () => {
+        p.kind = k.id;
+        for (const c of kind.querySelectorAll<HTMLElement>("[data-kind]")) {
+          c.setAttribute("aria-checked", String(c.dataset.kind === k.id));
+          c.tabIndex = c.dataset.kind === k.id ? 0 : -1;
+        }
+        sync();
+      });
+      b.addEventListener("keydown", (e) => {
+        const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+        if (!step) return;
+        e.preventDefault();
+        const all = [...kind.querySelectorAll<HTMLButtonElement>("[data-kind]")];
+        const next = all[(all.indexOf(b) + step + all.length) % all.length];
+        next.click();
+        next.focus();
+      });
+      return b;
+    }),
+  );
   const maps = mapsOfSlot(pinMaps(), slot);
   const pinMap = h("select", { disabled: !ok, ariaLabel: "Pin map" }, h("option", { value: "", textContent: "None" }), ...maps.map((m) => h("option", { value: m.id, textContent: m.name, selected: m.id === p.pinMap })));
   const useColor = h("input", { type: "checkbox", checked: !!p.color, disabled: !ok, ariaLabel: "Use a custom colour" });
@@ -324,7 +396,6 @@ function renderForm(rebuild: boolean): void {
   const cancel = h("button", { type: "button", className: "ghost", textContent: selected === "new" ? "Cancel" : "Close" });
   const sync = () => {
     p.name = name.value;
-    if (isPinKind(kind.value)) p.kind = kind.value;
     if (pinMap.value) p.pinMap = pinMap.value;
     else delete p.pinMap;
     color.disabled = !ok || !useColor.checked;
@@ -340,17 +411,17 @@ function renderForm(rebuild: boolean): void {
     updateButtons();
     redraw();
   };
-  for (const c of [name, kind, pinMap, useColor, color, desc, link]) c.addEventListener("input", sync);
+  for (const c of [name, pinMap, useColor, color, desc, link]) c.addEventListener("input", sync);
   const form = h(
     "form",
     { className: "pn-form" },
     h("label", {}, "Name", name),
-    h("label", {}, "Kind (decides the icon)", kind),
+    h("div", { className: "pn-field" }, h("span", { className: "small", textContent: "Kind (decides the icon)" }), kind),
     h("label", {}, "Pin map (optional: an embed can show one pin map)", pinMap),
     h("div", { className: "pn-color" }, h("label", { className: "check" }, useColor, "Custom colour"), color),
     h("label", {}, `Description (optional, up to ${PIN_DESCRIPTION_MAX} characters)`, desc),
     h("label", {}, "Link to the note (optional)", link),
-    h("p", { className: "muted small" }, "Position: ", h("span", { className: "pn-pos", textContent: posText(f) }), ok ? " · drag the marker to move it" : ""),
+    h("p", { className: "muted small" }, "Position: ", h("span", { className: "pn-pos", textContent: posText(f) }), ok ? " · drag the marker, or use the arrow keys (Shift: bigger steps)" : ""),
     p.createdBy ? h("p", { className: "muted small", textContent: `Placed by ${p.createdBy.login}${p.updated ? ` · saved ${new Date(p.updated).toLocaleString()}` : ""}` }) : null,
     err,
     h("div", { className: "row" }, ok ? save : null, selected !== "new" && canDelete(entryOf(selected)?.feature) ? del : null, cancel),
@@ -362,19 +433,24 @@ function renderForm(rebuild: boolean): void {
   });
   del.addEventListener("click", () => void remove_());
   cancel.addEventListener("click", () => {
-    adding = false;
-    draft = null;
-    selected = null;
-    renderForm(true);
-    renderList();
-    syncControls();
-    redraw();
+    void leave().then((go) => {
+      if (!go) return;
+      draft = null;
+      selected = null;
+      renderForm(true);
+      renderList();
+      syncControls();
+      redraw();
+    });
   });
   box.replaceChildren(form);
   updateButtons();
 }
 
-const posText = (f: PinFeature) => `${f.geometry.coordinates[1].toFixed(2)}° lat, ${f.geometry.coordinates[0].toFixed(2)}° lon (in the map's own frame)`;
+const posText = (f: PinFeature) => {
+  const [lon, lat] = f.geometry.coordinates;
+  return `${Math.abs(lat).toFixed(2)}° ${lat < 0 ? "S" : "N"}, ${Math.abs(lon).toFixed(2)}° ${lon < 0 ? "W" : "E"}`;
+};
 
 function updateButtons(): void {
   const b = el.form.querySelector<HTMLButtonElement>('button[type="submit"]');
@@ -426,8 +502,9 @@ async function save_(err: HTMLElement): Promise<void> {
       const entry: PinEntry = { id: f.id, path, sha: baseSha ?? "", feature: f };
       entries = isNew ? [...entries, entry].sort((a, b) => a.id.localeCompare(b.id)) : entries.map((x) => (x.id === f.id ? entry : x));
       selected = f.id;
-      adding = false;
       draft = structuredClone(f);
+      lastKind = f.properties.kind;
+      lastPinMap = f.properties.pinMap ?? "";
       return before;
     },
     undo: (before) => {
@@ -590,14 +667,14 @@ function pinRow(e: PinEntry): HTMLElement {
   sw.style.color = inkFor(pinColor(p));
   return h(
     "button",
-    { type: "button", className: `pn-row${selected === e.id ? " on" : ""}`, onclick: () => (select(e.id), centreOn(e.feature!)) },
+    { type: "button", className: `pn-row${selected === e.id ? " on" : ""}`, onclick: () => void leave().then((ok) => ok && (select(e.id), centreOn(e.feature!))) },
     sw,
     h("span", { className: "pn-name", textContent: p.name }),
     h("span", { className: "muted small", textContent: kindInfo(p.kind).label }),
   );
 }
 
-const pinMatches = (e: PinEntry, q: string): boolean => !q || e.feature!.properties.name.toLowerCase().includes(q) || e.id.includes(q) || e.feature!.properties.kind.includes(q);
+const pinMatches = (e: PinEntry, q: string): boolean => (!kindFilter.size || kindFilter.has(e.feature!.properties.kind)) && (!q || e.feature!.properties.name.toLowerCase().includes(q) || e.id.includes(q) || e.feature!.properties.kind.includes(q));
 /** The pins of this slot that are in pin map `m` (null: in none, or in one that no longer exists). */
 const pinsIn = (m: PinMap | null): PinEntry[] => slotPins().filter((e) => (m ? e.feature!.properties.pinMap === m.id : !e.feature!.properties.pinMap || !mapById(pinMaps(), e.feature!.properties.pinMap)));
 
@@ -665,10 +742,10 @@ function syncControls(): void {
   (el.addMap as HTMLButtonElement).disabled = !canOrganise() || !slot;
   (el.addFolder as HTMLButtonElement).disabled = !canOrganise();
   add.setAttribute("aria-pressed", String(adding));
-  add.textContent = adding ? "Click the map… (Esc to cancel)" : "Place a pin";
+  (el.placing as HTMLElement).hidden = !adding;
   (el.pane as HTMLElement).dataset.adding = String(adding);
   const emptyPlace = el.form?.querySelector<HTMLButtonElement>("[data-action=place-empty]");
-  if (emptyPlace) emptyPlace.textContent = add.textContent;
+  if (emptyPlace) emptyPlace.textContent = adding ? "Placing pins…" : "Place pins";
   // Size the pane to the map so it has no empty bands (see .pn-pane in admin.css).
   (el.pane as HTMLElement).style.setProperty("--pn-aspect", String(aspect()));
 }
@@ -775,10 +852,14 @@ function wirePane(): void {
     pts.delete(e.pointerId);
     if (down && !down.moved && adding && e.type === "pointerup") {
       const r = pane.getBoundingClientRect();
-      draft = blankPin(toLonLat(e.clientX - r.left, e.clientY - r.top));
-      adding = false;
-      select("new");
-      (el.form.querySelector("input[type=text]") as HTMLInputElement | null)?.focus();
+      const at = toLonLat(e.clientX - r.left, e.clientY - r.top);
+      // Place mode stays on: the next click drops the next pin (after asking about an unsaved one).
+      void leave().then((go) => {
+        if (!go) return;
+        draft = blankPin(at);
+        select("new");
+        (el.form.querySelector("input[type=text]") as HTMLInputElement | null)?.focus();
+      });
     }
     down = null;
   };
@@ -823,7 +904,7 @@ function build(): void {
   const root = $("#tab-pins");
   const slotSel = h("select", { ariaLabel: "Slot" });
   const searchBox = h("input", { type: "search", placeholder: "Search pins", autocomplete: "off", ariaLabel: "Search pins" });
-  const add = h("button", { type: "button", textContent: "Place a pin" });
+  const add = h("button", { type: "button", textContent: "Place pins", title: "Place pins: click the map to drop a pin; stays on until you press Done or Esc", ariaPressed: "false" });
   const embed = h("button", { type: "button", className: "ghost", textContent: "Embed code…" });
   const addMap = h("button", { type: "button", className: "ghost", textContent: "+ Pin map", dataset: { action: "new-pinmap" } });
   const addFolder = h("button", { type: "button", className: "ghost", textContent: "+ Folder", dataset: { action: "new-pinfolder" } });
@@ -833,11 +914,25 @@ function build(): void {
   const zoomIn = h("button", { type: "button", className: "ghost", textContent: "+", title: "Zoom in", ariaLabel: "Zoom in" });
   const zoomOut = h("button", { type: "button", className: "ghost", textContent: "−", title: "Zoom out", ariaLabel: "Zoom out" });
   const fitBtn = h("button", { type: "button", className: "ghost", textContent: "Fit", title: "Show the whole map" });
-  const pane = h("div", { className: "pn-pane", tabIndex: 0, role: "application", ariaLabel: "Map. Drag to move, scroll to zoom." }, canvas, layer, h("div", { className: "pn-zoom" }, zoomIn, zoomOut, fitBtn));
+  const labelsBtn = h("button", { type: "button", className: "ghost", textContent: "Labels", title: "Show each pin's name next to it", ariaPressed: "false", dataset: { action: "pin-labels" } });
+  const regionsBtn = h("button", { type: "button", className: "ghost", textContent: "Regions", title: "Show the outlines of this slot's regions behind the pins", ariaPressed: "false", dataset: { action: "pin-regions" } });
+  const placing = h("p", { className: "pn-placing small", hidden: true, role: "status", ariaLive: "polite" }, h("span", { textContent: "Placing pins: click the map to drop one. " }), h("button", { type: "button", className: "ghost tiny", textContent: "Done", dataset: { action: "place-done" } }));
+  const kindBar = h("div", { className: "pn-kindbar", role: "group", ariaLabel: "Show only these kinds" }, ...PIN_KINDS.map((k) => {
+    const b = h("button", { type: "button", className: "ghost tiny pn-kind", ariaPressed: "false", dataset: { kind: k.id }, title: `Show only ${k.label.toLowerCase()} pins` }, pinIcon(k.id, 14), h("span", { textContent: k.label }));
+    b.style.setProperty("--kind", k.color);
+    b.addEventListener("click", () => {
+      if (kindFilter.has(k.id)) kindFilter.delete(k.id);
+      else kindFilter.add(k.id);
+      b.setAttribute("aria-pressed", String(kindFilter.has(k.id)));
+      renderList();
+    });
+    return b;
+  }));
+  const pane = h("div", { className: "pn-pane", tabIndex: 0, role: "application", ariaLabel: "Map. Drag to move, scroll to zoom." }, canvas, layer, h("div", { className: "pn-zoom" }, labelsBtn, regionsBtn, zoomIn, zoomOut, fitBtn));
   const form = h("div", { className: "pn-formbox" });
   const list = h("div", { className: "pn-list" });
   const count = h("p", { className: "muted small" });
-  Object.assign(el, { slotSel, add, canvas, layer, pane, form, list, count });
+  Object.assign(el, { slotSel, add, canvas, layer, pane, form, list, count, placing });
   root.replaceChildren(
     h(
       "section",
@@ -845,11 +940,22 @@ function build(): void {
       h("h2", { textContent: "Map pins" }),
       h("p", { className: "muted", textContent: "Mark cities, ruins, battle sites and other places on a slot's map. Group pins into pin maps (“Holy sites”, “Battles”) and sort those into folders, like regions. An embed shows one pin map (?pins=holy-sites), or every pin (?pins=1), and a region can include pin maps so their pins show on its embed. A pin can link to its note in the vault." }),
       h("div", { className: "row pn-tools" }, h("label", {}, "Slot", slotSel), h("label", { className: "grow" }, "Search", searchBox), add, embed, addMap, addFolder),
+      placing,
       h("div", { className: "pn-body" }, pane, h("div", { className: "pn-side" }, form)),
-      h("div", { className: "pn-below" }, count, list),
+      h("div", { className: "pn-below" }, count, kindBar, list),
     ),
   );
   slotSel.addEventListener("change", () => {
+    if (slotSel.value !== slot && dirty()) {
+      const to = slotSel.value;
+      slotSel.value = slot;
+      void leave().then((go) => {
+        if (!go) return;
+        slotSel.value = to;
+        slotSel.dispatchEvent(new Event("change"));
+      });
+      return;
+    }
     slot = slotSel.value;
     selected = null;
     draft = null;
@@ -864,15 +970,40 @@ function build(): void {
     renderList();
   });
   add.addEventListener("click", () => {
-    adding = !adding;
-    if (adding) {
+    if (adding) return stopPlacing();
+    void leave().then((go) => {
+      if (!go) return;
+      adding = true;
       selected = null;
       draft = null;
       renderForm(true);
       renderList();
       pane.focus();
-    }
+      syncControls();
+      redraw();
+    });
+  });
+  const stopPlacing = () => {
+    adding = false;
     syncControls();
+    redraw();
+  };
+  placing.querySelector("button")!.addEventListener("click", stopPlacing);
+  // Esc anywhere in the tab ends place mode.
+  root.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && adding) {
+      e.stopPropagation();
+      stopPlacing();
+    }
+  });
+  labelsBtn.addEventListener("click", () => {
+    showLabels = !showLabels;
+    labelsBtn.setAttribute("aria-pressed", String(showLabels));
+    redraw();
+  });
+  regionsBtn.addEventListener("click", () => {
+    showRegions = !showRegions;
+    regionsBtn.setAttribute("aria-pressed", String(showRegions));
     redraw();
   });
   embed.addEventListener("click", () => embedDialog());

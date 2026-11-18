@@ -452,7 +452,7 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   check(A, "…and the map shows a marker for each", (await page.locator(".pn-marker").count()) === SEED.length);
 
   const n0 = mock.log.length;
-  await page.click("#tab-pins button:has-text('Place a pin')");
+  await page.click("#tab-pins button:has-text('Place pins')");
   const pane = await page.locator(".pn-pane").boundingBox();
   await page.mouse.click(pane.x + pane.width / 2, pane.y + pane.height / 2);
   await page.waitForSelector(".pn-form");
@@ -460,7 +460,7 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   await page.waitForFunction((n) => document.querySelectorAll(".pn-marker").length === n, SEED.length + 1, { timeout: 5000 }).catch(() => {});
   check(A, "clicking the map opens the new-pin form", (await page.locator(".pn-marker").count()) === SEED.length + 1);
   await page.fill('.pn-form input[aria-label="Name"]', "Test Harbour");
-  await page.selectOption(".pn-form select", "port");
+  await page.click('.pn-form [data-kind="port"]');
   await page.fill(".pn-form input[type=url]", "http://not-https.example/x");
   await page.click(".pn-form button[type=submit]");
   check(A, "a link that isn't https is refused", /https/.test((await page.textContent(".pn-form .error")) ?? "") && mock.log.length === n0);
@@ -481,6 +481,53 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   await page.waitForSelector('.pn-row:has-text("Test Harbour")');
   check(A, "the new pin is in the list", (await page.locator(".pn-row").count()) === SEED.length + 1);
 
+  // Place mode is sticky and remembers the last kind and pin map.
+  check(A, "place mode stays on after a pin is saved", await page.locator(".pn-placing").isVisible());
+  await page.mouse.click(pane.x + pane.width * 0.25, pane.y + pane.height * 0.25);
+  await page.waitForFunction(() => document.querySelector(".pn-form input[aria-label=Name]")?.value === "");
+  check(A, "the next pin starts with the last kind and pin map", (await page.locator('.pn-form [data-kind="port"]').getAttribute("aria-checked")) === "true" && (await page.inputValue('.pn-form select[aria-label="Pin map"]')) === "battles");
+  check(A, "kinds are a radiogroup", (await page.locator(".pn-form [role=radiogroup] [role=radio]").count()) === 10);
+  await page.fill('.pn-form input[aria-label="Name"]', "Unsaved one");
+  await page.locator(".pn-row", { hasText: "Old Ruin" }).click();
+  await page.waitForSelector("dialog.small-dlg.danger[open]");
+  check(A, "leaving an unsaved pin asks first", /Unsaved pin/.test((await page.textContent("dialog.small-dlg.danger[open]")) ?? ""));
+  await page.click("dialog.small-dlg.danger[open] button:has-text('Keep editing')");
+  check(A, "Keep editing leaves the form as it was", (await page.inputValue('.pn-form input[aria-label="Name"]')) === "Unsaved one");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(100);
+  check(A, "Esc ends place mode", !(await page.locator(".pn-placing").isVisible()));
+  await page.locator(".pn-row", { hasText: "Test Harbour" }).click();
+  await page.click("dialog.small-dlg.danger[open] button:has-text('Discard pin')");
+  await page.waitForFunction(() => document.querySelector(".pn-form input[aria-label=Name]")?.value === "Test Harbour");
+  check(A, "Discard pin drops the unsaved pin and opens the other", (await page.locator(".pn-marker").count()) === SEED.length + 1);
+  // Labels, region outlines and the kind filter.
+  await page.click('.pn-zoom button[data-action="pin-labels"]');
+  await page.waitForTimeout(200);
+  check(A, "Labels shows names next to the pins", (await page.locator(".pn-layer").getAttribute("data-labels")) === "true" && (await page.locator(".pn-marker .pn-label").first().isVisible()));
+  await page.click('.pn-zoom button[data-action="pin-regions"]');
+  check(A, "Regions is a pressed toggle", (await page.locator('.pn-zoom button[data-action="pin-regions"]').getAttribute("aria-pressed")) === "true");
+  await page.click('.pn-kindbar [data-kind="battle"]');
+  for (const [w, hgt] of [[1440, 900], [768, 900], [375, 800]])
+    for (const scheme of ["light", "dark"]) {
+      await page.setViewportSize({ width: w, height: hgt });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(OUT, `pins-tab-${w}-${scheme}.png`), fullPage: true });
+    }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.waitForTimeout(300);
+  const kinds = await page.locator(".pn-row .muted").allTextContents();
+  check(A, "the kind chips narrow the list", kinds.length > 0 && kinds.every((k) => k === "Battle"), JSON.stringify(kinds));
+  await page.click('.pn-kindbar [data-kind="battle"]');
+  await page.click('.pn-zoom button[data-action="pin-labels"]');
+  await page.click('.pn-zoom button[data-action="pin-regions"]');
+  // Arrow keys nudge the selected marker.
+  await page.locator(".pn-marker[aria-pressed=true]").focus();
+  for (let i = 0; i < 5; i++) await page.keyboard.press("ArrowRight");
+  const posAfter = await page.textContent(".pn-pos");
+  check(A, "arrow keys move the selected pin and the readout is plain", /° [NS], .*° [EW]/.test(posAfter ?? "") && !/frame/.test(posAfter ?? ""), posAfter);
+  await page.keyboard.press("Escape");
   // Move it by dragging its marker, then save.
   const marker = page.locator(".pn-marker[aria-pressed=true]");
   const [mx, my] = await centre(marker);
@@ -589,7 +636,7 @@ await step(A, "a contributor", async () => {
   check(A, "can open someone else's pin but not change it", (await page.locator('.pn-form input[aria-label="Name"]').isDisabled()) && (await page.locator(".pn-form button[type=submit]").count()) === 0 && (await page.locator(".pn-form button:has-text('Delete pin')").count()) === 0);
   await page.screenshot({ path: path.join(OUT, "admin-contributor.png") });
   const n0 = mock.log.length;
-  await page.click("#tab-pins button:has-text('Place a pin')");
+  await page.click("#tab-pins button:has-text('Place pins')");
   const pane = await page.locator(".pn-pane").boundingBox();
   await page.mouse.click(pane.x + pane.width / 3, pane.y + pane.height / 2);
   await page.waitForSelector('.pn-form input[aria-label="Name"]:not([disabled])');

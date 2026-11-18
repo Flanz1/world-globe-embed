@@ -10,7 +10,7 @@ import { GitHub, GitHubError, NotListed, type FileChange, type WorkflowRun } fro
 import { hasPendingSaves, initOptimistic, optimistic } from "./optimistic.ts";
 import { openPreview } from "./preview.ts";
 import { $, SITE, h } from "./dom.ts";
-import { initRegions, loadRegions, openRegionById, regionDisplayName, renderRegions, watchEditing } from "./regions.ts";
+import { initRegions, loadRegions, openRegionById, regionDisplayName, regionFeatures, renderRegions, watchEditing } from "./regions.ts";
 import { initPins, loadPins, renderPins } from "./pins.ts";
 import { initActivity, loadActivity } from "./activity.ts";
 import { PART_BYTES, prepareImage } from "./upload-image.ts";
@@ -640,7 +640,7 @@ if (framed) {
   initOptimistic({ setCheck: (c) => { saveCheck = c; renderChecks(lastRuns); }, setStatus, committed: afterCommit, reload: loadAll });
   initActivity({ gh: () => gh!, openRegion: openRegionById, regionName: regionDisplayName });
   initRegions({ gh: () => gh!, maps: () => maps, slots: () => slots, act, afterCommit });
-  initPins({ gh: () => gh!, maps: () => maps, slots: () => slots, act });
+  initPins({ gh: () => gh!, maps: () => maps, slots: () => slots, act, regions: regionFeatures });
   initUsers({ gh: () => gh!, act });
   wireTabs();
   $("#who").textContent = __REPO__;
