@@ -47,6 +47,7 @@ One line per source file: what it is for. The first comment in each file says mo
 | `src/shared/tiers.ts` | Which texture to load next. |
 | `src/shared/tiles.ts` | Tile levels above 8192: the map at 16384 (and 32768) px wide, cut into square tiles, so a zoomed-in view loads only the few tiles it shows instead of a whole texture of half a gigabyte or more. |
 | `src/shared/trash.ts` | The trash for deleted regions and map pins. |
+| `src/shared/warp.ts` | Warping regions and pins from one drawing of a world onto another: a thin-plate spline (or straight affine fit) from matched point pairs, with edges split only where the bend needs it. |
 | `src/shared/types.ts` | Shapes shared by the viewer, the build scripts and the admin page. |
 
 ## Admin page (`src/admin/`)
@@ -75,6 +76,7 @@ One line per source file: what it is for. The first comment in each file says mo
 | `src/admin/theme.ts` | The account's colour theme: an accent colour (a seed the whole palette is made from, src/shared/hct.ts) and light / dark / follow the system. |
 | `src/admin/trash.ts` | "Recently deleted": regions and map pins deleted in the last few days, with a Restore button. |
 | `src/admin/upload-image.ts` | Getting an upload ready in the browser. |
+| `src/admin/warp.ts` | "Warp regions…" (a slot's More… menu in Maps & slots): match points on the old and new map, preview, and move every region and pin of the slot onto the redrawn map in batched saves. |
 | `src/admin/users.ts` | The Users tab: who may use the admin page and what they may do (content/access.json), plus the people who signed in but aren't on the list yet. |
 
 ## Region editor (`src/admin/editor/`)

@@ -288,11 +288,11 @@ function card(e: RegionEntry): HTMLElement {
   );
 }
 
-type MenuItem = { text: string; onclick: () => void; why: string; hint: string; danger: boolean };
-const item = (text: string, onclick: () => void, why = "", hint = "", danger = false): MenuItem => ({ text, onclick, why, hint, danger });
+export type MenuItem = { text: string; onclick: () => void; why: string; hint: string; danger: boolean };
+export const item = (text: string, onclick: () => void, why = "", hint = "", danger = false): MenuItem => ({ text, onclick, why, hint, danger });
 
 /** The "More…" button at the end of a region card's row, with a menu of the less used actions (Delete last, red, behind a line). */
-function moreMenu(id: string, items: (MenuItem | null)[]): HTMLElement {
+export function moreMenu(id: string, items: (MenuItem | null)[]): HTMLElement {
   const list = items.filter((x): x is MenuItem => !!x);
   const menu = h("div", { className: "rmenu", role: "menu", ariaLabel: `More actions for ${id}`, dataset: { region: id } });
   menu.setAttribute("popover", "auto");
