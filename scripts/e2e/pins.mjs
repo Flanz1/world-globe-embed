@@ -1,4 +1,4 @@
-// e2e-suite: roots=VIEWER,src/viewer/pins.ts,src/admin/pins.ts,src/admin/preview-pins.ts cut=src/admin/session.ts,src/admin/github.ts,src/shared/access.ts,src/shared/categories.ts,src/admin/pinmaps.ts,src/shared/pinmaps.ts weight=2
+// e2e-suite: roots=VIEWER,src/viewer/pins.ts,src/admin/pins.ts,src/admin/editor/pin-tool.ts,src/admin/editor/pins-layer.ts,src/admin/preview-pins.ts cut=src/admin/session.ts,src/admin/github.ts,src/shared/access.ts,src/shared/categories.ts,src/admin/pinmaps.ts,src/shared/pinmaps.ts weight=2
 /**
  * Browser checks for map pins, in headless Chromium.
  *
@@ -146,7 +146,12 @@ for (const view of ["flat", "globe"]) {
     const harbour = page.locator('.wpin[data-name="Magenta Harbour"]');
     const label = page.locator(".rlabel:not([hidden])").first();
     const d = dist(await centre(harbour), await centre(label));
-    check(E, `${view}: the pin sits on the landmark it marks, with the region drawn there`, d < 14, `${d.toFixed(1)}px from the region's label`);
+    // The label is nudged clear of the pin (below, above or beside it), so it sits near the pin, not on it.
+    check(E, `${view}: the pin sits on the landmark it marks, with the region drawn there`, d < 70, `${d.toFixed(1)}px from the region's label`);
+    const pb = await harbour.boundingBox();
+    const lb = await label.boundingBox();
+    const overlap = !!pb && !!lb && pb.x < lb.x + lb.width && lb.x < pb.x + pb.width && pb.y < lb.y + lb.height && lb.y < pb.y + pb.height;
+    check(E, `${view}: the region's label doesn't cover the pin`, !overlap, JSON.stringify({ pb, lb }));
     await page.screenshot({ path: path.join(OUT, `embed-${view}-region.png`) });
 
     // A region that includes a pin map shows its pins by itself; ?pins= overrides, ?pins=0 turns them off.
@@ -377,13 +382,148 @@ await step(A, "the region editor can show the slot's pins over the map", async (
   await ctx.close();
 });
 
+await step(A, "the region editor's Pin tool places, moves, edits and deletes pins", async () => {
+  const { ctx, page, errors } = await adminPage("Flanz1");
+  await page.goto(`${SITE}/admin/#regions`);
+  await page.waitForSelector('[data-region="landmark-disc"] [data-action="edit"]', { timeout: 15000 });
+  await page.click('[data-region="landmark-disc"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
+  const tool = page.locator('dialog.editor [data-act="pin-tool"]');
+  check(A, "the toolbar has a Pin toggle, off at first", (await tool.getAttribute("aria-pressed")) === "false");
+  await tool.click();
+  check(A, "turning it on shows the pins and presses the toggle", (await tool.getAttribute("aria-pressed")) === "true");
+  const cv = await page.locator("dialog.editor canvas.ed-canvas").boundingBox();
+  const toScreen = (lon, lat) => page.evaluate(([a, b]) => document.querySelector("dialog.editor").wgeEditor.toScreen(a, b), [lon, lat]);
+  // Click an empty spot (the map's top-left corner area) to place a pin.
+  const n0 = mock.log.length;
+  await page.mouse.click(cv.x + 40, cv.y + 60);
+  const pop = page.locator("dialog.editor .ed-pin-pop");
+  await pop.waitFor({ state: "visible", timeout: 5000 });
+  check(A, "clicking the map opens the new-pin popover with Name focused", (await pop.locator("strong").textContent()) === "New pin" && (await page.evaluate(() => document.activeElement?.getAttribute("name"))) === "pin-name");
+  check(A, "while Pin is on, no drawing tool shows as pressed", (await page.locator('dialog.editor button.tool[aria-pressed="true"]').count()) === 0);
+  const pr = await pop.boundingBox();
+  check(A, "the popover is beside the new pin, not over it", pr.x > cv.x + 40 + 10 || pr.x + pr.width < cv.x + 40 - 10, JSON.stringify(pr));
+  await page.focus('dialog.editor [data-kind="city"]');
+  await page.keyboard.press("ArrowRight");
+  check(A, "arrow keys move through the kinds", (await pop.locator('[data-kind="town"]').getAttribute("aria-checked")) === "true" && (await page.evaluate(() => document.activeElement?.getAttribute("data-kind"))) === "town");
+  await pop.locator('[data-kind="city"]').click();
+  // Two fingers still pinch-zoom while the tool is on.
+  const v0 = await page.evaluate(() => document.querySelector("dialog.editor").wgeEditor.view());
+  const k0 = v0.k;
+  await page.evaluate(([x, y]) => {
+    const c = document.querySelector("dialog.editor canvas.ed-canvas");
+    const ev = (type, id, dx) => c.dispatchEvent(new PointerEvent(type, { pointerId: id, button: 0, clientX: x + dx, clientY: y, bubbles: true, cancelable: true, pointerType: "touch" }));
+    ev("pointerdown", 11, -40);
+    ev("pointerdown", 12, 40);
+    for (let i = 1; i <= 5; i++) {
+      ev("pointermove", 11, -40 - i * 10);
+      ev("pointermove", 12, 40 + i * 10);
+    }
+    ev("pointerup", 11, -90);
+    ev("pointerup", 12, 90);
+  }, [cv.x + 400, cv.y + 300]);
+  const k1 = await page.evaluate(() => document.querySelector("dialog.editor").wgeEditor.view().k);
+  await page.evaluate((v) => document.querySelector("dialog.editor").wgeEditor.setView(v.cx, v.cy, v.k), v0);
+  await page.waitForTimeout(200);
+  check(A, "a two-finger pinch zooms the map while Pin is on", k1 > k0 * 1.3, `${k0} -> ${k1}`);
+  check(A, "…and the pinch does not place a pin", (await pop.locator("strong").textContent()) === "New pin");
+  check(A, "the status line names the Pin mode", /^Pin · click the map/.test((await page.textContent("dialog.editor .ed-status")) ?? ""), await page.textContent("dialog.editor .ed-status"));
+  check(A, "kinds are a radiogroup of chips", (await pop.locator('[role=radiogroup] [role=radio]').count()) === 10);
+  await pop.locator('input[name="pin-name"]').fill("Editor Port");
+  for (const [w, hgt] of [[1440, 900], [768, 900], [375, 800]])
+    for (const scheme of ["light", "dark"]) {
+      await page.setViewportSize({ width: w, height: hgt });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(OUT, `editor-pin-tool-${w}-${scheme}.png`) });
+      if (w === 375 && scheme === "light") {
+        const sv = await pop.locator('[data-act="pin-save"]').boundingBox();
+        check(A, "at 375 the sheet's Save pin button is in view", !!sv && sv.y + sv.height <= 800 && sv.y >= 0, JSON.stringify(sv));
+      }
+    }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.waitForTimeout(300);
+  await pop.locator('[data-kind="port"]').click();
+  check(A, "choosing a kind checks its chip", (await pop.locator('[data-kind="port"]').getAttribute("aria-checked")) === "true" && (await pop.locator('[data-kind="city"]').getAttribute("aria-checked")) === "false");
+  await pop.locator('select[name="pin-map"]').selectOption("battles");
+  await pop.locator('input[name="pin-link"]').fill(NOTE);
+  await pop.locator('[data-act="pin-save"]').click();
+  await waitCommit(page, n0);
+  const c = mock.log.slice(n0);
+  check(A, "Save pin is one commit of just that pin (the region isn't saved)", c.length === 1 && c[0].changes.length === 1 && c[0].changes[0].path === "content/pins/editor-port.json", JSON.stringify(c.map((x) => x.changes.map((y) => y.path))));
+  const f = onBranch("content/pins/editor-port.json");
+  const p = f?.properties;
+  check(A, "the file has the popover's values", p?.name === "Editor Port" && p.kind === "port" && p.pinMap === "battles" && p.link === NOTE && p.slot === SLOT.slug && p.createdBy?.login === "Flanz1", JSON.stringify(p));
+  check(A, "the popover closes after saving", !(await pop.isVisible()));
+  // Place another: it starts with the last kind and pin map.
+  await page.mouse.click(cv.x + 90, cv.y + 60);
+  await pop.waitFor({ state: "visible" });
+  check(A, "the next pin starts with the last kind and pin map", (await pop.locator('[data-kind="port"]').getAttribute("aria-checked")) === "true" && (await pop.locator('select[name="pin-map"]').inputValue()) === "battles");
+  // Unsaved changes ask before they are lost.
+  await pop.locator('input[name="pin-name"]').fill("Half done");
+  await tool.click();
+  await page.waitForSelector("dialog.small-dlg.danger[open]");
+  check(A, "turning the tool off asks before dropping an unsaved pin", /Unsaved pin/.test((await page.textContent("dialog.small-dlg.danger[open]")) ?? ""));
+  await page.click("dialog.small-dlg.danger[open] button:has-text('Keep editing')");
+  check(A, "Keep editing leaves the popover as it was", (await pop.isVisible()) && (await pop.locator('input[name="pin-name"]').inputValue()) === "Half done");
+  // A new pin map from the popover.
+  const nm = mock.log.length;
+  await pop.locator('select[name="pin-map"]').selectOption({ label: "New pin map…" });
+  await page.fill('dialog[open] input[data-field="pinmap-name"]', "Fresh map");
+  await page.click('dialog[open] button[data-action="confirm-pinmap"]');
+  await waitCommit(page, nm);
+  await page.waitForFunction(() => /Fresh map/.test(document.querySelector('dialog.editor select[name="pin-map"]')?.selectedOptions[0]?.textContent ?? ""), null, { timeout: 5000 });
+  check(A, "New pin map… creates the map and picks it", !!(onBranch("content/pinmaps.json")?.maps ?? []).find((m) => m.name === "Fresh map"));
+  await pop.locator('[data-act="pin-save"]').click();
+  await waitCommit(page, nm + 1);
+  check(A, "…and the pin is saved into it", onBranch("content/pins/half-done.json")?.properties.pinMap === "fresh-map", JSON.stringify(onBranch("content/pins/half-done.json")?.properties));
+  // Click a pin to edit it, drag to move it.
+  const [px, py] = await toScreen(...onBranch("content/pins/editor-port.json").geometry.coordinates);
+  await page.mouse.click(cv.x + px, cv.y + py);
+  await pop.waitFor({ state: "visible" });
+  check(A, "clicking a pin opens it for editing", (await pop.locator('input[name="pin-name"]').inputValue()) === "Editor Port" && (await pop.locator("strong").textContent()) === "Pin");
+  const n1 = mock.log.length;
+  await page.mouse.move(cv.x + px, cv.y + py);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) await page.mouse.move(cv.x + px + (40 * i) / 6, cv.y + py + (20 * i) / 6);
+  await page.mouse.up();
+  check(A, "dragging a pin moves it without saving yet", mock.log.length === n1);
+  await pop.locator('[data-act="pin-save"]').click();
+  await waitCommit(page, n1);
+  const g = onBranch("content/pins/editor-port.json");
+  check(A, "Save pin writes the new position and keeps who placed it", g.geometry.coordinates[0] !== f.geometry.coordinates[0] && g.properties.created === p.created, JSON.stringify(g.geometry));
+  // Delete.
+  const n2 = mock.log.length;
+  await page.mouse.click(cv.x + (await toScreen(...g.geometry.coordinates))[0], cv.y + (await toScreen(...g.geometry.coordinates))[1]);
+  await pop.waitFor({ state: "visible" });
+  await pop.locator('[data-act="pin-delete"]').click();
+  await page.click("dialog.small-dlg.danger[open] button:has-text('Delete pin')");
+  await waitCommit(page, n2);
+  check(A, "Delete pin removes the file in one commit", !onBranch("content/pins/editor-port.json") && mock.log.length === n2 + 1);
+  // Tidy up: the second pin goes too.
+  const [hx, hy] = await toScreen(...onBranch("content/pins/half-done.json").geometry.coordinates);
+  await page.mouse.click(cv.x + hx, cv.y + hy);
+  await pop.waitFor({ state: "visible" });
+  const n3 = mock.log.length;
+  await pop.locator('[data-act="pin-delete"]').click();
+  await page.click("dialog.small-dlg.danger[open] button:has-text('Delete pin')");
+  await waitCommit(page, n3);
+  // Escape leaves the tool.
+  await page.keyboard.press("Escape");
+  check(A, "Escape turns the tool off", (await tool.getAttribute("aria-pressed")) === "false");
+  await page.screenshot({ path: path.join(OUT, "editor-pin-tool.png") });
+  check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+});
+
 await step(A, "owner places, moves and deletes a pin", async () => {
   const { ctx, page, errors } = await adminPage("Flanz1");
   check(A, "the list shows the slot's saved pins", (await page.locator(".pn-row").count()) === SEED.length, String(await page.locator(".pn-row").count()));
   check(A, "…and the map shows a marker for each", (await page.locator(".pn-marker").count()) === SEED.length);
 
   const n0 = mock.log.length;
-  await page.click("#tab-pins button:has-text('Place a pin')");
+  await page.click("#tab-pins button:has-text('Place pins')");
   const pane = await page.locator(".pn-pane").boundingBox();
   await page.mouse.click(pane.x + pane.width / 2, pane.y + pane.height / 2);
   await page.waitForSelector(".pn-form");
@@ -391,7 +531,7 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   await page.waitForFunction((n) => document.querySelectorAll(".pn-marker").length === n, SEED.length + 1, { timeout: 5000 }).catch(() => {});
   check(A, "clicking the map opens the new-pin form", (await page.locator(".pn-marker").count()) === SEED.length + 1);
   await page.fill('.pn-form input[aria-label="Name"]', "Test Harbour");
-  await page.selectOption(".pn-form select", "port");
+  await page.click('.pn-form [data-kind="port"]');
   await page.fill(".pn-form input[type=url]", "http://not-https.example/x");
   await page.click(".pn-form button[type=submit]");
   check(A, "a link that isn't https is refused", /https/.test((await page.textContent(".pn-form .error")) ?? "") && mock.log.length === n0);
@@ -412,6 +552,74 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   await page.waitForSelector('.pn-row:has-text("Test Harbour")');
   check(A, "the new pin is in the list", (await page.locator(".pn-row").count()) === SEED.length + 1);
 
+  // Place mode is sticky and remembers the last kind and pin map.
+  check(A, "place mode stays on after a pin is saved", await page.locator(".pn-placing").isVisible());
+  await page.mouse.click(pane.x + pane.width * 0.25, pane.y + pane.height * 0.25);
+  await page.waitForFunction(() => document.querySelector(".pn-form input[aria-label=Name]")?.value === "");
+  check(A, "the next pin starts with the last kind and pin map", (await page.locator('.pn-form [data-kind="port"]').getAttribute("aria-checked")) === "true" && (await page.inputValue('.pn-form select[aria-label="Pin map"]')) === "battles");
+  check(A, "kinds are a radiogroup", (await page.locator(".pn-form [role=radiogroup] [role=radio]").count()) === 10);
+  await page.fill('.pn-form input[aria-label="Name"]', "Unsaved one");
+  await page.locator(".pn-row", { hasText: "Old Ruin" }).click();
+  await page.waitForSelector("dialog.small-dlg.danger[open]");
+  check(A, "leaving an unsaved pin asks first", /Unsaved pin/.test((await page.textContent("dialog.small-dlg.danger[open]")) ?? ""));
+  await page.click("dialog.small-dlg.danger[open] button:has-text('Keep editing')");
+  check(A, "Keep editing leaves the form as it was", (await page.inputValue('.pn-form input[aria-label="Name"]')) === "Unsaved one");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(100);
+  check(A, "Esc ends place mode", !(await page.locator(".pn-placing").isVisible()));
+  await page.locator(".pn-row", { hasText: "Test Harbour" }).click();
+  await page.click("dialog.small-dlg.danger[open] button:has-text('Discard pin')");
+  await page.waitForFunction(() => document.querySelector(".pn-form input[aria-label=Name]")?.value === "Test Harbour");
+  check(A, "Discard pin drops the unsaved pin and opens the other", (await page.locator(".pn-marker").count()) === SEED.length + 1);
+  // Labels, region outlines and the kind filter.
+  await page.click('.pn-zoom button[data-action="pin-labels"]');
+  await page.waitForTimeout(200);
+  check(A, "Labels shows names next to the pins", (await page.locator(".pn-layer").getAttribute("data-labels")) === "true" && (await page.locator(".pn-marker .pn-label").first().isVisible()));
+  await page.click('.pn-zoom button[data-action="pin-regions"]');
+  check(A, "Regions is a pressed toggle", (await page.locator('.pn-zoom button[data-action="pin-regions"]').getAttribute("aria-pressed")) === "true");
+  await page.click('.pn-kindbar [data-kind="battle"]');
+  for (const [w, hgt] of [[1440, 900], [768, 900], [375, 800]])
+    for (const scheme of ["light", "dark"]) {
+      await page.setViewportSize({ width: w, height: hgt });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(300);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: path.join(OUT, `pins-tab-${w}-${scheme}.png`), fullPage: true });
+      if (w !== 768) {
+        const bar = page.locator("#tab-pins .pn-tools");
+        const top = page.locator("#tab-pins .pn-actions button:has-text('Place pins')");
+        await top.click();
+        await page.waitForSelector(".pn-placing:not([hidden])");
+        const box = await page.locator("#tab-pins h2").boundingBox();
+        await page.screenshot({ path: path.join(OUT, `pins-placing-${w}-${scheme}.png`), clip: { x: 0, y: Math.max(0, box.y - 10), width: w, height: Math.min(520, hgt - box.y) } });
+        if (w === 375 && scheme === "light") {
+          const b = await bar.boundingBox();
+          check(A, "at 375 the header actions sit under the fields on a row of their own", b.width <= 375);
+          const more = page.locator('.pinmap[data-pinmap="battles"] .act-more button[data-action="more"]');
+          check(A, "at 375 a pin map row keeps Embed code… and moves the rest into More…", (await page.locator('.pinmap[data-pinmap="battles"] button[data-action="embed-map"]').isVisible()) && !(await page.locator('.pinmap[data-pinmap="battles"] button[data-action="rename-map"]').isVisible()) && (await more.isVisible()));
+          await more.click();
+          check(A, "…the menu has Move, Rename and Delete", (await page.locator('.rmenu:popover-open button').allTextContents()).join("|") === "Move…|Rename…|Delete…");
+          await page.keyboard.press("Escape");
+          check(A, "folder reorder buttons have names", (await page.locator('.rfolder button[data-action="up"]').first().getAttribute("aria-label")) !== null);
+        }
+        if (await page.locator("#tab-pins button[data-action=place-done]").isVisible()) await page.click("#tab-pins button[data-action=place-done]");
+      }
+    }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.waitForTimeout(300);
+  const kinds = await page.locator(".pn-row .muted").allTextContents();
+  check(A, "the kind chips narrow the list", kinds.length > 0 && kinds.every((k) => k === "Battle"), JSON.stringify(kinds));
+  await page.click('.pn-kindbar [data-kind="battle"]');
+  await page.click('.pn-zoom button[data-action="pin-labels"]');
+  await page.click('.pn-zoom button[data-action="pin-regions"]');
+  // Arrow keys nudge the selected marker.
+  await page.locator(".pn-row", { hasText: "Test Harbour" }).click();
+  await page.locator(".pn-marker[aria-pressed=true]").focus();
+  for (let i = 0; i < 5; i++) await page.keyboard.press("ArrowRight");
+  const posAfter = await page.textContent(".pn-pos");
+  check(A, "arrow keys move the selected pin and the readout is plain", /° [NS], .*° [EW]/.test(posAfter ?? "") && !/frame/.test(posAfter ?? ""), posAfter);
+  await page.keyboard.press("Escape");
   // Move it by dragging its marker, then save.
   const marker = page.locator(".pn-marker[aria-pressed=true]");
   const [mx, my] = await centre(marker);
@@ -520,7 +728,7 @@ await step(A, "a contributor", async () => {
   check(A, "can open someone else's pin but not change it", (await page.locator('.pn-form input[aria-label="Name"]').isDisabled()) && (await page.locator(".pn-form button[type=submit]").count()) === 0 && (await page.locator(".pn-form button:has-text('Delete pin')").count()) === 0);
   await page.screenshot({ path: path.join(OUT, "admin-contributor.png") });
   const n0 = mock.log.length;
-  await page.click("#tab-pins button:has-text('Place a pin')");
+  await page.click("#tab-pins button:has-text('Place pins')");
   const pane = await page.locator(".pn-pane").boundingBox();
   await page.mouse.click(pane.x + pane.width / 3, pane.y + pane.height / 2);
   await page.waitForSelector('.pn-form input[aria-label="Name"]:not([disabled])');

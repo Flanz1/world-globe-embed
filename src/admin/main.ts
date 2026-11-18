@@ -10,14 +10,18 @@ import { GitHub, GitHubError, NotListed, type FileChange, type WorkflowRun } fro
 import { hasPendingSaves, initOptimistic, optimistic } from "./optimistic.ts";
 import { openPreview } from "./preview.ts";
 import { $, SITE, h } from "./dom.ts";
-import { initRegions, loadRegions, openRegionById, regionDisplayName, renderRegions, watchEditing } from "./regions.ts";
+import { initRegions, item, loadRegions, openRegionById, regionDisplayName, regionFeatures, renderRegions, watchEditing } from "./regions.ts";
+import { moreMenu } from "./more-menu.ts";
+import { canWarp, openWarp } from "./warp.ts";
 import { initPins, loadPins, renderPins } from "./pins.ts";
+import { initHealth, renderHealth } from "./health.ts";
 import { initActivity, loadActivity } from "./activity.ts";
 import { PART_BYTES, prepareImage } from "./upload-image.ts";
 import { can, refusal, setMe } from "./session.ts";
 import { adopt, colourMenu, connectAccount, forgetTheme, initTheme, modeButton, parsePrefs } from "./theme.ts";
 import { needsRenewal, sessionRemembers } from "./session-token.ts";
 import { initUsers, loadUsers } from "./users.ts";
+import { initBackToTop } from "./back-to-top.ts";
 import { setChecks, type Check } from "./status.ts";
 import { initErrorBanner, initSnackbar, showError, showSnackbar } from "./snackbar.ts";
 
@@ -231,7 +235,15 @@ function renderSlots(): void {
           " ",
           h("a", { href: new URL(`v/${slug}/`, SITE).href, target: "_blank", rel: "noopener", textContent: "open" }),
           h("div", { className: "slot-map" }, select),
-          h("div", { className: "actions" }, save, preview, copy),
+          h(
+            "div",
+            { className: "actions" },
+            save,
+            preview,
+            copy,
+            // Opt-in: only from here, never prompted when a map changes.
+            canWarp() ? moreMenu(`More actions for ${slug}`, [item("Warp regions…", () => openWarp({ gh: () => gh!, maps: () => maps, afterCommit }, slug, slots.slots[slug] ?? slot), "", "Move this slot's regions and pins onto a redrawn map by matching points")], { data: { region: slug } }) : null,
+          ),
         ),
       );
     }),
@@ -303,6 +315,7 @@ async function loadAll(): Promise<void> {
   void loadActivity();
   await regionsDone;
   await pinsDone;
+  renderHealth();
 }
 
 async function slotsChange(mutate: (s: SlotsFile) => void): Promise<FileChange> {
@@ -483,10 +496,10 @@ function wireNewSlot(): void {
 
 /* ── Tabs (kept in the URL hash so a reload stays on the same tab) ── */
 
-const TABS = ["maps", "regions", "pins", "users"] as const;
+const TABS = ["maps", "regions", "pins", "health", "users"] as const;
 type Tab = (typeof TABS)[number];
 /** The tabs this person may open: Maps & slots and Users need their own permission. */
-const allowedTabs = (): Tab[] => TABS.filter((t) => t === "regions" || t === "pins" || (t === "maps" ? can("maps") : can("users")));
+const allowedTabs = (): Tab[] => TABS.filter((t) => t === "regions" || t === "pins" || t === "health" || (t === "maps" ? can("maps") : can("users")));
 
 function showTab(name: Tab): void {
   const allowed = allowedTabs();
@@ -497,14 +510,16 @@ function showTab(name: Tab): void {
     b.hidden = !allowed.includes(t);
     b.setAttribute("aria-selected", String(t === name));
     b.tabIndex = t === name ? 0 : -1;
+    if (t === name) b.scrollIntoView?.({ inline: "nearest", block: "nearest" });
   }
   if (name === "regions") renderRegions();
   watchEditing(name === "regions");
   if (name === "pins") renderPins();
+  if (name === "health") renderHealth();
   if (name === "users") void loadUsers();
 }
 
-const tabFromHash = (): Tab => (location.hash === "#regions" ? "regions" : location.hash === "#pins" ? "pins" : location.hash === "#users" ? "users" : "maps");
+const tabFromHash = (): Tab => (location.hash === "#regions" ? "regions" : location.hash === "#pins" ? "pins" : location.hash === "#health" ? "health" : location.hash === "#users" ? "users" : "maps");
 
 function wireTabs(): void {
   for (const t of TABS)
@@ -653,6 +668,7 @@ if (framed) {
   initTheme();
   initSnackbar();
   initErrorBanner();
+  initBackToTop();
   $("#theme-ctl").append(modeButton(), colourMenu());
   $("#forget").addEventListener("click", signOut);
   $("#waiting-out").addEventListener("click", signOut);
@@ -662,7 +678,8 @@ if (framed) {
   initOptimistic({ setCheck: (c) => { saveCheck = c; renderChecks(lastRuns); }, setStatus, committed: afterCommit, reload: loadAll });
   initActivity({ gh: () => gh!, openRegion: openRegionById, regionName: regionDisplayName });
   initRegions({ gh: () => gh!, maps: () => maps, slots: () => slots, act, afterCommit });
-  initPins({ gh: () => gh!, maps: () => maps, slots: () => slots, act });
+  initPins({ gh: () => gh!, maps: () => maps, slots: () => slots, act, regions: regionFeatures });
+  initHealth({ slots: () => slots, openRegion: openRegionById });
   initUsers({ gh: () => gh!, act });
   wireTabs();
   $("#who").textContent = __REPO__;

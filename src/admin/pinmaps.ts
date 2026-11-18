@@ -33,6 +33,7 @@ import { GitHubError, type GitHub } from "./github.ts";
 import { optimistic } from "./optimistic.ts";
 import { confirmBox, modal } from "./region-dialogs.ts";
 import { can, refusal } from "./session.ts";
+import { moreMenu } from "./more-menu.ts";
 
 export interface PinMapsDeps {
   gh: () => GitHub;
@@ -223,8 +224,8 @@ export interface TreeOptions {
   hasMatch: (m: PinMap | null) => boolean;
 }
 
-const small = (text: string, action: string, onclick: () => void, why = "", cls = "ghost") =>
-  h("button", { type: "button", className: cls, textContent: text, onclick, disabled: !!why, title: why, dataset: { action } });
+export const small = (text: string, action: string, onclick: () => void, why = "", cls = "ghost", aria = "") =>
+  h("button", { type: "button", className: cls, textContent: text, onclick, disabled: !!why, title: why, ariaLabel: aria || null, dataset: { action } });
 
 function folderEl(k: Category, o: TreeOptions, pos: { first: boolean; last: boolean }, kids: HTMLElement[], maps: PinMap[]): HTMLElement {
   const el = h("section", { className: "rfolder", dataset: { pinfolder: k.id } });
@@ -248,12 +249,20 @@ function folderEl(k: Category, o: TreeOptions, pos: { first: boolean; last: bool
       "div",
       { className: "actions" },
       small("+ Pin map", "new-map", () => newMap(o.slot, k.id), why),
-      small("+ Subfolder", "subfolder", () => newFolder(k.id), why),
-      small("↑", "up", () => void shift(k, -1), pos.first ? "Already first" : why),
-      small("↓", "down", () => void shift(k, 1), pos.last ? "Already last" : why),
-      small("Move", "move", () => moveFolder(k), why),
-      small("Rename", "rename", () => renameFolder(k), why),
-      small("Delete", "delete", () => void removeFolder(k), why, "ghost danger"),
+      small("+ Subfolder", "subfolder", () => newFolder(k.id), why, "ghost act-extra"),
+      small("↑", "up", () => void shift(k, -1), pos.first ? "Already first" : why, "ghost act-extra", `Move folder ${k.name} up`),
+      small("↓", "down", () => void shift(k, 1), pos.last ? "Already last" : why, "ghost act-extra", `Move folder ${k.name} down`),
+      small("Move", "move", () => moveFolder(k), why, "ghost act-extra"),
+      small("Rename", "rename", () => renameFolder(k), why, "ghost act-extra"),
+      small("Delete", "delete", () => void removeFolder(k), why, "ghost danger act-extra"),
+      moreMenu(`More actions for folder ${k.name}`, [
+        { text: "+ Subfolder", action: "menu-subfolder", onclick: () => newFolder(k.id), why },
+        { text: "Move up", action: "menu-up", onclick: () => void shift(k, -1), why: pos.first ? "Already first" : why },
+        { text: "Move down", action: "menu-down", onclick: () => void shift(k, 1), why: pos.last ? "Already last" : why },
+        { text: "Move…", action: "menu-move", onclick: () => moveFolder(k), why },
+        { text: "Rename…", action: "menu-rename", onclick: () => renameFolder(k), why },
+        { text: "Delete…", action: "menu-delete", onclick: () => void removeFolder(k), why, danger: true },
+      ], { wrap: "act-more" }),
     ),
   );
   body.hidden = !open;

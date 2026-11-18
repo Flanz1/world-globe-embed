@@ -66,6 +66,7 @@ jobs:
       contents: read
     outputs:
       pending: ${{ steps.pending.outputs.pending }}
+      site: ${{ steps.pages.outputs.base_url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -102,6 +103,7 @@ jobs:
         run: npm run check
 
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+        id: pages
         if: steps.pending.outputs.pending != 'true'
 
       - name: Build
@@ -112,6 +114,13 @@ jobs:
           # The admin API (worker/) the admin page signs in and saves through; see docs/admin-access.md.
           VITE_ADMIN_API: ${{ vars.ADMIN_API_URL }}
         run: npm run build
+
+      # The commit the site was built from; the deploy job reads the live copy to never publish an older one.
+      - name: Stamp the build
+        if: steps.pending.outputs.pending != 'true'
+        env:
+          SHA: ${{ needs.target.outputs.sha }}
+        run: echo "$SHA" > dist/version.txt
 
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         if: steps.pending.outputs.pending != 'true'
@@ -124,8 +133,10 @@ jobs:
     if: needs.build.outputs.pending != 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pages: write
       id-token: write
+    # One deploy at a time, so the check below always sees the site as the previous deploy left it.
     concurrency:
       group: pages
       cancel-in-progress: false
@@ -133,18 +144,26 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      # If main moved on while e2e ran, the newer run deploys (its e2e covers this commit's changes too),
-      # so an older commit never overwrites a newer site.
-      - name: Skip if a newer commit is on main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.target.outputs.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      # Publish every tested commit that is newer than the live site, even when main has moved on meanwhile
+      # (merges can outpace a full e2e run for hours). Skip only when the live site is this commit or a newer one.
+      - name: Skip unless newer than the live site
         id: latest
         env:
           SHA: ${{ needs.target.outputs.sha }}
-          REPO: ${{ github.repository }}
+          SITE: ${{ needs.build.outputs.site }}
         run: |
-          TIP=$(git ls-remote "https://github.com/$REPO.git" refs/heads/main | cut -f1)
-          if [ "$TIP" = "$SHA" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; else
+          LIVE=$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${SITE%/}/version.txt?nocache=$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" 2>/dev/null | tr -dc '0-9a-f' | head -c 40 || true)
+          echo "Live: ${LIVE:-unknown}; this run: $SHA"
+          if [ -n "$LIVE" ] && { [ "$LIVE" = "$SHA" ] || git merge-base --is-ancestor "$SHA" "$LIVE" 2>/dev/null; }; then
             echo "go=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Superseded::main is now at $TIP, and that run deploys instead of $SHA."
+            echo "::notice title=Already live::The site already has $LIVE, which includes $SHA."
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
           fi
       - id: deployment
         if: steps.latest.outputs.go == 'true'

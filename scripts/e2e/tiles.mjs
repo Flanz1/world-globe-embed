@@ -128,35 +128,59 @@ async function settle(page, requested) {
     last = now;
   }
 }
-async function open(query, { context = {}, shots = false } = {}) {
+let stage = "starting";
+// A bare TimeoutError says nothing: name the step and the first lines of Playwright's message (run.mjs prints lines with "Error").
+for (const ev of ["uncaughtException", "unhandledRejection"]) {
+  process.on(ev, (e) => {
+    console.log(`Error: tiles failed during: ${stage}\nError: ${String(e?.message ?? e).split("\n").slice(0, 4).join(" | ")}`);
+    process.exit(1);
+  });
+}
+async function open(query, { context = {}, shots = false, failFirst8192 = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2, ...context });
   const page = await ctx.newPage();
   const errors = [];
   const requested = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+  page.on("console", (m) => m.type() === "warning" && console.log(`[browser warning] ${m.text()}`));
   page.on("request", (r) => {
     const l = label(r.url());
     if (l) requested.push(l);
   });
+  // A transient failure of the 8192 download: the first request is cut, the viewer retries once.
+  if (failFirst8192) {
+    let cut = false;
+    await page.route(/-8192\.webp$/, (route) => (cut ? route.continue() : ((cut = true), route.abort())));
+  }
   // Hold the tiles back until the 8192 stage is captured.
   let release = () => {};
   if (shots) {
     const held = new Promise((r) => (release = r));
     await page.route(/-\d+-\d+-\d+\.webp$/, async (route) => (await held, route.continue()));
   }
+  stage = `${query}: loading the page`;
   await page.goto(`${SITE}/${query}`);
+  stage = `${query}: waiting for the first upgrade (tex 8192 or state hires)`;
   await page.waitForFunction(() => document.documentElement.dataset.tex === "8192" || document.documentElement.dataset.state === "hires", null, { timeout: 120000 });
   const view = query.includes("flat") ? "flat" : "globe";
   if (shots) {
+    stage = `${query}: waiting for tex 8192 (tiles held back)`;
+    // A texture that failed to load says so in data-tex-error: report that instead of waiting out the timeout.
+    await page.waitForFunction(() => document.documentElement.dataset.tex === "8192" || document.documentElement.dataset.texError === "8192", null, { timeout: 120000 });
+    const failed = await page.evaluate(() => document.documentElement.dataset.texError ?? "");
+    if (failed) console.log(`[${query}] the ${failed} texture failed to load once (a retry follows); tex now ${await page.evaluate(() => document.documentElement.dataset.tex)}`);
     await page.waitForFunction(() => document.documentElement.dataset.tex === "8192", null, { timeout: 120000 });
     await page.waitForTimeout(900);
+    stage = `${query}: screenshot at 8192`;
     await page.screenshot({ path: path.join(OUT, `${view}-8192.png`) });
     release();
   }
+  stage = `${query}: letting the tiles load (settle)`;
   await settle(page, requested);
   if (shots) {
     await page.waitForTimeout(600);
+    stage = `${query}: screenshot with tiles`;
     await page.screenshot({ path: path.join(OUT, `${view}-tiles.png`) });
   }
   const tilesShown = await page.evaluate(() => document.documentElement.dataset.tiles ?? "");
@@ -208,6 +232,15 @@ for (const view of ["globe", "flat"]) {
   await phone.ctx.close();
 }
 
+// A cut 8192 download is retried once, not given up on for good.
+for (const view of ["globe", "flat"]) {
+  const q = `v/tiles/?region=close-up&zoom=99${view === "flat" ? "&view=flat" : ""}`;
+  const e = await open(q, { failFirst8192: true });
+  const tex = await e.page.evaluate(() => document.documentElement.dataset.tex);
+  check(`${view}: a cut 8192 download is retried and shown`, tex === "8192", `data-tex=${tex}, requested ${whole(e.requested).join(" → ")}`);
+  await e.ctx.close();
+}
+
 // The admin region editor: zoomed far in, it goes 2048 → 4096 → 8192, then the tiles under the view.
 {
   const mock = new MockGitHub({ root: dir });
@@ -224,11 +257,15 @@ for (const view of ["globe", "flat"]) {
     const l = label(r.url());
     if (l) requested.push(l);
   });
+  stage = "admin editor: opening the region list";
   await page.goto(`${SITE}/admin/#regions`);
-  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  // The list can start with cards inside a collapsed folder (not "visible"), and the admin page is slow to answer while a software-GL browser is busy: 15 s timed out on CI even with 45 cards present.
+  await page.waitForSelector("#regions .rcard", { state: "attached", timeout: 90000 });
+  stage = "admin editor: opening a new region";
   await page.selectOption("#r-new-slot", "tiles");
   await page.locator(".r-new-row .r-new").click();
   await page.waitForSelector("dialog.editor[open]");
+  stage = "admin editor: zooming in until the finest tiles show";
   await page.waitForTimeout(1500);
   const shown = () => page.evaluate(() => document.querySelector("dialog.editor")?.dataset.tiles ?? "");
   await page.evaluate(([cx, cy]) => document.querySelector("dialog.editor").wgeEditor.setView(cx, cy, 36), [(w0 + e0) / 2, (s0 + n0) / 2]); // just past the 16384 threshold on a 1x screen

@@ -1,0 +1,75 @@
+name: Content health
+
+# Weekly content health check (scripts/content-health.ts): broken links between regions, pins, categories
+# and pin maps, and similar. The Markdown report goes to the job summary every run. Only when it finds a
+# real problem does it open an issue (or update the open one); when everything is fine again it closes it.
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+  # Changes to this workflow check themselves on their PR (report only, no issue).
+  pull_request:
+    paths: [".github/workflows/health.yml", "scripts/content-health.ts"]
+
+permissions: {}
+
+concurrency:
+  group: content-health
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      problems: ${{ steps.health.outputs.problems }}
+      report: ${{ steps.health.outputs.report }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The script writes the job summary itself; --fail makes its exit code say whether a "problem" was found.
+      - name: Check content
+        id: health
+        run: |
+          set +e
+          npx tsx scripts/content-health.ts --fail > "$RUNNER_TEMP/health.md" 2>&1 # content that fails to load also exits 1, with its errors in the report
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ] && [ "$code" -ne 1 ]; then cat "$RUNNER_TEMP/health.md"; exit "$code"; fi
+          echo "problems=$([ "$code" -eq 1 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "report=$(head -c 60000 "$RUNNER_TEMP/health.md" | base64 -w0)" >> "$GITHUB_OUTPUT"
+
+  # A separate job without npm, so third-party packages never run next to a token that can write issues.
+  issue:
+    needs: check
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open, update or close the health issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PROBLEMS: ${{ needs.check.outputs.problems }}
+          REPORT: ${{ needs.check.outputs.report }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          TITLE="Content health: problems found"
+          NUM=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number,title --jq ".[] | select(.title == \"$TITLE\") | .number" | head -n1)
+          if [ "$PROBLEMS" = true ]; then
+            { echo "$REPORT" | base64 -d; echo; echo "_From the weekly [content health run]($RUN_URL)._"; } > body.md
+            if [ -n "$NUM" ]; then gh issue edit "$NUM" --body-file body.md; echo "Updated #$NUM"
+            else gh issue create --title "$TITLE" --body-file body.md; fi
+          elif [ -n "$NUM" ]; then
+            gh issue close "$NUM" --comment "All clear in the latest [content health run]($RUN_URL)."
+          else
+            echo "No problems and no open issue."
+          fi
