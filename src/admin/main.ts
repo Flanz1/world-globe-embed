@@ -65,6 +65,15 @@ let gh: GitHub | null = null;
 let maps: MapMeta[] = [];
 let slots: SlotsFile = { slots: {} };
 
+/** An error about a field or form on the page: shown right next to it (not in the top banner). */
+function fieldError(sel: string, text: string | null): void {
+  const el = $(sel);
+  el.textContent = text ?? "";
+  el.classList.toggle("error", !!text);
+  el.classList.toggle("muted", !text && el.id === "upload-info");
+  el.hidden = !text && el.id !== "upload-info";
+}
+
 /**
  * The Status card keeps the latest line (saving…, results, errors). Successes also pop up as a snackbar so they are seen
  * wherever you are on the page; errors also show in the banner at the top. A new action clears the old error.
@@ -379,7 +388,8 @@ function wireUpload(): void {
     const id = idInput.value.trim();
     const slot = (form.elements.namedItem("slot") as HTMLSelectElement).value;
     if (!file) return;
-    if (!SLUG.test(id)) return setStatus("Map id: lowercase letters, digits and dashes only.", "error");
+    if (!SLUG.test(id)) return fieldError("#upload-info", "Map id: lowercase letters, digits and dashes only.");
+    fieldError("#upload-info", null);
     const replacing = maps.some((m) => m.id === id);
     if (replacing && !confirm(`A map called "${id}" already exists. Replace its image?`)) return;
     void act("Preparing image…", async () => {
@@ -449,8 +459,9 @@ function wireNewSlot(): void {
     const slug = String(data.get("slug")).trim();
     const title = String(data.get("title") ?? "").trim();
     const map = String(data.get("map"));
-    if (!SLUG.test(slug)) return setStatus("Slot name: lowercase letters, digits and dashes only.", "error");
-    if (slots.slots[slug]) return setStatus(`Slot "${slug}" already exists.`, "error");
+    if (!SLUG.test(slug)) return fieldError("#new-slot-error", "Slot name: lowercase letters, digits and dashes only.");
+    if (slots.slots[slug]) return fieldError("#new-slot-error", `Slot "${slug}" already exists.`);
+    fieldError("#new-slot-error", null);
     void act(`Adding slot ${slug}…`, async () => {
       const sha = await gh!.commit(`Add slot "${slug}" showing map "${map}"`, async () => [
         await slotsChange((s) => {
