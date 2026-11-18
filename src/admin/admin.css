@@ -154,6 +154,14 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .45); }
 .pv-controls .range { display: flex; gap: 8px; align-items: center; }
 .pv-controls .range input { flex: 1; min-width: 0; }
 .pv-controls output { width: 3.2em; text-align: right; color: var(--md-sys-color-on-surface); font-variant-numeric: tabular-nums; }
+.pv-travel { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.pv-travel legend { padding: 0; margin-bottom: 6px; }
+.pv-tr { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.pv-tr label.inline { flex: 1 1 auto; min-width: 0; }
+.pv-tr input[type=text] { flex: 1 1 0; min-width: 0; width: 100%; }
+.pv-km { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; color: var(--md-sys-color-on-surface-variant); }
+.pv-km input { width: 8ch; padding-inline: 6px; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.pv-travel:disabled { opacity: .6; }
 .pv-view { display: grid; gap: 6px; justify-items: start; }
 .pv-controls label.inline { display: flex; align-items: center; gap: 8px; }
 .small { font-size: 12px; margin: 0; }
