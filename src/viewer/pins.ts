@@ -50,21 +50,24 @@ const CSS = `
 .wcl-list button{all:unset;box-sizing:border-box;display:block;width:100%;padding:6px 8px;border-radius:5px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wcl-list button:hover{background:rgba(255,255,255,.15)}
 .wcl-list button:focus-visible{outline:2px solid #f3ead8;outline-offset:-2px}
-.wpl{border-radius:6px;background:rgba(20,18,14,.62);color:#f3ead8;font:12px/1.3 system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden;order:2}
+.wpl{border-radius:6px;background:rgba(20,18,14,.8);color:#f3ead8;font:12px/1.3 system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden;order:2}
 .wpl[hidden]{display:none}
 .wpl-head{all:unset;box-sizing:border-box;display:block;width:100%;padding:4px 8px;font-weight:600;cursor:pointer}
 .wpl-head::after{content:"▾";margin-left:6px;opacity:.7}.wpl-head[aria-expanded=false]::after{content:"▸"}
 .wpl-chips{display:flex;flex-direction:column;gap:3px;padding:0 6px 6px;overflow:auto;max-height:calc(6 * 31px)}
 .wpl-chips[hidden]{display:none}
-.wpl-chip{all:unset;box-sizing:border-box;position:relative;display:flex;align-items:center;gap:6px;min-height:28px;padding:0 8px;border-radius:14px;border:1px solid rgba(243,234,216,.4);background:rgba(243,234,216,.14);cursor:pointer;white-space:nowrap}
-.wpl-chip::before{content:"";position:absolute;inset:-8px 0}
-.wpl-chip i{flex:none;display:grid;place-items:center;width:18px;height:18px;border-radius:50%}
-.wpl-chip span{overflow:hidden;text-overflow:ellipsis}
-.wpl-chip[aria-pressed=false]{background:none;opacity:.6}
-.wpl-chip[aria-pressed=false] span{text-decoration:line-through}
-.wpl-chip[aria-pressed=true]::after{content:"✓";margin-left:auto;padding-left:6px}
-.wpl-chip:focus-visible,.wpl-head:focus-visible{outline:2px solid #f3ead8;outline-offset:1px}
-@media (pointer:coarse){.wpl-chips{max-height:none}.wpl-chip::before{inset:-8px 0}}
+.wpl-chip{all:unset;box-sizing:border-box;display:flex;align-items:center;min-height:28px;cursor:pointer}
+.wpl-pill{flex:1;min-width:0;display:flex;align-items:center;gap:6px;min-height:28px;padding:0 8px;border-radius:14px;border:1px solid rgba(243,234,216,.45);background:rgba(243,234,216,.16);white-space:nowrap}
+.wpl-pill i{flex:none;display:grid;place-items:center;width:18px;height:18px;border-radius:50%}
+.wpl-pill span{overflow:hidden;text-overflow:ellipsis}
+.wpl-pill .n{margin-left:auto;padding-left:8px;opacity:.75;text-decoration:none}
+.wpl-pill::after{content:"✓";flex:none;width:12px;text-align:center}
+.wpl-chip[aria-pressed=false] .wpl-pill{background:none;border-color:rgba(243,234,216,.3)}
+.wpl-chip[aria-pressed=false] .wpl-pill::after{content:""}
+.wpl-chip[aria-pressed=false] .wpl-pill span:not(.n){text-decoration:line-through;opacity:.8}
+.wpl-chip:focus-visible .wpl-pill,.wpl-head:focus-visible{outline:2px solid #f3ead8;outline-offset:1px}
+.wpl-head:focus-visible{outline-offset:-2px}
+@media (pointer:coarse){.wpl-chips{max-height:none;gap:0}.wpl-chip{min-height:44px}}
 `.replace(/\n/g, "");
 
 /** Fetches and draws this slot's pins if the page asked for them (?pins=…); null when it didn't or there is nothing to show. */
@@ -240,8 +243,14 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
       sw.style.color = inkFor(k.color);
       sw.append(pinIcon(k.id, 12));
       const label = document.createElement("span");
-      label.textContent = `${k.label} ${n}`;
-      chip.append(sw, label);
+      const count = document.createElement("span");
+      count.className = "n";
+      count.textContent = String(n);
+      label.textContent = k.label;
+      const pill = document.createElement("span");
+      pill.className = "wpl-pill";
+      pill.append(sw, label, count);
+      chip.append(pill);
       chip.addEventListener("click", () => {
         const now = !off.has(k.id);
         if (now) off.add(k.id);
