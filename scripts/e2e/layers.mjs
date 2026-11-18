@@ -390,10 +390,10 @@ if (want("identity")) {
         }
         const ra = await raw(sa);
         const rb = await raw(sb);
-        // Outlines now sit inside their part (so touching borders stay side by side) and the globe overlay is sharper,
+        // Outlines now sit inside their part (so touching borders stay side by side) and the globe overlay is sharper and its borders are the flat map's on-screen thickness,
         // so only the outline pixels may differ: fills, map and everything else must still match origin/main.
         const nDiff = diffCount(ra, rb, { x0: 0, y0: 0, x1: ra.info.width, y1: ra.info.height });
-        check(G, `${region} (${view}) differs from origin/main only along the outlines`, same || nDiff < 0.03 * ra.info.width * ra.info.height, `${nDiff} px differ`);
+        check(G, `${region} (${view}) differs from origin/main only along the outlines`, same || nDiff < 0.05 * ra.info.width * ra.info.height, `${nDiff} px differ`);
         await a.ctx.close();
         await b.ctx.close();
       });
