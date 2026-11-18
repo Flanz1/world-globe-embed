@@ -661,3 +661,16 @@ dialog.help-dlg { width: min(640px, calc(100vw - 32px)); }
 .ed-cm-pop textarea { width: 100%; resize: vertical; }
 .ed-cm-count { display: inline-block; min-width: 16px; height: 16px; margin-left: 6px; padding: 0 4px; border-radius: 8px; font-size: 11px; line-height: 16px; text-align: center; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
 .ed-cm-count[hidden] { display: none; }
+
+/* Narrower desktops: keep "Other regions" in view. Undo, Redo, Snap (and below 1400 px Pin) become icon-only; the label stays
+   as visually hidden text, so the buttons keep their names. */
+@media (max-width: 1600px) {
+  .ed-toolbar [data-act="undo"] .ed-lbl, .ed-toolbar [data-act="redo"] .ed-lbl, .ed-toolbar [data-act="snap"] .ed-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  dialog.editor .ed-toolbar [data-act="undo"], dialog.editor .ed-toolbar [data-act="redo"], dialog.editor .ed-toolbar [data-act="snap"] { position: relative; justify-content: center; min-width: 40px; padding: 0; }
+  .ed-toolbar [data-act="snap"][aria-pressed="true"]::before { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; margin: 0; }
+}
+@media (max-width: 1400px) {
+  .ed-toolbar [data-act="pin-tool"] .ed-lbl, .ed-toolbar [data-act="comment-tool"] .ed-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  dialog.editor .ed-toolbar [data-act="pin-tool"], dialog.editor .ed-toolbar [data-act="comment-tool"] { position: relative; justify-content: center; min-width: 40px; padding: 0; }
+  .ed-toolbar [data-act="pin-tool"][aria-pressed="true"]::before { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; margin: 0; }
+}

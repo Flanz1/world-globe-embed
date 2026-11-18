@@ -67,6 +67,7 @@ export function iconify<T extends HTMLButtonElement>(b: T, name: IconName, label
 
 /** Put an icon in front of a button that keeps its own content (a label and a live count): the caller updates the rest. */
 export function withIcon<T extends HTMLButtonElement>(b: T, name: IconName): T {
+  for (const n of [...b.childNodes]) if (n.nodeType === Node.TEXT_NODE && n.textContent?.trim()) n.replaceWith(Object.assign(document.createElement("span"), { className: "ed-lbl", textContent: n.textContent }));
   b.prepend(icon(name));
   b.dataset.icon = name;
   return b;
