@@ -2,7 +2,8 @@
  * Region embed UI shared by the globe and flat viewers: the view lock, the region label and the
  * "Region not found" note. Region strings are only ever set with textContent.
  */
-import { mergeRegions, type LegendEntry, type RegionData } from "../shared/region.ts";
+import type { Position } from "../shared/geo.ts";
+import { mergeRegions, type LabelPoint, type LegendEntry, type RegionData } from "../shared/region.ts";
 
 export interface Lock {
   readonly locked: boolean;
@@ -64,29 +65,63 @@ export function regionNote(text: string): void {
   document.body.append(p);
 }
 
+/** How a label fits its part on screen: text direction (radians counter-clockwise from east), and the room along and across it, in px. */
+export interface LabelFit {
+  angle: number;
+  len: number;
+  wid: number;
+}
+/** Label text size bounds, px: scaled to the part's size between these. */
+const LABEL_MIN = 11;
+const LABEL_MAX = 26;
+const LABEL_BASE = 12;
+
 /** An HTML label (textContent only) that is kept clear of the control buttons. */
-export function makeLabel(stage: HTMLElement): { setText(t: string): void; place(x: number, y: number, visible: boolean): void; el: HTMLDivElement } {
+export function makeLabel(stage: HTMLElement): { setText(t: string): void; place(x: number, y: number, visible: boolean, fit?: LabelFit): void; el: HTMLDivElement } {
   const el = document.createElement("div");
   el.className = "rlabel";
   el.hidden = true;
   el.setAttribute("aria-hidden", "true");
   stage.append(el);
   let text = "";
+  let natural: { w: number; h: number } | null = null;
+  let size = 0;
   return {
     el,
     setText(t: string) {
       text = t;
       el.textContent = t;
+      natural = null;
+      size = 0;
     },
-    place(x: number, y: number, visible: boolean) {
+    place(x: number, y: number, visible: boolean, fit?: LabelFit) {
       el.hidden = !visible || !text;
       if (el.hidden) return;
+      // Size: the largest text that fits the part (with a margin), kept between the bounds. Measured once at the base size.
+      let px = LABEL_BASE;
+      if (fit && fit.len > 0 && fit.wid > 0) {
+        if (!natural) {
+          el.style.fontSize = `${LABEL_BASE}px`;
+          size = LABEL_BASE;
+          natural = { w: el.offsetWidth, h: el.offsetHeight };
+        }
+        const k = Math.min((fit.len * 0.85) / Math.max(1, natural.w), (fit.wid * 0.7) / Math.max(1, natural.h));
+        px = Math.round(Math.min(LABEL_MAX, Math.max(LABEL_MIN, LABEL_BASE * k)));
+      }
+      if (px !== size) {
+        el.style.fontSize = `${px}px`;
+        size = px;
+      }
       const w = el.offsetWidth;
       const h = el.offsetHeight;
       const W = stage.clientWidth;
       const H = stage.clientHeight;
-      const left = Math.min(Math.max(4, x - w / 2), W - w - 4);
-      let top = Math.min(Math.max(4, y - h / 2), H - h - 4);
+      const a = fit?.angle ?? 0;
+      // Half the label's box once turned: what has to stay inside the stage.
+      const hw = (Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a))) / 2;
+      const hh = (Math.abs(w * Math.sin(a)) + Math.abs(h * Math.cos(a))) / 2;
+      const cx = Math.min(Math.max(4 + hw, x), Math.max(4 + hw, W - hw - 4));
+      let cy = Math.min(Math.max(4 + hh, y), Math.max(4 + hh, H - hh - 4));
       const ui = document.getElementById("ui");
       if (ui && !ui.hidden) {
         const r = ui.getBoundingClientRect();
@@ -94,12 +129,13 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
         const ux = r.left - s.left - 4;
         const uy = r.top - s.top - 4;
         // Overlapping the button cluster: move just above it.
-        if (left + w > ux && top + h > uy) top = uy - h;
+        if (cx + hw > ux && cy + hh > uy) cy = uy - hh;
       }
-      el.style.transform = `translate(${Math.round(left)}px,${Math.round(top)}px)`;
+      el.style.transform = `translate(${Math.round(cx - w / 2)}px,${Math.round(cy - h / 2)}px) rotate(${(-a).toFixed(4)}rad)`;
     },
   };
 }
+
 
 /**
  * The region's legend: a colour swatch and a label per entry, top left, folded and unfolded with its
@@ -189,8 +225,29 @@ export function makeLegend(stage: HTMLElement): {
   };
 }
 
+/**
+ * Where a label goes on screen and how it fits: `project` maps a map-image position to screen px. The text
+ * direction and the room along and across it come from projecting one degree along each axis, so this serves
+ * the flat map and the globe (where the axis bends with the view). Text that isn't tilted stays level.
+ */
+export function labelOnScreen(pt: LabelPoint, project: (p: Position) => { x: number; y: number }): { x: number; y: number; fit?: LabelFit } {
+  const p0 = project(pt.at);
+  if (!(pt.length > 0 && pt.width > 0)) return p0;
+  const c = Math.cos(pt.angle);
+  const s = Math.sin(pt.angle);
+  const pu = project([pt.at[0] + c, pt.at[1] + s]);
+  const pv = project([pt.at[0] - s, pt.at[1] + c]);
+  let angle = 0;
+  if (pt.tilted) {
+    angle = Math.atan2(-(pu.y - p0.y), pu.x - p0.x);
+    if (angle > Math.PI / 2) angle -= Math.PI;
+    else if (angle <= -Math.PI / 2) angle += Math.PI;
+  }
+  return { ...p0, fit: { angle, len: pt.length * Math.hypot(pu.x - p0.x, pu.y - p0.y), wid: pt.width * Math.hypot(pv.x - p0.x, pv.y - p0.y) } };
+}
+
 /** Several labels (one per labelled part), each placed like makeLabel's. */
-export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; place(i: number, x: number, y: number, visible: boolean): void } {
+export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; place(i: number, x: number, y: number, visible: boolean, fit?: LabelFit): void } {
   const pool: ReturnType<typeof makeLabel>[] = [];
   return {
     set(texts) {
@@ -200,8 +257,8 @@ export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; pl
         if (i >= texts.length) l.place(0, 0, false);
       });
     },
-    place(i, x, y, visible) {
-      pool[i]?.place(x, y, visible);
+    place(i, x, y, visible, fit) {
+      pool[i]?.place(x, y, visible, fit);
     },
   };
 }
