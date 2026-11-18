@@ -180,6 +180,15 @@ export class GitHub {
     this.root = api.replace(/\/+$/, "");
   }
 
+  /** Asks for a fresh "Keep me signed in" token (30 more days) and uses it from now on. Returns it so the page can store it. */
+  async refreshSession(): Promise<string> {
+    const r = await fetch(`${this.root}/session/refresh`, { method: "POST", headers: { Authorization: `Bearer ${this.token}` }, cache: "no-store" });
+    const body = (await r.json().catch(() => ({}))) as { session?: string };
+    if (!r.ok || typeof body.session !== "string") throw new Error(`Couldn't renew the session (${r.status})`);
+    this.token = body.session;
+    return body.session;
+  }
+
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     return (await this.send<T>(path, init)).data;
   }
