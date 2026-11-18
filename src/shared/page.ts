@@ -59,7 +59,7 @@ transition:opacity .4s ease}
 background-image:var(--lqip);background-size:var(--fw) var(--fh);background-position:var(--fx) var(--fy);background-repeat:repeat-x}
 #btn-lock[aria-pressed=true] .i-open,#btn-lock[aria-pressed=false] .i-shut,#btn-view[data-view=flat] .i-flat,#btn-view[data-view=globe] .i-globe{display:none}
 .rlabel{position:absolute;left:0;top:0;padding:2px 7px;border-radius:5px;background:rgba(20,18,14,.62);color:#f3ead8;font:600 12px/1.3 system-ui,sans-serif;white-space:nowrap;pointer-events:none;max-width:60vw;overflow:hidden;text-overflow:ellipsis}
-.rkey{position:absolute;left:8px;top:8px;max-width:min(60vw,240px);max-height:calc(100% - 52px);overflow:auto;border-radius:6px;background:rgba(20,18,14,.62);color:#f3ead8;font:12px/1.3 system-ui,sans-serif}
+.rstack{position:absolute;left:8px;top:8px;z-index:2;display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:min(60vw,240px);max-height:calc(100% - 52px);pointer-events:none}.rstack>*{pointer-events:auto;min-height:0;max-width:100%}.rkey{position:relative;overflow:auto;border-radius:6px;background:rgba(20,18,14,.62);color:#f3ead8;font:12px/1.3 system-ui,sans-serif}
 .rkey-head{all:unset;box-sizing:border-box;display:block;width:100%;padding:4px 8px;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rkey-head:focus-visible{outline:2px solid #c9a94e}
 .rkey-head::after{content:"▾";margin-left:6px;opacity:.7}.rkey-head[aria-expanded=false]::after{content:"▸"}

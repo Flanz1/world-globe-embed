@@ -2605,8 +2605,8 @@ return errors === 0;
 validate27.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 export const validateSlots = validate28;
-const schema39 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/slots.schema.json","title":"Globe embed slots","description":"Which map each embed (slot) shows, plus its view defaults.","type":"object","required":["slots"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"slots":{"type":"object","propertyNames":{"pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"additionalProperties":{"$ref":"#/$defs/slot"}}},"$defs":{"slot":{"type":"object","required":["map"],"additionalProperties":false,"properties":{"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id (file stem in content/maps/)."},"title":{"type":"string","maxLength":120},"view":{"enum":["globe","flat"],"description":"Which view the embed opens in (default globe). ?view= overrides it."},"grid":{"type":"boolean"},"rotate":{"type":"boolean"},"legend":{"type":"boolean"},"controls":{"type":"boolean"},"bg":{"type":"string","pattern":"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},"lat":{"type":"number","minimum":-90,"maximum":90},"lon":{"type":"number","minimum":-180,"maximum":180},"zoom":{"type":"number","minimum":0.4,"maximum":2.2},"north":{"type":"number","minimum":0,"maximum":49,"description":"Percent of the globe's height left unmapped at the north pole."},"south":{"type":"number","minimum":0,"maximum":49,"description":"Percent left unmapped at the south pole."},"pole":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$","description":"Fill colour for the padded polar areas."},"shift":{"type":"number","minimum":-180,"maximum":180,"description":"Prime meridian: moves the map east (+) or west (-) by this many degrees so its prime meridian lines up with the grid's."},"radius":{"type":"number","minimum":100,"maximum":1000000,"description":"The world's radius in km. When set, every embed of the slot gets a ruler (distance and area in real units)."}}}}};
-const schema40 = {"type":"object","required":["map"],"additionalProperties":false,"properties":{"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id (file stem in content/maps/)."},"title":{"type":"string","maxLength":120},"view":{"enum":["globe","flat"],"description":"Which view the embed opens in (default globe). ?view= overrides it."},"grid":{"type":"boolean"},"rotate":{"type":"boolean"},"legend":{"type":"boolean"},"controls":{"type":"boolean"},"bg":{"type":"string","pattern":"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},"lat":{"type":"number","minimum":-90,"maximum":90},"lon":{"type":"number","minimum":-180,"maximum":180},"zoom":{"type":"number","minimum":0.4,"maximum":2.2},"north":{"type":"number","minimum":0,"maximum":49,"description":"Percent of the globe's height left unmapped at the north pole."},"south":{"type":"number","minimum":0,"maximum":49,"description":"Percent left unmapped at the south pole."},"pole":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$","description":"Fill colour for the padded polar areas."},"shift":{"type":"number","minimum":-180,"maximum":180,"description":"Prime meridian: moves the map east (+) or west (-) by this many degrees so its prime meridian lines up with the grid's."},"radius":{"type":"number","minimum":100,"maximum":1000000,"description":"The world's radius in km. When set, every embed of the slot gets a ruler (distance and area in real units)."}}};
+const schema39 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/slots.schema.json","title":"Globe embed slots","description":"Which map each embed (slot) shows, plus its view defaults.","type":"object","required":["slots"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"slots":{"type":"object","propertyNames":{"pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"additionalProperties":{"$ref":"#/$defs/slot"}}},"$defs":{"slot":{"type":"object","required":["map"],"additionalProperties":false,"properties":{"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id (file stem in content/maps/)."},"title":{"type":"string","maxLength":120},"view":{"enum":["globe","flat"],"description":"Which view the embed opens in (default globe). ?view= overrides it."},"grid":{"type":"boolean"},"rotate":{"type":"boolean"},"legend":{"type":"boolean"},"controls":{"type":"boolean"},"bg":{"type":"string","pattern":"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},"lat":{"type":"number","minimum":-90,"maximum":90},"lon":{"type":"number","minimum":-180,"maximum":180},"zoom":{"type":"number","minimum":0.4,"maximum":2.2},"north":{"type":"number","minimum":0,"maximum":49,"description":"Percent of the globe's height left unmapped at the north pole."},"south":{"type":"number","minimum":0,"maximum":49,"description":"Percent left unmapped at the south pole."},"pole":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$","description":"Fill colour for the padded polar areas."},"shift":{"type":"number","minimum":-180,"maximum":180,"description":"Prime meridian: moves the map east (+) or west (-) by this many degrees so its prime meridian lines up with the grid's."},"radius":{"type":"number","minimum":100,"maximum":1000000,"description":"The world's radius in km. When set, every embed of the slot gets a ruler (distance and area in real units)."},"travel":{"type":"array","maxItems":6,"description":"Travel speeds for the ruler (needs a radius): readers pick one and see how long the measured distance takes.","items":{"type":"object","additionalProperties":false,"required":["label","kmPerDay"],"properties":{"label":{"type":"string","minLength":1,"maxLength":24},"kmPerDay":{"type":"number","minimum":0.1,"maximum":100000}}}}}}}};
+const schema40 = {"type":"object","required":["map"],"additionalProperties":false,"properties":{"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id (file stem in content/maps/)."},"title":{"type":"string","maxLength":120},"view":{"enum":["globe","flat"],"description":"Which view the embed opens in (default globe). ?view= overrides it."},"grid":{"type":"boolean"},"rotate":{"type":"boolean"},"legend":{"type":"boolean"},"controls":{"type":"boolean"},"bg":{"type":"string","pattern":"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},"lat":{"type":"number","minimum":-90,"maximum":90},"lon":{"type":"number","minimum":-180,"maximum":180},"zoom":{"type":"number","minimum":0.4,"maximum":2.2},"north":{"type":"number","minimum":0,"maximum":49,"description":"Percent of the globe's height left unmapped at the north pole."},"south":{"type":"number","minimum":0,"maximum":49,"description":"Percent left unmapped at the south pole."},"pole":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$","description":"Fill colour for the padded polar areas."},"shift":{"type":"number","minimum":-180,"maximum":180,"description":"Prime meridian: moves the map east (+) or west (-) by this many degrees so its prime meridian lines up with the grid's."},"radius":{"type":"number","minimum":100,"maximum":1000000,"description":"The world's radius in km. When set, every embed of the slot gets a ruler (distance and area in real units)."},"travel":{"type":"array","maxItems":6,"description":"Travel speeds for the ruler (needs a radius): readers pick one and see how long the measured distance takes.","items":{"type":"object","additionalProperties":false,"required":["label","kmPerDay"],"properties":{"label":{"type":"string","minLength":1,"maxLength":24},"kmPerDay":{"type":"number","minimum":0.1,"maximum":100000}}}}}};
 const pattern26 = new RegExp("^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$", "u");
 const pattern27 = new RegExp("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$", "u");
 
@@ -3038,6 +3038,119 @@ var valid4 = _errs41 === errors;
 }
 else {
 var valid4 = true;
+}
+if(valid4){
+if(data2.travel !== undefined){
+let data19 = data2.travel;
+const _errs43 = errors;
+if(errors === _errs43){
+if(Array.isArray(data19)){
+if(data19.length > 6){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/travel",schemaPath:"#/$defs/slot/properties/travel/maxItems",keyword:"maxItems",params:{limit: 6},message:"must NOT have more than 6 items"}];
+return false;
+}
+else {
+var valid5 = true;
+const len0 = data19.length;
+for(let i0=0; i0<len0; i0++){
+let data20 = data19[i0];
+const _errs45 = errors;
+if(errors === _errs45){
+if(data20 && typeof data20 == "object" && !Array.isArray(data20)){
+let missing2;
+if(((data20.label === undefined) && (missing2 = "label")) || ((data20.kmPerDay === undefined) && (missing2 = "kmPerDay"))){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/travel/" + i0,schemaPath:"#/$defs/slot/properties/travel/items/required",keyword:"required",params:{missingProperty: missing2},message:"must have required property '"+missing2+"'"}];
+return false;
+}
+else {
+const _errs47 = errors;
+for(const key4 in data20){
+if(!((key4 === "label") || (key4 === "kmPerDay"))){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/travel/" + i0,schemaPath:"#/$defs/slot/properties/travel/items/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key4},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs47 === errors){
+if(data20.label !== undefined){
+let data21 = data20.label;
+const _errs48 = errors;
+if(errors === _errs48){
+if(typeof data21 === "string"){
+if(func2(data21) > 24){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/travel/" + i0+"/label",schemaPath:"#/$defs/slot/properties/travel/items/properties/label/maxLength",keyword:"maxLength",params:{limit: 24},message:"must NOT have more than 24 characters"}];
+return false;
+}
+else {
+if(func2(data21) < 1){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/travel/" + i0+"/label",schemaPath:"#/$defs/slot/properties/travel/items/properties/label/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/travel/" + i0+"/label",schemaPath:"#/$defs/slot/properties/travel/items/properties/label/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid6 = _errs48 === errors;
+}
+else {
+var valid6 = true;
+}
+if(valid6){
+if(data20.kmPerDay !== undefined){
+let data22 = data20.kmPerDay;
+const _errs50 = errors;
+if(errors === _errs50){
+if((typeof data22 == "number") && (isFinite(data22))){
+if(data22 > 100000 || isNaN(data22)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/travel/" + i0+"/kmPerDay",schemaPath:"#/$defs/slot/properties/travel/items/properties/kmPerDay/maximum",keyword:"maximum",params:{comparison: "<=", limit: 100000},message:"must be <= 100000"}];
+return false;
+}
+else {
+if(data22 < 0.1 || isNaN(data22)){
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/travel/" + i0+"/kmPerDay",schemaPath:"#/$defs/slot/properties/travel/items/properties/kmPerDay/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0.1},message:"must be >= 0.1"}];
+return false;
+}
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/travel/" + i0+"/kmPerDay",schemaPath:"#/$defs/slot/properties/travel/items/properties/kmPerDay/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid6 = _errs50 === errors;
+}
+else {
+var valid6 = true;
+}
+}
+}
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/travel/" + i0,schemaPath:"#/$defs/slot/properties/travel/items/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+var valid5 = _errs45 === errors;
+if(!valid5){
+break;
+}
+}
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/travel",schemaPath:"#/$defs/slot/properties/travel/type",keyword:"type",params:{type: "array"},message:"must be array"}];
+return false;
+}
+}
+var valid4 = _errs43 === errors;
+}
+else {
+var valid4 = true;
+}
 }
 }
 }

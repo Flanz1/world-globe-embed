@@ -124,7 +124,10 @@ form.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-t
 #signin-form input { flex: 1 1 260px; }
 .slots { display: grid; gap: 10px; margin-bottom: 10px; }
 .slot { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: center; background: var(--md-sys-color-surface-container-high); border-radius: 12px; padding: 10px; }
-.slot .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+.slot .actions { display: flex; gap: 8px; flex-wrap: nowrap; align-items: center; margin-top: 6px; min-width: 0; overflow-x: auto; }
+.slot .actions > * { flex: 0 0 auto; white-space: nowrap; }
+.slot > div { min-width: 0; }
+.slot-map { margin-top: 6px; }
 .slot strong { font-size: 15px; }
 .thumb { width: 96px; aspect-ratio: 2; object-fit: cover; border-radius: 8px; background: var(--md-sys-color-outline-variant); display: block; }
 .maps { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
@@ -132,26 +135,45 @@ form.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-t
 .map div { font-size: 13px; }
 .runs { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 4px; font-size: 13px; }
 code { font-size: 12px; }
+details.size-tips { margin: 0 0 10px; }
+details.size-tips p { margin: 6px 0 0; }
 details summary { cursor: pointer; color: var(--md-sys-color-primary); font-weight: 500; }
-@media (max-width: 520px) { .slot { grid-template-columns: 1fr; } .thumb { width: 100%; } }
+@media (max-width: 520px) { .slot { grid-template-columns: minmax(0, 1fr); } .thumb { width: 100%; } }
 label.check { display: flex; align-items: center; gap: 6px; font-size: 14px; }
 label.check input { margin: 0; }
 
 dialog#preview { width: min(1000px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; border: 0; border-radius: 28px; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); box-shadow: var(--app-shadow); }
+/* Desktop: the dialog has a fixed height; the globe fills the left pane and the controls scroll on the right, Save stays at the bottom. */
+dialog#preview[open] { display: flex; flex-direction: column; height: min(760px, calc(100vh - 32px)); overflow: hidden; }
 dialog#preview::backdrop { background: rgba(0, 0, 0, .45); }
 .pv-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 12px 24px; margin: 0; }
 .pv-head h2 { margin: 0; font-size: 20px; font-weight: 600; }
-.pv-body { display: grid; grid-template-columns: minmax(0, 1fr) 290px; }
-#pv-frame { width: 100%; height: min(70vh, 560px); border: 0; background: var(--app-map-bg); display: block; }
-.pv-controls { display: grid; gap: 12px; align-content: start; padding: 4px 24px 16px 16px; }
+.pv-body { display: grid; grid-template-columns: minmax(0, 1fr) 290px; grid-template-rows: minmax(0, 1fr); flex: 1 1 auto; min-height: 0; }
+#pv-frame { width: 100%; height: 100%; border: 0; background: var(--app-map-bg); display: block; }
+.pv-controls { display: grid; gap: 12px; align-content: start; padding: 4px 24px 0 16px; overflow-y: auto; min-height: 0; }
 .pv-controls .range { display: flex; gap: 8px; align-items: center; }
 .pv-controls .range input { flex: 1; min-width: 0; }
 .pv-controls output { width: 3.2em; text-align: right; color: var(--md-sys-color-on-surface); font-variant-numeric: tabular-nums; }
+.pv-travel { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.pv-travel legend { padding: 0; margin-bottom: 6px; }
+.pv-tr { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.pv-tr label.inline { flex: 1 1 auto; min-width: 0; }
+.pv-tr input[type=text] { flex: 1 1 0; min-width: 0; width: 100%; }
+.pv-km { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; color: var(--md-sys-color-on-surface-variant); }
+.pv-km input { width: 8ch; padding-inline: 6px; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.pv-travel:disabled { opacity: .6; }
 .pv-view { display: grid; gap: 6px; justify-items: start; }
 .pv-controls label.inline { display: flex; align-items: center; gap: 8px; }
 .small { font-size: 12px; margin: 0; }
-.pv-foot { position: sticky; bottom: 0; display: grid; gap: 6px; justify-items: start; margin: 4px -24px -16px -16px; padding: 12px 24px 16px 16px; background: var(--md-sys-color-surface-container-high); border-top: 1px solid var(--md-sys-color-outline-variant); }
-@media (max-width: 720px) { .pv-body { grid-template-columns: 1fr; } #pv-frame { height: 50vh; } }
+.pv-foot { position: sticky; bottom: 0; display: grid; gap: 6px; justify-items: end; margin: 4px -24px 0 -16px; padding: 12px 24px 16px 16px; background: var(--md-sys-color-surface-container-high); border-top: 1px solid var(--md-sys-color-outline-variant); box-shadow: 0 -6px 8px -6px rgba(0, 0, 0, .18); }
+/* Phone: the globe is a fixed ~35% of the screen and the whole body scrolls under it, with Save pinned at the bottom. */
+@media (max-width: 720px) {
+  dialog#preview[open] { height: auto; max-height: calc(100vh - 32px); }
+  .pv-body { display: block; overflow-y: auto; }
+  #pv-frame { height: 35vh; min-height: 200px; }
+  .pv-controls { overflow: visible; padding: 8px 16px 0; }
+  .pv-foot { margin: 4px -16px 0; padding: 12px 16px 16px; }
+}
 .map button { margin: 6px 0 2px; }
 .pv-controls .range input[type=number] { flex: 0 0 6.5em; width: 6.5em; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
 
@@ -341,10 +363,52 @@ dialog.editor .ed-folder-head button { padding: 0 8px; }
 .ed-part-row select { min-width: 0; width: 100%; }
 .ed-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, .3); }
 .ed-badge { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font: 600 11px/1 system-ui, sans-serif; font-style: normal; box-sizing: border-box; background: rgba(20, 18, 14, .85); color: #fff; border: 2.5px solid; }
+/* Side panel (sheet.ts). Wide: collapsible sections in the panel beside the map; the wrappers vanish so the
+   sections flow as before. Phones and tablets: see the media query below (bottom sheet with tabs). */
+.ed-sheet-head, .ed-peek, .ed-side-body { display: contents; }
+.ed-handle, .ed-tabs { display: none; }
+.ed-sec[hidden], .ed-tab[hidden] { display: none !important; }
+.ed-sec { display: grid; gap: 10px; min-width: 0; }
+.ed-sec + .ed-sec { border-top: 1px solid var(--md-sys-color-outline-variant); padding-top: 6px; }
+.ed-sec-head { margin: 0; font-size: 14px; }
+.ed-sec-body { display: grid; gap: 10px; min-width: 0; }
+.ed-sec.collapsed > .ed-sec-body { display: none; }
+dialog.editor .ed-sec-toggle { width: 100%; justify-content: flex-start; padding: 0 10px 0 4px; }
+/* Inside a section the section title is the heading: no box or legend of its own for these fieldsets. */
+.ed-sec-body > fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.ed-sec-body > fieldset > legend { padding: 0; }
+.ed-sec-body > .ed-colours > legend, .ed-sec-body > .ed-under > legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ed-sec-body > .ed-overlaps > legend, .ed-sec-body > .ed-pinmaps > legend { margin-bottom: 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--md-sys-color-on-surface-variant); }
+.ed-sec.closed .rfolder-arrow { transform: rotate(-90deg); }
+.ed-thumb { display: contents; }
+.ed-thumb-hit { display: none; }
+.ed-sub { margin: 4px 0 -4px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--md-sys-color-on-surface-variant); }
 @media (max-width: 860px) {
-  .ed-body { grid-template-columns: 1fr; grid-template-rows: minmax(260px, 55vh) auto; overflow: auto; }
-  .ed-side { border-left: 0; border-top: 1px solid var(--md-sys-color-outline-variant); }
+  .ed-body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) var(--ed-sheet, 112px); overflow: hidden; }
+  /* The bottom sheet: non-modal, no scrim, a hairline instead of a shadow. Heights: peek / half / full. */
+  .ed-side { display: flex; flex-direction: column; gap: 0; padding: 0; min-height: 0; overflow: hidden; border: 0; border-top: 1px solid var(--md-sys-color-outline-variant); border-radius: 28px 28px 0 0; background: var(--md-sys-color-surface-container-high); }
+  .ed-sheet-head { display: block; flex: none; touch-action: none; }
+  .ed-handle { display: grid; place-items: center; position: relative; width: 100%; min-height: 0; height: 24px; padding: 0; border: 0; border-radius: 28px 28px 0 0; background: transparent; }
+  .ed-handle::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 48px; transform: translateY(-50%); }
+  .ed-handle-bar { width: 32px; height: 4px; border-radius: 2px; background: var(--md-sys-color-on-surface-variant); }
+  .ed-handle:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: -4px; }
+  .ed-peek { display: flex; gap: 10px; align-items: center; padding: 0 12px 8px; }
+  .ed-tabs { display: flex; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; touch-action: pan-x; }
+  .ed-tabs > * { flex: 0 0 auto; white-space: nowrap; }
+  dialog.editor .ed-tab { padding: 0 14px; background-color: transparent; color: var(--md-sys-color-on-surface-variant); border-color: transparent; }
+  dialog.editor .ed-tab[aria-selected="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); font-weight: 600; }
+  /* The minimap: the globe cropped (the embed's own corner buttons are cut off), tap it to open or close the panel. */
+  .ed-thumb { display: block; position: relative; flex: none; width: 84px; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 12px; background: var(--app-map-bg); }
+  .ed-thumb .ed-globe { position: absolute; left: -19px; top: -14px; width: 320px; height: 240px; max-height: none; aspect-ratio: auto; transform: scale(.38); transform-origin: 0 0; pointer-events: none; border-radius: 0; }
+  .ed-thumb-hit { display: block; position: absolute; inset: 0; width: 100%; min-height: 0; padding: 0; border: 0; border-radius: 12px; background: transparent; }
+  .ed-side-body { display: grid; gap: 10px; align-content: start; flex: 1; min-height: 0; overflow: auto; padding: 4px 12px calc(12px + env(safe-area-inset-bottom)); }
+  .ed-sec, .ed-sec + .ed-sec { display: none; border-top: 0; padding-top: 0; }
+  .ed-sec.active { display: grid; }
+  .ed-sec-head { display: none; }
+  .ed-sec.collapsed > .ed-sec-body { display: grid; }
+  .ed-side-body > .ed-msg:empty { display: none; }
 }
+@supports (height: 100dvh) { dialog.editor { height: calc(100dvh - 16px); } }
 
 #upload-progress { width: 100%; height: 10px; margin-top: 10px; accent-color: currentColor; }
 
@@ -362,7 +426,10 @@ dialog.editor .ed-folder-head button { padding: 0 8px; }
 
 /* Editor: "Other regions" tool (button at the toolbar's right end, panel at the top right of the map) */
 .ed-toolbar-end { margin-left: auto; display: flex; }
-.ed-ov-panel { position: absolute; right: 8px; top: 8px; z-index: 3; display: grid; gap: 6px; width: min(340px, calc(100% - 16px)); max-height: min(70vh, 520px); grid-template-rows: auto auto auto auto auto minmax(0, 1fr); padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); border: 0; box-shadow: var(--app-shadow); }
+.ed-ov-panel { position: absolute; right: 8px; top: 8px; z-index: 3; display: grid; gap: 6px; width: min(340px, calc(100% - 16px)); max-height: min(70vh, 520px); grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); border: 0; box-shadow: var(--app-shadow); }
+.ed-ov-layers { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid var(--md-sys-color-outline-variant); }
+.ed-pin-tip { position: absolute; z-index: 4; pointer-events: none; padding: 4px 8px; border-radius: 8px; font-size: 12px; white-space: nowrap; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); border: 1px solid var(--md-sys-color-outline-variant); box-shadow: var(--app-shadow); }
+.ed-pin-tip[hidden] { display: none; }
 .ed-ov-panel[hidden] { display: none; }
 .ed-layer-bar { position: absolute; right: 8px; top: 8px; z-index: 3; display: flex; align-items: center; gap: 6px; padding: 6px 8px 6px 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); border: 0; box-shadow: var(--app-shadow); }
 .ed-layer-bar[hidden] { display: none; }
@@ -537,3 +604,21 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
 .hl-row .link { overflow-wrap: anywhere; }
 .hl-row[data-severity="problem"] > .small:first-child { color: var(--md-sys-color-error); }
 .hl-row[data-severity="notice"] > .small:first-child { color: var(--app-warn); }
+
+/* Touch: keep the 28-32 px look, but give every small button a 44 px hit area (an invisible ::after centred on the
+   button). The editor toolbar buttons get 40 px for real. Fine pointers (mouse) are untouched. */
+@media (pointer: coarse) {
+  .slot .actions button, .map button, .rcard .actions button, .rfolder-head .actions button, .pinmap-head .actions button,
+  .urow button, .sug-row button, .pn-zoom button, dialog.editor button, button.tiny, .rcard .rpin-btn, .theme-seg button,
+  .ed-pinfolder-toggle, .ed-folder-head button { position: relative; }
+  .slot .actions button::after, .map button::after, .rcard .actions button::after, .rfolder-head .actions button::after,
+  .pinmap-head .actions button::after, .urow button::after, .sug-row button::after, .pn-zoom button::after,
+  dialog.editor button::after, button.tiny::after, .rcard .rpin-btn::after, .theme-seg button::after,
+  .ed-pinfolder-toggle::after, .ed-folder-head button::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+  dialog.editor .ed-toolbar button { min-height: 40px; }
+  dialog.editor .ed-toolbar button::after { height: 44px; }
+  .ed-toolbar { padding-bottom: 6px; }
+}

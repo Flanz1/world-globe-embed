@@ -17,6 +17,7 @@ import { initActivity, loadActivity } from "./activity.ts";
 import { PART_BYTES, prepareImage } from "./upload-image.ts";
 import { can, refusal, setMe } from "./session.ts";
 import { adopt, colourMenu, connectAccount, forgetTheme, initTheme, modeButton, parsePrefs } from "./theme.ts";
+import { needsRenewal, sessionRemembers } from "./session-token.ts";
 import { initUsers, loadUsers } from "./users.ts";
 import { setChecks, type Check } from "./status.ts";
 
@@ -28,9 +29,10 @@ const SESSION_KEY = "wge-admin-session";
 const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 /*
- * Every GitHub Pages project site of an account shares one origin (<user>.github.io), so anything
- * stored here is readable by script on any of the owner's other Pages sites. The session therefore
- * lives in sessionStorage (this tab only, gone when it closes), and it expires after 12 hours anyway.
+ * The session is a signed token. Without "Keep me signed in" it lives in sessionStorage (this tab only, 12 hours).
+ * With it, it lives in localStorage for 30 days and is renewed whenever the page opens or has been open for a while
+ * (see keepFresh), so people who keep coming back are never signed out. The site has its own origin
+ * (editor.garmeley.com) and a content security policy, so nothing else reads that storage.
  */
 const tryStorage = <T>(fn: () => T, fallback: T): T => {
   try {
@@ -40,14 +42,20 @@ const tryStorage = <T>(fn: () => T, fallback: T): T => {
   }
 };
 const store = {
-  get: () => tryStorage(() => sessionStorage.getItem(SESSION_KEY), null),
-  set: (t: string) => tryStorage(() => sessionStorage.setItem(SESSION_KEY, t), undefined),
+  get: () => tryStorage(() => localStorage.getItem(SESSION_KEY), null) ?? tryStorage(() => sessionStorage.getItem(SESSION_KEY), null),
+  /** Saves the session where it belongs: for good (30 days) when it was asked to be remembered, else for this tab. */
+  set: (t: string, remember: boolean) => {
+    tryStorage(() => (remember ? localStorage : sessionStorage).setItem(SESSION_KEY, t), undefined);
+    tryStorage(() => (remember ? sessionStorage : localStorage).removeItem(SESSION_KEY), undefined);
+  },
   clear: () => {
     tryStorage(() => sessionStorage.removeItem(SESSION_KEY), undefined);
+    tryStorage(() => localStorage.removeItem(SESSION_KEY), undefined);
     // Tokens from before the admin API (personal access tokens) are dropped too.
     tryStorage(() => localStorage.removeItem("wge-admin-token"), undefined);
     tryStorage(() => sessionStorage.removeItem("wge-admin-token"), undefined);
   },
+  remembered: () => tryStorage(() => localStorage.getItem(SESSION_KEY), null) !== null,
 };
 
 /** The page acts for the signed-in person, so it must never run inside someone else's frame (clickjacking). */
@@ -113,7 +121,7 @@ function renderSlots(): void {
       const select = h("select", { className: "map-select", ariaLabel: `Map for ${slug}` });
       mapOptions(select, slot.map);
       let img = thumb(current);
-      const save = h("button", { type: "button", textContent: "Switch map", disabled: true });
+      const save = h("button", { type: "button", textContent: "Switch map", disabled: true, title: "Pick a different map first" });
       const copy = h("button", { type: "button", className: "ghost", textContent: "Copy embed code" });
       const preview = h("button", { type: "button", className: "ghost", textContent: "Preview" });
       preview.addEventListener("click", () =>
@@ -130,10 +138,11 @@ function renderSlots(): void {
               patch.south === (slot.south ?? 0) &&
               patch.pole.toLowerCase() === (slot.pole ?? "#e8dcc8").toLowerCase() &&
               patch.shift === (slot.shift ?? 0) &&
-              patch.radius === (slot.radius ?? 0);
+              patch.radius === (slot.radius ?? 0) &&
+              JSON.stringify(patch.travel) === JSON.stringify(slot.travel ?? []);
             if (unchanged) return setStatus("Nothing changed.");
             void act(`Saving ${slug}…`, () =>
-              gh!.commit(`Update slot "${slug}": map "${patch.map}", ${patch.view} view, padding N ${patch.north}% / S ${patch.south}%, prime meridian ${patch.shift}°, world radius ${patch.radius ? `${patch.radius} km` : "none"}`, async () => [
+              gh!.commit(`Update slot "${slug}": map "${patch.map}", ${patch.view} view, padding N ${patch.north}% / S ${patch.south}%, prime meridian ${patch.shift}°, world radius ${patch.radius ? `${patch.radius} km` : "none"}${patch.travel.length ? `, travel speeds ${patch.travel.map((t) => `${t.label} ${t.kmPerDay} km/day`).join(", ")}` : ""}`, async () => [
                 await slotsChange((s) => {
                   const cur = s.slots[slug];
                   if (!cur) throw new Error(`Slot "${slug}" no longer exists.`);
@@ -146,6 +155,8 @@ function renderSlots(): void {
                     if (patch[k]) cur[k] = patch[k];
                     else delete cur[k];
                   }
+                  if (patch.travel.length) cur.travel = patch.travel;
+                  else delete cur.travel;
                   if (patch.north || patch.south || cur.pole) cur.pole = patch.pole;
                 }),
               ]),
@@ -155,6 +166,7 @@ function renderSlots(): void {
       );
       select.addEventListener("change", () => {
         save.disabled = select.value === slot.map;
+        save.title = save.disabled ? "Pick a different map first" : "";
         const next = thumb(maps.find((m) => m.id === select.value));
         img.replaceWith(next);
         img = next;
@@ -200,7 +212,8 @@ function renderSlots(): void {
           h("code", { textContent: slug }),
           " ",
           h("a", { href: new URL(`v/${slug}/`, SITE).href, target: "_blank", rel: "noopener", textContent: "open" }),
-          h("div", { className: "actions" }, select, save, preview, copy),
+          h("div", { className: "slot-map" }, select),
+          h("div", { className: "actions" }, save, preview, copy),
         ),
       );
     }),
@@ -514,7 +527,8 @@ function signInWithGitHub(): void {
   } catch {
     /* Without sessionStorage sign-in can't be bound to this tab; takeFragment then refuses it. */
   }
-  location.href = `${ADMIN_API}/auth/login?return=${encodeURIComponent(back)}&nonce=${nonce}`;
+  const remember = $<HTMLInputElement>("#signin-remember").checked;
+  location.href = `${ADMIN_API}/auth/login?return=${encodeURIComponent(back)}&nonce=${nonce}${remember ? "&remember=1" : ""}`;
 }
 
 const NONCE_KEY = "wge-admin-signin-nonce";
@@ -552,6 +566,7 @@ async function signIn(token: string): Promise<void> {
     const me = await client.whoAmI();
     setMe(me);
     gh = client;
+    keepFresh(client, token);
     // The account's saved theme (null: never chose, so the defaults), and where later changes are saved.
     adopt(parsePrefs(me.prefs));
     connectAccount((p) => client.savePrefs(p), () => setStatus("Couldn't save your colour theme to your account; it only applies in this browser for now.", "error"));
@@ -583,7 +598,28 @@ async function signIn(token: string): Promise<void> {
   }
 }
 
+/** A remembered session is renewed when the page opens and then every few hours while it stays open, so it only ends after 30 days away. */
+let renewTimer = 0;
+function keepFresh(client: GitHub, token: string): void {
+  clearTimeout(renewTimer);
+  if (!sessionRemembers(token)) return;
+  let current = token;
+  const renew = async () => {
+    if (needsRenewal(current)) {
+      try {
+        current = await client.refreshSession();
+        store.set(current, true);
+      } catch {
+        /* Offline or the API is down: try again later; the old token still works until it expires. */
+      }
+    }
+    renewTimer = window.setTimeout(renew, 6 * 3600_000);
+  };
+  void renew();
+}
+
 function signOut(): void {
+  clearTimeout(renewTimer);
   store.clear();
   connectAccount(null);
   forgetTheme();
@@ -615,7 +651,7 @@ if (framed) {
   $("#who").textContent = __REPO__;
 
   const back = takeFragment();
-  if (back.session) store.set(back.session);
+  if (back.session) store.set(back.session, sessionRemembers(back.session));
   const saved = store.get();
   if (back.error) showSignIn(back.error);
   else if (saved) void signIn(saved);
