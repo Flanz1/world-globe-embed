@@ -91,6 +91,13 @@ try {
   check("no errors on the phone page", phone.errors.length === 0, phone.errors.join(" | "));
   await phone.ctx.close();
 
+  const tiny = await adminPage("Flanz1", 320);
+  const t = await tiny.page.evaluate(() => ({ page: document.documentElement.scrollWidth, w: document.documentElement.clientWidth, tabsScroll: document.querySelector("#tabs").scrollWidth > document.querySelector("#tabs").clientWidth, mask: getComputedStyle(document.querySelector("#tabs")).maskImage, wide: [...document.querySelectorAll("body *")].filter((e) => e.getBoundingClientRect().right > document.documentElement.clientWidth + 1 && e.offsetParent).slice(0, 6).map((e) => `${e.tagName}.${e.className}#${e.id}[${e.getAttribute("name") ?? e.type ?? ""}] ${Math.round(e.getBoundingClientRect().right)} w=${Math.round(e.getBoundingClientRect().width)}`) }));
+  check("320 px: the page doesn't scroll sideways", t.page <= t.w, JSON.stringify(t));
+  check("320 px: the tab row scrolls inside itself and fades at the right edge", t.tabsScroll && /linear-gradient/.test(t.mask), JSON.stringify(t));
+  await tiny.page.screenshot({ path: path.join(OUT, "phone-320.png") });
+  await tiny.ctx.close();
+
   const desk = await adminPage("Flanz1", 1440);
   const d = desk.page;
   check("desktop: the text and Sign out are in the header, no Account button", (await d.locator("#who").isVisible()) && (await d.locator("#forget").isVisible()) && !(await d.locator("#account").isVisible()));
