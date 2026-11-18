@@ -240,7 +240,6 @@ if (data.flat && (region || !data.maps)) {
   vb.hidden = !cfg.controls;
   vb.dataset.view = view;
   const other = view === "flat" ? "Show globe" : "Show flat map";
-  vb.title = other;
   vb.setAttribute("aria-label", other);
   vb.addEventListener("click", () => {
     const u = new URL(location.href);
@@ -302,3 +301,33 @@ function go(): void {
 
 // Wait for first paint, then load the heavy part.
 requestAnimationFrame(() => setTimeout(go, 0));
+
+/* ── One-time "drag to move" hint: touch screens only, once per page load, ~3 s, gone at the first touch ── */
+function dragHint(): void {
+  if (!cfg.controls || !matchMedia("(pointer:coarse)").matches || innerHeight < 240) return;
+  const lockBtn = document.getElementById("btn-lock");
+  if (lockBtn && !lockBtn.hidden && lockBtn.getAttribute("aria-pressed") === "true") return; // locked: the page scrolls, the map doesn't move
+  const chip = document.createElement("div");
+  chip.id = "hint";
+  chip.setAttribute("aria-hidden", "true");
+  chip.textContent = "Drag to move · pinch to zoom";
+  document.body.append(chip);
+  let timer = 0;
+  const off = () => {
+    clearTimeout(timer);
+    for (const t of ["pointerdown", "touchstart", "wheel", "keydown"]) removeEventListener(t, off, true);
+    chip.classList.remove("on");
+    setTimeout(() => chip.remove(), 450);
+  };
+  for (const t of ["pointerdown", "touchstart", "wheel", "keydown"]) addEventListener(t, off, { capture: true, passive: true });
+  requestAnimationFrame(() => chip.classList.add("on"));
+  timer = window.setTimeout(off, 3000);
+}
+setTimeout(dragHint, 1200);
+
+// Esc hides a tooltip that is showing; it comes back on the next hover or focus move.
+const ui = $("ui");
+addEventListener("keydown", (e) => {
+  if (e.key === "Escape") ui.classList.add("notip");
+});
+for (const t of ["pointermove", "focusin"]) ui.addEventListener(t, () => ui.classList.remove("notip"));
