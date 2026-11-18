@@ -139,7 +139,8 @@
       "name": "Cevoli",
       "regions": [
         "albesan",
-        "albesan-combined"
+        "albesan-combined",
+        "bassira"
       ],
       "parent": "ilrakhan"
     }
