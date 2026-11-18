@@ -27,8 +27,9 @@
   <section id="signin" class="card" hidden>
     <h2>Sign in</h2>
     <p>Sign in with your GitHub account. You'll only see the parts of the admin page you've been given access to.</p>
+    <p><label><input id="signin-remember" type="checkbox"> Keep me signed in on this browser</label></p>
     <p><button id="signin-github" type="button">Sign in with GitHub</button></p>
-    <p class="muted small">GitHub asks once whether to let this site know your username. The page never sees your GitHub password or a token that can change your repositories, and the sign-in lasts at most 12 hours in this tab.</p>
+    <p class="muted small">GitHub asks once whether to let this site know your username. The page never sees your GitHub password or a token that can change your repositories, and the sign-in lasts 12 hours in this tab, or 30 days (renewed whenever you use the page) if you tick "Keep me signed in". Only tick it on a browser that's yours.</p>
     <p id="signin-setup" class="warn small" hidden>Sign-in isn't set up for this copy of the site yet (it was built without VITE_ADMIN_API).</p>
     <p id="signin-error" class="error" role="alert"></p>
   </section>
