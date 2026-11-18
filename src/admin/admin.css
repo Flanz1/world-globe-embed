@@ -527,3 +527,22 @@ button.theme-item.ghost.text { color: var(--md-sys-color-on-surface); font-weigh
 .rename-url { overflow-wrap: anywhere; word-break: break-all; font-size: 13px; }
 .rename-copy { display: flex; gap: 8px; align-items: center; }
 .rename-dlg input[aria-invalid="true"], .rename-dlg input[aria-invalid="true"]:focus-visible { border-color: var(--md-sys-color-error); outline: 2px solid var(--md-sys-color-error); outline-offset: 0; }
+
+/* ── Bulk selection (Regions, Pins): checkboxes on cards and a bar docked at the bottom ── */
+.bulk-box { width: 20px; height: 20px; margin: 0; accent-color: var(--md-sys-color-primary); cursor: pointer; flex: 0 0 auto; }
+.rcard.selectable { position: relative; cursor: pointer; }
+.rcard.selectable button, .rcard.selectable select, .rcard.selectable a { cursor: pointer; }
+.rcard.selected { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: var(--md-sys-color-primary); }
+.rsel { position: absolute; top: 6px; left: 6px; z-index: 1; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 88%, transparent); cursor: pointer; }
+.rfolder-head > .bulk-box { margin-right: 4px; }
+body.bulk-on main, body.bulk-on #status-card { scroll-margin-bottom: 96px; }
+body.bulk-on { padding-bottom: 96px; }
+.bulk-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; align-items: center; gap: 8px 16px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background-color: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); border-radius: 28px 28px 0 0; box-shadow: 0 -2px 12px rgba(0, 0, 0, .25); }
+.bulk-bar[hidden] { display: none; }
+.bulk-count { flex: 0 0 auto; }
+.bulk-actions { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 auto; overflow-x: auto; }
+.bulk-actions > * { flex: 0 0 auto; white-space: nowrap; }
+.bulk-actions button { min-height: 32px; padding: 0 12px; font-size: 13px; line-height: 18px; }
+.bulk-sep { width: 1px; align-self: stretch; margin: 4px 6px; background: var(--md-sys-color-outline-variant); }
+@media (max-width: 560px) { .bulk-bar { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); } body.bulk-on { padding-bottom: 120px; } }
+.bulk-list { margin: 4px 0; padding-left: 20px; max-height: 40vh; overflow: auto; }
