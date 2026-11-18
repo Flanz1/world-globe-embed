@@ -236,6 +236,10 @@ for (const view of ["globe", "flat"]) {
 for (const view of ["globe", "flat"]) {
   const q = `v/tiles/?region=close-up&zoom=99${view === "flat" ? "&view=flat" : ""}`;
   const e = await open(q, { failFirst8192: true });
+  // open() returns once the 4096 stage is in (state hires); the retried 8192 arrives 1.5 s after the cut plus its decode,
+  // which on busy CI can outlast settle(). Wait for it rather than reading too early.
+  stage = `${q}: waiting for the retried 8192`;
+  await e.page.waitForFunction(() => document.documentElement.dataset.tex === "8192", null, { timeout: 60000 }).catch(() => {});
   const tex = await e.page.evaluate(() => document.documentElement.dataset.tex);
   check(`${view}: a cut 8192 download is retried and shown`, tex === "8192", `data-tex=${tex}, requested ${whole(e.requested).join(" → ")}`);
   await e.ctx.close();
