@@ -174,11 +174,14 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .45); }
 /* Phones: the search row is the one sticky bar; Back to top is a small pill that appears after the first screen. */
 .to-top { display: none; }
 @media (max-width: 720px) {
+  .r-search-l { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .r-search { position: sticky; top: 0; z-index: 5; margin: 10px -16px 0; padding: 8px 16px; background: var(--md-sys-color-surface-container-low); border-bottom: 1px solid var(--md-sys-color-outline-variant); }
   .to-top:not([hidden]) { display: inline-flex; position: fixed; right: 16px; bottom: 16px; z-index: 6; box-shadow: var(--app-shadow); }
   body.bulk-on .to-top { display: none; }
 }
 .r-new-row { margin-bottom: 6px; }
+.r-new-row { flex-wrap: nowrap; min-width: 0; overflow-x: auto; }
+.r-new-row > * { flex: 0 0 auto; white-space: nowrap; }
 .r-new-row { align-items: end; }
 .r-tools .grow { flex: 1 1 140px; min-width: 0; }
 .r-tools label, .pn-tools label { min-width: 0; }
