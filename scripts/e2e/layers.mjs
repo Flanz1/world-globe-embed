@@ -378,7 +378,7 @@ if (want("identity")) {
   else
     for (const [region, view] of [["provinces", "flat"], ["provinces", "globe"], ["landmark-disc", "flat"], ["landmark-disc", "globe"], ["dateline-box", "flat"]]) {
       await step(G, `${region} ${view}`, async () => {
-        const qs = `/v/${SLOT.slug}/?region=${region}${view === "flat" ? "&view=flat" : ""}`;
+        const qs = `/v/${SLOT.slug}/?region=${region}&key=0${view === "flat" ? "&view=flat" : ""}`; // key=0: the legend is UI, not map pixels
         const a = await openEmbed(SITE + qs);
         const b = await openEmbed(MAIN_SITE + qs);
         const sa = await canvasShot(a);
