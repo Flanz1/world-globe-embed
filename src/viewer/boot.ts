@@ -10,6 +10,7 @@
  */
 import { applyParams, diameterFraction, distanceForZoom, posterVars } from "../shared/params.ts";
 import { REGION_ID, flatFit, mergeRegions, parseRegionData, parseRegionIds, underFill, type RegionData } from "../shared/region.ts";
+import { cleanTravel } from "../shared/measure.ts";
 import type { ViewerConfig } from "../shared/types.ts";
 import type { BootData, FlatStartContext, RegionContext, StartContext, ViewMode } from "./contract.ts";
 
@@ -50,6 +51,13 @@ if (data.maps) {
     // Only the admin page's own preview takes the radius from the URL; embeds get it from the slot.
     const r = Number(q.get("radius"));
     if (q.has("radius") && Number.isFinite(r)) cfg.radius = r;
+    if (q.has("travel")) {
+      try {
+        cfg.travel = cleanTravel(JSON.parse(q.get("travel")!));
+      } catch {
+        cfg.travel = [];
+      }
+    }
     root.style.setProperty("--lqip", `url("${m.lqip}")`);
   }
 }

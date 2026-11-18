@@ -18,6 +18,7 @@ import { HISTORY_MAX_LIMIT, HISTORY_MAX_WITH_FILES, type HistoryEntry, type Hist
 import { appJwt, nonce, sign, verify } from "./crypto.ts";
 import { validateAccess, validateCategories, validateMap, validatePin, validatePinMaps, validatePrefs, validateRegion, validateSlots, type ValidateFn } from "./generated/validators.js";
 import { rateLimited, type RateLimiter } from "./ratelimit.ts";
+import * as comments from "./comments.ts";
 import * as proposals from "./proposals.ts";
 
 export interface KV {
@@ -50,6 +51,8 @@ export interface Env {
   PREFS?: KV;
   /** Where suggested changes are kept (src/proposals.ts). Optional; the waiting list's namespace is used when it isn't bound. */
   PROPOSALS?: proposals.ProposalKV;
+  /** Where reviewer comments are kept (src/comments.ts). Optional; falls back to the proposals store, then the waiting list's. */
+  COMMENTS?: comments.CommentKV;
   /** The EditingRoom Durable Object (index.ts, presence.ts). Optional: without it there are no "X is editing" notices. */
   EDITING_ROOM?: { idFromName(name: string): unknown; get(id: unknown): { fetch(req: Request): Promise<Response> } };
 }
@@ -59,6 +62,9 @@ export type Upstream = (url: string, init?: RequestInit) => Promise<Response>;
 const API = "https://api.github.com";
 const WEB = "https://github.com";
 const SESSION_HOURS = 12;
+/** "Keep me signed in": a longer session that the admin page renews as it is used (POST /session/refresh), so people who keep coming back never get signed out. */
+const REMEMBER_DAYS = 30;
+const sessionSeconds = (remember: boolean) => (remember ? REMEMBER_DAYS * 86400 : SESSION_HOURS * 3600);
 /** A part of a big map upload is 8 MB, ~11 MB as base64 JSON. */
 const MAX_BLOB_REQUEST = 16 * 1024 * 1024;
 const MAX_CHANGED_FILES = 400;
@@ -75,6 +81,8 @@ export interface Session {
   id: number;
   login: string;
   exp: number;
+  /** 1 when the person ticked "Keep me signed in". */
+  m?: 1;
 }
 
 class HttpError extends Error {
@@ -277,7 +285,7 @@ async function authLogin(req: Request, env: Env): Promise<Response> {
   // The admin page keeps a random value for this tab and gets it back with the session, so a session link from somewhere else is refused.
   const tab = url.searchParams.get("nonce") ?? "";
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(tab)) return new Response("This sign-in link doesn't come from the admin page.", { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });
-  const state = await sign({ r: ret, n: nonce(), c: tab, exp: Math.floor(Date.now() / 1000) + 600 }, env.SESSION_KEY);
+  const state = await sign({ r: ret, n: nonce(), c: tab, ...(url.searchParams.get("remember") === "1" ? { m: 1 } : {}), exp: Math.floor(Date.now() / 1000) + 600 }, env.SESSION_KEY);
   const to = new URL(`${WEB}/login/oauth/authorize`);
   to.searchParams.set("client_id", env.APP_CLIENT_ID);
   to.searchParams.set("redirect_uri", new URL("/auth/callback", url).href);
@@ -288,7 +296,7 @@ async function authLogin(req: Request, env: Env): Promise<Response> {
 
 async function authCallback(req: Request, env: Env, up: Upstream): Promise<Response> {
   const url = new URL(req.url);
-  const st = await verify<{ r: string; c?: string; exp: number }>(url.searchParams.get("state") ?? "", env.SESSION_KEY);
+  const st = await verify<{ r: string; c?: string; m?: 1; exp: number }>(url.searchParams.get("state") ?? "", env.SESSION_KEY);
   if (!st || !returnAllowed(st.r, env)) return new Response("This sign-in link has expired. Go back to the admin page and sign in again.", { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   const back = (fragment: string) => new Response(null, { status: 302, headers: { Location: `${st.r.split("#")[0]}#${fragment}&nonce=${st.c ?? ""}`, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
   const code = url.searchParams.get("code");
@@ -304,8 +312,20 @@ async function authCallback(req: Request, env: Env, up: Upstream): Promise<Respo
   const u = await readJson<{ id?: number; login?: string }>(me);
   if (!me.ok || !Number.isSafeInteger(u.id) || typeof u.login !== "string") return back(`signin-error=${encodeURIComponent("Couldn't read your GitHub account. Try again.")}`);
   // The user's GitHub token isn't kept: the API only needed to learn who they are.
-  const s: Session = { id: u.id!, login: u.login, exp: Math.floor(Date.now() / 1000) + SESSION_HOURS * 3600 };
+  const s: Session = { id: u.id!, login: u.login, ...(st.m ? { m: 1 as const } : {}), exp: Math.floor(Date.now() / 1000) + sessionSeconds(!!st.m) };
   return back(`session=${await sign(s, env.SESSION_KEY)}`);
+}
+
+/**
+ * Renews a "Keep me signed in" session for another 30 days. It is stateless (nothing stored, so no KV use) and only
+ * works while the old session is still valid; sessions without the tick are returned unchanged and never grow.
+ * Access is still checked on every real request, so someone removed from the list loses access at once.
+ */
+async function refreshSession(req: Request, env: Env): Promise<Response> {
+  const s = await session(req, env);
+  if (!s.m) return json(200, { session: req.headers.get("Authorization")!.slice(7), exp: s.exp });
+  const exp = Math.floor(Date.now() / 1000) + sessionSeconds(true);
+  return json(200, { session: await sign({ id: s.id, login: s.login, m: 1, exp }, env.SESSION_KEY), exp });
 }
 
 /* ── Save log ── */
@@ -449,6 +469,21 @@ async function editingLive(req: Request, env: Env, up: Upstream): Promise<Respon
   );
 }
 
+/** A region as it is on the branch now: its blob SHA and creator's id, or null when there is none. */
+async function regionInfo(env: Env, up: Upstream, id: string): Promise<{ sha: string; owner: number } | null> {
+  const r = await gh(env, up, `${repoPath(env)}/contents/content/regions/${id}.json?ref=${encodeURIComponent(branchOf(env))}`);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new HttpError(502, `Couldn't read the region ${id} (${r.status}).`);
+  const f = await readJson<{ content?: string; sha: string }>(r);
+  let text = f.content ? utf8(f.content) : "";
+  if (!text) text = await blobText(env, up, f.sha);
+  try {
+    return { sha: f.sha, owner: regionOwner(JSON.parse(text) as { properties?: { createdBy?: { id: number; login: string } } }, ownerId(env)) };
+  } catch {
+    return { sha: f.sha, owner: ownerId(env) };
+  }
+}
+
 /* ── Suggested changes (worker/src/proposals.ts) ── */
 
 async function suggestions(req: Request, env: Env, up: Upstream, p: string): Promise<Response | null> {
@@ -459,19 +494,7 @@ async function suggestions(req: Request, env: Env, up: Upstream, p: string): Pro
     actor,
     ownerId: ownerId(env),
     schemaProblem: (data) => schemaError(validateRegion, data, "the region"),
-    region: async (id) => {
-      const r = await gh(env, up, `${repoPath(env)}/contents/content/regions/${id}.json?ref=${encodeURIComponent(branchOf(env))}`);
-      if (r.status === 404) return null;
-      if (!r.ok) throw new HttpError(502, `Couldn't read the region ${id} (${r.status}).`);
-      const f = await readJson<{ content?: string; sha: string }>(r);
-      let text = f.content ? utf8(f.content) : "";
-      if (!text) text = await blobText(env, up, f.sha);
-      try {
-        return { sha: f.sha, owner: regionOwner(JSON.parse(text) as { properties?: { createdBy?: { id: number; login: string } } }, ownerId(env)) };
-      } catch {
-        return { sha: f.sha, owner: ownerId(env) };
-      }
-    },
+    region: (id) => regionInfo(env, up, id),
   };
   try {
     let m: RegExpExecArray | null;
@@ -497,6 +520,35 @@ async function suggestions(req: Request, env: Env, up: Upstream, p: string): Pro
     }
   } catch (e) {
     if (e instanceof proposals.ProposalError) throw new HttpError(e.status, e.message);
+    throw e;
+  }
+  throw new HttpError(404, "Not found.");
+}
+
+/* ── Reviewer comments (worker/src/comments.ts) ── */
+
+async function commentRoutes(req: Request, env: Env, up: Upstream, p: string): Promise<Response | null> {
+  if (p !== "/comments" && !p.startsWith("/comments/")) return null;
+  const actor = await listedActor(req, env, up);
+  const ctx: comments.CommentCtx = {
+    kv: env.COMMENTS ?? env.PROPOSALS ?? (env.WAITING as comments.CommentKV | undefined),
+    actor,
+    region: async (id) => {
+      const r = await regionInfo(env, up, id);
+      return r && { owner: r.owner };
+    },
+  };
+  try {
+    let m: RegExpExecArray | null;
+    if (req.method === "GET" && p === "/comments") return json(200, await comments.listComments(ctx, new URL(req.url).searchParams.get("region") ?? undefined));
+    if (req.method === "POST" && p === "/comments") return json(201, await comments.postComment(ctx, await readJson(req)));
+    if (req.method === "POST" && (m = /^\/comments\/([^/]+)\/(open|resolved)$/.exec(p))) return json(200, await comments.setStatus(ctx, decodeURIComponent(m[1]), m[2] as "open" | "resolved"));
+    if (req.method === "DELETE" && (m = /^\/comments\/([^/]+)$/.exec(p))) {
+      await comments.removeComment(ctx, decodeURIComponent(m[1]));
+      return new Response(null, { status: 204 });
+    }
+  } catch (e) {
+    if (e instanceof comments.CommentError) throw new HttpError(e.status, e.message);
     throw e;
   }
   throw new HttpError(404, "Not found.");
@@ -792,6 +844,7 @@ export async function handle(req: Request, env: Env, up: Upstream): Promise<Resp
     if (req.method === "GET" && p === "/auth/callback") return await authCallback(req, env, up);
     let m: RegExpExecArray | null;
     if (req.method === "GET" && p === "/session") return withCors(await sessionInfo(req, env, up));
+    if (req.method === "POST" && p === "/session/refresh") return withCors(await refreshSession(req, env));
     if (req.method === "GET" && (m = /^\/users\/([^/]+)$/.exec(p))) return withCors(await lookupUser(req, env, up, decodeURIComponent(m[1])));
     if (req.method === "PUT" && p === "/prefs") return withCors(await savePrefs(req, env, up));
     if (req.method === "GET" && p === "/history") return withCors(await history(req, env, up, url));
@@ -800,6 +853,7 @@ export async function handle(req: Request, env: Env, up: Upstream): Promise<Resp
     // Not wrapped in withCors: copying the response would lose its WebSocket.
     if (req.method === "GET" && p === "/editing/live") return await editingLive(req, env, up);
     if (p === "/proposals" || p.startsWith("/proposals/")) return withCors((await suggestions(req, env, up, p))!);
+    if (p === "/comments" || p.startsWith("/comments/")) return withCors((await commentRoutes(req, env, up, p))!);
     if (p.startsWith("/gh/")) return withCors(await proxy(req, env, up, p.slice(3), url));
     if (p === "/") return new Response("World globe admin API. Sign in from the admin page.", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
     throw new HttpError(404, "Not found.");

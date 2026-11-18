@@ -1,4 +1,4 @@
-// e2e-suite: roots=VIEWER,src/viewer/pins.ts,src/admin/pins.ts,src/admin/preview-pins.ts cut=src/admin/session.ts,src/admin/github.ts,src/shared/access.ts,src/shared/categories.ts,src/admin/pinmaps.ts,src/shared/pinmaps.ts weight=2
+// e2e-suite: roots=VIEWER,src/viewer/pins.ts,src/admin/pins.ts,src/admin/editor/pin-tool.ts,src/admin/editor/pins-layer.ts,src/admin/preview-pins.ts cut=src/admin/session.ts,src/admin/github.ts,src/shared/access.ts,src/shared/categories.ts,src/admin/pinmaps.ts,src/shared/pinmaps.ts weight=2
 /**
  * Browser checks for map pins, in headless Chromium.
  *
@@ -146,7 +146,12 @@ for (const view of ["flat", "globe"]) {
     const harbour = page.locator('.wpin[data-name="Magenta Harbour"]');
     const label = page.locator(".rlabel:not([hidden])").first();
     const d = dist(await centre(harbour), await centre(label));
-    check(E, `${view}: the pin sits on the landmark it marks, with the region drawn there`, d < 14, `${d.toFixed(1)}px from the region's label`);
+    // The label is nudged clear of the pin (below, above or beside it), so it sits near the pin, not on it.
+    check(E, `${view}: the pin sits on the landmark it marks, with the region drawn there`, d < 70, `${d.toFixed(1)}px from the region's label`);
+    const pb = await harbour.boundingBox();
+    const lb = await label.boundingBox();
+    const overlap = !!pb && !!lb && pb.x < lb.x + lb.width && lb.x < pb.x + pb.width && pb.y < lb.y + lb.height && lb.y < pb.y + pb.height;
+    check(E, `${view}: the region's label doesn't cover the pin`, !overlap, JSON.stringify({ pb, lb }));
     await page.screenshot({ path: path.join(OUT, `embed-${view}-region.png`) });
 
     // A region that includes a pin map shows its pins by itself; ?pins= overrides, ?pins=0 turns them off.
@@ -224,6 +229,72 @@ for (const view of ["flat", "globe"]) {
   });
 }
 
+/* ── Embed: kind filter chips and clusters (a synthetic pins file served by the test) ── */
+for (const view of ["flat", "globe"]) {
+  await step(E, `${view} filter and clusters`, async () => {
+    const ctx = await browser.newContext({ viewport: { width: 900, height: 520 }, deviceScaleFactor: 1 });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(String(e)));
+    const at = (i, base) => [Math.round((base[0] + (i % 3) * 0.01) * 1e4) / 1e4, Math.round((base[1] + Math.floor(i / 3) * 0.01) * 1e4) / 1e4];
+    const mk = (id, kind, pos) => ({ id, name: `Pin ${id}`, kind, at: pos });
+    const pins = [
+      ...Array.from({ length: 6 }, (_, i) => mk(`town-${i}`, "town", at(i, [DISC.lon, DISC.lat]))), // one tight group
+      mk("same-a", "city", [DISC.lon + 25, DISC.lat + 4]),
+      mk("same-b", "city", [DISC.lon + 25, DISC.lat + 4]), // exactly the same spot: can't be zoomed apart
+      mk("lone-ruin", "ruin", [65, -35]),
+    ];
+    await page.route("**/pins/*.json", (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ pins, maps: [] }) }));
+    await page.goto(`${SITE}/v/${SLOT.slug}/?view=${view}&pins=1&lon=${DISC.lon}&lat=${DISC.lat}&zoom=1&rotate=0`);
+    await ready(page);
+    await page.waitForSelector(".wpin.wcl:not([hidden])", { timeout: 15000 });
+    await page.waitForTimeout(400);
+    const cl = page.locator(".wpin.wcl:not([hidden])");
+    check(E, `${view}: pins on one spot merge into a numbered cluster`, (await cl.filter({ hasText: "6" }).count()) === 1, await cl.allTextContents().then((t) => t.join(",")));
+    check(E, `${view}: a cluster is a button with an accessible name`, /6 pins, zoom in/.test((await cl.filter({ hasText: "6" }).getAttribute("aria-label")) ?? ""));
+    check(E, `${view}: the merged pins are not drawn singly`, (await page.locator('.wpin:not(.wcl):not([hidden])[data-name^="Pin town"]').count()) === 0);
+
+    // The filter panel: a chip per kind with its count, pressed when on.
+    const chips = page.locator(".wpl-chip");
+    check(E, `${view}: one chip per kind present`, (await chips.count()) === 3, String(await chips.count()));
+    check(E, `${view}: chip name has the kind and count`, (await chips.first().getAttribute("aria-label")) === "City, 2 pins");
+    await page.locator('.wpl-chip[aria-label^="Town"]').click();
+    await page.waitForTimeout(200);
+    check(E, `${view}: switching a kind off hides its pins and cluster`, (await page.locator(".wpin.wcl:not([hidden])").filter({ hasText: "6" }).count()) === 0 && (await page.locator('.wpl-chip[aria-label^="Town"]').getAttribute("aria-pressed")) === "false");
+    await page.locator('.wpl-chip[aria-label^="Town"]').click();
+    await page.waitForTimeout(200);
+    check(E, `${view}: and back on shows them again`, (await page.locator(".wpin.wcl:not([hidden])").filter({ hasText: "6" }).count()) === 1);
+    await page.locator(".wpl-head").click();
+    check(E, `${view}: the panel folds`, (await page.locator(".wpl-chips").isHidden()) && (await page.locator(".wpl-head").getAttribute("aria-expanded")) === "false");
+    await page.locator(".wpl-head").click();
+    await page.screenshot({ path: path.join(OUT, `embed-${view}-clusters.png`) });
+
+    // Pins on exactly the same spot open a list instead of zooming.
+    const pair = page.locator(".wpin.wcl:not([hidden])").filter({ hasText: "2" });
+    if (await pair.count()) {
+      await pair.first().click();
+      check(E, `${view}: a cluster that can't zoom apart opens a list of its pins`, (await page.locator(".wcl-list button").count()) === 2);
+      await page.locator(".wcl-list button").first().click();
+      check(E, `${view}: choosing one opens its card`, await page.locator(".wpin-card").isVisible());
+    } else check(E, `${view}: the same-spot pair is a cluster`, false, "not in view");
+
+    // Clicking the big cluster zooms in until its pins separate.
+    await page.keyboard.press("Escape");
+    // (each click zooms a step; the globe zooms about 2x per click, so a few clicks may be needed)
+    let after = 0;
+    for (let i = 0; i < 6 && after < 2; i++) {
+      const big = page.locator(".wpin.wcl:not([hidden])").filter({ hasText: "6" });
+      if (!(await big.count())) break;
+      await big.click();
+      await page.waitForTimeout(900);
+      after = await page.locator('.wpin:not(.wcl):not([hidden])[data-name^="Pin town"]').count();
+    }
+    check(E, `${view}: clicking a cluster zooms in and splits it`, after > 1 || (await page.locator(".wcl-list button").count()) > 0, `${after} single pins`);
+    check(E, `${view}: no page errors`, errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  });
+}
+
 /* ═════════════ 2. Admin ═════════════ */
 const A = "admin";
 const mock = new MockGitHub({ root: dir, branches: ["main", BRANCH] });
@@ -267,6 +338,181 @@ await step(A, "the region editor lists pin maps in collapsible folders", async (
   await page.waitForTimeout(200);
   check(A, "ticking inside a folder keeps it open and shows the count on its badge", (await picker.locator('input[data-pinmap="battles"]').isVisible()) && /1\/2/.test((await picker.locator('.ed-pinfolder-toggle[data-pinfolder="places"] .badge').textContent()) ?? ""), await picker.locator('.ed-pinfolder-toggle[data-pinfolder="places"] .badge').textContent());
   await page.screenshot({ path: path.join(OUT, "editor-pin-folders.png"), clip: (await page.locator("dialog.editor .ed-pinmaps").boundingBox()) ?? undefined });
+  check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+});
+
+await step(A, "the region editor can show the slot's pins over the map", async () => {
+  const { ctx, page, errors } = await adminPage("Flanz1");
+  await page.goto(`${SITE}/admin/#regions`);
+  await page.waitForSelector('[data-region="landmark-disc"] [data-action="edit"]', { timeout: 15000 });
+  await page.click('[data-region="landmark-disc"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
+  check(A, "pins are hidden in the editor until switched on", !(await page.locator("dialog.editor .ed-pin-tip").isVisible()));
+  await page.click('dialog.editor [data-act="overlays"]');
+  const sw = page.locator('dialog.editor input[name="ed-pins-show"]');
+  check(A, "the Other regions panel has a Show pins switch", await sw.isEnabled());
+  await sw.check();
+  await page.waitForTimeout(300);
+  await page.click('dialog.editor [data-act="overlays"]');
+  // Pins are painted on the canvas (under the region's handles), so find the marker by hovering its position.
+  const at = await page.evaluate(([lon, lat]) => document.querySelector("dialog.editor").wgeEditor.toScreen(lon, lat), [DISC.lon, DISC.lat]);
+  const cv = await page.locator("dialog.editor canvas.ed-canvas").boundingBox();
+  await page.mouse.move(cv.x + at[0], cv.y + at[1]);
+  const tip = page.locator("dialog.editor .ed-pin-tip");
+  check(A, "hovering a pin shows its name and kind", (await tip.isVisible()) && /Magenta Harbour · City/.test((await tip.textContent()) ?? ""), await tip.textContent());
+  await page.mouse.move(cv.x + 5, cv.y + 5);
+  check(A, "the tooltip goes away off the pin", !(await tip.isVisible()));
+  // A pin never takes the click: the part under it is still selected by clicking there.
+  await page.mouse.click(cv.x + at[0], cv.y + at[1]);
+  check(A, "clicking a pin passes through to the map", (await page.evaluate(() => document.querySelector("dialog.editor").wgeEditor.selectedPart())) >= 0);
+  for (const [w, hgt] of [[1440, 900], [768, 900], [375, 800]])
+    for (const scheme of ["light", "dark"]) {
+      await page.setViewportSize({ width: w, height: hgt });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: path.join(OUT, `editor-pins-layer-${w}-${scheme}.png`) });
+      await page.click('dialog.editor [data-act="overlays"]');
+      await page.waitForTimeout(150);
+      await page.screenshot({ path: path.join(OUT, `editor-pins-panel-${w}-${scheme}.png`) });
+      await page.click('dialog.editor [data-act="overlays"]');
+    }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+});
+
+await step(A, "the region editor's Pin tool places, moves, edits and deletes pins", async () => {
+  const { ctx, page, errors } = await adminPage("Flanz1");
+  await page.goto(`${SITE}/admin/#regions`);
+  await page.waitForSelector('[data-region="landmark-disc"] [data-action="edit"]', { timeout: 15000 });
+  await page.click('[data-region="landmark-disc"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
+  const tool = page.locator('dialog.editor [data-act="pin-tool"]');
+  check(A, "the toolbar has a Pin toggle, off at first", (await tool.getAttribute("aria-pressed")) === "false");
+  await tool.click();
+  check(A, "turning it on shows the pins and presses the toggle", (await tool.getAttribute("aria-pressed")) === "true");
+  const cv = await page.locator("dialog.editor canvas.ed-canvas").boundingBox();
+  const toScreen = (lon, lat) => page.evaluate(([a, b]) => document.querySelector("dialog.editor").wgeEditor.toScreen(a, b), [lon, lat]);
+  // Click an empty spot (the map's top-left corner area) to place a pin.
+  const n0 = mock.log.length;
+  await page.mouse.click(cv.x + 40, cv.y + 60);
+  const pop = page.locator("dialog.editor .ed-pin-pop");
+  await pop.waitFor({ state: "visible", timeout: 5000 });
+  check(A, "clicking the map opens the new-pin popover with Name focused", (await pop.locator("strong").textContent()) === "New pin" && (await page.evaluate(() => document.activeElement?.getAttribute("name"))) === "pin-name");
+  check(A, "while Pin is on, no drawing tool shows as pressed", (await page.locator('dialog.editor button.tool[aria-pressed="true"]').count()) === 0);
+  const pr = await pop.boundingBox();
+  check(A, "the popover is beside the new pin, not over it", pr.x > cv.x + 40 + 10 || pr.x + pr.width < cv.x + 40 - 10, JSON.stringify(pr));
+  await page.focus('dialog.editor [data-kind="city"]');
+  await page.keyboard.press("ArrowRight");
+  check(A, "arrow keys move through the kinds", (await pop.locator('[data-kind="town"]').getAttribute("aria-checked")) === "true" && (await page.evaluate(() => document.activeElement?.getAttribute("data-kind"))) === "town");
+  await pop.locator('[data-kind="city"]').click();
+  // Two fingers still pinch-zoom while the tool is on.
+  const v0 = await page.evaluate(() => document.querySelector("dialog.editor").wgeEditor.view());
+  const k0 = v0.k;
+  await page.evaluate(([x, y]) => {
+    const c = document.querySelector("dialog.editor canvas.ed-canvas");
+    const ev = (type, id, dx) => c.dispatchEvent(new PointerEvent(type, { pointerId: id, button: 0, clientX: x + dx, clientY: y, bubbles: true, cancelable: true, pointerType: "touch" }));
+    ev("pointerdown", 11, -40);
+    ev("pointerdown", 12, 40);
+    for (let i = 1; i <= 5; i++) {
+      ev("pointermove", 11, -40 - i * 10);
+      ev("pointermove", 12, 40 + i * 10);
+    }
+    ev("pointerup", 11, -90);
+    ev("pointerup", 12, 90);
+  }, [cv.x + 400, cv.y + 300]);
+  const k1 = await page.evaluate(() => document.querySelector("dialog.editor").wgeEditor.view().k);
+  await page.evaluate((v) => document.querySelector("dialog.editor").wgeEditor.setView(v.cx, v.cy, v.k), v0);
+  await page.waitForTimeout(200);
+  check(A, "a two-finger pinch zooms the map while Pin is on", k1 > k0 * 1.3, `${k0} -> ${k1}`);
+  check(A, "…and the pinch does not place a pin", (await pop.locator("strong").textContent()) === "New pin");
+  check(A, "the status line names the Pin mode", /^Pin · click the map/.test((await page.textContent("dialog.editor .ed-status")) ?? ""), await page.textContent("dialog.editor .ed-status"));
+  check(A, "kinds are a radiogroup of chips", (await pop.locator('[role=radiogroup] [role=radio]').count()) === 10);
+  await pop.locator('input[name="pin-name"]').fill("Editor Port");
+  for (const [w, hgt] of [[1440, 900], [768, 900], [375, 800]])
+    for (const scheme of ["light", "dark"]) {
+      await page.setViewportSize({ width: w, height: hgt });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(OUT, `editor-pin-tool-${w}-${scheme}.png`) });
+      if (w === 375 && scheme === "light") {
+        const sv = await pop.locator('[data-act="pin-save"]').boundingBox();
+        check(A, "at 375 the sheet's Save pin button is in view", !!sv && sv.y + sv.height <= 800 && sv.y >= 0, JSON.stringify(sv));
+      }
+    }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.waitForTimeout(300);
+  await pop.locator('[data-kind="port"]').click();
+  check(A, "choosing a kind checks its chip", (await pop.locator('[data-kind="port"]').getAttribute("aria-checked")) === "true" && (await pop.locator('[data-kind="city"]').getAttribute("aria-checked")) === "false");
+  await pop.locator('select[name="pin-map"]').selectOption("battles");
+  await pop.locator('input[name="pin-link"]').fill(NOTE);
+  await pop.locator('[data-act="pin-save"]').click();
+  await waitCommit(page, n0);
+  const c = mock.log.slice(n0);
+  check(A, "Save pin is one commit of just that pin (the region isn't saved)", c.length === 1 && c[0].changes.length === 1 && c[0].changes[0].path === "content/pins/editor-port.json", JSON.stringify(c.map((x) => x.changes.map((y) => y.path))));
+  const f = onBranch("content/pins/editor-port.json");
+  const p = f?.properties;
+  check(A, "the file has the popover's values", p?.name === "Editor Port" && p.kind === "port" && p.pinMap === "battles" && p.link === NOTE && p.slot === SLOT.slug && p.createdBy?.login === "Flanz1", JSON.stringify(p));
+  check(A, "the popover closes after saving", !(await pop.isVisible()));
+  // Place another: it starts with the last kind and pin map.
+  await page.mouse.click(cv.x + 90, cv.y + 60);
+  await pop.waitFor({ state: "visible" });
+  check(A, "the next pin starts with the last kind and pin map", (await pop.locator('[data-kind="port"]').getAttribute("aria-checked")) === "true" && (await pop.locator('select[name="pin-map"]').inputValue()) === "battles");
+  // Unsaved changes ask before they are lost.
+  await pop.locator('input[name="pin-name"]').fill("Half done");
+  await tool.click();
+  await page.waitForSelector("dialog.small-dlg.danger[open]");
+  check(A, "turning the tool off asks before dropping an unsaved pin", /Unsaved pin/.test((await page.textContent("dialog.small-dlg.danger[open]")) ?? ""));
+  await page.click("dialog.small-dlg.danger[open] button:has-text('Keep editing')");
+  check(A, "Keep editing leaves the popover as it was", (await pop.isVisible()) && (await pop.locator('input[name="pin-name"]').inputValue()) === "Half done");
+  // A new pin map from the popover.
+  const nm = mock.log.length;
+  await pop.locator('select[name="pin-map"]').selectOption({ label: "New pin map…" });
+  await page.fill('dialog[open] input[data-field="pinmap-name"]', "Fresh map");
+  await page.click('dialog[open] button[data-action="confirm-pinmap"]');
+  await waitCommit(page, nm);
+  await page.waitForFunction(() => /Fresh map/.test(document.querySelector('dialog.editor select[name="pin-map"]')?.selectedOptions[0]?.textContent ?? ""), null, { timeout: 5000 });
+  check(A, "New pin map… creates the map and picks it", !!(onBranch("content/pinmaps.json")?.maps ?? []).find((m) => m.name === "Fresh map"));
+  await pop.locator('[data-act="pin-save"]').click();
+  await waitCommit(page, nm + 1);
+  check(A, "…and the pin is saved into it", onBranch("content/pins/half-done.json")?.properties.pinMap === "fresh-map", JSON.stringify(onBranch("content/pins/half-done.json")?.properties));
+  // Click a pin to edit it, drag to move it.
+  const [px, py] = await toScreen(...onBranch("content/pins/editor-port.json").geometry.coordinates);
+  await page.mouse.click(cv.x + px, cv.y + py);
+  await pop.waitFor({ state: "visible" });
+  check(A, "clicking a pin opens it for editing", (await pop.locator('input[name="pin-name"]').inputValue()) === "Editor Port" && (await pop.locator("strong").textContent()) === "Pin");
+  const n1 = mock.log.length;
+  await page.mouse.move(cv.x + px, cv.y + py);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) await page.mouse.move(cv.x + px + (40 * i) / 6, cv.y + py + (20 * i) / 6);
+  await page.mouse.up();
+  check(A, "dragging a pin moves it without saving yet", mock.log.length === n1);
+  await pop.locator('[data-act="pin-save"]').click();
+  await waitCommit(page, n1);
+  const g = onBranch("content/pins/editor-port.json");
+  check(A, "Save pin writes the new position and keeps who placed it", g.geometry.coordinates[0] !== f.geometry.coordinates[0] && g.properties.created === p.created, JSON.stringify(g.geometry));
+  // Delete.
+  const n2 = mock.log.length;
+  await page.mouse.click(cv.x + (await toScreen(...g.geometry.coordinates))[0], cv.y + (await toScreen(...g.geometry.coordinates))[1]);
+  await pop.waitFor({ state: "visible" });
+  await pop.locator('[data-act="pin-delete"]').click();
+  await page.click("dialog.small-dlg.danger[open] button:has-text('Delete pin')");
+  await waitCommit(page, n2);
+  check(A, "Delete pin removes the file in one commit", !onBranch("content/pins/editor-port.json") && mock.log.length === n2 + 1);
+  // Tidy up: the second pin goes too.
+  const [hx, hy] = await toScreen(...onBranch("content/pins/half-done.json").geometry.coordinates);
+  await page.mouse.click(cv.x + hx, cv.y + hy);
+  await pop.waitFor({ state: "visible" });
+  const n3 = mock.log.length;
+  await pop.locator('[data-act="pin-delete"]').click();
+  await page.click("dialog.small-dlg.danger[open] button:has-text('Delete pin')");
+  await waitCommit(page, n3);
+  // Escape leaves the tool.
+  await page.keyboard.press("Escape");
+  check(A, "Escape turns the tool off", (await tool.getAttribute("aria-pressed")) === "false");
+  await page.screenshot({ path: path.join(OUT, "editor-pin-tool.png") });
   check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));
   await ctx.close();
 });
