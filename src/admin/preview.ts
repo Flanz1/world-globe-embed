@@ -3,9 +3,9 @@
  * iframe and adjusts pole padding live with postMessage, then optionally saves to a slot.
  */
 import type { PreviewMessage } from "../viewer/contract.ts";
-import type { MapMeta, Slot, ViewMode } from "../shared/types.ts";
+import type { MapMeta, Slot, TravelSpeed, ViewMode } from "../shared/types.ts";
 import { DEFAULT_VIEW } from "../shared/types.ts";
-import { EARTH_RADIUS_KM, KM_PER_MI, MAX_RADIUS_KM, MIN_RADIUS_KM, formatLength, validRadius, type DistUnit } from "../shared/measure.ts";
+import { EARTH_RADIUS_KM, KM_PER_MI, MAX_KM_PER_DAY, MAX_RADIUS_KM, MIN_KM_PER_DAY, MIN_RADIUS_KM, TRAVEL_PRESETS, cleanTravel, formatLength, validKmPerDay, validRadius, type DistUnit } from "../shared/measure.ts";
 
 export interface PreviewOptions {
   maps: MapMeta[];
@@ -15,7 +15,7 @@ export interface PreviewOptions {
   /** Map to show first (defaults to the slot's map). */
   mapId: string;
   /** Called with the fields to write into the slot. */
-  onSave?: (patch: { map: string; view: ViewMode; north: number; south: number; pole: string; shift: number; radius: number }) => void;
+  onSave?: (patch: { map: string; view: ViewMode; north: number; south: number; pole: string; shift: number; radius: number; travel: TravelSpeed[] }) => void;
 }
 
 const SITE = new URL("../", location.href);
@@ -68,9 +68,41 @@ export function radiusKm(text: string, unit: DistUnit): number {
   return validRadius(km) ? km : NaN;
 }
 
+const travelBox = $<HTMLFieldSetElement>("pv-travel");
+const travelHint = $<HTMLSpanElement>("pv-travel-hint");
+const TRAVEL_ROWS = [
+  ...TRAVEL_PRESETS.map((t) => ({ ...t, on: $<HTMLInputElement>(`pv-tr-${t.id}`), km: $<HTMLInputElement>(`pv-tr-${t.id}-km`), name: null as HTMLInputElement | null })),
+  { id: "custom", label: "Custom", kmPerDay: 50, on: $<HTMLInputElement>("pv-tr-custom"), km: $<HTMLInputElement>("pv-tr-custom-km"), name: $<HTMLInputElement>("pv-tr-custom-name") },
+];
+
+/** The ticked travel speeds; `bad` is true when a ticked row has no usable speed or name. */
+function travelValue(): { list: TravelSpeed[]; bad: boolean } {
+  const list: TravelSpeed[] = [];
+  let bad = false;
+  for (const r of TRAVEL_ROWS) {
+    if (!r.on.checked) continue;
+    const label = r.name ? r.name.value.trim() : r.label;
+    const kmPerDay = Number(r.km.value);
+    if (!label || r.km.value.trim() === "" || !validKmPerDay(kmPerDay)) bad = true;
+    else list.push({ label, kmPerDay });
+  }
+  return { list, bad };
+}
+
+/** Fills the rows from a slot's saved speeds: presets by name, the first other one as the custom row. */
+function setTravel(saved: unknown): void {
+  const list = cleanTravel(saved);
+  for (const r of TRAVEL_ROWS) {
+    const hit = r.name ? list.find((t) => !TRAVEL_PRESETS.some((p) => p.label === t.label)) : list.find((t) => t.label === r.label);
+    r.on.checked = !!hit;
+    r.km.value = String(hit?.kmPerDay ?? r.kmPerDay);
+    if (r.name) r.name.value = hit?.label ?? "";
+  }
+}
+
 const values = () => {
   const r = radiusKm(radius.value, radiusUnit.value as DistUnit);
-  return { north: Number(north.value), south: Number(south.value), pole: pole.value, shift: roundShift(Number(shift.value)), radius: Number.isNaN(r) ? 0 : r };
+  return { north: Number(north.value), south: Number(south.value), pole: pole.value, shift: roundShift(Number(shift.value)), radius: Number.isNaN(r) ? 0 : r, travel: travelValue().list };
 };
 
 /** Padding (split evenly) that keeps a map wider than 2:1 in proportion on the sphere. */
@@ -86,7 +118,17 @@ function describeRadius(): void {
     : r
       ? `Circumference ${formatLength(2 * Math.PI * r, radiusUnit.value as DistUnit)}. Readers get a ruler (distance and area) in every embed of this slot.`
       : "Leave empty for no ruler. Earth's radius is 6,371 km.";
-  save.disabled = Number.isNaN(r);
+  const noRadius = !r || Number.isNaN(r);
+  travelBox.disabled = noRadius;
+  const tv = travelValue();
+  const badTravel = !noRadius && tv.bad;
+  travelHint.classList.toggle("error", badTravel);
+  travelHint.textContent = noRadius
+    ? "Set a world size first to use travel speeds."
+    : badTravel
+      ? `Give each ticked speed a name and between ${MIN_KM_PER_DAY} and ${MAX_KM_PER_DAY.toLocaleString()} km per day.`
+      : "Readers pick one on the ruler and see the travel time for the distance they measure.";
+  save.disabled = Number.isNaN(r) || badTravel;
 }
 
 function describe(): void {
@@ -123,6 +165,7 @@ function load(): void {
     pole: pole.value,
     shift: shift.value,
     radius: String(values().radius),
+    ...(values().travel.length ? { travel: JSON.stringify(values().travel) } : {}),
     grid: grid.checked ? "1" : "0",
     rotate: "0",
   });
@@ -151,6 +194,7 @@ shiftN.addEventListener("change", () => {
 });
 grid.addEventListener("change", send);
 radius.addEventListener("input", send);
+for (const r of TRAVEL_ROWS) for (const el of [r.on, r.km, r.name]) el?.addEventListener("input", send);
 radiusUnit.addEventListener("change", () => {
   // Keep the same size: convert what's typed into the other unit.
   const km = radiusKm(radius.value, radiusUnit.value === "mi" ? "km" : "mi");
@@ -181,7 +225,7 @@ fit.addEventListener("click", () => {
 save.addEventListener("click", () => {
   if (!current?.onSave) return;
   const v = values();
-  current.onSave({ map: mapSel.value, view, north: v.north, south: v.south, pole: v.pole, shift: v.shift, radius: v.radius });
+  current.onSave({ map: mapSel.value, view, north: v.north, south: v.south, pole: v.pole, shift: v.shift, radius: v.radius, travel: v.travel });
   dialog.close();
 });
 
@@ -197,6 +241,7 @@ export function openPreview(opts: PreviewOptions): void {
   pole.value = s.pole && /^#[0-9a-f]{6}$/i.test(s.pole) ? s.pole : DEFAULT_VIEW.pole;
   radiusUnit.value = "km";
   radius.value = s.radius ? String(s.radius) : "";
+  setTravel(s.travel);
   grid.checked = s.grid ?? false;
   view = s.view === "flat" ? "flat" : "globe";
   showView();

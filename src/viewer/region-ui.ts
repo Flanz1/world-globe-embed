@@ -4,6 +4,7 @@
  */
 import type { Position } from "../shared/geo.ts";
 import { mergeRegions, type LabelPoint, type LegendEntry, type RegionData } from "../shared/region.ts";
+import { leftStack } from "./stack.ts";
 
 export interface Lock {
   readonly locked: boolean;
@@ -199,7 +200,7 @@ export function makeLegend(stage: HTMLElement): {
   layerBox.className = "rlayers";
   layerBox.hidden = true;
   box.append(head, layerBox, list);
-  stage.append(box);
+  leftStack(stage).append(box);
   let count = 0;
   let open = true;
   const apply = () => {
@@ -315,7 +316,9 @@ export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; pl
         const r = e.getBoundingClientRect();
         if (r.width > 0 && r.height > 0) fixed.push({ x0: r.left - s.left - 2, y0: r.top - s.top - 2, x1: r.right - s.left + 2, y1: r.bottom - s.top + 2 });
       };
-      for (const sel of [".rkey", "#ui"]) add(root.querySelector(sel) ?? document.querySelector(sel));
+      // The left panel stack (legend, pin panels) panel by panel, and the corner buttons.
+      root.querySelectorAll(":scope > .rstack > *").forEach(add);
+      add(root.querySelector("#ui") ?? document.querySelector("#ui"));
       root.querySelectorAll(".wpin").forEach(add);
       const W = root.clientWidth;
       const H = root.clientHeight;
@@ -372,8 +375,6 @@ export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; pl
     },
   };
 }
-
-export const prefersReducedMotion = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**
  * Stacked regions (?regions=a,b,c): which are shown. `of(r)` is the region to paint: r without the hidden

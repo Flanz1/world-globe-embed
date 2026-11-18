@@ -22,14 +22,6 @@ export function loadImage(url: string): Promise<HTMLImageElement> {
   return p;
 }
 
-/** URL of a map's texture of the given width (or the nearest smaller one); LQIP if none is deployed. */
-export function mapImageUrl(map: MapMeta, want: TextureWidth): string {
-  for (const w of [want, 2048, 1024] as const) {
-    if (w <= want && map.sizes[`${w}`]) return new URL(map.sizes[`${w}`]!, SITE).href;
-  }
-  return map.lqip;
-}
-
 /** Loads the map at `want` width, falling back to smaller sizes and finally the LQIP (e.g. not deployed yet). */
 export async function loadMapImage(map: MapMeta, want: TextureWidth): Promise<HTMLImageElement> {
   const tries = ([8192, 4096, 2048, 1024] as const).filter((w) => w <= want && map.sizes[`${w}`]).map((w) => new URL(map.sizes[`${w}`]!, SITE).href);

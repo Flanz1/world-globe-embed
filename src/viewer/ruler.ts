@@ -5,7 +5,8 @@
  * Positions are [lon, lat] on the globe (after pole padding and prime meridian shift).
  */
 import type { Position } from "../shared/geo.ts";
-import { formatArea, formatLength, formatPercent, geodesic, perimeterKm, pathKm, ringAreaKm2, ringSphereFraction, validRadius, distanceKm, type DistUnit } from "../shared/measure.ts";
+import type { TravelSpeed } from "../shared/types.ts";
+import { cleanTravel, formatArea, formatDuration, formatLength, formatPercent, geodesic, perimeterKm, pathKm, ringAreaKm2, ringSphereFraction, validRadius, distanceKm, type DistUnit } from "../shared/measure.ts";
 
 export interface RulerHost {
   /** The viewer's canvas: clicks on it place points (drags still move the view). */
@@ -19,6 +20,10 @@ export interface RulerHost {
 
 export interface Ruler {
   redraw(): void;
+  /** The host's pick, for other tools that read a position off the map (the region card). */
+  pick: RulerHost["pick"];
+  /** Likewise the host's project. */
+  project: RulerHost["project"];
 }
 
 const CSS = `
@@ -31,16 +36,22 @@ const CSS = `
 .rl button:focus-visible{outline:2px solid #c9a94e}
 .rl button[aria-pressed=true]{background:#c9a94e;color:#1a1710}
 .rl button:disabled{opacity:.4;cursor:default}
-.rl output{display:block;min-height:1.3em}
+.rl output{display:block;min-height:1.3em;white-space:pre-line}
+.rl select{all:unset;box-sizing:border-box;padding:3px 22px 3px 8px;border-radius:5px;cursor:pointer;background:rgba(255,255,255,.1) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23f3ead8' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 7px center;max-width:100%}
+.rl select:focus-visible{outline:2px solid #c9a94e}
+.rl select option{color:#1a1710;background:#f3ead8}
+.rl-row[hidden]{display:none}
 `;
 
-export function setupRuler(cfg: { radius: number; controls: boolean }, host: RulerHost): Ruler {
+export function setupRuler(cfg: { radius: number; controls: boolean; travel?: TravelSpeed[] }, host: RulerHost): Ruler {
   const btn = document.getElementById("btn-ruler") as HTMLButtonElement | null;
   let radius = validRadius(cfg.radius) ? cfg.radius : 0;
   let on = false;
   let mode: "dist" | "area" = "dist";
   let unit: DistUnit = "km";
   let pts: Position[] = [];
+  let travel = cleanTravel(cfg.travel);
+  let speed = 0;
 
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -80,13 +91,30 @@ export function setupRuler(cfg: { radius: number; controls: boolean }, host: Rul
   const row1 = document.createElement("div");
   row1.className = "rl-row";
   row1.append(bDist, bArea, bUnit);
+  const rowT = document.createElement("div");
+  rowT.className = "rl-row";
+  const selT = document.createElement("select");
+  selT.setAttribute("aria-label", "Travel by");
+  selT.title = "How you travel: shows the time for the distance";
+  selT.addEventListener("change", () => {
+    speed = Number(selT.value) || 0;
+    update();
+  });
+  rowT.append(selT);
   const row2 = document.createElement("div");
   row2.className = "rl-row";
   row2.append(bUndo, bClear);
-  panel.append(row1, out, row2);
+  panel.append(row1, rowT, out, row2);
   // Clicks and drags on the panel shouldn't reach the viewer under it.
   for (const t of ["pointerdown", "wheel"] as const) panel.addEventListener(t, (e) => e.stopPropagation());
   host.stage.append(cv, panel);
+
+  function fillTravel(): void {
+    selT.replaceChildren(...travel.map((t, i) => Object.assign(document.createElement("option"), { value: String(i), textContent: `${t.label} · ${t.kmPerDay.toLocaleString("en")} km/day` })));
+    speed = Math.min(speed, travel.length - 1);
+    selT.value = String(Math.max(speed, 0));
+  }
+  fillTravel();
 
   function setMode(m: "dist" | "area"): void {
     mode = m;
@@ -97,6 +125,7 @@ export function setupRuler(cfg: { radius: number; controls: boolean }, host: Rul
     bDist.setAttribute("aria-pressed", String(mode === "dist"));
     bArea.setAttribute("aria-pressed", String(mode === "area"));
     bUnit.textContent = unit;
+    rowT.hidden = !(mode === "dist" && radius && travel.length > 1);
     bUndo.disabled = bClear.disabled = !pts.length;
     if (!radius) out.textContent = "";
     else if (mode === "dist") {
@@ -104,6 +133,11 @@ export function setupRuler(cfg: { radius: number; controls: boolean }, host: Rul
       else {
         const total = pathKm(pts, radius);
         out.textContent = `Distance: ${formatLength(total, unit)}` + (pts.length > 2 ? ` (last leg ${formatLength(distanceKm(pts[pts.length - 2], pts[pts.length - 1], radius), unit)})` : "");
+        const t = travel[speed];
+        if (t) {
+          const text = formatDuration(total / t.kmPerDay, t.label === "On foot" ? "on foot" : `by ${t.label.toLowerCase()}`);
+          out.textContent += `\n${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+        }
       }
     } else if (pts.length < 3) out.textContent = "Click the map to outline a shape (3 points or more).";
     else
@@ -234,9 +268,13 @@ export function setupRuler(cfg: { radius: number; controls: boolean }, host: Rul
     if (e.origin !== location.origin || e.source !== window.parent || e.data?.type !== "wge-preview" || !("radius" in e.data)) return;
     const v = e.data.radius;
     radius = validRadius(v) ? v : 0;
+    if ("travel" in e.data) {
+      travel = cleanTravel(e.data.travel);
+      fillTravel();
+    }
     applyRadius();
   });
 
   applyRadius();
-  return { redraw: draw };
+  return { redraw: draw, pick: host.pick, project: host.project };
 }
