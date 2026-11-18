@@ -79,7 +79,7 @@ const LABEL_BASE = 12;
 const TILT_MAX = (70 * Math.PI) / 180;
 
 /** An HTML label (textContent only) that is kept clear of the control buttons. */
-export function makeLabel(stage: HTMLElement): { setText(t: string): void; place(x: number, y: number, visible: boolean, fit?: LabelFit): void; el: HTMLDivElement; box: { x0: number; y0: number; x1: number; y1: number } | null; rank: number } {
+export function makeLabel(stage: HTMLElement): { setText(t: string): void; place(x: number, y: number, visible: boolean, fit?: LabelFit): void; el: HTMLDivElement; box: { x0: number; y0: number; x1: number; y1: number } | null; rank: number; shove(dx: number, dy: number): void } {
   const el = document.createElement("div");
   el.className = "rlabel";
   el.hidden = true;
@@ -88,10 +88,17 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
   let text = "";
   let natural: { w: number; h: number } | null = null;
   let size = 0;
+  let last: { cx: number; cy: number; w: number; h: number; a: number; box: { x0: number; y0: number; x1: number; y1: number } } | null = null;
   const self = {
     el,
     box: null as { x0: number; y0: number; x1: number; y1: number } | null,
     rank: 0,
+    /** Moves the placed label by (dx, dy) px from where place() put it. */
+    shove(dx: number, dy: number) {
+      if (!self.box || !last) return;
+      el.style.transform = `translate(${Math.round(last.cx + dx - last.w / 2)}px,${Math.round(last.cy + dy - last.h / 2)}px) rotate(${(-last.a).toFixed(4)}rad)`;
+      self.box = { x0: last.box.x0 + dx, y0: last.box.y0 + dy, x1: last.box.x1 + dx, y1: last.box.y1 + dy };
+    },
     setText(t: string) {
       text = t;
       el.textContent = t;
@@ -142,6 +149,7 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
       }
       el.style.transform = `translate(${Math.round(cx - w / 2)}px,${Math.round(cy - h / 2)}px) rotate(${(-a).toFixed(4)}rad)`;
       self.box = { x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh };
+      last = { cx, cy, w, h, a, box: self.box };
       el.style.opacity = "";
     },
   };
@@ -285,7 +293,35 @@ export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; pl
         keep.push({ x0: r.left - s.left, y0: r.top - s.top, x1: r.right - s.left, y1: r.bottom - s.top });
       }
       const hit = (a: { x0: number; y0: number; x1: number; y1: number }, b: typeof a) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+      // Visible pin markers are obstacles too: a label that would cover one is nudged clear (below, above, or along its axis).
+      const pins = [...root.querySelectorAll<HTMLElement>(".wpin")]
+        .map((e) => ({ e, r: e.getBoundingClientRect() }))
+        .filter(({ e, r }) => !e.hidden && r.width > 0 && r.height > 0)
+        .map(({ r }) => ({ x0: r.left - s.left - 2, y0: r.top - s.top - 2, x1: r.right - s.left + 2, y1: r.bottom - s.top + 2 }));
+      const W = root.clientWidth;
+      const H = root.clientHeight;
       for (const l of [...pool].filter((l) => l.box).sort((a, b) => b.rank - a.rank)) {
+        const free = (b: { x0: number; y0: number; x1: number; y1: number }) => !keep.some((k) => hit(b, k)) && b.x0 >= 0 && b.y0 >= 0 && b.x1 <= W && b.y1 <= H;
+        if (pins.some((k) => hit(l.box!, k))) {
+          const b = l.box!;
+          const w = b.x1 - b.x0;
+          const h = b.y1 - b.y0;
+          const hitPins = pins.filter((k) => hit(b, k));
+          const below = Math.max(...hitPins.map((k) => k.y1)) - b.y0;
+          const above = Math.min(...hitPins.map((k) => k.y0)) - b.y1;
+          const right = Math.max(...hitPins.map((k) => k.x1)) - b.x0;
+          const left = Math.min(...hitPins.map((k) => k.x0)) - b.x1;
+          const tries: [number, number][] = [[0, below], [0, above], [right, 0], [left, 0], [right, below], [left, above]];
+          const ok = tries.find(([dx, dy]) => {
+            const m = { x0: b.x0 + dx, y0: b.y0 + dy, x1: b.x1 + dx, y1: b.y1 + dy };
+            return free(m) && !pins.some((k) => hit(m, k)) && w + h > 0;
+          });
+          if (ok) l.shove(ok[0], ok[1]);
+          else {
+            l.el.style.opacity = "0";
+            continue;
+          }
+        }
         const clash = keep.some((k) => hit(l.box!, k));
         l.el.style.opacity = clash ? "0" : "";
         if (!clash) keep.push(l.box!);

@@ -162,13 +162,13 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       const { x, y, fit } = labelOnScreen(pt, ([lon, lat]) => ({ x: sx(lon + shift, w), y: sy(lat, h) }));
       labels?.place(i, x, y, x >= 0 && x <= w && y >= 0 && y <= h, fit);
     });
-    labels?.settle(stage);
     ruler.redraw();
     pinLayer?.place(([plon, plat]) => {
       const x = sx(plon + 360 * Math.round((view.cx - plon) / 360), w);
       const y = sy(plat, h);
       return { x, y, visible: x >= -12 && x <= w + 12 && y >= -12 && y <= h + 12 };
     });
+    labels?.settle(stage);
     maybeUpgrade();
     maybeTiles();
   }

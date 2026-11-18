@@ -401,7 +401,6 @@ export async function start(ctx: StartContext): Promise<void> {
       const { fit } = labelOnScreen(pt, (p) => toScreen(p));
       labels.place(i, x, y, facing, fit);
     });
-    labels.settle(stage);
   }
 
   /* ── Ruler: picks and projects globe positions with the same lat/lon → xyz convention as buildGrid ── */
@@ -566,6 +565,7 @@ export async function start(ctx: StartContext): Promise<void> {
       placeLabel();
       ruler.redraw();
       placePins();
+      labels?.settle(stage);
       dirty = false;
       // The view moved: once it settles, see whether it needs a sharper texture or other tiles.
       if (!spinning && !fade) onZoom();
