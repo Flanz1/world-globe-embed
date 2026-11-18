@@ -134,6 +134,12 @@
       "pinned": [
         "gethricism"
       ]
+    },
+    {
+      "id": "cevoli",
+      "name": "Cevoli",
+      "regions": [],
+      "parent": "ilrakhan"
     }
   ]
 }
