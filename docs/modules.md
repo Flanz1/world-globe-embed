@@ -14,6 +14,7 @@ One line per source file: what it is for. The first comment in each file says mo
 | `src/viewer/globe.ts` | The 3D globe, ported from GlobePanel in Fantasy-World-Visualizer (src/App.jsx) as plain TypeScript with no React. |
 | `src/viewer/pins.ts` | Map pins in the embed, shared by the globe and flat viewers: ?pins=1 (or ?pins=holy-sites for one pin map) fetches pins/<slot>.json and draws each pin as a small round marker on top of the map and the regions. |
 | `src/viewer/region-ui.ts` | Region embed UI shared by the globe and flat viewers: the view lock, the region label and the "Region not found" note. |
+| `src/viewer/region-card.ts` | Region cards: clicking a part of a region embed opens a small card with its area (km² and share of the world), the regions it borders and the pins inside it, read from the build-time facts/<region>.json. |
 | `src/viewer/ruler.ts` | The embed's ruler: a reader tool (corner button) that measures distance along the globe's surface and the area of a shape, in km or miles, using the world radius an admin set for the slot. |
 
 ## Shared (`src/shared/`)
@@ -29,6 +30,7 @@ One line per source file: what it is for. The first comment in each file says mo
 | `src/shared/combine.ts` | Combining several saved regions into one new region. |
 | `src/shared/embed.ts` | Embed snippets for regions. |
 | `src/shared/geo.ts` | Small geometry toolkit for regions, shared by the validator, the page generator, the viewer and the admin editor. |
+| `src/shared/health.ts` | Content health check: finds regions on another map than their slot shows, pins outside the regions that show their pin map, unused pin maps, regions in no folder, empty colour folders and regions near the vertex limit. Pure; the Health tab and scripts/content-health.ts both use it. |
 | `src/shared/hct.ts` | HCT colour space (hue and chroma from CAM16, tone = CIE L*) and the Material You (M3) colour scheme the admin page and editor use. |
 | `src/shared/history.ts` | The save log: who changed what in content/, and when, as the admin API's GET /history serves it. |
 | `src/shared/json.ts` | Region files as text: pretty-printed JSON, except that a position stays on one line. |
@@ -38,6 +40,7 @@ One line per source file: what it is for. The first comment in each file says mo
 | `src/shared/params.ts` | Reads and normalises the embed's query parameters (`grid`, `bg`, `zoom`, pole padding, …) and the slot defaults they override. |
 | `src/shared/pin-icons.ts` | Pin icons: line drawings in a 24×24 box, built as SVG elements (never from strings of markup). |
 | `src/shared/pinmaps.ts` | Pin maps: named, embeddable sets of pins ("Holy sites", "Battles"), kept in folders that nest like the Regions tab's (content/pinmaps.json). |
+| `src/shared/facts.ts` | Region facts, worked out at build time: each part's share of the world, the regions it borders (shared edges) and the pins inside it; also parses the file the embed fetches. |
 | `src/shared/pins.ts` | Map pins: single places (a city, a ruin, a battle site…) on a slot's map. |
 | `src/shared/raster.ts` | Draws a region onto a 2D canvas. |
 | `src/shared/region-paint.ts` | Turns a region into what raster.ts paints: a colour per part, which parts overlap which, and the contested land where parts of different colours overlap. |
@@ -55,8 +58,10 @@ One line per source file: what it is for. The first comment in each file says mo
 |---|---|
 | `src/admin/activity.ts` | Activity: who saved, moved or deleted what, from the admin API's save log (GET /history). |
 | `src/admin/categories.ts` | Region folders (categories) on the admin page: the state (content/categories.json), who may change what, and the dialogs to add, rename, reorder, move and delete folders and to move regions between them. |
+| `src/admin/comments.ts` | Reviewer comments on the admin page: one list read once and kept up to date by the person's own actions (never polled). |
 | `src/admin/dom.ts` | Tiny DOM helpers for the admin page. |
 | `src/admin/editing.ts` | A live link to the admin API's "who has a region open" room (worker/src/presence.ts). |
+| `src/admin/health.ts` | Health tab: lists what the content health check finds, from the regions, pins and folders already loaded (no extra requests). |
 | `src/admin/github.ts` | Minimal GitHub REST client for the admin page. |
 | `src/admin/images.ts` | Same-origin map images for the admin page's canvases (thumbnails and the region editor), cached. |
 | `src/admin/main.ts` | Admin page: list maps and slots, upload a map, switch a slot's map, draw regions, manage users. |
@@ -82,6 +87,7 @@ One line per source file: what it is for. The first comment in each file says mo
 | File | Purpose |
 |---|---|
 | `src/admin/editor/coast.ts` | The map's coastline as snap targets for the region editor (data: shared/coast.ts, made by scripts/lib/coast-mask.ts). |
+| `src/admin/editor/comments.ts` | The region editor's Comment tool: click the map to leave a comment, numbered markers, a popover to read, resolve, reopen or delete. |
 | `src/admin/editor/draft.ts` | Local copy of the editor's unsaved work, so a crash, a reload or a closed tab doesn't lose it. |
 | `src/admin/editor/editor.ts` | The region editor: a flat equirectangular canvas for drawing and editing, with the real globe (the preview page) beside it, updated live by postMessage. |
 | `src/admin/editor/fill.ts` | The fill tool: click inside an area and get its outline, traced out to the coast and to the borders of other parts and regions. |
@@ -109,6 +115,7 @@ One line per source file: what it is for. The first comment in each file says mo
 | File | Purpose |
 |---|---|
 | `scripts/build-worker-validators.ts` | Generates worker/src/generated/validators.js: the region, pin, access, categories, slots, map and prefs JSON schemas compiled to plain functions, because Cloudflare Workers can't compile schemas at run time (no eval). |
+| `scripts/content-health.ts` | CLI: the content health check over content/, as a Markdown report (also to the Actions job summary): npm run health, add --fail to exit 1 when a problem is found. |
 | `scripts/coast.ts` | Builds (or rebuilds) the coast file of maps that are already processed, from their textures: npm run coast                 every map npm run coast -- my-map    one map npm run coast -- my-map --mask out/mask.png   also write the… |
 | `scripts/generate-pages.ts` | Post-build step: writes dist/v/<slug>/index.html for every slot, plus the landing page. |
 | `scripts/import-map.ts` | Adds a map straight from a local image, for originals too big to upload to GitHub (over 100 MB, or wider than the admin page can take). |
@@ -117,6 +124,7 @@ One line per source file: what it is for. The first comment in each file says mo
 | `scripts/lib/coast-mask.ts` | Finds land and open sea in a painted map, and traces the coast between them. |
 | `scripts/lib/content.ts` | Loads and validates content/slots.json, content/maps/*.json and content/regions/*.json. |
 | `scripts/lib/landing.ts` | The small, unindexed landing page listing slots and their embed snippets. |
+| `scripts/lib/facts.ts` | Writes facts/<region>.json for every region (borders only count between regions in the same top-level category folder). |
 | `scripts/lib/pages.ts` | Generates the static files for a build: slot pages, the preview page, region and pin JSON. |
 | `scripts/lib/paths.ts` | Repository paths (content, regions, pins, maps) shared by the scripts. |
 | `scripts/lib/process.ts` | Turns an uploaded equirectangular image into WebP textures + LQIP + metadata. |

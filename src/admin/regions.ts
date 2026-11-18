@@ -25,6 +25,7 @@ import { compareBy, creatorChoices, creatorId, matchesQuery, type Filterable } f
 import { openHistory } from "./region-history.ts";
 import { openTrash } from "./trash.ts";
 import { alertBox, confirmBox, modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
+import { initComments, loadComments, onCommentsChange, openCountFor } from "./comments.ts";
 import { declineSuggestion, initSuggestions, loadSuggestions, markAccepted, pendingFor } from "./suggestions.ts";
 import type { SuggestionSummary } from "./github.ts";
 import { OWNER_ID, account, can, canDelete, canEdit, canTransfer, currentUser, ownerOf, refusal } from "./session.ts";
@@ -62,6 +63,9 @@ export const serialize = (f: RegionFeature) => stringifyCompact(f) + "\n";
 
 let deps: RegionsDeps;
 let entries: RegionEntry[] = [];
+
+/** The regions as loaded (the Health tab reads them). */
+export const regionEntries = (): RegionEntry[] => entries;
 
 /** Parsed region files by blob SHA: a blob never changes, so a reload after a save only reads the file that changed. */
 const parsed = new Map<string, { feature: RegionFeature | null; problem?: string }>();
@@ -126,6 +130,8 @@ export async function loadRegions(): Promise<void> {
   void loadSuggestions().then(() => {
     if (!hasPendingSaves()) renderRegions();
   });
+  // Cards also show how many comments are open on a region: one read of the comment list per page load.
+  void loadComments();
   await categoriesDone;
   // A change is still being saved: this read may predate it. The save reloads when it's done.
   if (hasPendingSaves()) return;
@@ -268,6 +274,7 @@ function card(e: RegionEntry): HTMLElement {
       { className: "actions" },
       canEdit(f) || !can("regions") || linked ? btn("Edit", () => edit(e), "tonal", noEdit) : null,
       !canEdit(f) && !linked && can("regions") ? btn("Suggest changes", () => suggest(e), "tonal", "") : null,
+      !canEdit(f) || !openCountFor(e.id) || linked ? null : h("button", { type: "button", className: "text small", textContent: `${openCountFor(e.id)} comment${openCountFor(e.id) > 1 ? "s" : ""}`, title: "Open the editor on the comments", dataset: { action: "comments", region: e.id }, onclick: () => edit(e, true) }),
       !canEdit(f) || !pendingFor(e.id) ? null : h("span", { className: "badge warn", textContent: `${pendingFor(e.id)} suggestion${pendingFor(e.id) > 1 ? "s" : ""}`, title: "Waiting in the list above the regions" }),
       btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot, p.pinMaps)),
       h("button", { type: "button", className: "ghost", textContent: "Embed code…", title: "Choose what to show and copy the embed code", dataset: { action: "embed" }, onclick: () => openEmbedDialog({ region: { id: e.id, name: e.id, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot }) }),
@@ -745,10 +752,10 @@ export function regionDisplayName(id: string): string | null {
   return e ? (e.feature?.properties.name || id) : null;
 }
 
-function edit(e: RegionEntry): void {
+function edit(e: RegionEntry, comments = false): void {
   if (!e.feature || !canEdit(e.feature)) return;
   if (e.feature.properties.linked) return editLinked(e);
-  openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature: e.feature, sha: e.sha, isNew: false, neighbours: others(e), neighbourMeta: overlayMeta(), takenIds: new Set(entries.map((x) => x.id)), afterCommit: deps.afterCommit });
+  openEditor({ ...(comments ? { openComments: true } : {}), gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature: e.feature, sha: e.sha, isNew: false, neighbours: others(e), neighbourMeta: overlayMeta(), takenIds: new Set(entries.map((x) => x.id)), afterCommit: deps.afterCommit });
 }
 
 /** Someone who can't edit this region changes it in the editor and sends the result to the people who can. */
@@ -1288,6 +1295,8 @@ function del(e: RegionEntry): void {
 
 export function initRegions(d: RegionsDeps): void {
   deps = d;
+  initComments(() => d.gh());
+  onCommentsChange(() => renderRegions());
   initSuggestions({ gh: d.gh, review: (s) => void reviewSuggestion(s).catch((e: Error) => alertBox("Couldn't open the suggestion", e.message)) });
   ui.search().addEventListener("input", renderRegions);
   ui.slot().addEventListener("change", renderRegions);
