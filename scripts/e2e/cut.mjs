@@ -296,7 +296,7 @@ await step(E, "closing a polygon or freehand outline is deliberate", async () =>
   const pressed = () => page.getAttribute('dialog.editor button[data-act="keep-open"]', "aria-pressed");
   await page.keyboard.press("f");
   await page.keyboard.press("k");
-  await page.waitForTimeout(100);
+  await page.waitForFunction(() => document.querySelector('dialog.editor button[data-act="keep-open"]')?.getAttribute("aria-pressed") === "true", null, { timeout: 5000 }).catch(() => {});
   let pr = await pressed();
   check(E, "K turns Open line on", pr === "true", String(pr));
   await drag([[0, 0], [150, 0], [150, 150]]);
@@ -316,7 +316,7 @@ await step(E, "closing a polygon or freehand outline is deliberate", async () =>
   check(E, "a stroke ending near the first point closes the outline", s.parts.length === n0 + 3 && !(await open()), `${s.parts.length} parts; ${await ed.msg()}`);
   await page.keyboard.press("f");
   await page.keyboard.press("k");
-  await page.waitForTimeout(100);
+  await page.waitForFunction(() => document.querySelector('dialog.editor button[data-act="keep-open"]')?.getAttribute("aria-pressed") === "false", null, { timeout: 5000 }).catch(() => {});
   pr = await pressed();
   check(E, "K turns Open line off again", pr === "false", String(pr));
   await page.keyboard.press("Escape");
