@@ -200,7 +200,8 @@ function renderSlots(): void {
           h("code", { textContent: slug }),
           " ",
           h("a", { href: new URL(`v/${slug}/`, SITE).href, target: "_blank", rel: "noopener", textContent: "open" }),
-          h("div", { className: "actions" }, select, save, preview, copy),
+          h("div", { className: "slot-map" }, select),
+          h("div", { className: "actions" }, save, preview, copy),
         ),
       );
     }),
