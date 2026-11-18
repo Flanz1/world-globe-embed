@@ -262,6 +262,12 @@ body:has(#tab-users:not([hidden]) #users-bar:not([hidden])) .snackbar { bottom: 
 .uperms .check { display: inline-flex; flex-direction: row; gap: 5px; align-items: center; color: var(--md-sys-color-on-surface); }
 .badge.rcreator { font-weight: 500; }
 @media (max-width: 720px) { .urow, .urow[data-waiting] { grid-template-columns: 1fr; } }
+/* Phones: name and role on their own lines; the summary + Permissions… on the left and a compact Remove on the right of the same line. */
+@media (max-width: 720px) {
+  .urow:not([data-waiting]) { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
+  .urow:not([data-waiting]) > .uname, .urow:not([data-waiting]) > select, .urow:not([data-waiting]) > span.muted { grid-column: 1 / -1; }
+  .urow:not([data-waiting]) > button[data-action="remove-user"] { grid-column: 2; align-self: start; justify-self: end; }
+}
 
 /* ── Small dialogs ── */
 /* Dialogs: 28 px radius on surface-container-high (M3). */
