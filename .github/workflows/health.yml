@@ -39,7 +39,7 @@ jobs:
         id: health
         run: |
           set +e
-          npx tsx scripts/content-health.ts --fail > "$RUNNER_TEMP/health.md"
+          npx tsx scripts/content-health.ts --fail > "$RUNNER_TEMP/health.md" 2>&1 # content that fails to load also exits 1, with its errors in the report
           code=$?
           set -e
           if [ "$code" -ne 0 ] && [ "$code" -ne 1 ]; then cat "$RUNNER_TEMP/health.md"; exit "$code"; fi
