@@ -63,6 +63,9 @@ export const serialize = (f: RegionFeature) => stringifyCompact(f) + "\n";
 let deps: RegionsDeps;
 let entries: RegionEntry[] = [];
 
+/** The regions as loaded (the Health tab reads them). */
+export const regionEntries = (): RegionEntry[] => entries;
+
 /** Parsed region files by blob SHA: a blob never changes, so a reload after a save only reads the file that changed. */
 const parsed = new Map<string, { feature: RegionFeature | null; problem?: string }>();
 const READ_PARALLEL = 8;

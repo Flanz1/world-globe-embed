@@ -13,6 +13,7 @@
     "build": "npm run validate && vite build && tsx scripts/generate-pages.ts",
     "preview": "vite preview --port 4173",
     "validate": "tsx scripts/validate-content.ts",
+    "health": "tsx scripts/content-health.ts",
     "process-maps": "tsx scripts/process-maps.ts",
     "import-map": "tsx scripts/import-map.ts",
     "coast": "tsx scripts/coast.ts",
@@ -50,6 +51,7 @@
     "worker:validators": "tsx scripts/build-worker-validators.ts",
     "preflight": "tsx scripts/preflight.mjs",
     "e2e:roles": "tsx scripts/e2e/roles.mjs",
+    "e2e:health": "tsx scripts/e2e/health.mjs",
     "e2e:theme": "tsx scripts/e2e/theme.mjs"
   },
   "dependencies": {
