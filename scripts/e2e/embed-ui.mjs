@@ -72,8 +72,10 @@ await step(D, "labels, tooltips and lock state", async () => {
   await page.locator("#btn-grid").focus();
   await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Tab");
-  await page.waitForTimeout(150);
-  check(D, "focus shows the tooltip at once", (await tip(page, "btn-grid")) > 0.9);
+  // "At once" = no transition delay on focus (hover has one). Poll the opacity rather than a fixed wait, since busy CI lags the fade.
+  const focusDelay = await page.evaluate(() => getComputedStyle(document.getElementById("btn-grid"), "::after").transitionDelay);
+  await page.waitForFunction(() => parseFloat(getComputedStyle(document.getElementById("btn-grid"), "::after").opacity) > 0.9, null, { timeout: 3000 }).catch(() => {});
+  check(D, "focus shows the tooltip at once", /^0s(,|$)/.test(focusDelay) && (await tip(page, "btn-grid")) > 0.9, `delay ${focusDelay}`);
   await page.screenshot({ path: path.join(OUT, "desktop-tooltip.png") });
   await page.keyboard.press("Escape");
   await page.waitForTimeout(150);

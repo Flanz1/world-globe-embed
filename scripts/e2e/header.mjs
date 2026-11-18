@@ -77,6 +77,7 @@ try {
   await p.click("#account");
   await p.waitForSelector("#account-menu:popover-open", { timeout: 3000 });
   check("phone: the menu shows who is signed in", /signed in as Flanz1/.test((await p.textContent("#who-menu")) ?? ""), await p.textContent("#who-menu"));
+  await p.waitForFunction(() => document.activeElement?.id === "forget-menu", null, { timeout: 3000 }).catch(() => {}); // focus moves after the popover opens; busy CI lags a frame
   check("phone: focus goes to Sign out and the button says it is expanded", (await p.evaluate(() => document.activeElement?.id)) === "forget-menu" && (await p.getAttribute("#account", "aria-expanded")) === "true");
   await p.screenshot({ path: path.join(OUT, "phone-menu.png") });
   await p.keyboard.press("Escape");
