@@ -28,10 +28,7 @@ export function setupLock(canvas: HTMLCanvasElement, initial: boolean, onChange:
     canvas.style.cursor = locked ? "default" : "";
     canvas.dataset.locked = String(locked);
     if (btn) {
-      const label = locked ? "Unlock view" : "Lock view";
       btn.setAttribute("aria-pressed", String(locked));
-      btn.setAttribute("aria-label", label);
-      btn.title = label;
     }
   };
   btn?.addEventListener("click", () => {
