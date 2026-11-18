@@ -1,4 +1,4 @@
-// e2e-suite: roots=EDITOR,WORKER weight=2 quarantine=182
+// e2e-suite: roots=EDITOR,WORKER weight=2
 /**
  * Browser checks for reviewer comments: a contributor drops a comment on someone else's region from the editor,
  * the region's owner sees a "1 comment" link on the card, opens the editor on it, and resolves it; the tool and the
@@ -84,6 +84,12 @@ const waitFor = async (page, fn, ms = 15000) => {
   const t0 = Date.now();
   while (!(await fn()) && Date.now() - t0 < ms) await page.waitForTimeout(100);
 };
+/** Polls an attribute until it has the wanted value (state is set a beat late on a busy runner); false if it never does. */
+const attrIs = async (page, loc, name, want, ms = 10000) => {
+  let got;
+  await waitFor(page, async () => ((got = await loc.getAttribute(name, { timeout: 2000 }).catch(() => null)) === want), ms);
+  return got === want;
+};
 const REGION = "provinces";
 const card = (id) => `.rcard[data-region="${id}"]`;
 const apiCalls = [];
@@ -100,14 +106,15 @@ await step(G, "a contributor comments on someone else's region", async () => {
   await ann.page.click(`${card(REGION)} [data-action="suggest-changes"]`);
   await ann.page.waitForSelector("dialog.editor", { timeout: 15000 });
   const tool = ann.page.locator('dialog.editor [data-act="comment-tool"]');
-  check(G, "the toolbar has a Comments button (no count yet)", ((await tool.textContent()) ?? "").trim() === "Comments" && (await tool.getAttribute("aria-label")) === "Comments");
+  check(G, "the toolbar has a Comments button (no count yet)", ((await tool.textContent()) ?? "").trim() === "Comments" && (await attrIs(ann.page, tool, "aria-label", "Comments")));
   await tool.click();
-  check(G, "pressing it turns the tool on", (await tool.getAttribute("aria-pressed")) === "true");
+  check(G, "pressing it turns the tool on", await attrIs(ann.page, tool, "aria-pressed", "true"));
   // Pin and Comment exclude each other.
   await ann.page.click('dialog.editor [data-act="pin-tool"]');
-  check(G, "the Pin tool switches the Comment tool off, and back", (await tool.getAttribute("aria-pressed")) === "false" && (await ann.page.getAttribute('dialog.editor [data-act="pin-tool"]', "aria-pressed")) === "true");
+  const pinBtn = ann.page.locator('dialog.editor [data-act="pin-tool"]');
+  check(G, "the Pin tool switches the Comment tool off, and back", (await attrIs(ann.page, tool, "aria-pressed", "false")) && (await attrIs(ann.page, pinBtn, "aria-pressed", "true")));
   await tool.click();
-  check(G, "…and the other way round", (await ann.page.getAttribute('dialog.editor [data-act="pin-tool"]', "aria-pressed")) === "false" && (await tool.getAttribute("aria-pressed")) === "true");
+  check(G, "…and the other way round", (await attrIs(ann.page, pinBtn, "aria-pressed", "false")) && (await attrIs(ann.page, tool, "aria-pressed", "true")));
   const cv = await ann.page.locator("dialog.editor canvas.ed-canvas").boundingBox();
   await ann.page.mouse.click(cv.x + cv.width * 0.4, cv.y + cv.height * 0.5);
   await ann.page.waitForSelector("dialog.editor .ed-cm-pop textarea", { timeout: 5000 });
@@ -117,12 +124,15 @@ await step(G, "a contributor comments on someone else's region", async () => {
   await ann.page.screenshot({ path: path.join(OUT, "1440-new.png") });
   await post.click();
   await ann.page.waitForSelector('dialog.editor .ed-cm-mark[data-comment]:not([data-comment="new"])', { timeout: 10000 });
-  check(G, "posting leaves a numbered marker, and the button counts it", (await ann.page.textContent('dialog.editor .ed-cm-mark[data-comment]:not([data-comment="new"])')) === "1" && (await tool.getAttribute("aria-label")) === "Comments, 1 open");
+  check(G, "posting leaves a numbered marker, and the button counts it", (await ann.page.textContent('dialog.editor .ed-cm-mark[data-comment]:not([data-comment="new"])')) === "1" && (await attrIs(ann.page, tool, "aria-label", "Comments, 1 open")));
+  await ann.page.waitForSelector('dialog.editor [data-act="comment-delete"]', { timeout: 10000 }); // the popover shows the posted comment a beat after the marker
   check(G, "the author can delete but not resolve their comment on another's region", (await ann.page.locator('dialog.editor [data-act="comment-delete"]').count()) === 1 && (await ann.page.locator('dialog.editor [data-act="comment-resolve"]').count()) === 0);
   await ann.page.screenshot({ path: path.join(OUT, "1440-posted.png") });
+  await waitFor(ann.page, () => ann.page.evaluate(() => document.activeElement?.matches('dialog.editor [data-act="comment-close"]'))); // the popover takes focus once it shows the posted comment; keys only reach the editor while focus is inside it
   await ann.page.keyboard.press("Escape");
+  await waitFor(ann.page, async () => (await ann.page.locator("dialog.editor .ed-cm-pop").isHidden()));
   await ann.page.keyboard.press("Escape");
-  check(G, "Esc closes the form, then leaves the tool", (await tool.getAttribute("aria-pressed")) === "false");
+  check(G, "Esc closes the form, then leaves the tool", await attrIs(ann.page, tool, "aria-pressed", "false"), await ann.page.evaluate(() => `pop hidden=${document.querySelector("dialog.editor .ed-cm-pop")?.hidden} focus=${document.activeElement?.tagName}.${document.activeElement?.className} dialogOpen=${!!document.querySelector("dialog.editor[open]")}`));
   check(G, "no page errors", ann.errors.length === 0, ann.errors.join(" | ") || "none");
   await ann.ctx.close();
 });
@@ -141,7 +151,7 @@ await step(G, "the owner sees it on the card, opens it and resolves it", async (
   await owner.page.waitForSelector("dialog.editor", { timeout: 15000 });
   const tool = owner.page.locator('dialog.editor [data-act="comment-tool"]');
   await owner.page.waitForSelector("dialog.editor .ed-cm-mark.resolved, dialog.editor .ed-cm-mark[data-comment]", { timeout: 10000 });
-  check(G, "the editor opens with the Comment tool on and the marker showing", (await tool.getAttribute("aria-pressed")) === "true" && (await tool.getAttribute("aria-label")) === "Comments, 1 open");
+  check(G, "the editor opens with the Comment tool on and the marker showing", (await attrIs(owner.page, tool, "aria-pressed", "true")) && (await attrIs(owner.page, tool, "aria-label", "Comments, 1 open")));
   await owner.page.click("dialog.editor .ed-cm-mark[data-comment]");
   await owner.page.waitForSelector('dialog.editor [data-act="comment-resolve"]');
   check(G, "the popover shows who wrote it and what", /carto-ann/.test((await owner.page.textContent("dialog.editor .ed-cm-pop")) ?? "") && /border looks off/.test((await owner.page.textContent("dialog.editor .ed-cm-pop")) ?? ""));
@@ -150,8 +160,7 @@ await step(G, "the owner sees it on the card, opens it and resolves it", async (
   await owner.page.screenshot({ path: path.join(OUT, "1440-dark-owner.png") });
   await owner.page.evaluate(() => (document.documentElement.dataset.theme = "light"));
   await owner.page.click('dialog.editor [data-act="comment-resolve"]');
-  await waitFor(owner.page, async () => (await tool.getAttribute("aria-label")) === "Comments");
-  check(G, "Resolve takes it off the open count and the markers", (await tool.getAttribute("aria-label")) === "Comments" && (await owner.page.locator("dialog.editor .ed-cm-mark[data-comment]:not(.resolved)").count()) === 0);
+  check(G, "Resolve takes it off the open count and the markers", (await attrIs(owner.page, tool, "aria-label", "Comments")) && (await owner.page.locator("dialog.editor .ed-cm-mark[data-comment]:not(.resolved)").count()) === 0);
   await owner.page.check('dialog.editor [name="ed-comments-resolved"]', { force: true }).catch(() => {});
   check(G, "no page errors", owner.errors.length === 0, owner.errors.join(" | ") || "none");
   await owner.ctx.close();
