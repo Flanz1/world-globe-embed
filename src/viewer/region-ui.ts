@@ -3,6 +3,7 @@
  * "Region not found" note. Region strings are only ever set with textContent.
  */
 import { mergeRegions, type LegendEntry, type RegionData } from "../shared/region.ts";
+import { leftStack } from "./stack.ts";
 
 export interface Lock {
   readonly locked: boolean;
@@ -124,7 +125,7 @@ export function makeLegend(stage: HTMLElement): {
   layerBox.className = "rlayers";
   layerBox.hidden = true;
   box.append(head, layerBox, list);
-  stage.append(box);
+  leftStack(stage).append(box);
   let count = 0;
   let open = true;
   const apply = () => {
@@ -205,8 +206,6 @@ export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; pl
     },
   };
 }
-
-export const prefersReducedMotion = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**
  * Stacked regions (?regions=a,b,c): which are shown. `of(r)` is the region to paint: r without the hidden

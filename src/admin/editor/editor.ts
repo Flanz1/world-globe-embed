@@ -63,6 +63,7 @@ import { TEXTURE_WIDTHS, type MapMeta, type SlotsFile, type TextureWidth } from 
 import { deviceLimit, nextTier } from "../../shared/tiers.ts";
 import { h } from "../dom.ts";
 import { iconify } from "./icons.ts";
+import { sidePanel } from "./sheet.ts";
 import { mapLimit, type GitHub } from "../github.ts";
 import { childrenOf, regionsPerCommit } from "../../shared/categories.ts";
 import { loadMapImage } from "../images.ts";
@@ -123,6 +124,8 @@ import {
 } from "./model.ts";
 import { pinMaps as allPinMaps } from "../pinmaps.ts";
 import { pinEntries } from "../pins.ts";
+import { createPinsLayer } from "./pins-layer.ts";
+import { createPinTool } from "./pin-tool.ts";
 import { keepPinsSent, sendPins } from "../preview-pins.ts";
 import { REGION_PINMAPS_MAX, mapsOfSlot, treeOf, type PinMap } from "../../shared/pinmaps.ts";
 import { clearDraft, draftKey, loadDraft, saveDraft, type Draft } from "./draft.ts";
@@ -335,7 +338,16 @@ export function openEditor(o: EditorOptions): void {
     layerBar.fwd.disabled = p >= n - 1;
     layerBar.back.disabled = p <= 0;
   }
+  // The slot's pins, painted on the canvas under the region's handles (positions come from the view helpers below).
+  const pinPos = { sx: (lon: number) => lon * 0, sy: (lat: number) => lat * 0 };
+  const pinsLayer = createPinsLayer({
+    pins: () => pinEntries().flatMap((e) => (e.feature && e.feature.properties.slot === slotName ? [e.feature] : [])),
+    sx: (lon) => pinPos.sx(lon),
+    sy: (lat) => pinPos.sy(lat),
+    changed: () => draw(),
+  });
   const overlays = createOverlayFilter({
+    extra: pinsLayer.row,
     items: neighbours.map((n, index) => ({
       categoryId: null,
       id: n.id as string,
@@ -588,7 +600,92 @@ export function openEditor(o: EditorOptions): void {
     h("div", { className: "row" }, combApply, btn("Cancel", "", () => closeCombine())),
   );
 
+  /* The side panel: four-ish sections shown as collapsible sections (wide) or tabs in a bottom sheet (phones, tablets). */
+  const side = sidePanel({
+    frame: frameEl,
+    banners: [draftBar, editingBanner, msg],
+    sections: [
+      {
+        id: "region",
+        title: "Region",
+        children: [
+          h("div", { className: "row" }, btn("Centre on region", "Turn the globe preview to face the region", () => sendPreview(true), "centre"), btn("Embed code…", "Copy the iframe code for this region", () => embed(), "embed")),
+          h("label", {}, "Id (permanent; embeds use it)", idIn),
+          h("p", { className: "muted small", textContent: `Slot: ${slotName} · map: ${slot.map}` }),
+          h("h4", { className: "ed-sub", textContent: "Appearance" }),
+          h("label", { className: "inline grow ed-fill" }, "Fill", opacityIn, opacityOut),
+          h("label", { className: "check" }, labelIn, "Show part labels in embed"),
+          h("label", { className: "check", title: "Draw a dark border where parts of different colours share a line (parts of one colour read as one). Off: parts that touch just touch." }, borderIn, "Draw national borders"),
+          h("h4", { className: "ed-sub", textContent: "Description" }),
+          h("label", {}, "Description (plain text)", descIn),
+        ],
+      },
+      {
+        id: "parts",
+        title: "Parts",
+        children: [
+        h(
+          "fieldset",
+          { className: "ed-colours" },
+          h("legend", { textContent: "Colours and parts" }),
+          h("p", {
+            className: "muted small",
+            textContent:
+              "Each colour is a folder of parts. Give a colour a label and the embed lists it in the legend. Move a part to another colour with its colour menu. Where parts overlap, the higher-numbered part is drawn on top: use Forward and Back to change that.",
+          }),
+          h("label", {}, "Legend title", keyTitleIn),
+          foldAllBtn,
+          folders,
+          addKeyBtn,
+        ),
+        h(
+          "fieldset",
+          { className: "ed-overlaps" },
+          h("legend", { textContent: "Overlaps" }),
+          h("p", {
+            className: "muted small",
+            textContent:
+              "Where parts of different colours overlap, the overlap is contested: equal stripes of every colour, with the borders through it dashed in each. A contested area (a colour's + Contested, or a part's Contested button) is an occupied area: striped and dash-bordered the same way, but the borders of the parts under it stay solid, as they were.",
+          }),
+          clashList,
+        ),
+          stats,
+        ],
+      },
+      { id: "underlays", title: "Underlays", children: [underBox, pinMapBox] },
+    ],
+  });
   const title = h("h2", {});
+  // The Pin tool: place, edit and move pins on this map (they save on their own, apart from the region).
+  const pinTool = createPinTool({
+    canvas,
+    pins: pinsLayer,
+    slot: slotName,
+    mapId: map?.id ?? "",
+    local: (e) => local(e),
+    lonLat: (x, y) => [wx(x), wy(y)],
+    toScreen: (lon, lat) => [sx(lon), sy(lat)],
+    size: () => size(),
+    offsets: () => offsets(),
+    view: {
+      get: () => view,
+      zoom: (f, x, y) => zoomAt(f, x, y),
+      pan: (dx, dy) => {
+        view.cx -= dx / view.k;
+        view.cy = Math.max(-90, Math.min(90, view.cy + dy / (view.k * ky)));
+        touched = true;
+        draw();
+      },
+    },
+    onToggle: (on) => {
+      if (on) {
+        drawing = null;
+        closeCombine(true);
+      }
+      canvas.style.cursor = on ? "crosshair" : tool === "select" ? "default" : "crosshair";
+      changed();
+    },
+  });
   const dlg = h(
     "dialog",
     { className: "editor", ariaLabel: "Region editor" },
@@ -600,6 +697,8 @@ export function openEditor(o: EditorOptions): void {
       iconify(toolBtn("polygon", "Polygon", "P", ": click points to draw a part; double-click or click the first point to close it"), "polygon", true),
       iconify(toolBtn("freehand", "Freehand", "F", ": drag to draw a part freehand"), "freehand", true),
       iconify(toolBtn("fill", "Fill", "B", ": click inside an area (an island, a province between borders) to trace it out to the coast and to the borders of other parts and regions"), "fill", true),
+      h("span", { className: "sep" }),
+      iconify(pinTool.button, "pin", false),
       h("span", { className: "sep" }),
       iconify(btn("Add part", "Draw another polygon (an island or exclave), in the default colour; a colour's + Part draws one in that colour", () => ((newPartStyle = OWN_COLOUR), (newPartOccupied = false), startDraw("part")), "add-part"), "add-part", false),
       iconify(btn("Cut", "Draw a shape to cut away: inside a part it makes a hole, across a part's edge it bites it, right across it splits it into separate parts", () => startDraw("cut"), "cut-hole"), "cut", false),
@@ -628,50 +727,8 @@ export function openEditor(o: EditorOptions): void {
     h(
       "div",
       { className: "ed-body" },
-      h("div", { className: "ed-canvas-wrap" }, canvas, overlays.panel, layerBar.el, ctxMenu, tip, simpPanel, combPanel, status),
-      h(
-        "div",
-        { className: "ed-side" },
-        frameEl,
-        h("div", { className: "row" }, btn("Centre on region", "Turn the globe preview to face the region", () => sendPreview(true), "centre"), btn("Embed code…", "Copy the iframe code for this region", () => embed(), "embed")),
-        draftBar,
-        editingBanner,
-        msg,
-        h("label", {}, "Id (permanent; embeds use it)", idIn),
-        h("p", { className: "muted small", textContent: `Slot: ${slotName} · map: ${slot.map}` }),
-        h("label", { className: "inline grow ed-fill" }, "Fill", opacityIn, opacityOut),
-        h("label", { className: "check" }, labelIn, "Show part labels in embed"),
-        h("label", { className: "check", title: "Draw a dark border where parts of different colours share a line (parts of one colour read as one). Off: parts that touch just touch." }, borderIn, "Draw national borders"),
-        h("label", {}, "Description (plain text)", descIn),
-        underBox,
-        pinMapBox,
-        h(
-          "fieldset",
-          { className: "ed-colours" },
-          h("legend", { textContent: "Colours and parts" }),
-          h("p", {
-            className: "muted small",
-            textContent:
-              "Each colour is a folder of parts. Give a colour a label and the embed lists it in the legend. Move a part to another colour with its colour menu. Where parts overlap, the higher-numbered part is drawn on top: use Forward and Back to change that.",
-          }),
-          h("label", {}, "Legend title", keyTitleIn),
-          foldAllBtn,
-          folders,
-          addKeyBtn,
-        ),
-        h(
-          "fieldset",
-          { className: "ed-overlaps" },
-          h("legend", { textContent: "Overlaps" }),
-          h("p", {
-            className: "muted small",
-            textContent:
-              "Where parts of different colours overlap, the overlap is contested: equal stripes of every colour, with the borders through it dashed in each. A contested area (a colour's + Contested, or a part's Contested button) is an occupied area: striped and dash-bordered the same way, but the borders of the parts under it stay solid, as they were.",
-          }),
-          clashList,
-        ),
-        stats,
-      ),
+      h("div", { className: "ed-canvas-wrap" }, canvas, pinsLayer.tip, pinTool.popover, overlays.panel, layerBar.el, ctxMenu, tip, simpPanel, combPanel, status),
+      side.el,
     ),
   );
   document.body.append(dlg);
@@ -685,6 +742,7 @@ export function openEditor(o: EditorOptions): void {
       (underBox.querySelector("legend") as HTMLElement).textContent = "Show under all its regions";
     }
     pinMapBox.hidden = true;
+    for (const e of dlg.querySelectorAll<HTMLElement>(".ed-sub")) e.hidden = true;
     for (const act of ["province-border", "embed"]) (dlg.querySelector(`button[data-act="${act}"]`) as HTMLElement).hidden = true;
     const ownerIn = h(
       "select",
@@ -713,6 +771,8 @@ export function openEditor(o: EditorOptions): void {
   const size = () => cssSize;
   const sx = (lon: number) => (lon - view.cx) * view.k + size().w / 2;
   const sy = (lat: number) => (view.cy - lat) * view.k * ky + size().h / 2;
+  pinPos.sx = sx;
+  pinPos.sy = sy;
   const wx = (x: number) => view.cx + (x - size().w / 2) / view.k;
   const wy = (y: number) => view.cy - (y - size().h / 2) / (view.k * ky);
   const nearest = (lon: number, near: number) => lon + 360 * Math.round((near - lon) / 360);
@@ -1285,6 +1345,8 @@ export function openEditor(o: EditorOptions): void {
         g.restore();
       }
     }
+    pinsLayer.draw(g, offs);
+    pinTool.reposition();
     if (combine) drawCombine(offs);
     if (tool === "select" && !simplifyPreview && !combine) {
       drawHandles(offs);
@@ -1614,11 +1676,12 @@ export function openEditor(o: EditorOptions): void {
       const lon = ((((cursor[0] + 180) % 360) + 360) % 360) - 180;
       line += ` · lon ${round(lon, 3)}, lat ${round(cursor[1], 3)}`;
     }
+    if (pinTool.active()) line = `Pin · click the map to place a pin, click a pin to edit it${cursor ? line.slice(line.indexOf(" · lon ")) : ""}`;
     status.textContent = line;
     undoBtn.disabled = !hist.canUndo;
     redoBtn.disabled = !hist.canRedo;
     histTitles();
-    for (const b of dlg.querySelectorAll<HTMLButtonElement>("button.tool")) b.setAttribute("aria-pressed", String(b.dataset.tool === tool));
+    for (const b of dlg.querySelectorAll<HTMLButtonElement>("button.tool")) b.setAttribute("aria-pressed", String(b.dataset.tool === tool && !pinTool.active()));
     gridBtn.setAttribute("aria-pressed", String(gridOn));
     snapBtn.setAttribute("aria-pressed", String(snapOn));
     coastBtn.setAttribute("aria-pressed", String(coastActive()));
@@ -2369,6 +2432,7 @@ export function openEditor(o: EditorOptions): void {
   /** The drawing tool Add part, Cut and Split use: freehand until the polygon tool is picked. */
   let drawTool: "polygon" | "freehand" = "freehand";
   function setTool(t: Tool): void {
+    if (pinTool.active()) pinTool.toggle(false);
     if (drawing && t !== "polygon") drawing = null;
     tool = t;
     if (t === "polygon" || t === "freehand") drawTool = t;
@@ -2379,6 +2443,7 @@ export function openEditor(o: EditorOptions): void {
     changed();
   }
   function startDraw(t: DrawTarget): void {
+    if (pinTool.active()) pinTool.toggle(false);
     closeCombine(true);
     if ((t === "cut" || t === "split" || t === "border") && !parts().length) return setMsg(`Draw a part first, then ${t === "border" ? "draw province borders in it" : `${t} it`}.`, "error");
     selLine = -1;
@@ -3357,6 +3422,8 @@ export function openEditor(o: EditorOptions): void {
   });
 
   canvas.addEventListener("pointermove", (e) => {
+    const cr = canvas.getBoundingClientRect();
+    pinsLayer.hover(e.clientX - cr.left, e.clientY - cr.top, offsets());
     const { x, y } = local(e);
     cursor = [wx(x), wy(y)];
     const pt = pointers.get(e.pointerId);
@@ -3646,6 +3713,14 @@ export function openEditor(o: EditorOptions): void {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && !(t instanceof HTMLInputElement && ["range", "checkbox", "color"].includes(t.type));
     const mod = e.ctrlKey || e.metaKey;
     if (typing) return; // native editing and undo inside text fields
+    if (e.key === "Escape" && pinTool.escape()) {
+      e.preventDefault();
+      return e.stopPropagation();
+    }
+    if ((e.key === "i" || e.key === "I") && !mod && !e.altKey) {
+      e.preventDefault();
+      return pinTool.toggle();
+    }
     if (mod && e.key.toLowerCase() === "z") {
       e.preventDefault();
       return e.shiftKey ? redo() : undo();
@@ -3843,6 +3918,7 @@ export function openEditor(o: EditorOptions): void {
   let saving = false;
   async function save(): Promise<void> {
     if (saving) return;
+    if (!(await pinTool.okToLeave())) return;
     if (live) return saveLive();
     const s = hist.state;
     if (isNew) {
@@ -4171,6 +4247,7 @@ export function openEditor(o: EditorOptions): void {
   };
   window.addEventListener("beforeunload", beforeUnload);
   async function tryClose(): Promise<void> {
+    if (!(await pinTool.okToLeave())) return;
     if (dirty() && !(await confirmBox("Unsaved changes", "Close the editor and lose the changes you haven't saved?", "Discard changes", "Keep editing"))) return;
     // Closed on purpose (saved, or discarded): nothing to recover. (A crash or a closed tab never gets here, so the draft stays.)
     draftHold = true;
@@ -4200,6 +4277,7 @@ export function openEditor(o: EditorOptions): void {
   ro.observe(canvas);
 
   dlg.showModal();
+  side.refresh();
   measure();
   fitView();
   if (o.live?.view) {
