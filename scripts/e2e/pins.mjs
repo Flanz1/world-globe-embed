@@ -224,6 +224,72 @@ for (const view of ["flat", "globe"]) {
   });
 }
 
+/* ── Embed: kind filter chips and clusters (a synthetic pins file served by the test) ── */
+for (const view of ["flat", "globe"]) {
+  await step(E, `${view} filter and clusters`, async () => {
+    const ctx = await browser.newContext({ viewport: { width: 900, height: 520 }, deviceScaleFactor: 1 });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(String(e)));
+    const at = (i, base) => [Math.round((base[0] + (i % 3) * 0.01) * 1e4) / 1e4, Math.round((base[1] + Math.floor(i / 3) * 0.01) * 1e4) / 1e4];
+    const mk = (id, kind, pos) => ({ id, name: `Pin ${id}`, kind, at: pos });
+    const pins = [
+      ...Array.from({ length: 6 }, (_, i) => mk(`town-${i}`, "town", at(i, [DISC.lon, DISC.lat]))), // one tight group
+      mk("same-a", "city", [DISC.lon + 25, DISC.lat + 4]),
+      mk("same-b", "city", [DISC.lon + 25, DISC.lat + 4]), // exactly the same spot: can't be zoomed apart
+      mk("lone-ruin", "ruin", [65, -35]),
+    ];
+    await page.route("**/pins/*.json", (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ pins, maps: [] }) }));
+    await page.goto(`${SITE}/v/${SLOT.slug}/?view=${view}&pins=1&lon=${DISC.lon}&lat=${DISC.lat}&zoom=1&rotate=0`);
+    await ready(page);
+    await page.waitForSelector(".wpin.wcl:not([hidden])", { timeout: 15000 });
+    await page.waitForTimeout(400);
+    const cl = page.locator(".wpin.wcl:not([hidden])");
+    check(E, `${view}: pins on one spot merge into a numbered cluster`, (await cl.filter({ hasText: "6" }).count()) === 1, await cl.allTextContents().then((t) => t.join(",")));
+    check(E, `${view}: a cluster is a button with an accessible name`, /6 pins, zoom in/.test((await cl.filter({ hasText: "6" }).getAttribute("aria-label")) ?? ""));
+    check(E, `${view}: the merged pins are not drawn singly`, (await page.locator('.wpin:not(.wcl):not([hidden])[data-name^="Pin town"]').count()) === 0);
+
+    // The filter panel: a chip per kind with its count, pressed when on.
+    const chips = page.locator(".wpl-chip");
+    check(E, `${view}: one chip per kind present`, (await chips.count()) === 3, String(await chips.count()));
+    check(E, `${view}: chip name has the kind and count`, (await chips.first().getAttribute("aria-label")) === "City, 2 pins");
+    await page.locator('.wpl-chip[aria-label^="Town"]').click();
+    await page.waitForTimeout(200);
+    check(E, `${view}: switching a kind off hides its pins and cluster`, (await page.locator(".wpin.wcl:not([hidden])").filter({ hasText: "6" }).count()) === 0 && (await page.locator('.wpl-chip[aria-label^="Town"]').getAttribute("aria-pressed")) === "false");
+    await page.locator('.wpl-chip[aria-label^="Town"]').click();
+    await page.waitForTimeout(200);
+    check(E, `${view}: and back on shows them again`, (await page.locator(".wpin.wcl:not([hidden])").filter({ hasText: "6" }).count()) === 1);
+    await page.locator(".wpl-head").click();
+    check(E, `${view}: the panel folds`, (await page.locator(".wpl-chips").isHidden()) && (await page.locator(".wpl-head").getAttribute("aria-expanded")) === "false");
+    await page.locator(".wpl-head").click();
+    await page.screenshot({ path: path.join(OUT, `embed-${view}-clusters.png`) });
+
+    // Pins on exactly the same spot open a list instead of zooming.
+    const pair = page.locator(".wpin.wcl:not([hidden])").filter({ hasText: "2" });
+    if (await pair.count()) {
+      await pair.first().click();
+      check(E, `${view}: a cluster that can't zoom apart opens a list of its pins`, (await page.locator(".wcl-list button").count()) === 2);
+      await page.locator(".wcl-list button").first().click();
+      check(E, `${view}: choosing one opens its card`, await page.locator(".wpin-card").isVisible());
+    } else check(E, `${view}: the same-spot pair is a cluster`, false, "not in view");
+
+    // Clicking the big cluster zooms in until its pins separate.
+    await page.keyboard.press("Escape");
+    // (each click zooms a step; the globe zooms about 2x per click, so a few clicks may be needed)
+    let after = 0;
+    for (let i = 0; i < 6 && after < 2; i++) {
+      const big = page.locator(".wpin.wcl:not([hidden])").filter({ hasText: "6" });
+      if (!(await big.count())) break;
+      await big.click();
+      await page.waitForTimeout(900);
+      after = await page.locator('.wpin:not(.wcl):not([hidden])[data-name^="Pin town"]').count();
+    }
+    check(E, `${view}: clicking a cluster zooms in and splits it`, after > 1 || (await page.locator(".wcl-list button").count()) > 0, `${after} single pins`);
+    check(E, `${view}: no page errors`, errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  });
+}
+
 /* ═════════════ 2. Admin ═════════════ */
 const A = "admin";
 const mock = new MockGitHub({ root: dir, branches: ["main", BRANCH] });
