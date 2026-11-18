@@ -1,5 +1,5 @@
 /**
- * The top-left stack of "what's shown" panels in the embed: the region legend (with its layer toggles) and the
+ * The left-edge stack (top-left on phones) of "what's shown" panels in the embed: the region legend (with its layer toggles) and the
  * pin kind filter sit in one column so they never overlap. The first caller creates it; styled in shared/page.ts.
  */
 export function leftStack(stage: HTMLElement): HTMLElement {

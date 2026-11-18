@@ -899,6 +899,18 @@ function refresh(): void {
   redraw();
 }
 
+/** Opens the Pins tab on a pin's slot with that pin selected. False when there is no such pin. */
+export function openPinById(id: string): boolean {
+  const e = entryOf(id);
+  if (!e?.feature) return false;
+  location.hash = "#pins";
+  if (!built) renderPins();
+  slot = e.feature.properties.slot;
+  refresh();
+  select(id);
+  return true;
+}
+
 /** Called when the Pins tab is opened. */
 export function renderPins(): void {
   if (!built) build();

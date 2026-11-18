@@ -630,6 +630,16 @@ body.bulk-on { padding-bottom: 96px; }
 .bulk-bar .bulk-actions { order: 3; }
 @media (max-width: 560px) { .bulk-bar { flex-flow: row wrap; } .bulk-count { order: 1; flex: 1 1 auto; } .bulk-actions { flex: 1 1 100%; } }
 
+/* Health tab */
+.hl-head { align-items: center; margin-top: 10px; }
+.hl-group { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; background: var(--md-sys-color-surface-container-high); }
+.hl-group > p { margin: 6px 0 8px; }
+.hl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.hl-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.hl-row .link { overflow-wrap: anywhere; }
+.hl-row[data-severity="problem"] > .small:first-child { color: var(--md-sys-color-error); }
+.hl-row[data-severity="notice"] > .small:first-child { color: var(--app-warn); }
+
 /* Touch: keep the 28-32 px look, but give every small button a 44 px hit area (an invisible ::after centred on the
    button). The editor toolbar buttons get 40 px for real. Fine pointers (mouse) are untouched. */
 @media (pointer: coarse) {
