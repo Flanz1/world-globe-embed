@@ -3053,6 +3053,8 @@ export function openEditor(o: EditorOptions): void {
   }
   function toggleKeepOpen(): void {
     keepOpen = !keepOpen;
+    // Shown at once: the status refresh waits for the next animation frame, which lags on a busy machine.
+    keepOpenBtn.setAttribute("aria-pressed", String(keepOpen));
     try {
       localStorage.setItem(KEEP_OPEN_PREF, keepOpen ? "on" : "off");
     } catch {
