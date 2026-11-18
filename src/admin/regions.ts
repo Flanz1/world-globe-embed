@@ -23,7 +23,8 @@ import type { Editing, FileCommit, GitHub } from "./github.ts";
 import { loadMapImage } from "./images.ts";
 import { compareBy, creatorChoices, creatorId, matchesQuery, type Filterable } from "./region-filter.ts";
 import { openHistory } from "./region-history.ts";
-import { openTrash } from "./trash.ts";
+import { openTrash, restoredFile } from "./trash.ts";
+import { showSnackbar } from "./snackbar.ts";
 import { alertBox, confirmBox, modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
 import { declineSuggestion, initSuggestions, loadSuggestions, markAccepted, pendingFor } from "./suggestions.ts";
 import type { SuggestionSummary } from "./github.ts";
@@ -1254,8 +1255,29 @@ async function transfer(e: RegionEntry, f: RegionFeature): Promise<void> {
   m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), go);
 }
 
+/** Puts a region deleted a moment ago back, exactly as it was (the snackbar's Undo). */
+function undoDelete(e: RegionEntry): void {
+  const feature = e.feature;
+  if (!feature) return;
+  const text = restoredFile(serialize(feature));
+  if (!text) return;
+  void optimistic({
+    label: `Restore region ${e.id}`,
+    check: () => refusal({ path: e.path, before: null, after: text }),
+    apply: () => {
+      const before = entries;
+      entries = [...entries, e];
+      return before;
+    },
+    undo: (before) => void (entries = before),
+    render: renderRegions,
+    commit: () => deps.gh().commit(`Restore region ${e.id}`, async () => [{ path: e.path, content: text }]),
+  });
+}
+
 function del(e: RegionEntry): void {
   openDelete(e.id, () => {
+    if (e.feature) showSnackbar(`Deleted region ${e.id}`, { label: "Undo", run: () => undoDelete(e) });
     void optimistic({
       label: `Delete region ${e.id}`,
       check: () => refusal({ path: e.path, before: e.feature ? serialize(e.feature) : "", after: null }),

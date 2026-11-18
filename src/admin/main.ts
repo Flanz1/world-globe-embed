@@ -19,6 +19,7 @@ import { adopt, colourMenu, connectAccount, forgetTheme, initTheme, modeButton, 
 import { needsRenewal, sessionRemembers } from "./session-token.ts";
 import { initUsers, loadUsers } from "./users.ts";
 import { setChecks, type Check } from "./status.ts";
+import { initErrorBanner, initSnackbar, showError, showSnackbar } from "./snackbar.ts";
 
 declare const __REPO__: string;
 /** The admin API (worker/). Set with VITE_ADMIN_API at build time; empty means it isn't set up yet. */
@@ -64,10 +65,19 @@ let gh: GitHub | null = null;
 let maps: MapMeta[] = [];
 let slots: SlotsFile = { slots: {} };
 
+/**
+ * The Status card keeps the latest line (saving…, results, errors). Successes also pop up as a snackbar so they are seen
+ * wherever you are on the page; errors also show in the banner at the top. A new action clears the old error.
+ */
 function setStatus(text: string, kind: "muted" | "error" | "ok" = "muted"): void {
   const el = $("#status");
   el.textContent = text;
   el.className = kind;
+  if (kind === "error") showError(text);
+  else if (kind === "ok") {
+    showError(null);
+    showSnackbar(text);
+  }
 }
 
 // No ?view= here: the page reads the slot's default view, so changing it later updates embeds already pasted.
@@ -228,9 +238,8 @@ function renderChecks(runs: WorkflowRun[]): void {
   const busy = runs.some((r) => r.status !== "completed");
   const failed = runs.find((r) => r.conclusion === "failure");
   setChecks([
-    deploys
-      ? { id: "branch", label: "Commits go to the live branch", state: "ok", detail: gh?.branch }
-      : { id: "branch", label: "Test branch: changes won't go live", state: "warn", detail: gh?.branch },
+    // On a test branch the header badge already says so; no second warning here.
+    ...(deploys ? [{ id: "branch", label: "Commits go to the live branch", state: "ok" as const, detail: gh?.branch }] : []),
     failed
       ? { id: "workflow", label: "Last workflow failed", state: "error", detail: failed.name }
       : busy
@@ -320,8 +329,8 @@ function pollRuns(): void {
 
 /** After a commit: tell the user, watch the workflows, reload everything. */
 async function afterCommit(sha: string, reload = true): Promise<void> {
-  setStatus(`Committed ${sha.slice(0, 7)} to ${gh!.branch}. Waiting for the workflow to publish it…`, "ok");
-  if (gh!.branch !== gh!.defaultBranch) setStatus(`Committed ${sha.slice(0, 7)} to the test branch ${gh!.branch}. GitHub Pages only deploys ${gh!.defaultBranch}, so it won't go live from here.`, "ok");
+  if (gh!.branch !== gh!.defaultBranch) setStatus(`Saved ${sha.slice(0, 7)} to the test branch ${gh!.branch}. It won't go live from here.`, "ok");
+  else setStatus(`Saved ${sha.slice(0, 7)} to ${gh!.branch}. Publishing…`, "ok");
   pollRuns();
   if (can("users")) void loadUsers();
   if (reload) await loadAll().catch((e) => setStatus((e as Error).message, "error"));
@@ -626,6 +635,8 @@ if (framed) {
   );
 } else {
   initTheme();
+  initSnackbar();
+  initErrorBanner();
   $("#theme-ctl").append(modeButton(), colourMenu());
   $("#forget").addEventListener("click", signOut);
   $("#waiting-out").addEventListener("click", signOut);
