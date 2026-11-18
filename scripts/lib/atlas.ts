@@ -83,8 +83,8 @@ export function atlasGroups(slug: string, regions: ReadonlyMap<string, RegionFea
 }
 
 const CSS = `
-:root{color-scheme:light dark;--surface:#fffbff;--on:#1e1b16;--on-var:#4d4639;--card:#f8f2ea;--card-hi:#ece7de;--line:#d0c5b4;--primary:#6b5d1e;--on-primary:#fff;--tonal:#f1e3a8;--on-tonal:#221b00;--chip:#e9e2d0;--on-chip:#1e1b16;--map:#14120f}
-@media (prefers-color-scheme:dark){:root{--chip:#4a4739;--on-chip:#e9e2d3;--surface:#16130b;--on:#e9e2d3;--on-var:#cfc6b3;--card:#1e1b13;--card-hi:#2c2920;--line:#4d4639;--primary:#dcc66e;--on-primary:#3b2f00;--tonal:#52470d;--on-tonal:#f9e285}}
+:root{color-scheme:light dark;--surface:#fff8ee;--on:#1f1b14;--on-var:#4f4635;--card:#fbf2e7;--card-hi:#f0e7dc;--line:#d3c5af;--primary:#7a5900;--tonal:#f5e0bb;--on-tonal:#241a04;--chip:#f5e0bb;--on-chip:#241a04;--map:#14120f}
+@media (prefers-color-scheme:dark){:root{--surface:#16130d;--on:#eae1d6;--on-var:#d3c5af;--card:#1f1b14;--card-hi:#2e2922;--line:#4f4635;--primary:#edc061;--tonal:#52452a;--on-tonal:#f5e0bb;--chip:#52452a;--on-chip:#f5e0bb}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--surface);color:var(--on);font:15px/1.5 system-ui,sans-serif}
 main{max-width:72rem;margin:0 auto;padding:16px}
@@ -92,7 +92,7 @@ h1{font-size:24px;margin:8px 0 4px;display:flex;flex-wrap:wrap;gap:8px;align-ite
 h2{font-size:16px;font-weight:600;margin:24px 0 8px}
 .pill{font-size:12px;font-weight:500;padding:2px 10px;border-radius:999px;background:var(--chip);color:var(--on-chip)}
 .hint{color:var(--on-var);margin:0 0 8px;font-size:14px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
 .tile{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:10px;display:flex;flex-direction:column;gap:6px;min-width:0}
 .view{aspect-ratio:16/10;border-radius:8px;overflow:hidden;background:var(--map);position:relative}
 .view.live{background:var(--card-hi)}
@@ -101,7 +101,8 @@ section{content-visibility:auto;contain-intrinsic-size:auto 400px}
 .view iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .name{font-weight:600;font-size:16px;overflow-wrap:anywhere}
 code{font:12px ui-monospace,monospace;color:var(--on-var);overflow-wrap:anywhere}
-.row{display:flex;gap:6px;flex-wrap:wrap}
+.row{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto}
+button{flex:none;white-space:nowrap}
 button{font:500 13px system-ui,sans-serif;height:32px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--primary);cursor:pointer}
 button.text{border-color:transparent}
 button[hidden]{display:none}
@@ -150,7 +151,7 @@ export function generateAtlasPages(content: Content, cats?: CategoriesFile): Gen
             const op = typeof r.properties.fillOpacity === "number" ? Math.min(1, Math.max(0.15, r.properties.fillOpacity + 0.2)) : 0.55;
             return `<li class="tile" data-src="${escapeHtml(src)}" data-title="${escapeHtml(`Live view of ${displayName(r)}`)}">
 <div class="view"><svg viewBox="0 0 ${VIEW_W} ${VIEW_H}" role="img" aria-label="Outline of ${escapeHtml(displayName(r))}"><path d="${outlinePath(r)}" fill="${col}" fill-opacity="${op}" stroke="${col}" stroke-width="1.2" fill-rule="evenodd" stroke-linejoin="round"/></svg></div>
-<div class="name">${escapeHtml(displayName(r))}</div><code>${escapeHtml(id)}</code>
+<div class="name">${escapeHtml(displayName(r))}</div>${displayName(r) !== id ? `<code>${escapeHtml(id)}</code>` : ""}
 <div class="row"><button type="button" class="tonal" data-live>Load live view</button><button type="button" class="text" data-unload hidden>Show preview</button><button type="button" data-copy data-code="${escapeHtml(code)}" aria-live="polite">Copy embed code</button></div></li>`;
           })
           .join("\n");
