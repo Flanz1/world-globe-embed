@@ -673,4 +673,7 @@ dialog.help-dlg { width: min(640px, calc(100vw - 32px)); }
   .ed-toolbar [data-act="pin-tool"] .ed-lbl, .ed-toolbar [data-act="comment-tool"] .ed-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   dialog.editor .ed-toolbar [data-act="pin-tool"], dialog.editor .ed-toolbar [data-act="comment-tool"] { position: relative; justify-content: center; min-width: 40px; padding: 0; }
   .ed-toolbar [data-act="pin-tool"][aria-pressed="true"]::before { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; margin: 0; }
+  /* Icon-only Comments: the open count stays, as a small pill on the icon's top right. */
+  .ed-toolbar [data-act="comment-tool"] .ed-cm-count { position: absolute; top: 1px; right: 1px; min-width: 14px; height: 14px; margin: 0; padding: 0 3px; font-size: 10px; line-height: 14px; }
+  .ed-toolbar [data-act="comment-tool"][aria-pressed="true"]::before { position: absolute; top: 3px; left: 3px; width: 10px; height: 10px; margin: 0; }
 }
