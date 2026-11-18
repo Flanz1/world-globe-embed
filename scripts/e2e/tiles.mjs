@@ -259,8 +259,8 @@ for (const view of ["globe", "flat"]) {
   });
   stage = "admin editor: opening the region list";
   await page.goto(`${SITE}/admin/#regions`);
-  // The list can start with cards inside a collapsed folder (not "visible"); the suite only needs the page loaded.
-  await page.waitForSelector("#regions .rcard", { state: "attached", timeout: 15000 });
+  // The list can start with cards inside a collapsed folder (not "visible"), and the admin page is slow to answer while a software-GL browser is busy: 15 s timed out on CI even with 45 cards present.
+  await page.waitForSelector("#regions .rcard", { state: "attached", timeout: 90000 });
   stage = "admin editor: opening a new region";
   await page.selectOption("#r-new-slot", "tiles");
   await page.locator(".r-new-row .r-new").click();
