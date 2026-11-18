@@ -57,12 +57,12 @@ export interface Content {
   maps: Map<string, MapMeta>;
   /** Region id → region. Optional so older callers (and tests) that build Content by hand still work. */
   regions?: Map<string, RegionFeature>;
+  /** content/categories.json, when present (the atlas page groups by it). */
+  categories?: CategoriesFile;
   /** Pin id → pin (content/pins/). Optional like regions. */
   pins?: Map<string, PinFeature>;
   /** Pin maps and their folders (content/pinmaps.json). Optional. */
   pinMaps?: PinMapsFile;
-  /** Region categories (content/categories.json), when there are any. Optional. */
-  categories?: CategoriesFile;
 }
 
 export interface ValidationResult {
@@ -293,9 +293,9 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
     }
   }
 
-  let categories: CategoriesFile | undefined;
   // Region categories (optional). A region id that no longer exists is only a warning: deleting a region leaves its id behind until the next category change tidies it up.
   const categoriesFile = path.join(paths.content, "categories.json");
+  let categories: CategoriesFile | undefined;
   if (existsSync(categoriesFile)) {
     try {
       const data = readJson(categoriesFile);
@@ -312,5 +312,5 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
     }
   }
 
-  return { content: errors.length || !slots ? null : { slots, maps, regions, pins, pinMaps, ...(categories ? { categories } : {}) }, errors, warnings };
+  return { content: errors.length || !slots ? null : { slots, maps, regions, pins, pinMaps, categories }, errors, warnings };
 }

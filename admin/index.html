@@ -27,8 +27,9 @@
   <section id="signin" class="card" hidden>
     <h2>Sign in</h2>
     <p>Sign in with your GitHub account. You'll only see the parts of the admin page you've been given access to.</p>
+    <p><label><input id="signin-remember" type="checkbox"> Keep me signed in on this browser</label></p>
     <p><button id="signin-github" type="button">Sign in with GitHub</button></p>
-    <p class="muted small">GitHub asks once whether to let this site know your username. The page never sees your GitHub password or a token that can change your repositories, and the sign-in lasts at most 12 hours in this tab.</p>
+    <p class="muted small">GitHub asks once whether to let this site know your username. The page never sees your GitHub password or a token that can change your repositories, and the sign-in lasts 12 hours in this tab, or 30 days (renewed whenever you use the page) if you tick "Keep me signed in". Only tick it on a browser that's yours.</p>
     <p id="signin-setup" class="warn small" hidden>Sign-in isn't set up for this copy of the site yet (it was built without VITE_ADMIN_API).</p>
     <p id="signin-error" class="error" role="alert"></p>
   </section>
@@ -166,9 +167,9 @@
       <label>World size <span class="range"><input id="pv-radius" type="number" min="0" step="any" inputmode="decimal" placeholder="Radius" aria-label="World radius"><select id="pv-radius-unit" aria-label="Radius unit"><option value="km">km</option><option value="mi">mi</option></select><button id="pv-earth" type="button" class="ghost" title="Earth's radius, 6,371 km">Earth</button></span><span id="pv-radius-hint" class="muted small"></span></label>
       <button id="pv-fit" type="button" class="ghost">Fit padding to image</button>
       <p id="pv-hint" class="muted small"></p>
+      <p id="pv-note" class="muted small" aria-live="polite"></p>
       <div class="pv-foot">
         <button id="pv-save" type="button">Save to slot</button>
-        <p id="pv-note" class="muted small" aria-live="polite"></p>
       </div>
     </div>
   </div>
