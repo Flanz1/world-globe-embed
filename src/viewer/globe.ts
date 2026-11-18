@@ -793,7 +793,7 @@ export async function start(ctx: StartContext): Promise<void> {
   // Show the canvas on the frame after the first real render, so the poster crossfade has pixels to reveal.
   requestAnimationFrame(() => {
     root.classList.add("ready");
-    root.dataset.state = "interactive";
+    if (root.dataset.state !== "hires") root.dataset.state = "interactive"; // a texture upgrade may already have finished
     performance.mark("wge-interactive");
   });
 

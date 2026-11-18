@@ -540,7 +540,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   render();
   requestAnimationFrame(() => {
     root.classList.add("ready");
-    root.dataset.state = "interactive";
+    if (root.dataset.state !== "hires") root.dataset.state = "interactive"; // a texture upgrade may already have finished
     performance.mark("wge-interactive");
   });
 }
