@@ -603,9 +603,12 @@ export function openEditor(o: EditorOptions): void {
     mapId: map?.id ?? "",
     local: (e) => local(e),
     lonLat: (x, y) => [wx(x), wy(y)],
+    toScreen: (lon, lat) => [sx(lon), sy(lat)],
+    size: () => size(),
     offsets: () => offsets(),
     view: {
       get: () => view,
+      zoom: (f, x, y) => zoomAt(f, x, y),
       pan: (dx, dy) => {
         view.cx -= dx / view.k;
         view.cy = Math.max(-90, Math.min(90, view.cy + dy / (view.k * ky)));
@@ -1323,6 +1326,7 @@ export function openEditor(o: EditorOptions): void {
       }
     }
     pinsLayer.draw(g, offs);
+    pinTool.reposition();
     if (combine) drawCombine(offs);
     if (tool === "select" && !simplifyPreview && !combine) {
       drawHandles(offs);
@@ -1655,7 +1659,7 @@ export function openEditor(o: EditorOptions): void {
     status.textContent = line;
     undoBtn.disabled = !hist.canUndo;
     redoBtn.disabled = !hist.canRedo;
-    for (const b of dlg.querySelectorAll<HTMLButtonElement>("button.tool")) b.setAttribute("aria-pressed", String(b.dataset.tool === tool));
+    for (const b of dlg.querySelectorAll<HTMLButtonElement>("button.tool")) b.setAttribute("aria-pressed", String(b.dataset.tool === tool && !pinTool.active()));
     gridBtn.setAttribute("aria-pressed", String(gridOn));
     snapBtn.setAttribute("aria-pressed", String(snapOn));
     coastBtn.setAttribute("aria-pressed", String(coastActive()));

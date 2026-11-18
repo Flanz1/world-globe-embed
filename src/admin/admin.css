@@ -364,16 +364,19 @@ dialog.editor .ed-folder-head button { padding: 0 8px; }
 .ed-toolbar-end { margin-left: auto; display: flex; }
 .ed-ov-panel { position: absolute; right: 8px; top: 8px; z-index: 3; display: grid; gap: 6px; width: min(340px, calc(100% - 16px)); max-height: min(70vh, 520px); grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); border: 0; box-shadow: var(--app-shadow); }
 .ed-ov-layers { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid var(--md-sys-color-outline-variant); }
-.ed-pin-pop { position: absolute; right: 8px; bottom: 36px; z-index: 5; width: min(320px, calc(100% - 16px)); max-height: calc(100% - 52px); overflow: auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); box-shadow: var(--app-shadow); }
+.ed-pin-pop { position: absolute; left: 8px; top: 8px; z-index: 5; width: min(320px, calc(100% - 16px)); max-height: calc(100% - 16px); display: flex; flex-direction: column; border-radius: 12px; background: var(--md-sys-color-surface-container-high); box-shadow: var(--app-shadow); }
 .ed-pin-pop[hidden] { display: none; }
-.ed-pin-form { display: grid; gap: 8px; }
-.ed-pin-form label { display: grid; gap: 2px; }
-.ed-pin-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ed-pin-form { display: flex; flex-direction: column; min-height: 0; max-height: inherit; }
+.ed-pin-head { padding: 12px 12px 0; }
+.ed-pin-body { display: grid; gap: 8px; padding: 8px 12px; overflow: auto; min-height: 0; }
+.ed-pin-body label { display: grid; gap: 2px; }
+.ed-pin-foot { display: flex; align-items: center; gap: 8px; padding: 8px 12px 12px; border-top: 1px solid var(--md-sys-color-outline-variant); }
+.ed-pin-foot .grow { flex: 1; }
 .ed-pin-kinds { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; }
-.ed-pin-kinds .ed-kind { flex: 0 0 auto; white-space: nowrap; box-shadow: inset 0 -3px 0 var(--kind); }
+.ed-pin-kinds .ed-kind { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; box-shadow: inset 0 -3px 0 var(--kind); }
 .ed-pin-kinds .ed-kind[aria-checked="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: var(--md-sys-color-outline); }
-.ed-pin-kinds .ed-kind[aria-checked="true"]::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 2px; background: currentColor; -webkit-mask: var(--app-tick) center / contain no-repeat; mask: var(--app-tick) center / contain no-repeat; }
-@media (max-width: 600px) { .ed-pin-pop { left: 0; right: 0; bottom: 0; width: auto; border-radius: 16px 16px 0 0; max-height: 65%; } }
+.ed-pin-kinds .ed-kind[aria-checked="true"]::before { content: ""; width: 12px; height: 12px; margin: 0; background: currentColor; -webkit-mask: var(--app-tick) center / contain no-repeat; mask: var(--app-tick) center / contain no-repeat; }
+@media (max-width: 600px) { .ed-pin-pop { position: fixed; left: 0; right: 0; top: auto; bottom: 0; width: auto; max-height: 70vh; border-radius: 16px 16px 0 0; z-index: 20; } }
 .ed-pin-tip { position: absolute; z-index: 4; pointer-events: none; padding: 4px 8px; border-radius: 8px; font-size: 12px; white-space: nowrap; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); border: 1px solid var(--md-sys-color-outline-variant); box-shadow: var(--app-shadow); }
 .ed-pin-tip[hidden] { display: none; }
 .ed-ov-panel[hidden] { display: none; }

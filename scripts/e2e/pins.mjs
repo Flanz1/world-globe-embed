@@ -329,6 +329,33 @@ await step(A, "the region editor's Pin tool places, moves, edits and deletes pin
   const pop = page.locator("dialog.editor .ed-pin-pop");
   await pop.waitFor({ state: "visible", timeout: 5000 });
   check(A, "clicking the map opens the new-pin popover with Name focused", (await pop.locator("strong").textContent()) === "New pin" && (await page.evaluate(() => document.activeElement?.getAttribute("name"))) === "pin-name");
+  check(A, "while Pin is on, no drawing tool shows as pressed", (await page.locator('dialog.editor button.tool[aria-pressed="true"]').count()) === 0);
+  const pr = await pop.boundingBox();
+  check(A, "the popover is beside the new pin, not over it", pr.x > cv.x + 40 + 10 || pr.x + pr.width < cv.x + 40 - 10, JSON.stringify(pr));
+  await page.focus('dialog.editor [data-kind="city"]');
+  await page.keyboard.press("ArrowRight");
+  check(A, "arrow keys move through the kinds", (await pop.locator('[data-kind="town"]').getAttribute("aria-checked")) === "true" && (await page.evaluate(() => document.activeElement?.getAttribute("data-kind"))) === "town");
+  await pop.locator('[data-kind="city"]').click();
+  // Two fingers still pinch-zoom while the tool is on.
+  const v0 = await page.evaluate(() => document.querySelector("dialog.editor").wgeEditor.view());
+  const k0 = v0.k;
+  await page.evaluate(([x, y]) => {
+    const c = document.querySelector("dialog.editor canvas.ed-canvas");
+    const ev = (type, id, dx) => c.dispatchEvent(new PointerEvent(type, { pointerId: id, button: 0, clientX: x + dx, clientY: y, bubbles: true, cancelable: true, pointerType: "touch" }));
+    ev("pointerdown", 11, -40);
+    ev("pointerdown", 12, 40);
+    for (let i = 1; i <= 5; i++) {
+      ev("pointermove", 11, -40 - i * 10);
+      ev("pointermove", 12, 40 + i * 10);
+    }
+    ev("pointerup", 11, -90);
+    ev("pointerup", 12, 90);
+  }, [cv.x + 400, cv.y + 300]);
+  const k1 = await page.evaluate(() => document.querySelector("dialog.editor").wgeEditor.view().k);
+  await page.evaluate((v) => document.querySelector("dialog.editor").wgeEditor.setView(v.cx, v.cy, v.k), v0);
+  await page.waitForTimeout(200);
+  check(A, "a two-finger pinch zooms the map while Pin is on", k1 > k0 * 1.3, `${k0} -> ${k1}`);
+  check(A, "…and the pinch does not place a pin", (await pop.locator("strong").textContent()) === "New pin");
   check(A, "kinds are a radiogroup of chips", (await pop.locator('[role=radiogroup] [role=radio]').count()) === 10);
   await pop.locator('input[name="pin-name"]').fill("Editor Port");
   for (const [w, hgt] of [[1440, 900], [768, 900], [375, 800]])
@@ -337,6 +364,10 @@ await step(A, "the region editor's Pin tool places, moves, edits and deletes pin
       await page.emulateMedia({ colorScheme: scheme });
       await page.waitForTimeout(300);
       await page.screenshot({ path: path.join(OUT, `editor-pin-tool-${w}-${scheme}.png`) });
+      if (w === 375 && scheme === "light") {
+        const sv = await pop.locator('[data-act="pin-save"]').boundingBox();
+        check(A, "at 375 the sheet's Save pin button is in view", !!sv && sv.y + sv.height <= 800 && sv.y >= 0, JSON.stringify(sv));
+      }
     }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ colorScheme: "light" });
