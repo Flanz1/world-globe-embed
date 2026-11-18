@@ -10,7 +10,8 @@ import { GitHub, GitHubError, NotListed, type FileChange, type WorkflowRun } fro
 import { hasPendingSaves, initOptimistic, optimistic } from "./optimistic.ts";
 import { openPreview } from "./preview.ts";
 import { $, SITE, h } from "./dom.ts";
-import { initRegions, item, loadRegions, moreMenu, openRegionById, regionDisplayName, renderRegions, watchEditing } from "./regions.ts";
+import { initRegions, item, loadRegions, openRegionById, regionDisplayName, regionFeatures, renderRegions, watchEditing } from "./regions.ts";
+import { moreMenu } from "./more-menu.ts";
 import { canWarp, openWarp } from "./warp.ts";
 import { initPins, loadPins, renderPins } from "./pins.ts";
 import { initHealth, renderHealth } from "./health.ts";
@@ -222,7 +223,7 @@ function renderSlots(): void {
             preview,
             copy,
             // Opt-in: only from here, never prompted when a map changes.
-            canWarp() ? moreMenu(slug, [item("Warp regions…", () => openWarp({ gh: () => gh!, maps: () => maps, afterCommit }, slug, slots.slots[slug] ?? slot), "", "Move this slot's regions and pins onto a redrawn map by matching points")]) : null,
+            canWarp() ? moreMenu(`More actions for ${slug}`, [item("Warp regions…", () => openWarp({ gh: () => gh!, maps: () => maps, afterCommit }, slug, slots.slots[slug] ?? slot), "", "Move this slot's regions and pins onto a redrawn map by matching points")], { data: { region: slug } }) : null,
           ),
         ),
       );
@@ -655,7 +656,7 @@ if (framed) {
   initOptimistic({ setCheck: (c) => { saveCheck = c; renderChecks(lastRuns); }, setStatus, committed: afterCommit, reload: loadAll });
   initActivity({ gh: () => gh!, openRegion: openRegionById, regionName: regionDisplayName });
   initRegions({ gh: () => gh!, maps: () => maps, slots: () => slots, act, afterCommit });
-  initPins({ gh: () => gh!, maps: () => maps, slots: () => slots, act });
+  initPins({ gh: () => gh!, maps: () => maps, slots: () => slots, act, regions: regionFeatures });
   initHealth({ slots: () => slots, openRegion: openRegionById });
   initUsers({ gh: () => gh!, act });
   wireTabs();

@@ -810,6 +810,7 @@ export async function start(ctx: StartContext): Promise<void> {
    * screen, and when zoomed in further 8192, always after the 4096 has shown (see nextTier). */
   let texW = cfg.textures[0].w;
   let upgrading = false;
+  const failedTiers = new Set<number>();
   async function upgradeTexture(): Promise<void> {
     if (upgrading || fade) return;
     const pick = nextTier(cfg.textures, texW, textureWant(), texLimit);
@@ -877,10 +878,17 @@ export async function start(ctx: StartContext): Promise<void> {
         },
       };
       invalidate();
-    } catch {
-      texW = pick.w; // don't retry this size; keep the current texture
+    } catch (e) {
+      console.warn("[wge] texture upgrade failed", pick.w, e);
+      root.dataset.texError = String(pick.w);
       upgrading = false;
-      root.dataset.state = "hires";
+      if (failedTiers.has(pick.w)) {
+        texW = pick.w; // failed twice: don't retry this size; keep the current texture
+        root.dataset.state = "hires";
+      } else {
+        failedTiers.add(pick.w); // a transient failure (network, memory under load) gets one retry
+        setTimeout(() => void upgradeTexture(), 1500);
+      }
     }
   }
   void upgradeTexture();

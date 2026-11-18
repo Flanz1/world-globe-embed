@@ -35,6 +35,7 @@ import type { AccessFile, Account } from "../shared/access.ts";
 import { newIdProblem, renameInCategories, renameInRegion } from "../shared/rename.ts";
 import { CATEGORIES_PATH, regionsPerCommit, serializeCategories, type CategoriesFile } from "../shared/categories.ts";
 import { SITE } from "./dom.ts";
+import { moreMenu, type MoreItem } from "./more-menu.ts";
 import type { FileChange } from "./github.ts";
 
 export interface RegionEntry {
@@ -281,7 +282,7 @@ function card(e: RegionEntry): HTMLElement {
       !canEdit(f) || !pendingFor(e.id) ? null : h("span", { className: "badge warn", textContent: `${pendingFor(e.id)} suggestion${pendingFor(e.id) > 1 ? "s" : ""}`, title: "Waiting in the list above the regions" }),
       btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot, p.pinMaps)),
       h("button", { type: "button", className: "ghost", textContent: "Embed code…", title: "Choose what to show and copy the embed code", dataset: { action: "embed" }, onclick: () => openEmbedDialog({ region: { id: e.id, name: e.id, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot }) }),
-      moreMenu(e.id, [
+      moreMenu(`More actions for ${e.id}`, [
         // Editors who can edit it themselves can still send a suggestion for somebody else to accept (same name as everywhere).
         canEdit(f) && can("regions") && !linked ? item("Suggest changes", () => suggest(e), "", "Draw changes and send them for somebody else to accept or decline") : null,
         item("Rename…", () => changeId(e), noRename, "Change the id that embed links use"),
@@ -289,73 +290,12 @@ function card(e: RegionEntry): HTMLElement {
         item("History", () => openHistory({ gh: deps.gh(), id: e.id, path: e.path, feature: f, map, noRestore: noEdit, act: deps.act }), linked ? "A linked region has no history of its own: open the regions it combines." : ""),
         canTransfer() ? item("Transfer", () => transfer(e, f), "") : null,
         item("Delete", () => del(e), noDelete, "", true),
-      ]),
+      ], { data: { region: e.id } }),
     ),
   );
 }
 
-export type MenuItem = { text: string; onclick: () => void; why: string; hint: string; danger: boolean };
-export const item = (text: string, onclick: () => void, why = "", hint = "", danger = false): MenuItem => ({ text, onclick, why, hint, danger });
-
-/** The "More…" button at the end of a region card's row, with a menu of the less used actions (Delete last, red, behind a line). */
-export function moreMenu(id: string, items: (MenuItem | null)[]): HTMLElement {
-  const list = items.filter((x): x is MenuItem => !!x);
-  const menu = h("div", { className: "rmenu", role: "menu", ariaLabel: `More actions for ${id}`, dataset: { region: id } });
-  menu.setAttribute("popover", "auto");
-  const buttons = list.map((x) => {
-    const b = h("button", { type: "button", role: "menuitem", className: `ghost${x.danger ? " danger" : ""}`, textContent: x.text, disabled: !!x.why, title: x.why || x.hint, dataset: { action: x.text.toLowerCase().replace(/\W+/g, "-") } });
-    b.addEventListener("click", () => {
-      menu.hidePopover();
-      x.onclick();
-    });
-    return b;
-  });
-  menu.append(...buttons);
-  const more = h("button", { type: "button", className: "ghost text", textContent: "More…", dataset: { action: "more" } });
-  more.setAttribute("aria-expanded", "false");
-  more.setAttribute("aria-haspopup", "menu");
-  const close = () => {
-    if (menu.matches(":popover-open")) menu.hidePopover();
-  };
-  const enabled = () => buttons.filter((b) => !b.disabled);
-  menu.addEventListener("beforetoggle", (ev) => {
-    if ((ev as ToggleEvent).newState !== "open") return;
-    const r = more.getBoundingClientRect();
-    // Below the button, or above it when there is no room below.
-    const room = window.innerHeight - r.bottom - 8;
-    const need = buttons.length * 30 + 16;
-    menu.style.top = room >= need || r.top < need ? `${Math.round(r.bottom + 4)}px` : `${Math.round(r.top - 4 - need)}px`;
-    menu.style.left = `${Math.max(8, Math.round(Math.min(r.right - 170, window.innerWidth - 178)))}px`;
-  });
-  menu.addEventListener("toggle", (ev) => {
-    const open = (ev as ToggleEvent).newState === "open";
-    more.setAttribute("aria-expanded", String(open));
-    if (open) {
-      (enabled()[0] ?? buttons[0])?.focus();
-      window.addEventListener("scroll", close, { capture: true, passive: true });
-      window.addEventListener("resize", close);
-    } else {
-      window.removeEventListener("scroll", close, { capture: true });
-      window.removeEventListener("resize", close);
-      // Escape or a click outside: put focus back on More… unless it went somewhere else on purpose.
-      if (menu.contains(document.activeElement) || document.activeElement === document.body) more.focus();
-    }
-  });
-  menu.addEventListener("keydown", (ev) => {
-    const live = enabled();
-    const at = live.indexOf(document.activeElement as HTMLButtonElement);
-    const go = (n: number) => (ev.preventDefault(), live[(n + live.length) % live.length]?.focus());
-    if (ev.key === "ArrowDown") go(at + 1);
-    else if (ev.key === "ArrowUp") go(at < 0 ? -1 : at - 1);
-    else if (ev.key === "Home") go(0);
-    else if (ev.key === "End") go(live.length - 1);
-    else if (ev.key === "Tab") menu.hidePopover();
-  });
-  more.addEventListener("click", () => {
-    menu.togglePopover();
-  });
-  return h("span", { className: "rmore" }, more, menu);
-}
+export const item = (text: string, onclick: () => void, why = "", hint = "", danger = false): MoreItem => ({ text, onclick, why, hint, danger });
 
 /** "Folder" dropdown on a card: only shown once folders exist. Moving needs the right to edit the region. */
 function categorySelect(e: RegionEntry): HTMLElement | null {
@@ -1299,6 +1239,9 @@ function del(e: RegionEntry): void {
     });
   });
 }
+
+/** The saved regions' features (for drawing their outlines elsewhere, e.g. behind the pins). */
+export const regionFeatures = (): RegionFeature[] => entries.flatMap((e) => (e.feature ? [e.feature] : []));
 
 /* ── Bulk actions: tick several region cards, then move, recolour or delete them together ── */
 
