@@ -242,3 +242,12 @@ describe("underlays of a linked region", () => {
     expect(a.properties.under).toEqual([{ id: "x" }]);
   });
 });
+
+describe("partLegend schema", () => {
+  it("accepts every legend index up to LEGEND_MAX - 1", () => {
+    const legend = Array.from({ length: LEGEND_MAX }, (_, i) => ({ label: `c${i}`, color: "#2980b9" }));
+    const f = { type: "Feature", properties: { name: "x", color: "#c0392b", legend, partLegend: [0, 15, 16, 191 % LEGEND_MAX, LEGEND_MAX - 1] }, geometry: { type: "MultiPolygon", coordinates: [] } };
+    validate(f);
+    expect((validate.errors ?? []).filter((e) => e.instancePath.startsWith("/properties/partLegend"))).toEqual([]);
+  });
+});
