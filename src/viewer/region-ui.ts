@@ -207,8 +207,6 @@ export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; pl
   };
 }
 
-export const prefersReducedMotion = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
-
 /**
  * Stacked regions (?regions=a,b,c): which are shown. `of(r)` is the region to paint: r without the hidden
  * ones, the same object for the same state (so painters can cache on it). The last one can't be hidden.
