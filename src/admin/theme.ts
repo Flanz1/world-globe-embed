@@ -23,7 +23,6 @@ const views: (() => void)[] = [];
 const darkQuery = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : null;
 /** Whether the page is dark right now (the choice, or the system's when following it). */
 export const isDark = (): boolean => (current.mode === "system" ? !!darkQuery?.matches : current.mode === "dark");
-export const currentPrefs = (): Prefs => ({ ...current });
 
 /** Set (or, for the default Gold, clear) the colour roles on <html>. Custom properties set through the CSSOM pass the page's strict CSP. */
 function setVars(vars: Record<string, string> | null): void {

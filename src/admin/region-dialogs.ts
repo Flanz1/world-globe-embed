@@ -153,6 +153,7 @@ export function previewUrl(slot: Slot, q: Record<string, string>): string {
     pole: slot.pole ?? DEFAULT_VIEW.pole,
     shift: String(slot.shift ?? DEFAULT_VIEW.shift),
     radius: String(slot.radius ?? DEFAULT_VIEW.radius),
+    ...(slot.travel?.length ? { travel: JSON.stringify(slot.travel) } : {}),
     rotate: "0",
     ...q,
   });

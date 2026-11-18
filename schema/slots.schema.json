@@ -105,6 +105,20 @@
           "minimum": 100,
           "maximum": 1000000,
           "description": "The world's radius in km. When set, every embed of the slot gets a ruler (distance and area in real units)."
+        },
+        "travel": {
+          "type": "array",
+          "maxItems": 6,
+          "description": "Travel speeds for the ruler (needs a radius): readers pick one and see how long the measured distance takes.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "kmPerDay"],
+            "properties": {
+              "label": { "type": "string", "minLength": 1, "maxLength": 24 },
+              "kmPerDay": { "type": "number", "minimum": 0.1, "maximum": 100000 }
+            }
+          }
         }
       }
     }

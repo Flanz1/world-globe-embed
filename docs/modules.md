@@ -14,6 +14,7 @@ One line per source file: what it is for. The first comment in each file says mo
 | `src/viewer/globe.ts` | The 3D globe, ported from GlobePanel in Fantasy-World-Visualizer (src/App.jsx) as plain TypeScript with no React. |
 | `src/viewer/pins.ts` | Map pins in the embed, shared by the globe and flat viewers: ?pins=1 (or ?pins=holy-sites for one pin map) fetches pins/<slot>.json and draws each pin as a small round marker on top of the map and the regions. |
 | `src/viewer/region-ui.ts` | Region embed UI shared by the globe and flat viewers: the view lock, the region label and the "Region not found" note. |
+| `src/viewer/region-card.ts` | Region cards: clicking a part of a region embed opens a small card with its area (km² and share of the world), the regions it borders and the pins inside it, read from the build-time facts/<region>.json. |
 | `src/viewer/ruler.ts` | The embed's ruler: a reader tool (corner button) that measures distance along the globe's surface and the area of a shape, in km or miles, using the world radius an admin set for the slot. |
 
 ## Shared (`src/shared/`)
@@ -38,6 +39,7 @@ One line per source file: what it is for. The first comment in each file says mo
 | `src/shared/params.ts` | Reads and normalises the embed's query parameters (`grid`, `bg`, `zoom`, pole padding, …) and the slot defaults they override. |
 | `src/shared/pin-icons.ts` | Pin icons: line drawings in a 24×24 box, built as SVG elements (never from strings of markup). |
 | `src/shared/pinmaps.ts` | Pin maps: named, embeddable sets of pins ("Holy sites", "Battles"), kept in folders that nest like the Regions tab's (content/pinmaps.json). |
+| `src/shared/facts.ts` | Region facts, worked out at build time: each part's share of the world, the regions it borders (shared edges) and the pins inside it; also parses the file the embed fetches. |
 | `src/shared/pins.ts` | Map pins: single places (a city, a ruin, a battle site…) on a slot's map. |
 | `src/shared/raster.ts` | Draws a region onto a 2D canvas. |
 | `src/shared/region-paint.ts` | Turns a region into what raster.ts paints: a colour per part, which parts overlap which, and the contested land where parts of different colours overlap. |
@@ -98,6 +100,7 @@ One line per source file: what it is for. The first comment in each file says mo
 
 | File | Purpose |
 |---|---|
+| `worker/src/comments.ts` | Reviewer comments: anyone on the admin list can drop a short comment at a spot on a region; people who may edit the region see it and tick it off. Kept in one KV value, never listed. |
 | `worker/src/crypto.ts` | Signing helpers for the admin API: HMAC-signed session and state tokens, and the GitHub App's RS256 JWT. |
 | `worker/src/handler.ts` | The admin API: a Cloudflare Worker that is the only thing allowed to write to the repository. |
 | `worker/src/index.ts` | Cloudflare Worker entry for the admin API (see handler.ts), and the Durable Object behind "X is editing" (presence.ts). |
@@ -118,6 +121,7 @@ One line per source file: what it is for. The first comment in each file says mo
 | `scripts/lib/coast-mask.ts` | Finds land and open sea in a painted map, and traces the coast between them. |
 | `scripts/lib/content.ts` | Loads and validates content/slots.json, content/maps/*.json and content/regions/*.json. |
 | `scripts/lib/landing.ts` | The small, unindexed landing page listing slots and their embed snippets. |
+| `scripts/lib/facts.ts` | Writes facts/<region>.json for every region (borders only count between regions in the same top-level category folder). |
 | `scripts/lib/pages.ts` | Generates the static files for a build: slot pages, the preview page, region and pin JSON. |
 | `scripts/lib/paths.ts` | Repository paths (content, regions, pins, maps) shared by the scripts. |
 | `scripts/lib/process.ts` | Turns an uploaded equirectangular image into WebP textures + LQIP + metadata. |

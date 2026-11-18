@@ -202,6 +202,43 @@ describe("admin API sign-in", () => {
     expect(me).toEqual({ ...ANN, owner: false, permissions: ["regions"], prefs: null });
   });
 
+  it("keeps a remembered sign-in for 30 days and renews it without storing anything", async () => {
+    const NONCE = "r".repeat(24);
+    const login = async (remember: boolean) => {
+      const start = await call(`${API}/auth/login?return=${encodeURIComponent(ADMIN)}&nonce=${NONCE}${remember ? "&remember=1" : ""}`);
+      const state = new URL(start.headers.get("Location")!).searchParams.get("state")!;
+      const back = await call(`${API}/auth/callback?code=${mock.oauthCode("carto-ann")}&state=${encodeURIComponent(state)}`);
+      return back.headers.get("Location")!.split("#session=")[1].split("&")[0];
+    };
+    const plain = await verify<{ m?: number; exp: number }>(await login(false), KEY);
+    expect(plain!.m).toBeUndefined();
+    expect(plain!.exp - Date.now() / 1000).toBeLessThanOrEqual(12 * 3600 + 5);
+
+    const kept = await login(true);
+    const k = await verify<{ m?: number; exp: number }>(kept, KEY);
+    expect(k!.m).toBe(1);
+    expect(k!.exp - Date.now() / 1000).toBeGreaterThan(29 * 86400);
+
+    // Renewing a session that has 2 days left gives a fresh 30 days, for the same person.
+    const old = await sign({ ...ANN, m: 1, exp: Math.floor(Date.now() / 1000) + 2 * 86400 }, KEY);
+    const r = await call(`${API}/session/refresh`, { method: "POST", headers: { Authorization: `Bearer ${old}` } });
+    expect(r.status).toBe(200);
+    const fresh = ((await r.json()) as { session: string }).session;
+    const f = await verify<{ id: number; login: string; m?: number; exp: number }>(fresh, KEY);
+    expect(f).toMatchObject({ ...ANN, m: 1 });
+    expect(f!.exp - Date.now() / 1000).toBeGreaterThan(29 * 86400);
+
+    // A 12-hour session never grows, and expired or forged ones can't be renewed.
+    const short = await session(ANN);
+    const same = await call(`${API}/session/refresh`, { method: "POST", headers: { Authorization: `Bearer ${short}` } });
+    expect(((await same.json()) as { session: string }).session).toBe(short);
+    for (const t of [await sign({ ...ANN, m: 1, exp: Math.floor(Date.now() / 1000) - 5 }, KEY), await sign({ ...ANN, m: 1, exp: 9e9 }, "x".repeat(40))]) {
+      expect((await call(`${API}/session/refresh`, { method: "POST", headers: { Authorization: `Bearer ${t}` } })).status).toBe(401);
+    }
+    // Someone removed from the list is still refused with a renewed session.
+    expect((await call(`${API}/session`, { headers: { Authorization: `Bearer ${await sign({ ...STRANGER, m: 1, exp: 9e9 }, KEY)}` } })).status).toBe(403);
+  });
+
   it("rejects forged, tampered and expired sessions", async () => {
     const good = await session(ANN);
     const [body] = good.split(".");
@@ -867,5 +904,52 @@ describe("suggested changes", () => {
   it("answers 501 where there's no key-value store", async () => {
     env.WAITING = undefined;
     await expect((await client(ANN)).suggestions()).rejects.toThrow(/aren't set up/);
+  });
+});
+
+describe("reviewer comments", () => {
+  it("lets anyone listed comment; the author and people who may edit the region see it, nothing reaches the repository", async () => {
+    const before = head();
+    const kv = env.WAITING as unknown as MemoryKV;
+    const c = await (await client(ANN)).addComment("simon-land", "  border looks   off here ", 5.123456, -3);
+    expect(c).toMatchObject({ region: "simon-land", text: "border looks off here", lon: 5.1235, lat: -3, owner: SIMON.id, status: "open", by: { login: ANN.login } });
+    expect(head()).toBe(before);
+    expect((await (await client(ANN)).comments("simon-land")).length).toBe(1);
+    expect((await (await client(SIMON)).comments()).length).toBe(1);
+    expect((await (await client(BO)).comments("simon-land")).length).toBe(1);
+    expect((await (await client(MANAGER)).comments()).length).toBe(0);
+    expect((await (await client(SIMON)).comments("ann-land")).length).toBe(0);
+    // Reads never list: one get each.
+    expect(kv.lists).toBe(0);
+  });
+
+  it("lets only editors of the region resolve, reopen; the author or an editor delete", async () => {
+    const c = await (await client(ANN)).addComment("simon-land", "hi", 1, 1);
+    await expect((await client(ANN)).setCommentStatus(c.id, "resolved")).rejects.toThrow(/can't resolve/);
+    const done = await (await client(SIMON)).setCommentStatus(c.id, "resolved");
+    expect(done).toMatchObject({ status: "resolved", resolvedBy: SIMON.login });
+    expect((await (await client(SIMON)).setCommentStatus(c.id, "open")).resolvedBy).toBeUndefined();
+    await expect((await client(MANAGER)).removeComment(c.id)).rejects.toThrow(/Only the person/);
+    await (await client(ANN)).removeComment(c.id);
+    expect((await (await client(SIMON)).comments()).find((x) => x.id === c.id)).toBeUndefined();
+    const d = await (await client(ANN)).addComment("simon-land", "again", 1, 1);
+    await (await client(BO)).removeComment(d.id);
+  });
+
+  it("refuses empty text, missing regions, bad spots, strangers and more than 20 open", async () => {
+    const ann = await client(ANN);
+    await expect(ann.addComment("simon-land", "   ", 1, 1)).rejects.toThrow(/Write something/);
+    await expect(ann.addComment("nope", "x", 1, 1)).rejects.toThrow(/no region/);
+    await expect(ann.addComment("simon-land", "x", 999, 1)).rejects.toThrow(/spot/);
+    await expect(ann.addComment("../x", "x", 1, 1)).rejects.toThrow(/Bad region/);
+    expect((await ann.addComment("simon-land", "x".repeat(500), 1, 1)).text.length).toBe(240);
+    for (let i = 0; i < 19; i++) await ann.addComment("simon-land", `c${i}`, 1, 1);
+    await expect(ann.addComment("simon-land", "one too many", 1, 1)).rejects.toThrow(/20 open/);
+    await expect(new GitHub(await session(STRANGER), REPO, API).comments()).rejects.toThrow();
+  });
+
+  it("answers 501 where there's no key-value store", async () => {
+    env.WAITING = undefined;
+    await expect((await client(ANN)).comments()).rejects.toThrow(/aren't set up/);
   });
 });
