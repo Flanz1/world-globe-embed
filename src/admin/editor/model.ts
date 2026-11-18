@@ -259,12 +259,6 @@ export function moveVertices(parts: Parts, refs: VRef[], dLon: number, dLat: num
   return out;
 }
 
-export function setVertex(parts: Parts, v: VRef, pos: Position): Parts {
-  const out = cloneParts(parts);
-  out[v.p][v.r][v.i] = [pos[0], Math.max(-90, Math.min(90, pos[1]))];
-  return out;
-}
-
 /** Inserts a vertex after index `i` (i.e. on the edge i → i+1). Returns the new parts and the new vertex. */
 export function insertVertex(parts: Parts, p: number, r: number, i: number, pos: Position): { parts: Parts; v: VRef } {
   const out = cloneParts(parts);

@@ -34,8 +34,3 @@ export function regionIdOf(path: string): string | null {
   const m = /^content\/regions\/([^/]+)\.json$/.exec(path);
   return m ? m[1] : null;
 }
-
-/** Ids of the regions a save touched (needs `files`). */
-export function regionsTouched(e: HistoryEntry): string[] {
-  return (e.files ?? []).map((f) => regionIdOf(f.path)).filter((x): x is string => !!x);
-}

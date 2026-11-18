@@ -65,9 +65,6 @@ export function unwrapRing(ring: Ring): Ring {
   return out;
 }
 
-/** Wraps every longitude back into [-180, 180]. */
-export const wrapRing = (ring: Ring): Ring => ring.map(([x, y]) => [wrapLon(x), y]);
-
 export const openRing = (ring: Ring): Ring =>
   ring.length > 1 && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1] ? ring.slice(0, -1) : ring.slice();
 
