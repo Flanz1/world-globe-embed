@@ -124,7 +124,10 @@ form.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-t
 #signin-form input { flex: 1 1 260px; }
 .slots { display: grid; gap: 10px; margin-bottom: 10px; }
 .slot { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: center; background: var(--md-sys-color-surface-container-high); border-radius: 12px; padding: 10px; }
-.slot .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+.slot .actions { display: flex; gap: 8px; flex-wrap: nowrap; align-items: center; margin-top: 6px; min-width: 0; overflow-x: auto; }
+.slot .actions > * { flex: 0 0 auto; white-space: nowrap; }
+.slot > div { min-width: 0; }
+.slot-map { margin-top: 6px; }
 .slot strong { font-size: 15px; }
 .thumb { width: 96px; aspect-ratio: 2; object-fit: cover; border-radius: 8px; background: var(--md-sys-color-outline-variant); display: block; }
 .maps { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
@@ -132,8 +135,10 @@ form.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-t
 .map div { font-size: 13px; }
 .runs { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 4px; font-size: 13px; }
 code { font-size: 12px; }
+details.size-tips { margin: 0 0 10px; }
+details.size-tips p { margin: 6px 0 0; }
 details summary { cursor: pointer; color: var(--md-sys-color-primary); font-weight: 500; }
-@media (max-width: 520px) { .slot { grid-template-columns: 1fr; } .thumb { width: 100%; } }
+@media (max-width: 520px) { .slot { grid-template-columns: minmax(0, 1fr); } .thumb { width: 100%; } }
 label.check { display: flex; align-items: center; gap: 6px; font-size: 14px; }
 label.check input { margin: 0; }
 
