@@ -47,6 +47,10 @@ const slotsFile = path.join(dir, "content/slots.json");
 const slots = JSON.parse(readFileSync(slotsFile, "utf8"));
 slots.slots[SLOT.slug].view = "flat";
 slots.slots[SLOT.slug].radius = RADIUS;
+slots.slots[SLOT.slug].travel = [
+  { label: "On foot", kmPerDay: 30 },
+  { label: "Sailing ship", kmPerDay: 100 },
+];
 // The radius-less checks use the real "inara" slot, which can get a world size from the admin page at
 // any time: take it off in the fixture so they don't depend on live content.
 delete slots.slots.inara.radius;
@@ -118,6 +122,21 @@ await step(E, "ruler button and flat-map measuring", async () => {
   const want = haversine(toGlobe(A), toGlobe(B));
   check(E, "distance matches the great-circle distance", Math.abs(got - want) / want < 0.01, `${text} vs ${want.toFixed(0)} km`);
   await page.screenshot({ path: path.join(OUT, "embed-flat-distance.png") });
+
+  // Travel time: the slot's speeds are in a select, the reading follows the choice.
+  const days = (t) => {
+    const m = /\((\d[\d,]*) days\)|(\d+) days?\b/.exec(t.split("\n")[1] ?? "");
+    return Number((m?.[1] ?? m?.[2] ?? "NaN").replace(/,/g, ""));
+  };
+  const sel = page.locator(".rl select");
+  check(E, "two speeds show a labelled select", (await sel.isVisible()) && (await sel.getAttribute("aria-label")) === "Travel by");
+  const t1 = await page.locator(".rl output").innerText();
+  check(E, "first speed (on foot) gives the time for the distance", /\nAbout .* on foot/.test(t1) && Math.abs(days(t1) - want / 30) <= 1, t1);
+  await sel.selectOption({ index: 1 });
+  const t2 = await page.locator(".rl output").innerText();
+  check(E, "sailing ship is faster", /\nAbout .* by sailing ship/.test(t2) && Math.abs(days(t2) - want / 100) <= 1, t2);
+  await page.screenshot({ path: path.join(OUT, "embed-flat-travel.png") });
+  await sel.selectOption({ index: 0 });
 
   await page.locator(".rl button", { hasText: /^km$/ }).click();
   const mi = number(await page.locator(".rl output").innerText());
@@ -250,6 +269,36 @@ await step(A, "world size in the preview dialog", async () => {
   await waitCommit(n);
   s = slotsOnBranch().inara;
   check(A, "saving a blank radius removes it", !("radius" in s), JSON.stringify(s));
+  await page.waitForSelector("#slots .slot", { timeout: 15000 });
+  await page.waitForTimeout(500);
+  await openSlotPreview("inara");
+  check(A, "travel speeds are disabled with a reason until a world size is set", (await page.isDisabled("#pv-tr-foot")) && /Set a world size first/.test(await page.innerText("#pv-travel-hint")));
+  await page.fill("#pv-radius", "6371");
+  check(A, "…and open up with one", !(await page.isDisabled("#pv-tr-foot")));
+  await page.check("#pv-tr-foot");
+  await page.check("#pv-tr-custom");
+  check(A, "a ticked custom speed without a name is refused", await page.isDisabled("#pv-save"));
+  await page.fill("#pv-tr-custom-name", "Dragon");
+  await page.fill("#pv-tr-custom-km", "900");
+  await page.waitForTimeout(300);
+  check(A, "…and accepted once named", !(await page.isDisabled("#pv-save")));
+  n = mock.log.length;
+  await page.click("#pv-save");
+  await waitCommit(n);
+  s = slotsOnBranch().inara;
+  check(A, "saving writes the ticked speeds", JSON.stringify(s.travel) === JSON.stringify([{ label: "On foot", kmPerDay: 30 }, { label: "Dragon", kmPerDay: 900 }]), JSON.stringify(s));
+  check(A, "commit message names them", /On foot 30 km\/day/.test(mock.log.at(-1)?.message ?? ""), mock.log.at(-1)?.message);
+  await page.waitForSelector("#slots .slot", { timeout: 15000 });
+  await page.waitForTimeout(500);
+  await openSlotPreview("inara");
+  check(A, "reopening shows them again", (await page.isChecked("#pv-tr-foot")) && (await page.inputValue("#pv-tr-custom-name")) === "Dragon" && !(await page.isChecked("#pv-tr-horse")));
+  await page.uncheck("#pv-tr-foot");
+  await page.uncheck("#pv-tr-custom");
+  await page.fill("#pv-radius", "");
+  n = mock.log.length;
+  await page.click("#pv-save");
+  await waitCommit(n);
+  check(A, "unticking all removes travel from the slot", !("travel" in slotsOnBranch().inara));
   check(A, "nothing written to main", mock.log.every((c) => c.branch === BRANCH));
   check(A, "no page errors", errors.length === 0, errors.join(" | "));
 });

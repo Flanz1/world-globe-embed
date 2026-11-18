@@ -143,5 +143,6 @@ jobs:
       ref: main
     permissions:
       contents: read
+      actions: read # Deploy reads its own past runs to find the last deployed commit
       pages: write
       id-token: write
