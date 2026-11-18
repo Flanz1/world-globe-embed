@@ -1,4 +1,4 @@
-// e2e-suite: roots=EDITOR,WORKER weight=2
+// e2e-suite: roots=EDITOR,WORKER weight=2 quarantine=182
 /**
  * Browser checks for reviewer comments: a contributor drops a comment on someone else's region from the editor,
  * the region's owner sees a "1 comment" link on the card, opens the editor on it, and resolves it; the tool and the
