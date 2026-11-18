@@ -1,5 +1,5 @@
 import type { RegionData, RegionIndexEntry } from "../shared/region.ts";
-import type { PreviewMap, ViewerConfig } from "../shared/types.ts";
+import type { PreviewMap, TravelSpeed, ViewerConfig } from "../shared/types.ts";
 
 /** JSON inlined into each slot page as <script type="application/json" id="wge-data">. */
 export interface BootData {
@@ -29,6 +29,8 @@ export interface PreviewMessage {
   grid?: boolean;
   /** The world's radius in km (0 = none), for the ruler. */
   radius?: number;
+  /** Travel speeds for the ruler. */
+  travel?: TravelSpeed[];
 }
 
 /** postMessage from the admin page's region editor or region preview to the preview iframe. */

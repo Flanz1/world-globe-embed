@@ -39,6 +39,17 @@ export interface ViewDefaults {
    * Not a query param: only the admin can set it.
    */
   radius: number;
+  /**
+   * Travel speeds for the ruler, set by an admin once per slot (needs a radius). Readers pick one on the
+   * ruler and see how long the measured distance takes. Missing or empty: distance only.
+   */
+  travel?: TravelSpeed[];
+}
+
+/** One way of travelling for the ruler: a label ("On foot") and how far it gets in a day. */
+export interface TravelSpeed {
+  label: string;
+  kmPerDay: number;
 }
 
 export const DEFAULT_VIEW: ViewDefaults = {

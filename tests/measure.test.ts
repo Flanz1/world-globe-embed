@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EARTH_RADIUS_KM, KM_PER_MI, distanceKm, formatArea, formatLength, formatPercent, geodesic, pathKm, perimeterKm, ringAreaKm2, ringSphereFraction, sphereAreaKm2, validRadius } from "../src/shared/measure.ts";
+import { EARTH_RADIUS_KM, KM_PER_MI, distanceKm, cleanTravel, formatDuration, formatArea, formatLength, formatPercent, geodesic, pathKm, perimeterKm, ringAreaKm2, ringSphereFraction, sphereAreaKm2, validRadius } from "../src/shared/measure.ts";
 import type { Position } from "../src/shared/geo.ts";
 
 describe("distance", () => {
@@ -71,5 +71,27 @@ describe("formatting and limits", () => {
   it("accepts only sane radii", () => {
     expect(validRadius(6371)).toBe(true);
     for (const v of [0, 99, 1_000_001, NaN, Infinity, "6371", null, undefined]) expect(validRadius(v)).toBe(false);
+  });
+});
+
+describe("travel time", () => {
+  it("writes durations from days to years", () => {
+    expect(formatDuration(0.4)).toBe("under a day");
+    expect(formatDuration(1)).toBe("1 day");
+    expect(formatDuration(3.2)).toBe("3 days");
+    expect(formatDuration(14)).toBe("about 2 weeks (14 days)");
+    expect(formatDuration(37)).toBe("about 5 weeks (37 days)");
+    expect(formatDuration(330)).toBe("about 11 months (330 days)");
+    expect(formatDuration(1000)).toBe("about 2.7 years (1,000 days)");
+    expect(formatDuration(500)).toBe("about 16 months (500 days)");
+    expect(formatDuration(NaN)).toBe("");
+  });
+  it("keeps only usable travel speeds, trimmed and capped", () => {
+    expect(cleanTravel(undefined)).toEqual([]);
+    expect(cleanTravel([{ label: " Horse ", kmPerDay: 50 }, { label: "", kmPerDay: 5 }, { label: "Bad", kmPerDay: 0 }, null, { label: "x".repeat(40), kmPerDay: 1 }])).toEqual([
+      { label: "Horse", kmPerDay: 50 },
+      { label: "x".repeat(24), kmPerDay: 1 },
+    ]);
+    expect(cleanTravel(Array.from({ length: 9 }, (_, i) => ({ label: `s${i}`, kmPerDay: 10 })))).toHaveLength(6);
   });
 });

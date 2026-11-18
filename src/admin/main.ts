@@ -129,10 +129,11 @@ function renderSlots(): void {
               patch.south === (slot.south ?? 0) &&
               patch.pole.toLowerCase() === (slot.pole ?? "#e8dcc8").toLowerCase() &&
               patch.shift === (slot.shift ?? 0) &&
-              patch.radius === (slot.radius ?? 0);
+              patch.radius === (slot.radius ?? 0) &&
+              JSON.stringify(patch.travel) === JSON.stringify(slot.travel ?? []);
             if (unchanged) return setStatus("Nothing changed.");
             void act(`Saving ${slug}…`, () =>
-              gh!.commit(`Update slot "${slug}": map "${patch.map}", ${patch.view} view, padding N ${patch.north}% / S ${patch.south}%, prime meridian ${patch.shift}°, world radius ${patch.radius ? `${patch.radius} km` : "none"}`, async () => [
+              gh!.commit(`Update slot "${slug}": map "${patch.map}", ${patch.view} view, padding N ${patch.north}% / S ${patch.south}%, prime meridian ${patch.shift}°, world radius ${patch.radius ? `${patch.radius} km` : "none"}${patch.travel.length ? `, travel speeds ${patch.travel.map((t) => `${t.label} ${t.kmPerDay} km/day`).join(", ")}` : ""}`, async () => [
                 await slotsChange((s) => {
                   const cur = s.slots[slug];
                   if (!cur) throw new Error(`Slot "${slug}" no longer exists.`);
@@ -145,6 +146,8 @@ function renderSlots(): void {
                     if (patch[k]) cur[k] = patch[k];
                     else delete cur[k];
                   }
+                  if (patch.travel.length) cur.travel = patch.travel;
+                  else delete cur.travel;
                   if (patch.north || patch.south || cur.pole) cur.pole = patch.pole;
                 }),
               ]),
