@@ -24,7 +24,10 @@ import { loadMapImage } from "./images.ts";
 import { compareBy, creatorChoices, creatorId, matchesQuery, type Filterable } from "./region-filter.ts";
 import { openHistory } from "./region-history.ts";
 import { openTrash } from "./trash.ts";
+import { Selection, blockedList, cardBox, groupBox, refreshBoxes, selectionBar } from "./bulk.ts";
+import { TRASH_DAYS } from "../shared/trash.ts";
 import { alertBox, confirmBox, modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
+import { initComments, loadComments, onCommentsChange, openCountFor } from "./comments.ts";
 import { declineSuggestion, initSuggestions, loadSuggestions, markAccepted, pendingFor } from "./suggestions.ts";
 import type { SuggestionSummary } from "./github.ts";
 import { OWNER_ID, account, can, canDelete, canEdit, canTransfer, currentUser, ownerOf, refusal } from "./session.ts";
@@ -32,6 +35,7 @@ import type { AccessFile, Account } from "../shared/access.ts";
 import { newIdProblem, renameInCategories, renameInRegion } from "../shared/rename.ts";
 import { CATEGORIES_PATH, regionsPerCommit, serializeCategories, type CategoriesFile } from "../shared/categories.ts";
 import { SITE } from "./dom.ts";
+import { moreMenu, type MoreItem } from "./more-menu.ts";
 import type { FileChange } from "./github.ts";
 
 export interface RegionEntry {
@@ -62,6 +66,9 @@ export const serialize = (f: RegionFeature) => stringifyCompact(f) + "\n";
 
 let deps: RegionsDeps;
 let entries: RegionEntry[] = [];
+
+/** The regions as loaded (the Health tab and the warp tool read them). */
+export const regionEntries = (): RegionEntry[] => entries;
 
 /** Parsed region files by blob SHA: a blob never changes, so a reload after a save only reads the file that changed. */
 const parsed = new Map<string, { feature: RegionFeature | null; problem?: string }>();
@@ -126,6 +133,8 @@ export async function loadRegions(): Promise<void> {
   void loadSuggestions().then(() => {
     if (!hasPendingSaves()) renderRegions();
   });
+  // Cards also show how many comments are open on a region: one read of the comment list per page load.
+  void loadComments();
   await categoriesDone;
   // A change is still being saved: this read may predate it. The save reloads when it's done.
   if (hasPendingSaves()) return;
@@ -230,7 +239,8 @@ function card(e: RegionEntry): HTMLElement {
   const noCreate = can("regions") ? "" : "You don't have permission to create regions.";
   return h(
     "div",
-    { className: "rcard", dataset: { region: e.id }, draggable: can("regions") && !!categories().categories.length, title: "" },
+    { className: `rcard${sel.on ? " selectable" : ""}${sel.on && sel.has(e.id) ? " selected" : ""}`, dataset: { region: e.id }, draggable: !sel.on && can("regions") && !!categories().categories.length, title: "" },
+    sel.on ? cardBox(sel, e.id, domOrder, refreshSelection) : null,
     thumbnail(f, map),
     h(
       "div",
@@ -268,10 +278,11 @@ function card(e: RegionEntry): HTMLElement {
       { className: "actions" },
       canEdit(f) || !can("regions") || linked ? btn("Edit", () => edit(e), "tonal", noEdit) : null,
       !canEdit(f) && !linked && can("regions") ? btn("Suggest changes", () => suggest(e), "tonal", "") : null,
+      !canEdit(f) || !openCountFor(e.id) || linked ? null : h("button", { type: "button", className: "text small", textContent: `${openCountFor(e.id)} comment${openCountFor(e.id) > 1 ? "s" : ""}`, title: "Open the editor on the comments", dataset: { action: "comments", region: e.id }, onclick: () => edit(e, true) }),
       !canEdit(f) || !pendingFor(e.id) ? null : h("span", { className: "badge warn", textContent: `${pendingFor(e.id)} suggestion${pendingFor(e.id) > 1 ? "s" : ""}`, title: "Waiting in the list above the regions" }),
       btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot, p.pinMaps)),
       h("button", { type: "button", className: "ghost", textContent: "Embed code…", title: "Choose what to show and copy the embed code", dataset: { action: "embed" }, onclick: () => openEmbedDialog({ region: { id: e.id, name: e.id, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot }) }),
-      moreMenu(e.id, [
+      moreMenu(`More actions for ${e.id}`, [
         // Editors who can edit it themselves can still send a suggestion for somebody else to accept (same name as everywhere).
         canEdit(f) && can("regions") && !linked ? item("Suggest changes", () => suggest(e), "", "Draw changes and send them for somebody else to accept or decline") : null,
         item("Rename…", () => changeId(e), noRename, "Change the id that embed links use"),
@@ -279,73 +290,12 @@ function card(e: RegionEntry): HTMLElement {
         item("History", () => openHistory({ gh: deps.gh(), id: e.id, path: e.path, feature: f, map, noRestore: noEdit, act: deps.act }), linked ? "A linked region has no history of its own: open the regions it combines." : ""),
         canTransfer() ? item("Transfer", () => transfer(e, f), "") : null,
         item("Delete", () => del(e), noDelete, "", true),
-      ]),
+      ], { data: { region: e.id } }),
     ),
   );
 }
 
-type MenuItem = { text: string; onclick: () => void; why: string; hint: string; danger: boolean };
-const item = (text: string, onclick: () => void, why = "", hint = "", danger = false): MenuItem => ({ text, onclick, why, hint, danger });
-
-/** The "More…" button at the end of a region card's row, with a menu of the less used actions (Delete last, red, behind a line). */
-function moreMenu(id: string, items: (MenuItem | null)[]): HTMLElement {
-  const list = items.filter((x): x is MenuItem => !!x);
-  const menu = h("div", { className: "rmenu", role: "menu", ariaLabel: `More actions for ${id}`, dataset: { region: id } });
-  menu.setAttribute("popover", "auto");
-  const buttons = list.map((x) => {
-    const b = h("button", { type: "button", role: "menuitem", className: `ghost${x.danger ? " danger" : ""}`, textContent: x.text, disabled: !!x.why, title: x.why || x.hint, dataset: { action: x.text.toLowerCase().replace(/\W+/g, "-") } });
-    b.addEventListener("click", () => {
-      menu.hidePopover();
-      x.onclick();
-    });
-    return b;
-  });
-  menu.append(...buttons);
-  const more = h("button", { type: "button", className: "ghost text", textContent: "More…", dataset: { action: "more" } });
-  more.setAttribute("aria-expanded", "false");
-  more.setAttribute("aria-haspopup", "menu");
-  const close = () => {
-    if (menu.matches(":popover-open")) menu.hidePopover();
-  };
-  const enabled = () => buttons.filter((b) => !b.disabled);
-  menu.addEventListener("beforetoggle", (ev) => {
-    if ((ev as ToggleEvent).newState !== "open") return;
-    const r = more.getBoundingClientRect();
-    // Below the button, or above it when there is no room below.
-    const room = window.innerHeight - r.bottom - 8;
-    const need = buttons.length * 30 + 16;
-    menu.style.top = room >= need || r.top < need ? `${Math.round(r.bottom + 4)}px` : `${Math.round(r.top - 4 - need)}px`;
-    menu.style.left = `${Math.max(8, Math.round(Math.min(r.right - 170, window.innerWidth - 178)))}px`;
-  });
-  menu.addEventListener("toggle", (ev) => {
-    const open = (ev as ToggleEvent).newState === "open";
-    more.setAttribute("aria-expanded", String(open));
-    if (open) {
-      (enabled()[0] ?? buttons[0])?.focus();
-      window.addEventListener("scroll", close, { capture: true, passive: true });
-      window.addEventListener("resize", close);
-    } else {
-      window.removeEventListener("scroll", close, { capture: true });
-      window.removeEventListener("resize", close);
-      // Escape or a click outside: put focus back on More… unless it went somewhere else on purpose.
-      if (menu.contains(document.activeElement) || document.activeElement === document.body) more.focus();
-    }
-  });
-  menu.addEventListener("keydown", (ev) => {
-    const live = enabled();
-    const at = live.indexOf(document.activeElement as HTMLButtonElement);
-    const go = (n: number) => (ev.preventDefault(), live[(n + live.length) % live.length]?.focus());
-    if (ev.key === "ArrowDown") go(at + 1);
-    else if (ev.key === "ArrowUp") go(at < 0 ? -1 : at - 1);
-    else if (ev.key === "Home") go(0);
-    else if (ev.key === "End") go(live.length - 1);
-    else if (ev.key === "Tab") menu.hidePopover();
-  });
-  more.addEventListener("click", () => {
-    menu.togglePopover();
-  });
-  return h("span", { className: "rmore" }, more, menu);
-}
+export const item = (text: string, onclick: () => void, why = "", hint = "", danger = false): MoreItem => ({ text, onclick, why, hint, danger });
 
 /** "Folder" dropdown on a card: only shown once folders exist. Moving needs the right to edit the region. */
 function categorySelect(e: RegionEntry): HTMLElement | null {
@@ -375,6 +325,14 @@ const collapsed = new Set<string>(
   })(),
 );
 const UNCATEGORIZED = "~uncategorized";
+/** A phone visit that has never opened or closed a folder: the page starts with every folder shut, so a long list is short. */
+let collapseOnFirstVisit = (() => {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === null && window.matchMedia("(max-width: 720px)").matches;
+  } catch {
+    return false;
+  }
+})();
 
 function toggleFolder(id: string, el: HTMLElement): void {
   const open = collapsed.has(id);
@@ -521,7 +479,8 @@ function folder(id: string, title: string, members: RegionEntry[], k: Category |
   const noEdit = k && !edit ? "You don't have permission to change folders." : "";
   const head = h(
     "div",
-    { className: "rfolder-head", draggable: edit },
+    { className: "rfolder-head", draggable: edit && !sel.on },
+    sel.on ? groupBox(sel, members.filter((m) => m.feature).map((m) => m.id), `Select all regions in ${title}`, refreshSelection) : null,
     h(
       "button",
       { type: "button", className: "rfolder-toggle ghost", onclick: () => toggleFolder(id, el), ariaExpanded: "true", title: "Open or close this folder" },
@@ -640,8 +599,21 @@ export function renderRegions(): void {
     .filter((e) => matchesQuery(q, filterable(e)))
     .sort((a, b) => compareBy(sort, filterable(a), filterable(b)));
   $("#regions-empty").hidden = entries.length > 0;
+  sel.keepOnly(new Set(entries.map((e) => e.id)));
+  $("#r-select").hidden = !entries.length;
   $("#regions-tools").hidden = entries.length === 0;
+  $("#regions-search").hidden = entries.length === 0;
   const cats = categories().categories;
+  if (collapseOnFirstVisit && cats.length) {
+    collapseOnFirstVisit = false;
+    for (const k of cats) collapsed.add(k.id);
+    collapsed.add(UNCATEGORIZED);
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed]));
+    } catch {
+      /* remembering is a convenience */
+    }
+  }
   $<HTMLButtonElement>("#r-new-category").hidden = !entries.length;
   $<HTMLButtonElement>("#r-combine").hidden = !entries.length;
   $<HTMLButtonElement>("#r-new-category").disabled = !canAddCategory();
@@ -672,6 +644,7 @@ export function renderRegions(): void {
     if (rest.length) out.push(folder(UNCATEGORIZED, "Uncategorized", rest, null, { first: true, last: true }, filtering));
   }
   $("#regions").replaceChildren(...out);
+  bar?.update();
 }
 
 /** What the search, creator filter and sorting see of a region (shared with the editor's overlay panel). */
@@ -726,10 +699,10 @@ export function regionDisplayName(id: string): string | null {
   return e ? (e.feature?.properties.name || id) : null;
 }
 
-function edit(e: RegionEntry): void {
+function edit(e: RegionEntry, comments = false): void {
   if (!e.feature || !canEdit(e.feature)) return;
   if (e.feature.properties.linked) return editLinked(e);
-  openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature: e.feature, sha: e.sha, isNew: false, neighbours: others(e), neighbourMeta: overlayMeta(), takenIds: new Set(entries.map((x) => x.id)), afterCommit: deps.afterCommit });
+  openEditor({ ...(comments ? { openComments: true } : {}), gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature: e.feature, sha: e.sha, isNew: false, neighbours: others(e), neighbourMeta: overlayMeta(), takenIds: new Set(entries.map((x) => x.id)), afterCommit: deps.afterCommit });
 }
 
 /** Someone who can't edit this region changes it in the editor and sends the result to the people who can. */
@@ -1267,8 +1240,185 @@ function del(e: RegionEntry): void {
   });
 }
 
+/** The saved regions' features (for drawing their outlines elsewhere, e.g. behind the pins). */
+export const regionFeatures = (): RegionFeature[] => entries.flatMap((e) => (e.feature ? [e.feature] : []));
+
+/* ── Bulk actions: tick several region cards, then move, recolour or delete them together ── */
+
+const sel = new Selection();
+let bar: ReturnType<typeof selectionBar> | undefined;
+const refreshSelection = (): void => {
+  refreshBoxes($("#regions"), sel);
+  bar?.update();
+};
+/** The ids of the region cards on screen, top to bottom (for "select all shown" and shift+click ranges). */
+const domOrder = (): string[] => [...document.querySelectorAll<HTMLElement>("#regions .rcard[data-region]:not(.broken)")].map((c) => c.dataset.region ?? "");
+const byIds = (ids: string[]): RegionEntry[] => ids.map((id) => entries.find((x) => x.id === id)).filter((e): e is RegionEntry => !!e?.feature);
+const perCommit = (): number => regionsPerCommit(!!currentUser()?.owner);
+const plural = (n: number, what: string) => `${n} ${what}${n === 1 ? "" : "s"}`;
+const nameOf = (part: RegionEntry[]) => (part.length === 1 ? `region ${part[0].id}` : `${part.length} regions`);
+
+function setSelecting(on: boolean): void {
+  sel.on = on;
+  if (!on) sel.clear();
+  const b = $("#r-select");
+  b.setAttribute("aria-pressed", String(on));
+  renderRegions();
+}
+
+const hex6 = (c: string) => (/^#[0-9a-f]{3}$/i.test(c) ? `#${[...c.slice(1)].map((x) => x + x).join("")}` : c).toLowerCase();
+const withColour = (f: RegionFeature, color: string): RegionFeature => {
+  const properties = { ...f.properties, color, updatedBy: account(), updated: stamp() };
+  if (!properties.createdBy && currentUser()?.owner) properties.createdBy = account();
+  return { ...f, properties };
+};
+
+const bulkWhy = {
+  move: () => (!can("regions") ? "You don't have permission to create regions." : categories().categories.length ? "" : "There are no folders yet: add one with + Folder first."),
+  colour: (ids: string[]) =>
+    blockedList("region", "change the colour of", ids.filter((id) => { const f = byIds([id])[0]?.feature; return !f || !!f.properties.linked || !canEdit(f); })),
+  delete: (ids: string[]) => blockedList("region", "delete", ids.filter((id) => { const f = byIds([id])[0]?.feature; return !f || !canDelete(f); })),
+};
+
+function bulkMove(ids: string[]): void {
+  const m = modal("Move to folder");
+  const cats = categories().categories;
+  const select = h("select", { ariaLabel: "Folder", dataset: { field: "bulk-folder" } }, h("option", { value: "", textContent: "Uncategorized (no folder)" }), ...cats.map((k) => h("option", { value: k.id, textContent: pathName(categories(), k.id) })));
+  const go = h("button", { type: "button", textContent: `Move ${plural(ids.length, "region")}`, dataset: { action: "confirm-bulk-move" } });
+  go.addEventListener("click", () => {
+    m.close();
+    void moveRegions(ids, select.value || null);
+  });
+  m.body.append(h("p", { className: "muted small", textContent: `Puts ${plural(ids.length, "region")} in one folder${ids.length > 24 ? ` (several saves, ${24} at a time)` : ""}. The regions themselves don't change.` }), h("label", {}, "Folder ", select));
+  m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), go);
+  select.focus();
+}
+
+function bulkColour(ids: string[]): void {
+  const m = modal("Change colour");
+  const first = byIds(ids)[0]?.feature?.properties.color;
+  const input = h("input", { type: "color", value: hex6(typeof first === "string" && REGION_COLOR.test(first) ? first : "#888888"), ariaLabel: "New colour", dataset: { field: "bulk-colour" } });
+  const go = h("button", { type: "button", textContent: `Change ${plural(ids.length, "region")}`, dataset: { action: "confirm-bulk-colour" } });
+  go.addEventListener("click", () => {
+    m.close();
+    void recolour(ids, input.value.toLowerCase());
+  });
+  m.body.append(h("p", { className: "muted small", textContent: `Sets the main colour of ${plural(ids.length, "region")} in one save. Parts that have their own colour keep it.` }), h("label", {}, "Colour ", input));
+  m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), go);
+  input.focus();
+}
+
+async function recolour(ids: string[], color: string): Promise<void> {
+  const all = byIds(ids);
+  for (let i = 0; i < all.length; i += perCommit()) {
+    const part = all.slice(i, i + perCommit());
+    const message = `Change colour of ${nameOf(part)} to ${color}`;
+    await optimistic({
+      label: message,
+      check: () => {
+        for (const e of part) {
+          const why = refusal({ path: e.path, before: serialize(e.feature!), after: serialize(withColour(e.feature!, color)) });
+          if (why) return `Can't change the colour of ${e.id}: ${why}`;
+        }
+        return null;
+      },
+      apply: () => {
+        const before = entries;
+        entries = entries.map((e) => (part.includes(e) ? { ...e, feature: withColour(e.feature!, color) } : e));
+        return before;
+      },
+      undo: (before) => void (entries = before),
+      render: renderRegions,
+      commit: () =>
+        deps.gh().commit(message, async () => {
+          const out: FileChange[] = [];
+          for (const e of part) out.push({ path: e.path, content: serialize(withColour(JSON.parse((await deps.gh().readFile(e.path)).text) as RegionFeature, color)) });
+          return out;
+        }),
+    });
+  }
+}
+
+function bulkDelete(ids: string[]): void {
+  const m = modal(`Delete ${plural(ids.length, "region")}`, "danger");
+  const shown = ids.slice(0, 10);
+  const go = h("button", { type: "button", className: "danger", textContent: `Delete ${plural(ids.length, "region")}`, dataset: { action: "confirm-bulk-delete" } });
+  go.addEventListener("click", () => {
+    m.close();
+    void removeMany(ids);
+  });
+  const cancel = h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close });
+  m.body.append(
+    h("p", {}, `This deletes ${plural(ids.length, "region")}${ids.length > perCommit() ? ` (in several saves, ${perCommit()} at a time)` : " in one save"}:`),
+    h("ul", { className: "bulk-list" }, ...shown.map((id) => h("li", {}, h("code", { textContent: id }))), ids.length > shown.length ? h("li", { className: "muted", textContent: `and ${ids.length - shown.length} more` }) : null),
+    h(
+      "div",
+      { className: "rename-note", role: "note" },
+      h("span", { className: "rename-note-icon", ariaHidden: "true", textContent: "⚠" }),
+      h("div", {}, h("strong", { textContent: "Embeds that show these regions will stop showing them." }), " They fall back to the plain globe with a small “Region not found” note."),
+    ),
+    h("p", { className: "muted small", textContent: `They stay in Recently deleted for ${TRASH_DAYS} days, where you can restore them.` }),
+  );
+  m.foot.append(cancel, go);
+  cancel.focus();
+}
+
+async function removeMany(ids: string[]): Promise<void> {
+  const all = byIds(ids);
+  for (let i = 0; i < all.length; i += perCommit()) {
+    const part = all.slice(i, i + perCommit());
+    const message = `Delete ${nameOf(part)}`;
+    await optimistic({
+      label: message,
+      check: () => {
+        for (const e of part) {
+          const why = refusal({ path: e.path, before: serialize(e.feature!), after: null });
+          if (why) return `Can't delete ${e.id}: ${why}`;
+        }
+        return null;
+      },
+      apply: () => {
+        const before = entries;
+        entries = entries.filter((x) => !part.includes(x));
+        return before;
+      },
+      undo: (before) => void (entries = before),
+      render: renderRegions,
+      commit: () => deps.gh().commit(message, async () => part.map((e) => ({ path: e.path, content: "", delete: true }))),
+    });
+  }
+}
+
 export function initRegions(d: RegionsDeps): void {
   deps = d;
+  initComments(() => d.gh());
+  onCommentsChange(() => renderRegions());
+  bar = selectionBar(
+    sel,
+    "region",
+    [
+      { text: "Move to folder…", action: "bulk-move", why: bulkWhy.move, run: bulkMove },
+      { text: "Change colour…", action: "bulk-colour", why: bulkWhy.colour, run: bulkColour },
+      { text: "Delete…", action: "bulk-delete", why: bulkWhy.delete, run: bulkDelete, danger: true },
+    ],
+    domOrder,
+    refreshSelection,
+    () => setSelecting(false),
+  );
+  document.body.append(bar.el);
+  $("#r-select").addEventListener("click", () => setSelecting(!sel.on));
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && sel.on && !document.querySelector("dialog[open]") && !ev.defaultPrevented) setSelecting(false);
+  });
+  // Clicking a card (not one of its buttons) ticks it while selecting.
+  $("#regions").addEventListener("click", (ev) => {
+    if (!sel.on) return;
+    const t = ev.target as HTMLElement;
+    const c = t.closest<HTMLElement>(".rcard[data-region]:not(.broken)");
+    if (!c || t.closest("button, a, input, select, label, summary, [popover], textarea")) return;
+    sel.toggle(c.dataset.region ?? "");
+    refreshSelection();
+  });
   initSuggestions({ gh: d.gh, review: (s) => void reviewSuggestion(s).catch((e: Error) => alertBox("Couldn't open the suggestion", e.message)) });
   ui.search().addEventListener("input", renderRegions);
   ui.slot().addEventListener("change", renderRegions);

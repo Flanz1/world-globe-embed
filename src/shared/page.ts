@@ -47,11 +47,22 @@ transition:opacity .4s ease}
 .ready #globe{opacity:1}.ready #poster{opacity:0}
 .flat{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .note{position:absolute;inset:auto 16px;top:45%;margin:0;text-align:center;font-size:14px;color:#9d927b}
-#ui{position:fixed;right:8px;bottom:8px;display:flex;gap:4px;opacity:.55;transition:opacity .2s}
+#ui{position:fixed;right:8px;bottom:8px;display:flex;gap:4px}
 #ui:hover,#ui:focus-within{opacity:1}
-#ui button{all:unset;box-sizing:border-box;width:28px;height:28px;display:grid;place-items:center;border-radius:6px;cursor:pointer;color:#e8dcc8;background:rgba(20,18,14,.55)}
+#ui button{all:unset;box-sizing:border-box;width:28px;height:28px;display:grid;place-items:center;border-radius:6px;cursor:pointer;color:#e8dcc8;background:var(--embed-panel);-webkit-backdrop-filter:var(--embed-blur);backdrop-filter:var(--embed-blur)}
 #ui button:focus-visible{outline:2px solid #c9a94e}
-#ui button[aria-pressed=true]{color:#e8c44a;background:rgba(20,18,14,.8)}
+#ui button[aria-pressed=true]{color:#e8c44a;background:rgba(20,18,14,.88)}
+#ui button{position:relative}
+#ui button::after{content:attr(aria-label);position:absolute;right:0;bottom:calc(100% + 6px);padding:3px 8px;border-radius:5px;background:rgba(20,18,14,.92);color:#f3ead8;font:600 12px/1.3 system-ui,sans-serif;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .12s}
+@media (hover:hover){#ui button:hover::after{opacity:1;transition-delay:.4s}}
+#ui button:focus-visible::after{opacity:1}
+#ui.notip button::after{opacity:0!important}
+#btn-lock::before{content:"";position:absolute;right:3px;bottom:3px;width:9px;height:9px;border-radius:50%;background:#e8c44a center/7px 7px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.2 4.2l2 2 3.6-4.4' fill='none' stroke='%231a1710' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+#btn-lock[aria-pressed=false]::before{width:2px;height:20px;right:13px;bottom:4px;border-radius:1px;background:#e8dcc8;box-shadow:0 0 0 1px rgba(20,18,14,.9);transform:rotate(45deg)}
+@media (pointer:coarse){#ui{gap:6px}#ui button{width:44px;height:44px;border-radius:8px}#ui button::after{display:none}}
+#hint{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);padding:6px 12px;border-radius:14px;background:rgba(20,18,14,.8);color:#f3ead8;font:600 13px/1.3 system-ui,sans-serif;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .4s}
+#hint.on{opacity:1}
+@media (prefers-reduced-motion:reduce){#hint{transition:none}#ui button::after{transition:none}}
 #ui [hidden],#legend[hidden],#ui[hidden]{display:none}
 #legend{position:fixed;left:8px;bottom:8px;padding:6px 8px;border-radius:6px;color:#e8dcc8;background:rgba(20,18,14,.6);display:grid;gap:4px}
 #legend i{display:inline-block;width:16px;height:3px;border-radius:1px;margin-right:6px;vertical-align:middle}
@@ -59,15 +70,20 @@ transition:opacity .4s ease}
 background-image:var(--lqip);background-size:var(--fw) var(--fh);background-position:var(--fx) var(--fy);background-repeat:repeat-x}
 #btn-lock[aria-pressed=true] .i-open,#btn-lock[aria-pressed=false] .i-shut,#btn-view[data-view=flat] .i-flat,#btn-view[data-view=globe] .i-globe{display:none}
 .rlabel{position:absolute;left:0;top:0;padding:2px 7px;border-radius:5px;background:rgba(20,18,14,.62);color:#f3ead8;font:600 12px/1.3 system-ui,sans-serif;white-space:nowrap;pointer-events:none;max-width:60vw;overflow:hidden;text-overflow:ellipsis}
-.rstack{position:absolute;left:8px;top:8px;z-index:2;display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:min(60vw,240px);max-height:calc(100% - 52px);pointer-events:none}.rstack>*{pointer-events:auto;min-height:0;max-width:100%}.rkey{position:relative;overflow:auto;border-radius:6px;background:rgba(20,18,14,.62);color:#f3ead8;font:12px/1.3 system-ui,sans-serif}
-.rkey-head{all:unset;box-sizing:border-box;display:block;width:100%;padding:4px 8px;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+:root{--embed-panel:rgba(20,18,14,.8);--embed-blur:blur(6px)}
+.rstack{position:absolute;left:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:flex-start;gap:8px;width:max-content;max-width:calc(100% - 20px);max-height:min(60%,calc(100% - 64px));z-index:2;pointer-events:none}
+.rstack>*{pointer-events:auto;min-height:0;max-width:100%}
+.rkey{position:relative;max-width:100%;min-width:0;max-height:100%;overflow:auto;border-radius:10px;background:var(--embed-panel);color:#f3ead8;font:15px/1.35 system-ui,sans-serif;-webkit-backdrop-filter:var(--embed-blur);backdrop-filter:var(--embed-blur)}
+.rkey-head{all:unset;box-sizing:border-box;display:block;width:100%;padding:8px 14px;font-weight:600;font-size:16px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
 .rkey-head:focus-visible{outline:2px solid #c9a94e}
-.rkey-head::after{content:"▾";margin-left:6px;opacity:.7}.rkey-head[aria-expanded=false]::after{content:"▸"}
-.rkey ul{list-style:none;margin:0;padding:0 8px 6px;display:grid;gap:3px}
-.rkey li{display:flex;align-items:center;gap:6px;min-width:0}
+.rkey-head::after{content:"▾";margin-left:8px;opacity:.7}.rkey-head[aria-expanded=false]::after{content:"▸"}
+.rkey ul{list-style:none;margin:0;padding:2px 14px 10px;display:grid;grid-template-columns:1fr;gap:6px 18px}
+.rkey li{display:flex;align-items:center;gap:8px;min-width:0}
 .rkey li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rkey i{flex:none;width:12px;height:12px;border-radius:3px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
-.rkey i.dash{box-shadow:none;border:1px solid #f3ead8;box-sizing:border-box;background:repeating-linear-gradient(135deg,rgba(243,234,216,.35) 0 1px,transparent 1px 4px)}
+.rkey i{flex:none;width:18px;height:18px;border-radius:4px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
+.rkey i.dash{box-shadow:none;border:1px solid #f3ead8;box-sizing:border-box;background:repeating-linear-gradient(135deg,rgba(243,234,216,.35) 0 1px,transparent 1px 5px)}
+@media (max-width:520px){[data-ruler=on] .rstack{display:none}}
+@media (max-width:480px){.rstack{top:8px;left:8px;transform:none;max-height:min(35%,calc(100% - 52px))}.rkey{font-size:14px}.rkey ul{grid-template-columns:1fr}}
 .rkey[hidden],.rkey ul[hidden],.rlayers[hidden]{display:none}
 .rlayers{display:grid;gap:3px;padding:2px 8px 6px}.rlayers label{display:flex;align-items:center;gap:6px;cursor:pointer;min-width:0}.rlayers-head{font-weight:600;opacity:.85}.rlayers input{margin:0;flex:none}.rlayers span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rnote{position:fixed;left:8px;top:8px;margin:0;padding:3px 8px;border-radius:6px;background:rgba(20,18,14,.6);color:#e8dcc8;font-size:11px;pointer-events:none}
@@ -206,7 +222,7 @@ ${first ? `<link rel="preload" href="${escapeHtml(first.url)}" as="fetch" type="
 </head>
 <body>
 <div id="stage"><div id="poster" role="img" aria-label="${title}"></div><canvas id="globe" aria-label="${title}, drag to rotate, scroll or pinch to zoom"></canvas></div>
-<div id="ui"${cfg.controls ? "" : " hidden"}><button id="btn-lock" type="button" hidden aria-pressed="true" title="Unlock view" aria-label="Unlock view">${ICON_LOCK}</button><button id="btn-ruler" type="button" hidden aria-pressed="false" title="Measure" aria-label="Measure distance and area">${ICON_RULER}</button><button id="btn-view" type="button" hidden>${ICON_VIEW}</button><button id="btn-grid" type="button" aria-pressed="${cfg.grid}" title="Grid" aria-label="Toggle grid">${ICON_GRID}</button><button id="btn-fs" type="button" title="Fullscreen" aria-label="Fullscreen">${ICON_FS}</button></div>
+<div id="ui"${cfg.controls ? "" : " hidden"}><button id="btn-lock" type="button" hidden aria-pressed="true" aria-label="Lock view">${ICON_LOCK}</button><button id="btn-ruler" type="button" hidden aria-pressed="false" aria-label="Measure distance">${ICON_RULER}</button><button id="btn-view" type="button" hidden>${ICON_VIEW}</button><button id="btn-grid" type="button" aria-pressed="${cfg.grid}" aria-label="Grid">${ICON_GRID}</button><button id="btn-fs" type="button" aria-label="Fullscreen">${ICON_FS}</button></div>
 <div id="legend" hidden><span><i style="background:#e8c44a"></i>Equator</span><span><i style="background:#e85050"></i>Prime meridian</span><span><i style="background:rgba(201,169,78,.6)"></i>30°</span><span><i style="background:rgba(201,169,78,.3)"></i>15°</span></div>
 <script type="application/json" id="wge-data">${data}</script>
 <script>${bootJs}</script>
