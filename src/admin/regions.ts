@@ -67,7 +67,7 @@ export const serialize = (f: RegionFeature) => stringifyCompact(f) + "\n";
 let deps: RegionsDeps;
 let entries: RegionEntry[] = [];
 
-/** The regions as loaded (the Health tab reads them). */
+/** The regions as loaded (the Health tab and the warp tool read them). */
 export const regionEntries = (): RegionEntry[] => entries;
 
 /** Parsed region files by blob SHA: a blob never changes, so a reload after a save only reads the file that changed. */
@@ -295,7 +295,7 @@ function card(e: RegionEntry): HTMLElement {
   );
 }
 
-const item = (text: string, onclick: () => void, why = "", hint = "", danger = false): MoreItem => ({ text, onclick, why, hint, danger });
+export const item = (text: string, onclick: () => void, why = "", hint = "", danger = false): MoreItem => ({ text, onclick, why, hint, danger });
 
 /** "Folder" dropdown on a card: only shown once folders exist. Moving needs the right to edit the region. */
 function categorySelect(e: RegionEntry): HTMLElement | null {
