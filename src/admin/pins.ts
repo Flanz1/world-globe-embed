@@ -22,6 +22,8 @@ import { canOrganise, initPinMaps, loadPinMaps, moveMapDialog, newFolder, newMap
 import { mapById, mapsOfSlot, type PinMap } from "../shared/pinmaps.ts";
 import { account, can, canDelete, canEdit, refusal } from "./session.ts";
 import { moreMenu } from "./more-menu.ts";
+import { Selection, blockedList, cardBox, groupBox, refreshBoxes, selectionBar } from "./bulk.ts";
+import { TRASH_DAYS } from "../shared/trash.ts";
 
 export interface PinsDeps {
   gh: () => GitHub;
@@ -211,6 +213,7 @@ function draw(): void {
     b.title = `${p.name || "(unnamed)"}, ${kindInfo(p.kind).label}`;
     b.setAttribute("aria-label", b.title);
     b.setAttribute("aria-pressed", String(selected === id));
+    b.dataset.ticked = String(sel.on && sel.has(id));
     const [lon, lat] = f.geometry.coordinates;
     b.style.transform = `translate(${Math.round(sx(lon) - 13)}px,${Math.round(sy(lat) - 13)}px)`;
   }
@@ -231,6 +234,11 @@ function makeMarker(id: string): HTMLButtonElement {
   let drag: { x: number; y: number; moved: boolean; start: [number, number] } | null = null;
   b.addEventListener("pointerdown", (e) => {
     e.stopPropagation();
+    if (sel.on) {
+      sel.toggle(id);
+      refreshSelection();
+      return;
+    }
     if (id !== selected && dirty()) {
       void leave().then((ok) => ok && select(id));
       return;
@@ -661,13 +669,18 @@ function pinRow(e: PinEntry): HTMLElement {
   const sw = h("span", { className: "pn-sw" }, pinIcon(p.kind, 12));
   sw.style.background = pinColor(p);
   sw.style.color = inkFor(pinColor(p));
-  return h(
+  const row = h(
     "button",
     { type: "button", className: `pn-row${selected === e.id ? " on" : ""}`, onclick: () => void leave().then((ok) => ok && (select(e.id), centreOn(e.feature!))) },
     sw,
     h("span", { className: "pn-name", textContent: p.name }),
     h("span", { className: "muted small", textContent: kindInfo(p.kind).label }),
   );
+  if (!sel.on) return row;
+  // Selecting: the row ticks instead of opening the pin.
+  row.onclick = () => (sel.toggle(e.id), refreshSelection());
+  const item = h("div", { className: `pn-item${sel.has(e.id) ? " selected" : ""}`, dataset: { pin: e.id } }, cardBox(sel, e.id, domOrder, refreshSelection, "pn-sel"), row);
+  return item;
 }
 
 const pinMatches = (e: PinEntry, q: string): boolean => (!kindFilter.size || kindFilter.has(e.feature!.properties.kind)) && (!q || e.feature!.properties.name.toLowerCase().includes(q) || e.id.includes(q) || e.feature!.properties.kind.includes(q));
@@ -676,6 +689,7 @@ const pinsIn = (m: PinMap | null): PinEntry[] => slotPins().filter((e) => (m ? e
 
 function renderList(): void {
   const q = search.trim().toLowerCase();
+  sel.keepOnly(new Set(slotPins().map((e) => e.id)));
   const bad = entries.filter((e) => !e.feature);
   const nMaps = mapsOfSlot(pinMaps(), slot).length;
   el.count.textContent = `${slotPins().length} pin${slotPins().length === 1 ? "" : "s"} and ${nMaps} pin map${nMaps === 1 ? "" : "s"} on this slot`;
@@ -692,6 +706,7 @@ function renderList(): void {
       h(
         "div",
         { className: "pinmap-head" },
+        sel.on && rows.length ? groupBox(sel, rows.map((e) => e.id), `Select all shown pins in ${m ? m.name : "no pin map"}`, refreshSelection) : null,
         h("strong", { textContent: m ? m.name : "Not in a pin map" }),
         h("span", { className: "badge", textContent: String(all.length), title: `${all.length} pin${all.length === 1 ? "" : "s"}` }),
         m
@@ -726,6 +741,7 @@ function renderList(): void {
     ...(!tree.some((n) => n.textContent) && !slotPins().length && !nMaps ? [h("p", { className: "muted small", textContent: "No pins or pin maps yet. Add a pin map, then place pins and choose it in their form." })] : []),
     ...bad.map((e) => h("p", { className: "error small", textContent: `${e.path}: ${e.problem ?? "can't be used"}` })),
   );
+  bar?.update();
 }
 
 function centreOn(f: PinFeature): void {
@@ -739,7 +755,10 @@ function centreOn(f: PinFeature): void {
 
 function syncControls(): void {
   const add = el.add as HTMLButtonElement;
-  add.disabled = !can("regions") || !slotMap();
+  add.disabled = !can("regions") || !slotMap() || sel.on;
+  if (sel.on) add.title = "Finish selecting first (press Done)";
+  else if (add.dataset.tip) add.title = add.dataset.tip;
+  (el.select as HTMLButtonElement).setAttribute("aria-pressed", String(sel.on));
   (el.addMap as HTMLButtonElement).disabled = !canOrganise() || !slot;
   (el.addFolder as HTMLButtonElement).disabled = !canOrganise();
   add.setAttribute("aria-pressed", String(adding));
@@ -905,11 +924,12 @@ function build(): void {
   const root = $("#tab-pins");
   const slotSel = h("select", { ariaLabel: "Slot" });
   const searchBox = h("input", { type: "search", placeholder: "Search pins", autocomplete: "off", ariaLabel: "Search pins" });
-  const add = h("button", { type: "button", textContent: "Place pins", title: "Place pins: click the map to drop a pin; stays on until you press Done or Esc", ariaPressed: "false" });
+  const add = h("button", { type: "button", textContent: "Place pins", title: "Place pins: click the map to drop a pin; stays on until you press Done or Esc", ariaPressed: "false", dataset: { action: "place-pins", tip: "Place pins: click the map to drop a pin; stays on until you press Done or Esc" } });
   const embed = h("button", { type: "button", className: "ghost", textContent: "Embed code…" });
   const addMap = h("button", { type: "button", className: "ghost", textContent: "+ Pin map", dataset: { action: "new-pinmap" } });
   const addFolder = h("button", { type: "button", className: "ghost", textContent: "+ Folder", dataset: { action: "new-pinfolder" } });
-  Object.assign(el, { addMap, addFolder });
+  const selectBtn = h("button", { type: "button", className: "ghost", textContent: "Select pins", title: "Tick several pins to move them to another pin map, or delete them together", ariaPressed: "false", dataset: { action: "select-pins" } });
+  Object.assign(el, { addMap, addFolder, select: selectBtn });
   const canvas = h("canvas", { className: "pn-canvas" });
   const layer = h("div", { className: "pn-layer" });
   const zoomIn = h("button", { type: "button", className: "ghost", textContent: "+", title: "Zoom in", ariaLabel: "Zoom in" });
@@ -943,10 +963,11 @@ function build(): void {
       h("div", { className: "row pn-tools" }, h("label", {}, "Slot", slotSel), h("label", { className: "grow" }, "Search", searchBox), h("div", { className: "pn-actions" }, add, embed)),
       placing,
       h("div", { className: "pn-body" }, pane, h("div", { className: "pn-side" }, form)),
-      h("div", { className: "pn-below" }, count, kindBar, h("div", { className: "pn-listbar" }, addMap, addFolder), list),
+      h("div", { className: "pn-below" }, count, kindBar, h("div", { className: "pn-listbar" }, addMap, addFolder, selectBtn), list),
     ),
   );
   slotSel.addEventListener("change", () => {
+    sel.clear();
     if (slotSel.value !== slot && dirty()) {
       const to = slotSel.value;
       slotSel.value = slot;
@@ -1009,6 +1030,11 @@ function build(): void {
   });
   embed.addEventListener("click", () => embedDialog());
   addMap.addEventListener("click", () => newMap(slot, null));
+  selectBtn.addEventListener("click", () => void setSelecting(!sel.on));
+  // Clicking a pin row's empty space is handled by the row itself; Esc leaves selection mode.
+  root.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && sel.on && !document.querySelector("dialog[open]") && !e.defaultPrevented) setSelecting(false);
+  });
   addFolder.addEventListener("click", () => newFolder(null));
   zoomIn.addEventListener("click", () => zoomAt(1.6, paneSize().w / 2, paneSize().h / 2));
   zoomOut.addEventListener("click", () => zoomAt(1 / 1.6, paneSize().w / 2, paneSize().h / 2));
@@ -1055,7 +1081,168 @@ export function renderPins(): void {
   });
 }
 
+/* ── Bulk actions: tick several pins, then move them to another pin map or delete them together ── */
+
+const sel = new Selection();
+let bar: ReturnType<typeof selectionBar> | undefined;
+const refreshSelection = (): void => {
+  if (built) refreshBoxes(el.list, sel);
+  bar?.update();
+  redraw();
+};
+/** The ids of the pin rows on screen, top to bottom (for "select all shown" and shift+click ranges). */
+const domOrder = (): string[] => [...el.list.querySelectorAll<HTMLElement>(".pn-item[data-pin]")].map((c) => c.dataset.pin ?? "");
+const byIds = (ids: string[]): PinEntry[] => ids.map((id) => entryOf(id)).filter((e): e is PinEntry => !!e?.feature);
+const perCommit = (): number => 16;
+const plural = (n: number, what: string) => `${n} ${what}${n === 1 ? "" : "s"}`;
+const nameOf = (part: PinEntry[]) => (part.length === 1 ? `pin "${part[0].feature!.properties.name}"` : `${part.length} pins`);
+
+async function setSelecting(on: boolean): Promise<void> {
+  if (on === sel.on) return;
+  if (on) {
+    if (!(await leave())) return;
+    // Place mode and an open pin end when selection starts.
+    adding = false;
+    draft = null;
+    selected = null;
+    sel.on = true;
+    renderForm(true);
+  } else {
+    sel.on = false;
+    sel.clear();
+  }
+  renderList();
+  syncControls();
+  redraw();
+}
+
+const bulkWhy = {
+  move: (ids: string[]) =>
+    !can("regions") ? "You don't have permission to change pins." : blockedList("pin", "change", ids.filter((id) => { const f = entryOf(id)?.feature; return !f || !canEdit(f); })),
+  delete: (ids: string[]) => blockedList("pin", "delete", ids.filter((id) => { const f = entryOf(id)?.feature; return !f || !canDelete(f); })),
+};
+
+const withPinMap = (f: PinFeature, pinMap: string): PinFeature => {
+  const properties = { ...f.properties, updatedBy: account(), updated: stamp() };
+  if (pinMap) properties.pinMap = pinMap;
+  else delete properties.pinMap;
+  return { ...f, properties };
+};
+
+function bulkMove(ids: string[]): void {
+  const m = modal("Change pin map");
+  const maps = mapsOfSlot(pinMaps(), slot);
+  const select = h("select", { ariaLabel: "Pin map", dataset: { field: "bulk-pinmap" } }, h("option", { value: "", textContent: "None (not in a pin map)" }), ...maps.map((x) => h("option", { value: x.id, textContent: x.name })));
+  const go = h("button", { type: "button", textContent: `Move ${plural(ids.length, "pin")}`, dataset: { action: "confirm-bulk-move" } });
+  go.addEventListener("click", () => {
+    m.close();
+    void movePins(ids, select.value);
+  });
+  m.body.append(h("p", { className: "muted small", textContent: `Puts ${plural(ids.length, "pin")} in one pin map${ids.length > perCommit() ? ` (several saves, ${perCommit()} at a time)` : ""}. The pins themselves don't change.` }), h("label", {}, "Pin map ", select));
+  m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), go);
+  select.focus();
+}
+
+async function movePins(ids: string[], pinMap: string): Promise<void> {
+  const all = byIds(ids);
+  for (let i = 0; i < all.length; i += perCommit()) {
+    const part = all.slice(i, i + perCommit());
+    const label = pinMap ? `Move ${nameOf(part)} to pin map ${mapById(pinMaps(), pinMap)?.name ?? pinMap}` : `Take ${nameOf(part)} out of their pin map`;
+    await optimistic<PinEntry[]>({
+      label,
+      check: () => {
+        for (const e of part) {
+          const why = refusal({ path: e.path, before: serialize(e.feature!), after: serialize(withPinMap(e.feature!, pinMap)) });
+          if (why) return `Can't change ${e.id}: ${why}`;
+        }
+        return null;
+      },
+      apply: () => {
+        const before = entries;
+        entries = entries.map((e) => (part.includes(e) ? { ...e, feature: withPinMap(e.feature!, pinMap) } : e));
+        return before;
+      },
+      undo: (before) => void (entries = before),
+      render: () => {
+        renderList();
+        redraw();
+      },
+      commit: () =>
+        deps.gh().commit(label, async () => {
+          const out: { path: string; content: string }[] = [];
+          for (const e of part) out.push({ path: e.path, content: serialize(withPinMap(JSON.parse((await deps.gh().readFile(e.path)).text) as PinFeature, pinMap)) });
+          return out;
+        }),
+    });
+  }
+}
+
+function bulkDelete(ids: string[]): void {
+  const m = modal(`Delete ${plural(ids.length, "pin")}`, "danger");
+  const shown = ids.slice(0, 10);
+  const go = h("button", { type: "button", className: "danger", textContent: `Delete ${plural(ids.length, "pin")}`, dataset: { action: "confirm-bulk-delete" } });
+  go.addEventListener("click", () => {
+    m.close();
+    void removeMany(ids);
+  });
+  const cancel = h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close });
+  m.body.append(
+    h("p", {}, `This deletes ${plural(ids.length, "pin")}${ids.length > perCommit() ? ` (in several saves, ${perCommit()} at a time)` : " in one save"}:`),
+    h("ul", { className: "bulk-list" }, ...shown.map((id) => h("li", {}, h("code", { textContent: id }))), ids.length > shown.length ? h("li", { className: "muted", textContent: `and ${ids.length - shown.length} more` }) : null),
+    h(
+      "div",
+      { className: "rename-note", role: "note" },
+      h("span", { className: "rename-note-icon", ariaHidden: "true", textContent: "⚠" }),
+      h("div", {}, h("strong", { textContent: "Embeds that show these pins will stop showing them." }), " They disappear once the site has rebuilt."),
+    ),
+    h("p", { className: "muted small", textContent: `They stay in Recently deleted for ${TRASH_DAYS} days, where you can restore them.` }),
+  );
+  m.foot.append(cancel, go);
+  cancel.focus();
+}
+
+async function removeMany(ids: string[]): Promise<void> {
+  const all = byIds(ids);
+  for (let i = 0; i < all.length; i += perCommit()) {
+    const part = all.slice(i, i + perCommit());
+    const label = `Delete ${nameOf(part)}`;
+    await optimistic<PinEntry[]>({
+      label,
+      check: () => {
+        for (const e of part) {
+          const why = refusal({ path: e.path, before: serialize(e.feature!), after: null });
+          if (why) return `Can't delete ${e.id}: ${why}`;
+        }
+        return null;
+      },
+      apply: () => {
+        const before = entries;
+        entries = entries.filter((x) => !part.includes(x));
+        return before;
+      },
+      undo: (before) => void (entries = before),
+      render: () => {
+        renderList();
+        redraw();
+      },
+      commit: () => deps.gh().commit(label, async () => part.map((e) => ({ path: e.path, content: "", delete: true }))),
+    });
+  }
+}
+
 export function initPins(d: PinsDeps): void {
   deps = d;
   initPinMaps({ gh: d.gh, render: () => renderList() });
+  bar = selectionBar(
+    sel,
+    "pin",
+    [
+      { text: "Change pin map…", action: "bulk-move", why: bulkWhy.move, run: bulkMove },
+      { text: "Delete…", action: "bulk-delete", why: bulkWhy.delete, run: bulkDelete, danger: true },
+    ],
+    domOrder,
+    refreshSelection,
+    () => void setSelecting(false),
+  );
+  document.body.append(bar.el);
 }
