@@ -44,6 +44,7 @@
     "e2e:stack": "tsx scripts/e2e/stack.mjs",
     "e2e:view": "tsx scripts/e2e/view.mjs",
     "e2e:ruler": "tsx scripts/e2e/ruler.mjs",
+    "e2e:embed-ui": "tsx scripts/e2e/embed-ui.mjs",
     "e2e:pins": "tsx scripts/e2e/pins.mjs",
     "e2e:trash": "tsx scripts/e2e/trash.mjs",
     "region-owners": "tsx scripts/region-owners.ts",
