@@ -906,3 +906,50 @@ describe("suggested changes", () => {
     await expect((await client(ANN)).suggestions()).rejects.toThrow(/aren't set up/);
   });
 });
+
+describe("reviewer comments", () => {
+  it("lets anyone listed comment; the author and people who may edit the region see it, nothing reaches the repository", async () => {
+    const before = head();
+    const kv = env.WAITING as unknown as MemoryKV;
+    const c = await (await client(ANN)).addComment("simon-land", "  border looks   off here ", 5.123456, -3);
+    expect(c).toMatchObject({ region: "simon-land", text: "border looks off here", lon: 5.1235, lat: -3, owner: SIMON.id, status: "open", by: { login: ANN.login } });
+    expect(head()).toBe(before);
+    expect((await (await client(ANN)).comments("simon-land")).length).toBe(1);
+    expect((await (await client(SIMON)).comments()).length).toBe(1);
+    expect((await (await client(BO)).comments("simon-land")).length).toBe(1);
+    expect((await (await client(MANAGER)).comments()).length).toBe(0);
+    expect((await (await client(SIMON)).comments("ann-land")).length).toBe(0);
+    // Reads never list: one get each.
+    expect(kv.lists).toBe(0);
+  });
+
+  it("lets only editors of the region resolve, reopen; the author or an editor delete", async () => {
+    const c = await (await client(ANN)).addComment("simon-land", "hi", 1, 1);
+    await expect((await client(ANN)).setCommentStatus(c.id, "resolved")).rejects.toThrow(/can't resolve/);
+    const done = await (await client(SIMON)).setCommentStatus(c.id, "resolved");
+    expect(done).toMatchObject({ status: "resolved", resolvedBy: SIMON.login });
+    expect((await (await client(SIMON)).setCommentStatus(c.id, "open")).resolvedBy).toBeUndefined();
+    await expect((await client(MANAGER)).removeComment(c.id)).rejects.toThrow(/Only the person/);
+    await (await client(ANN)).removeComment(c.id);
+    expect((await (await client(SIMON)).comments()).find((x) => x.id === c.id)).toBeUndefined();
+    const d = await (await client(ANN)).addComment("simon-land", "again", 1, 1);
+    await (await client(BO)).removeComment(d.id);
+  });
+
+  it("refuses empty text, missing regions, bad spots, strangers and more than 20 open", async () => {
+    const ann = await client(ANN);
+    await expect(ann.addComment("simon-land", "   ", 1, 1)).rejects.toThrow(/Write something/);
+    await expect(ann.addComment("nope", "x", 1, 1)).rejects.toThrow(/no region/);
+    await expect(ann.addComment("simon-land", "x", 999, 1)).rejects.toThrow(/spot/);
+    await expect(ann.addComment("../x", "x", 1, 1)).rejects.toThrow(/Bad region/);
+    expect((await ann.addComment("simon-land", "x".repeat(500), 1, 1)).text.length).toBe(240);
+    for (let i = 0; i < 19; i++) await ann.addComment("simon-land", `c${i}`, 1, 1);
+    await expect(ann.addComment("simon-land", "one too many", 1, 1)).rejects.toThrow(/20 open/);
+    await expect(new GitHub(await session(STRANGER), REPO, API).comments()).rejects.toThrow();
+  });
+
+  it("answers 501 where there's no key-value store", async () => {
+    env.WAITING = undefined;
+    await expect((await client(ANN)).comments()).rejects.toThrow(/aren't set up/);
+  });
+});
