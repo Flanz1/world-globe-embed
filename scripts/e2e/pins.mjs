@@ -790,7 +790,12 @@ await step(A, "legend names: set per pin map in the region editor's Underlays se
   await dlg.locator('input[data-field="legend-kind-city"]').fill("Settlement");
   await dlg.locator('[data-action="confirm-legend"]').click();
   await page.waitForTimeout(300);
-  check(A, "the button shows the words are set", /✓/.test((await btn.textContent()) ?? ""));
+  check(A, "the button shows the words are set", /✓/.test((await btn.textContent()) ?? "") && /custom names set/.test((await btn.getAttribute("aria-label")) ?? ""));
+  for (const scheme of ["light", "dark"]) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForTimeout(200);
+    await page.locator("dialog.editor .ed-pinmaps").screenshot({ path: path.join(OUT, `legend-names-1440-${scheme}-button-set.png`) });
+  }
   const n0 = mock.log.length;
   await page.click("dialog.editor .ed-save");
   await waitCommit(page, n0);

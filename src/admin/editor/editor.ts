@@ -2033,7 +2033,7 @@ export function openEditor(o: EditorOptions): void {
       const label = h("label", { className: "check" }, box, m.name);
       if (!box.checked) return label;
       const own = hist.state.props.pinLegends?.[m.id];
-      const names = h("button", { type: "button", className: "text tiny lg-open", textContent: own ? "Legend names ✓" : "Legend names…", title: `Change what the pin legend calls the panel and each kind of pin for "${m.name}" on this region's embed`, dataset: { action: "legend-names", pinmap: m.id } });
+      const names = h("button", { type: "button", className: "text tiny lg-open", textContent: own ? "Legend names ✓" : "Legend names…", title: `Change what the pin legend calls the panel and each kind of pin for "${m.name}" on this region's embed`, ariaLabel: own ? `Legend names for ${m.name}, custom names set` : `Legend names for ${m.name}`, dataset: { action: "legend-names", pinmap: m.id } });
       names.addEventListener("click", () =>
         legendDialog(own, `For pin map "${m.name}" on this region's embed.`, (legend) => {
           const rest = { ...(hist.state.props.pinLegends ?? {}) };

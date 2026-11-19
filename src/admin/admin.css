@@ -899,4 +899,5 @@ dialog.legend-dlg .dlg-foot .grow { flex: 1 1 auto; }
   dialog.legend-dlg { width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 28px 28px 0 0; }
 }
 .ed-pinrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.ed-pinrow .lg-open { flex: 0 0 auto; }
+.ed-pinrow .lg-open { flex: 0 0 auto; background-color: transparent; border-color: transparent; color: var(--md-sys-color-primary); }
+dialog.legend-dlg::backdrop { background: rgba(0, 0, 0, .45); }
