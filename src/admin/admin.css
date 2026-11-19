@@ -576,10 +576,9 @@ button.link { background: none; border: 0; border-radius: 4px; min-height: 0; pa
 .pn-placing[hidden] { display: none; }
 .pn-label { display: none; position: absolute; left: 30px; top: 3px; padding: 1px 6px; border-radius: 6px; background: rgba(20, 18, 14, .82); color: #ece2d0; font-size: 12px; white-space: nowrap; pointer-events: none; }
 .pn-layer[data-labels="true"] .pn-label { display: block; }
-.pn-kinds, .pn-kindbar { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); }
-.pn-kind { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; box-shadow: inset 0 -3px 0 var(--kind); }
-.pn-kind[aria-checked="true"], .pn-kind[aria-pressed="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: var(--md-sys-color-outline); }
-.pn-kind[aria-checked="true"]::before, .pn-kind[aria-pressed="true"]::before { content: ""; width: 12px; height: 12px; background: currentColor; -webkit-mask: var(--app-tick) center / contain no-repeat; mask: var(--app-tick) center / contain no-repeat; }
+.pn-kinds, .pn-kindbar { display: flex; flex-wrap: wrap; gap: 4px; }
+.pn-kind { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 36px; min-width: 36px; padding: 0; box-shadow: inset 0 -3px 0 var(--kind); }
+.pn-kind[aria-checked="true"], .pn-kind[aria-pressed="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border: 2px solid var(--md-sys-color-outline); }
 .pn-field { display: grid; gap: 2px; }
 /* On the dark map in both themes, so fixed map-overlay colours rather than theme roles. */
 .pn-zoom button { background-color: rgba(20, 18, 14, .8); color: #ece2d0; border-color: rgba(255, 255, 255, .3); min-width: 32px; }

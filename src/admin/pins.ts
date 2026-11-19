@@ -366,7 +366,7 @@ function renderForm(rebuild: boolean): void {
     "div",
     { className: "pn-kinds", role: "radiogroup", ariaLabel: "Kind (decides the icon)" },
     ...PIN_KINDS.map((k) => {
-      const b = h("button", { type: "button", className: "ghost tiny pn-kind", role: "radio", ariaChecked: String(k.id === p.kind), tabIndex: k.id === p.kind ? 0 : -1, disabled: !ok, dataset: { kind: k.id }, title: k.label }, pinIcon(k.id, 14), h("span", { textContent: k.label }));
+      const b = h("button", { type: "button", className: "ghost tiny pn-kind", role: "radio", ariaChecked: String(k.id === p.kind), tabIndex: k.id === p.kind ? 0 : -1, disabled: !ok, dataset: { kind: k.id }, title: k.label, ariaLabel: k.label }, pinIcon(k.id, 16));
       b.style.setProperty("--kind", k.color);
       b.addEventListener("click", () => {
         p.kind = k.id;
@@ -939,7 +939,7 @@ function build(): void {
   const regionsBtn = h("button", { type: "button", className: "ghost", textContent: "Regions", title: "Show the outlines of this slot's regions behind the pins", ariaPressed: "false", dataset: { action: "pin-regions" } });
   const placing = h("p", { className: "pn-placing small", hidden: true, role: "status", ariaLive: "polite" }, h("span", { textContent: "Placing pins: click the map to drop one. " }), h("button", { type: "button", className: "ghost tiny", textContent: "Done", dataset: { action: "place-done" } }));
   const kindBar = h("div", { className: "pn-kindbar", role: "group", ariaLabel: "Show only these kinds" }, ...PIN_KINDS.map((k) => {
-    const b = h("button", { type: "button", className: "ghost tiny pn-kind", ariaPressed: "false", dataset: { kind: k.id }, title: `Show only ${k.label.toLowerCase()} pins` }, pinIcon(k.id, 14), h("span", { textContent: k.label }));
+    const b = h("button", { type: "button", className: "ghost tiny pn-kind", ariaPressed: "false", dataset: { kind: k.id }, title: `Show only ${k.label.toLowerCase()} pins`, ariaLabel: `Show only ${k.label.toLowerCase()} pins` }, pinIcon(k.id, 16));
     b.style.setProperty("--kind", k.color);
     b.addEventListener("click", () => {
       if (kindFilter.has(k.id)) kindFilter.delete(k.id);
