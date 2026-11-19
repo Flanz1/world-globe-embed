@@ -362,14 +362,16 @@ function renderForm(rebuild: boolean): void {
     return;
   }
   const name = h("input", { type: "text", maxLength: PIN_NAME_MAX, value: p.name, required: true, disabled: !ok, autocomplete: "off", ariaLabel: "Name" });
+  const kindLabel = h("span", { className: "small", textContent: `Kind: ${kindInfo(p.kind).label}` });
   const kind = h(
     "div",
     { className: "pn-kinds", role: "radiogroup", ariaLabel: "Kind (decides the icon)" },
     ...PIN_KINDS.map((k) => {
-      const b = h("button", { type: "button", className: "ghost tiny pn-kind", role: "radio", ariaChecked: String(k.id === p.kind), tabIndex: k.id === p.kind ? 0 : -1, disabled: !ok, dataset: { kind: k.id }, title: k.label, ariaLabel: k.label }, pinIcon(k.id, 16));
+      const b = h("button", { type: "button", className: "ghost tiny pn-kind", role: "radio", ariaChecked: String(k.id === p.kind), tabIndex: k.id === p.kind ? 0 : -1, disabled: !ok, dataset: { kind: k.id }, title: k.label, ariaLabel: k.label }, pinIcon(k.id, 20));
       b.style.setProperty("--kind", k.color);
       b.addEventListener("click", () => {
         p.kind = k.id;
+        kindLabel.textContent = `Kind: ${k.label}`;
         for (const c of kind.querySelectorAll<HTMLElement>("[data-kind]")) {
           c.setAttribute("aria-checked", String(c.dataset.kind === k.id));
           c.tabIndex = c.dataset.kind === k.id ? 0 : -1;
@@ -420,7 +422,7 @@ function renderForm(rebuild: boolean): void {
     "form",
     { className: "pn-form" },
     h("label", {}, "Name", name),
-    h("div", { className: "pn-field" }, h("span", { className: "small", textContent: "Kind (decides the icon)" }), kind),
+    h("div", { className: "pn-field" }, kindLabel, kind),
     h("label", {}, "Pin map (optional: an embed can show one pin map)", pinMap),
     h("div", { className: "pn-color" }, h("label", { className: "check" }, useColor, "Custom colour"), color),
     h("label", {}, `Description (optional, up to ${PIN_DESCRIPTION_MAX} characters)`, desc),
@@ -939,16 +941,32 @@ function build(): void {
   const regionsBtn = h("button", { type: "button", className: "ghost", textContent: "Regions", title: "Show the outlines of this slot's regions behind the pins", ariaPressed: "false", dataset: { action: "pin-regions" } });
   const placing = h("p", { className: "pn-placing small", hidden: true, role: "status", ariaLive: "polite" }, h("span", { textContent: "Placing pins: click the map to drop one. " }), h("button", { type: "button", className: "ghost tiny", textContent: "Done", dataset: { action: "place-done" } }));
   const kindBar = h("div", { className: "pn-kindbar", role: "group", ariaLabel: "Show only these kinds" }, ...PIN_KINDS.map((k) => {
-    const b = h("button", { type: "button", className: "ghost tiny pn-kind", ariaPressed: "false", dataset: { kind: k.id }, title: `Show only ${k.label.toLowerCase()} pins`, ariaLabel: `Show only ${k.label.toLowerCase()} pins` }, pinIcon(k.id, 16));
+    const b = h("button", { type: "button", className: "ghost tiny pn-kind", ariaPressed: String(kindFilter.has(k.id)), dataset: { kind: k.id }, title: `Show only ${k.label.toLowerCase()} pins`, ariaLabel: `Show only ${k.label.toLowerCase()} pins` }, pinIcon(k.id, 20));
     b.style.setProperty("--kind", k.color);
     b.addEventListener("click", () => {
       if (kindFilter.has(k.id)) kindFilter.delete(k.id);
       else kindFilter.add(k.id);
       b.setAttribute("aria-pressed", String(kindFilter.has(k.id)));
+      kindSummary();
       renderList();
     });
     return b;
   }));
+  const kindNote = h("p", { className: "pn-kindnote small muted", hidden: true });
+  const kindSummary = (): void => {
+    const n = kindFilter.size;
+    kindNote.hidden = !n;
+    if (!n) return;
+    const all = h("button", { type: "button", className: "ghost tiny", textContent: "Show all" });
+    all.addEventListener("click", () => {
+      kindFilter.clear();
+      for (const c of kindBar.querySelectorAll<HTMLElement>("[data-kind]")) c.setAttribute("aria-pressed", "false");
+      kindSummary();
+      renderList();
+    });
+    kindNote.replaceChildren(h("span", { textContent: `Showing ${n} of ${PIN_KINDS.length} kinds · ` }), all);
+  };
+  kindSummary();
   const pane = h("div", { className: "pn-pane", tabIndex: 0, role: "application", ariaLabel: "Map. Drag to move, scroll to zoom." }, canvas, layer, h("div", { className: "pn-zoom" }, labelsBtn, regionsBtn, zoomIn, zoomOut, fitBtn));
   const form = h("div", { className: "pn-formbox" });
   const list = h("div", { className: "pn-list" });
@@ -963,7 +981,7 @@ function build(): void {
       h("div", { className: "row pn-tools" }, h("label", {}, "Slot", slotSel), h("label", { className: "grow" }, "Search", searchBox), h("div", { className: "pn-actions" }, add, embed)),
       placing,
       h("div", { className: "pn-body" }, pane, h("div", { className: "pn-side" }, form)),
-      h("div", { className: "pn-below" }, count, kindBar, h("div", { className: "pn-listbar" }, addMap, addFolder, selectBtn), list),
+      h("div", { className: "pn-below" }, count, kindBar, kindNote, h("div", { className: "pn-listbar" }, addMap, addFolder, selectBtn), list),
     ),
   );
   slotSel.addEventListener("change", () => {
