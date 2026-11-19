@@ -928,7 +928,7 @@ function build(): void {
   const embed = h("button", { type: "button", className: "ghost", textContent: "Embed code…" });
   const addMap = h("button", { type: "button", className: "ghost", textContent: "+ Pin map", dataset: { action: "new-pinmap" } });
   const addFolder = h("button", { type: "button", className: "ghost", textContent: "+ Folder", dataset: { action: "new-pinfolder" } });
-  const legendBtn = h("button", { type: "button", className: "ghost", textContent: "Rename legend…", title: "Change what embeds call the pin panel and each kind of pin", dataset: { action: "rename-legend" } });
+  const legendBtn = h("button", { type: "button", className: "ghost tiny lg-open", textContent: "Legend names…", title: "Change what this slot's embeds call the pin panel and each kind of pin", dataset: { action: "rename-legend" } });
   const selectBtn = h("button", { type: "button", className: "ghost", textContent: "Select pins", title: "Tick several pins to move them to another pin map, or delete them together", ariaPressed: "false", dataset: { action: "select-pins" } });
   Object.assign(el, { addMap, addFolder, select: selectBtn });
   const canvas = h("canvas", { className: "pn-canvas" });
@@ -939,7 +939,7 @@ function build(): void {
   const labelsBtn = h("button", { type: "button", className: "ghost", textContent: "Labels", title: "Show each pin's name next to it", ariaPressed: "false", dataset: { action: "pin-labels" } });
   const regionsBtn = h("button", { type: "button", className: "ghost", textContent: "Regions", title: "Show the outlines of this slot's regions behind the pins", ariaPressed: "false", dataset: { action: "pin-regions" } });
   const placing = h("p", { className: "pn-placing small", hidden: true, role: "status", ariaLive: "polite" }, h("span", { textContent: "Placing pins: click the map to drop one. " }), h("button", { type: "button", className: "ghost tiny", textContent: "Done", dataset: { action: "place-done" } }));
-  const kindBar = h("div", { className: "pn-kindbar", role: "group", ariaLabel: "Show only these kinds" }, ...PIN_KINDS.map((k) => {
+  const kindBar = h("div", { className: "pn-kindbar", role: "group", ariaLabel: "Show only these kinds" }, ...[...PIN_KINDS].map((k) => {
     const b = h("button", { type: "button", className: "ghost tiny pn-kind", ariaPressed: "false", dataset: { kind: k.id }, title: `Show only ${k.label.toLowerCase()} pins` }, pinIcon(k.id, 14), h("span", { textContent: k.label }));
     b.style.setProperty("--kind", k.color);
     b.addEventListener("click", () => {
@@ -949,7 +949,7 @@ function build(): void {
       renderList();
     });
     return b;
-  }));
+  }), legendBtn);
   const pane = h("div", { className: "pn-pane", tabIndex: 0, role: "application", ariaLabel: "Map. Drag to move, scroll to zoom." }, canvas, layer, h("div", { className: "pn-zoom" }, labelsBtn, regionsBtn, zoomIn, zoomOut, fitBtn));
   const form = h("div", { className: "pn-formbox" });
   const list = h("div", { className: "pn-list" });
@@ -964,7 +964,7 @@ function build(): void {
       h("div", { className: "row pn-tools" }, h("label", {}, "Slot", slotSel), h("label", { className: "grow" }, "Search", searchBox), h("div", { className: "pn-actions" }, add, embed)),
       placing,
       h("div", { className: "pn-body" }, pane, h("div", { className: "pn-side" }, form)),
-      h("div", { className: "pn-below" }, count, kindBar, h("div", { className: "pn-listbar" }, addMap, addFolder, selectBtn, legendBtn), list),
+      h("div", { className: "pn-below" }, count, kindBar, h("div", { className: "pn-listbar" }, addMap, addFolder, selectBtn), list),
     ),
   );
   slotSel.addEventListener("change", () => {
@@ -1031,7 +1031,7 @@ function build(): void {
   });
   embed.addEventListener("click", () => embedDialog());
   addMap.addEventListener("click", () => newMap(slot, null));
-  legendBtn.addEventListener("click", () => editLegend(slot));
+  legendBtn.addEventListener("click", () => editLegend(slot, deps.slots().slots[slot]?.title || slot));
   selectBtn.addEventListener("click", () => void setSelecting(!sel.on));
   // Clicking a pin row's empty space is handled by the row itself; Esc leaves selection mode.
   root.addEventListener("keydown", (e) => {
