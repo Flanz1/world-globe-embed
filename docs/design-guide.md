@@ -51,6 +51,8 @@ the design review checks plans and PRs against them.
 - Rows with many actions keep the 2–3 common ones visible and put the rest in **More…** (a menu button, keyboard
   operable, Delete last and separated).
 - Labels: verb first, sentence case. A trailing `…` means it opens a dialog or menu. `+ X` adds a thing to the list.
+- **Copy embed code** copies straight away (slot cards, atlas). **Embed code…** opens the dialog (region cards, pins).
+  Both names are allowed, by that rule.
 
 ## Names (use exactly these)
 Region, part, colour folder, pin, pin map, folder / subfolder, slot, map, embed code, *Suggest changes*,
@@ -59,6 +61,39 @@ Region, part, colour folder, pin, pin map, folder / subfolder, slot, map, embed 
 ## Folder trees
 Full width below the map or form, collapsible folders with an arrow and a count badge, *Collapse all* above the tree
 (#121, #123, #124). Folder actions sit in the folder head on one line (as above). Regions and pins use the same tree.
+
+## Touch
+On `(pointer: coarse)` every control has a 44 px hit area (admin, editor, embed). The editor toolbar uses 40 px.
+
+## Embed
+- One `.rstack` panel column holds every "what's shown" panel: the legend (layers inside it), then pin filters.
+  Background `var(--embed-panel)`; the ruler panel uses it too (#169).
+- Placement: left edge, vertically centred at ≥768 px; top-left on phones; folds to a *Legend* button when the
+  embed is under 300 px tall.
+- Bottom-right is for the reader corner buttons only, with the hint above the buttons.
+- Region labels: min 12 px, even-pixel size steps, tilt ≤ 70 deg. On a clash shrink one step, then slide (≤ 110 px),
+  then fade. Labels avoid the legend column, corner buttons and pins (#162). Not done yet: clamp globe label centres
+  inside the visible disc.
+
+## Editor
+- The drawing tools form one segmented button, followed by the [Pin][Comments] place-mode group. Pin and Comments use
+  a shared popover at 768/1440 px and a bottom sheet at 375 px.
+- Side panel sections: Region / Parts / Underlays / Layers (sections on desktop, sheet tabs on phone).
+- Toolbar labels (#163): drawing tools have labels; secondary tools are icon-only (title, `aria-label` and visually
+  hidden text). Under 1600 px Undo/Redo/Snap go icon-only; under 1400 px Pin/Comments too. *Other regions* stays
+  visible without scrolling at ≥1280 px. Counts on icon buttons are a small pill at the top right.
+- Mode-specific options (e.g. Freehand *Open line*, #175) are chips at the map's top-left, not toolbar buttons.
+
+## Admin
+- Phone header: title and tabs, sun/moon, accent swatch, Account menu (repo/user and Sign out). The test-branch
+  warning is a banner under the header at every width.
+- Top error banner (`role="alert"`, dismissible) only for errors with no inline home; field errors sit next to the
+  field.
+- Under 600 px, rows use the shared **More…** menu (`src/admin/more-menu.ts`); don't copy it.
+- Reversible draft edits (e.g. removing a user before Save) need no confirm; the sticky Save/Undo bar shows only
+  while there are unsaved changes.
+- Bulk selection bar: count and Done on the first row, actions scroll below it; the page gets bottom padding so
+  nothing hides behind the bar.
 
 ## Forms and dialogs
 - Label above the input (`label` grid). Inputs shrink rather than overflow.
@@ -69,6 +104,10 @@ Full width below the map or form, collapsible folders with an arrow and a count 
 Every list or panel has: an **empty state** (what it is plus the button to start, in the `.empty` box), a
 **loading** state, an **error** shown next to the thing that failed (`.error`, `role="alert"` when it needs action),
 and **disabled** controls with a title explaining why.
+
+**Feedback:** the snackbar is for success plus Undo only, shown for 5 s, paused on hover or focus, and it sits above
+the bulk bar when that's open. Errors stay inline next to the thing that failed (the only exception is the Admin top
+banner for errors with no inline home).
 
 ## Accessibility
 - Semantic elements first: `button` for actions, `a` for navigation, `fieldset`/`legend` for groups, `dialog` for
