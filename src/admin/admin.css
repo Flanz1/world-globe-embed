@@ -466,8 +466,10 @@ dialog.editor .ed-sec-toggle { width: 100%; justify-content: flex-start; padding
 .ed-pin-body label { display: grid; gap: 2px; }
 .ed-pin-foot { display: flex; align-items: center; gap: 8px; padding: 8px 12px 12px; border-top: 1px solid var(--md-sys-color-outline-variant); }
 .ed-pin-foot .grow { flex: 1; }
-.ed-pin-kinds { display: flex; flex-wrap: wrap; gap: 4px; }
-.ed-pin-kinds .ed-kind { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 36px; min-width: 36px; padding: 0; box-shadow: inset 0 -3px 0 var(--kind); }
+.ed-pin-kindfield { display: grid; gap: 2px; }
+.ed-pin-kinds { display: flex; flex-wrap: wrap; gap: 8px; }
+.ed-pin-kinds .ed-kind { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 36px; min-width: 36px; min-height: 36px; padding: 0; box-shadow: inset 0 -3px 0 var(--kind); }
+@media (pointer: coarse) { .ed-pin-kinds .ed-kind { position: relative; } .ed-pin-kinds .ed-kind::after { content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); } }
 .ed-pin-kinds .ed-kind[aria-checked="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border: 2px solid var(--md-sys-color-outline); }
 @media (max-width: 600px) { .ed-pin-pop, .ed-cm-pop { position: fixed; left: 0; right: 0; top: auto; bottom: 0; width: auto; max-height: 70vh; border-radius: 16px 16px 0 0; z-index: 20; } }
 .ed-pin-tip { position: absolute; z-index: 4; pointer-events: none; padding: 4px 8px; border-radius: 8px; font-size: 12px; white-space: nowrap; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); border: 1px solid var(--md-sys-color-outline-variant); box-shadow: var(--app-shadow); }

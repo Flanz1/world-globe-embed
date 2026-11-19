@@ -6,7 +6,7 @@
  */
 import { h } from "../dom.ts";
 import { pinIcon } from "../../shared/pin-icons.ts";
-import { PIN_DESCRIPTION_MAX, PIN_KINDS, PIN_NAME_MAX, isPinKind, type PinFeature, type PinKind } from "../../shared/pins.ts";
+import { PIN_DESCRIPTION_MAX, PIN_KINDS, PIN_NAME_MAX, isPinKind, kindInfo, type PinFeature, type PinKind } from "../../shared/pins.ts";
 import { mapsOfSlot } from "../../shared/pinmaps.ts";
 import { confirmBox } from "../region-dialogs.ts";
 import { canDelete, canEdit, can } from "../session.ts";
@@ -126,14 +126,16 @@ export function createPinTool(o: PinToolOptions): PinTool {
     const p = f.properties;
     const ok = isNew ? can("regions") : canEdit(f);
     const name = h("input", { type: "text", maxLength: PIN_NAME_MAX, value: p.name, disabled: !ok, autocomplete: "off", ariaLabel: "Name", name: "pin-name" });
+    const kindLabel = h("span", { className: "small", textContent: `Kind: ${kindInfo(p.kind).label}` });
     const kinds = h(
       "div",
       { className: "ed-pin-kinds", role: "radiogroup", ariaLabel: "Kind (decides the icon)" },
       ...PIN_KINDS.map((k) => {
-        const b = h("button", { type: "button", className: "ghost tiny ed-kind", role: "radio", ariaChecked: String(k.id === p.kind), tabIndex: k.id === p.kind ? 0 : -1, disabled: !ok, dataset: { kind: k.id }, title: k.label, ariaLabel: k.label }, pinIcon(k.id, 16));
+        const b = h("button", { type: "button", className: "ghost tiny ed-kind", role: "radio", ariaChecked: String(k.id === p.kind), tabIndex: k.id === p.kind ? 0 : -1, disabled: !ok, dataset: { kind: k.id }, title: k.label, ariaLabel: k.label }, pinIcon(k.id, 20));
         b.style.setProperty("--kind", k.color);
         b.addEventListener("click", () => {
           p.kind = k.id;
+          kindLabel.textContent = `Kind: ${k.label}`;
           for (const c of kinds.querySelectorAll<HTMLElement>("[data-kind]")) {
             c.setAttribute("aria-checked", String(c.dataset.kind === k.id));
             c.tabIndex = c.dataset.kind === k.id ? 0 : -1;
@@ -202,7 +204,7 @@ export function createPinTool(o: PinToolOptions): PinTool {
         "div",
         { className: "ed-pin-body" },
         h("label", {}, "Name", name),
-        kinds,
+        h("div", { className: "ed-pin-kindfield" }, kindLabel, kinds),
         h("label", {}, "Pin map", pinMap),
         h("label", {}, `Description (optional)`, desc),
         h("label", {}, "Link to the note (optional)", link),
