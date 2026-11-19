@@ -130,7 +130,7 @@ export function createPinTool(o: PinToolOptions): PinTool {
       "div",
       { className: "ed-pin-kinds", role: "radiogroup", ariaLabel: "Kind (decides the icon)" },
       ...PIN_KINDS.map((k) => {
-        const b = h("button", { type: "button", className: "ghost tiny ed-kind", role: "radio", ariaChecked: String(k.id === p.kind), tabIndex: k.id === p.kind ? 0 : -1, disabled: !ok, dataset: { kind: k.id }, title: k.label }, pinIcon(k.id, 14), h("span", { textContent: k.label }));
+        const b = h("button", { type: "button", className: "ghost tiny ed-kind", role: "radio", ariaChecked: String(k.id === p.kind), tabIndex: k.id === p.kind ? 0 : -1, disabled: !ok, dataset: { kind: k.id }, title: k.label, ariaLabel: k.label }, pinIcon(k.id, 16));
         b.style.setProperty("--kind", k.color);
         b.addEventListener("click", () => {
           p.kind = k.id;
