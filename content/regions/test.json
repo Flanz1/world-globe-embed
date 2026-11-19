@@ -9,9 +9,10 @@
     "fillOpacity": 0.35,
     "label": true,
     "pinMaps": [
-      "zuhurist-holy-sites"
+      "zuhurist-holy-sites",
+      "test"
     ],
-    "updated": "2026-11-19T10:30:02Z",
+    "updated": "2026-11-19T10:30:17Z",
     "created": "2026-11-19T10:30:02Z",
     "createdBy": {
       "id": 45669787,
