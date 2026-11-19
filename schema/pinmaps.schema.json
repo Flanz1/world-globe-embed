@@ -31,6 +31,28 @@
         }
       }
     },
+    "legends": {
+      "type": "object",
+      "maxProperties": 100,
+      "description": "Per slot (by slot id): the words the embed's pin legend uses instead of the defaults. Only labels change: a kind keeps its icon, colour and its id in ?pins=.",
+      "propertyNames": { "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 30, "description": "The legend panel's title (default \"Pins\")." },
+          "kinds": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "A label per pin kind id; kinds not listed keep their default label.",
+            "properties": {
+              "city": { "$ref": "#/$defs/label" }, "town": { "$ref": "#/$defs/label" }, "fortress": { "$ref": "#/$defs/label" }, "port": { "$ref": "#/$defs/label" }, "temple": { "$ref": "#/$defs/label" },
+              "ruin": { "$ref": "#/$defs/label" }, "battle": { "$ref": "#/$defs/label" }, "landmark": { "$ref": "#/$defs/label" }, "mountain": { "$ref": "#/$defs/label" }, "other": { "$ref": "#/$defs/label" }
+            }
+          }
+        }
+      }
+    },
     "maps": {
       "type": "array",
       "maxItems": 300,
@@ -47,6 +69,7 @@
     }
   },
   "$defs": {
+    "label": { "type": "string", "minLength": 1, "maxLength": 40 },
     "account": {
       "type": "object",
       "required": ["id", "login"],

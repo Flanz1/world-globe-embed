@@ -32,6 +32,18 @@ export type PinKind = (typeof PIN_KINDS)[number]["id"];
 const KIND_IDS: readonly string[] = PIN_KINDS.map((k) => k.id);
 export const isPinKind = (v: unknown): v is PinKind => typeof v === "string" && KIND_IDS.includes(v);
 export const kindInfo = (k: PinKind) => PIN_KINDS.find((x) => x.id === k)!;
+
+export const PIN_LEGEND_TITLE = "Pins";
+export const LEGEND_TITLE_MAX = 30;
+export const LEGEND_LABEL_MAX = 40;
+/** A slot's own words for the embed's pin legend: its title and a label per kind. Anything missing keeps the default. */
+export interface PinLegend {
+  title?: string;
+  kinds?: Partial<Record<PinKind, string>>;
+}
+/** What a kind is called: the slot's own label for it, or the built-in one. Only the label changes, never the kind (icon, colour, ?pins= filters). */
+export const kindLabel = (k: PinKind, legend?: PinLegend | null): string => legend?.kinds?.[k]?.trim() || kindInfo(k).label;
+export const legendTitle = (legend?: PinLegend | null): string => legend?.title?.trim() || PIN_LEGEND_TITLE;
 /** The colour a pin is drawn in: its own, or its kind's. */
 export const pinColor = (p: { kind: PinKind; color?: string }): string => (p.color && PIN_COLOR.test(p.color) ? p.color : kindInfo(p.kind).color);
 
@@ -122,17 +134,32 @@ export function pinData(f: PinFeature): PinData {
 }
 
 /** The body of pins/<slot>.json, minified. Stable order (by id) so rebuilds don't change the file for nothing. */
-export function pinsJson(pins: readonly PinFeature[], maps: readonly { id: string; name: string }[] = []): string {
+export function pinsJson(pins: readonly PinFeature[], maps: readonly { id: string; name: string }[] = [], legend?: PinLegend | null): string {
   const sorted = [...pins].sort((a, b) => a.id.localeCompare(b.id));
   if (sorted.length > MAX_PINS_PER_SLOT) throw new Error(`a slot can show at most ${MAX_PINS_PER_SLOT} pins`);
   const used = new Set(sorted.map((p) => p.properties.pinMap));
-  return JSON.stringify({ pins: sorted.map(pinData), maps: maps.filter((m) => used.has(m.id)).map((m) => ({ id: m.id, name: m.name })) });
+  return JSON.stringify({ pins: sorted.map(pinData), maps: maps.filter((m) => used.has(m.id)).map((m) => ({ id: m.id, name: m.name })), ...(cleanLegend(legend) ? { legend: cleanLegend(legend) } : {}) });
 }
 
 /** What an embed reads from pins/<slot>.json: the pins and the names of the pin maps they are in. */
 export interface PinsFile {
   pins: PinData[];
   maps: { id: string; name: string }[];
+  legend?: PinLegend;
+}
+
+/** The legend with only what is usable (known kinds, plain text, within the length limits); undefined when nothing is left. */
+export function cleanLegend(v: unknown): PinLegend | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const r = v as { title?: unknown; kinds?: unknown };
+  const out: PinLegend = {};
+  if (text(r.title, LEGEND_TITLE_MAX) && r.title.trim()) out.title = r.title.trim();
+  if (r.kinds && typeof r.kinds === "object") {
+    const kinds: Partial<Record<PinKind, string>> = {};
+    for (const [k, l] of Object.entries(r.kinds)) if (isPinKind(k) && text(l, LEGEND_LABEL_MAX) && l.trim()) kinds[k] = l.trim();
+    if (Object.keys(kinds).length) out.kinds = kinds;
+  }
+  return out.title || out.kinds ? out : undefined;
 }
 
 /** Validates fetched pin data; anything that doesn't fit is dropped (never trusted as is). Null if the file isn't a pin file at all. */
@@ -161,7 +188,8 @@ export function parsePinsFile(j: unknown): PinsFile | null {
   const maps = ((j as { maps?: unknown }).maps instanceof Array ? ((j as { maps: unknown[] }).maps) : [])
     .map((m) => m as { id?: unknown; name?: unknown })
     .filter((m): m is { id: string; name: string } => !!m && typeof m.id === "string" && PIN_ID.test(m.id) && text(m.name, 60) && !!(m.name as string).trim());
-  return { pins: out, maps };
+  const legend = cleanLegend((j as { legend?: unknown }).legend);
+  return { pins: out, maps, ...(legend ? { legend } : {}) };
 }
 
 /** What ?pins= asked for: every pin, or the pins of those pin maps (by id) or of those kinds. */

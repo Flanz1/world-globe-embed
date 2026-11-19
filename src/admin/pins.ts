@@ -18,7 +18,7 @@ import type { GitHub } from "./github.ts";
 import { optimistic } from "./optimistic.ts";
 import { loadMapImage } from "./images.ts";
 import { confirmBox, modal } from "./region-dialogs.ts";
-import { canOrganise, initPinMaps, loadPinMaps, moveMapDialog, newFolder, newMap, pinMaps, removeMap, renameMap, renderTree } from "./pinmaps.ts";
+import { canOrganise, initPinMaps, loadPinMaps, moveMapDialog, editLegend, newFolder, newMap, pinMaps, removeMap, renameMap, renderTree } from "./pinmaps.ts";
 import { mapById, mapsOfSlot, type PinMap } from "../shared/pinmaps.ts";
 import { account, can, canDelete, canEdit, refusal } from "./session.ts";
 import { moreMenu } from "./more-menu.ts";
@@ -928,6 +928,7 @@ function build(): void {
   const embed = h("button", { type: "button", className: "ghost", textContent: "Embed code…" });
   const addMap = h("button", { type: "button", className: "ghost", textContent: "+ Pin map", dataset: { action: "new-pinmap" } });
   const addFolder = h("button", { type: "button", className: "ghost", textContent: "+ Folder", dataset: { action: "new-pinfolder" } });
+  const legendBtn = h("button", { type: "button", className: "ghost", textContent: "Rename legend…", title: "Change what embeds call the pin panel and each kind of pin", dataset: { action: "rename-legend" } });
   const selectBtn = h("button", { type: "button", className: "ghost", textContent: "Select pins", title: "Tick several pins to move them to another pin map, or delete them together", ariaPressed: "false", dataset: { action: "select-pins" } });
   Object.assign(el, { addMap, addFolder, select: selectBtn });
   const canvas = h("canvas", { className: "pn-canvas" });
@@ -963,7 +964,7 @@ function build(): void {
       h("div", { className: "row pn-tools" }, h("label", {}, "Slot", slotSel), h("label", { className: "grow" }, "Search", searchBox), h("div", { className: "pn-actions" }, add, embed)),
       placing,
       h("div", { className: "pn-body" }, pane, h("div", { className: "pn-side" }, form)),
-      h("div", { className: "pn-below" }, count, kindBar, h("div", { className: "pn-listbar" }, addMap, addFolder, selectBtn), list),
+      h("div", { className: "pn-below" }, count, kindBar, h("div", { className: "pn-listbar" }, addMap, addFolder, selectBtn, legendBtn), list),
     ),
   );
   slotSel.addEventListener("change", () => {
@@ -1030,6 +1031,7 @@ function build(): void {
   });
   embed.addEventListener("click", () => embedDialog());
   addMap.addEventListener("click", () => newMap(slot, null));
+  legendBtn.addEventListener("click", () => editLegend(slot));
   selectBtn.addEventListener("click", () => void setSelecting(!sel.on));
   // Clicking a pin row's empty space is handled by the row itself; Esc leaves selection mode.
   root.addEventListener("keydown", (e) => {

@@ -80,3 +80,23 @@ describe("pin maps and folders", () => {
     expect(validateRegion(base)).toBe(false);
   });
 });
+
+describe("pin legend words", () => {
+  it("are saved per slot, validated, and reach the embed's pins file without touching kinds", async () => {
+    const { setLegend } = await import("../src/shared/pinmaps.ts");
+    const { kindLabel, legendTitle, parsePinsFile, pinsJson } = await import("../src/shared/pins.ts");
+    let f = setLegend(emptyPinMaps(), "inara", { title: "Places", kinds: { temple: "Holy site" } });
+    expect(checkPinMaps(f)).toEqual([]);
+    expect(validatePinMaps(JSON.parse(serializePinMaps(f)))).toBe(true);
+    const parsed = parsePinsFile(JSON.parse(pinsJson([], [], f.legends!.inara)))!;
+    expect(legendTitle(parsed.legend)).toBe("Places");
+    expect(kindLabel("temple", parsed.legend)).toBe("Holy site");
+    expect(kindLabel("city", parsed.legend)).toBe("City");
+    expect(legendTitle(undefined)).toBe("Pins");
+    f = setLegend(f, "inara", {});
+    expect(f.legends).toBeUndefined();
+    expect(serializePinMaps(f)).not.toContain("legends");
+    expect(checkPinMaps({ folders: [], maps: [], legends: { inara: { kinds: { nope: "x" } } } }).length).toBeGreaterThan(0);
+    expect(validatePinMaps({ folders: [], maps: [], legends: { inara: { kinds: { nope: "x" } } } })).toBe(false);
+  });
+});

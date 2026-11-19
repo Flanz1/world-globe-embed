@@ -6,6 +6,7 @@
  * create regions can add, rename, move and delete them. The folder tree is the Regions tab's (categories.ts),
  * with pin maps in the place of regions.
  */
+import { LEGEND_LABEL_MAX, LEGEND_TITLE_MAX, cleanLegend, isPinKind, type PinLegend } from "./pins.ts";
 import {
   addCategory,
   assignRegions,
@@ -41,6 +42,8 @@ export interface PinMapsFile {
   /** Folders; each lists (as `regions`, the shared tree's word for its members) the ids of the pin maps in it. */
   folders: Category[];
   maps: PinMap[];
+  /** Per slot: the embed pin legend's own title and kind labels (see PinLegend). Absent = the defaults. */
+  legends?: Record<string, PinLegend>;
 }
 
 export const emptyPinMaps = (): PinMapsFile => ({ folders: [], maps: [] });
@@ -48,7 +51,7 @@ export const emptyPinMaps = (): PinMapsFile => ({ folders: [], maps: [] });
 /** The folder tree as the Regions tab's code sees it. */
 export const treeOf = (f: PinMapsFile | null | undefined): CategoriesFile => ({ categories: f?.folders ?? [] });
 const withTree = (f: PinMapsFile, t: CategoriesFile): PinMapsFile => ({ ...f, folders: t.categories });
-const copy = (f: PinMapsFile): PinMapsFile => ({ ...f, folders: f.folders.map((k) => ({ ...k, regions: [...k.regions] })), maps: f.maps.map((m) => ({ ...m })) });
+const copy = (f: PinMapsFile): PinMapsFile => ({ ...f, folders: f.folders.map((k) => ({ ...k, regions: [...k.regions] })), maps: f.maps.map((m) => ({ ...m })), ...(f.legends ? { legends: Object.fromEntries(Object.entries(f.legends).map(([k, v]) => [k, { ...v, ...(v.kinds ? { kinds: { ...v.kinds } } : {}) }])) } : {}) });
 
 /** Problems with the file beyond its JSON schema: the folder rules, duplicate ids or names, a folder listing a pin map that isn't there. */
 export function checkPinMaps(f: unknown): string[] {
@@ -75,6 +78,17 @@ export function checkPinMaps(f: unknown): string[] {
       else names.add(key);
     }
     if (typeof m.slot !== "string" || !PINMAP_ID.test(m.slot)) errs.push(`${where}.slot must be a slot id.`);
+  }
+  if (file.legends !== undefined) {
+    if (!file.legends || typeof file.legends !== "object" || Array.isArray(file.legends)) errs.push("legends must be an object keyed by slot id.");
+    else
+      for (const [slot, l] of Object.entries(file.legends)) {
+        if (!PINMAP_ID.test(slot)) errs.push(`legends: "${slot}" is not a slot id.`);
+        const c = cleanLegend(l);
+        const kinds = Object.entries((l as PinLegend)?.kinds ?? {});
+        if ((l as PinLegend)?.title !== undefined && (c?.title === undefined || c.title !== (l as PinLegend).title)) errs.push(`legends.${slot}.title must be 1 to ${LEGEND_TITLE_MAX} characters of plain text, without spaces at the ends.`);
+        for (const [k, v] of kinds) if (!isPinKind(k) || c?.kinds?.[k] === undefined || c.kinds[k] !== v) errs.push(`legends.${slot}.kinds.${k} must be a known kind with a label of 1 to ${LEGEND_LABEL_MAX} characters of plain text, without spaces at the ends.`);
+      }
   }
   for (const k of file.folders) for (const id of k.regions ?? []) if (typeof id === "string" && !ids.has(id)) errs.push(`The folder "${k.id}" lists the pin map "${id}", which doesn't exist.`);
   return errs;
@@ -141,7 +155,19 @@ export const moveFolder = (f: PinMapsFile, id: string, parent: string | null): P
 /** Deleting a folder keeps its pin maps (they become "not in a folder") and moves the folders inside it up a level. */
 export const removeFolder = (f: PinMapsFile, id: string): PinMapsFile => withTree(copy(f), removeCategory(treeOf(copy(f)), id));
 
-export const serializePinMaps = (f: PinMapsFile): string => JSON.stringify({ $schema: "../schema/pinmaps.schema.json", folders: f.folders, maps: f.maps }, null, 2) + "\n";
+/** Sets (or, with nothing usable left, clears) a slot's legend words. */
+export function setLegend(f: PinMapsFile, slot: string, legend: PinLegend | null): PinMapsFile {
+  const file = copy(f);
+  const legends = { ...(file.legends ?? {}) };
+  const c = cleanLegend(legend);
+  if (c) legends[slot] = c;
+  else delete legends[slot];
+  if (Object.keys(legends).length) file.legends = legends;
+  else delete file.legends;
+  return file;
+}
+
+export const serializePinMaps = (f: PinMapsFile): string => JSON.stringify({ $schema: "../schema/pinmaps.schema.json", folders: f.folders, maps: f.maps, ...(f.legends && Object.keys(f.legends).length ? { legends: f.legends } : {}) }, null, 2) + "\n";
 
 /** What changed between two versions, for the permission check: nothing about who owns what, so only whether it's a real file. */
 export function pinMapIds(f: PinMapsFile | null | undefined): Set<string> {
