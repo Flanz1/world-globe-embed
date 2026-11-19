@@ -6,6 +6,7 @@ import { diameterFraction, distanceForZoom, posterVars } from "./params.ts";
 import type { MapMeta, PreviewMap, Slot, ViewerConfig } from "./types.ts";
 import type { RegionIndexEntry } from "./region.ts";
 import { REGION_ID, underFill } from "./region.ts";
+import { cleanLegends } from "./pins.ts";
 import { DEFAULT_VIEW, TEXTURE_WIDTHS } from "./types.ts";
 import { TILE_LEVELS } from "./tiles.ts";
 
@@ -161,12 +162,14 @@ function checkIndex(regions: Record<string, RegionIndexEntry>): Record<string, R
     if (!finite(...e.c, e.z, ...e.b) || e.c.length !== 2 || e.b.length !== 4) throw new Error(`region "${id}": bad index numbers`);
     const u = (e.u ?? []).filter((x) => REGION_ID.test(x.id)).map((x) => ({ id: x.id, ...(typeof x.label === "string" ? { label: x.label } : {}), ...(typeof x.on === "boolean" ? { on: x.on } : {}), ...(underFill(x.fill) !== undefined ? { fill: underFill(x.fill) } : {}) }));
     const pm = (e.pm ?? []).filter((x) => typeof x === "string" && REGION_ID.test(x));
+    const pl = pm.length ? cleanLegends(Object.fromEntries(Object.entries(e.pl ?? {}).filter(([k]) => pm.includes(k)))) : undefined;
     out[id] = {
       c: [e.c[0], e.c[1]],
       z: e.z,
       b: [e.b[0], e.b[1], e.b[2], e.b[3]],
       ...(u.length ? { u } : {}),
       ...(pm.length ? { pm } : {}),
+      ...(pl ? { pl } : {}),
       ...(u.length && e.uc === false ? { uc: false as const } : {}),
       ...(u.length && typeof e.ut === "string" ? { ut: e.ut } : {}),
       ...(u.length && typeof e.ul === "string" ? { ul: e.ul } : {}),

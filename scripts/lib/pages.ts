@@ -11,7 +11,7 @@ import {
   type RegionFeature,
   type RegionIndexEntry,
 } from "../../src/shared/region.ts";
-import { pinsJson, type PinFeature } from "../../src/shared/pins.ts";
+import { cleanLegends, pinsJson, type PinFeature } from "../../src/shared/pins.ts";
 import type { Content } from "./content.ts";
 
 export interface GeneratedPage {
@@ -31,13 +31,15 @@ const modules = (m: string | ViewerModules, preloads: string[] = []): ViewerModu
   typeof m === "string" ? { globe: m, globePreloads: preloads } : m;
 
 /** The underlay settings of a region for the inline index: only regions that exist on its slot (and aren't itself). */
-function underIndex(r: RegionFeature, all: ReadonlyMap<string, RegionFeature> | undefined, pinMaps?: ReadonlyMap<string, { slot: string }>): Pick<RegionIndexEntry, "u" | "uc" | "ut" | "ul" | "pm" | "ot"> {
+function underIndex(r: RegionFeature, all: ReadonlyMap<string, RegionFeature> | undefined, pinMaps?: ReadonlyMap<string, { slot: string }>): Pick<RegionIndexEntry, "u" | "uc" | "ut" | "ul" | "pm" | "pl" | "ot"> {
   const p = r.properties;
   const pm = (p.pinMaps ?? []).filter((id) => pinMaps?.get(id)?.slot === p.slot);
+  const pl = cleanLegends(Object.fromEntries(Object.entries(p.pinLegends ?? {}).filter(([id]) => pm.includes(id))));
   const u = (p.under ?? []).filter((e) => e.id !== r.id && all?.get(e.id)?.properties.slot === p.slot);
-  if (!u.length) return pm.length ? { pm } : {};
+  if (!u.length) return pm.length ? { pm, ...(pl ? { pl } : {}) } : {};
   return {
     ...(pm.length ? { pm } : {}),
+    ...(pl ? { pl } : {}),
     u: u.map((e) => ({ id: e.id, ...(e.label?.trim() ? { label: e.label.trim() } : {}), ...(typeof e.on === "boolean" ? { on: e.on } : {}), ...(typeof e.fill === "number" ? { fill: e.fill } : {}) })),
     ...(p.underClip === false ? { uc: false as const } : {}),
     ...(p.underTitle?.trim() ? { ut: p.underTitle.trim() } : {}),
@@ -130,7 +132,7 @@ export function generateRegionFiles(content: Content): { path: string; json: str
 export function generatePinFiles(content: Content): { path: string; json: string }[] {
   const bySlot = new Map<string, PinFeature[]>();
   for (const pin of content.pins?.values() ?? []) bySlot.set(pin.properties.slot, [...(bySlot.get(pin.properties.slot) ?? []), pin]);
-  return [...bySlot].sort(([a], [b]) => a.localeCompare(b)).map(([slot, pins]) => ({ path: `pins/${slot}.json`, json: pinsJson(pins, (content.pinMaps?.maps ?? []).filter((m) => m.slot === slot), content.pinMaps?.legends?.[slot]) }));
+  return [...bySlot].sort(([a], [b]) => a.localeCompare(b)).map(([slot, pins]) => ({ path: `pins/${slot}.json`, json: pinsJson(pins, (content.pinMaps?.maps ?? []).filter((m) => m.slot === slot)) }));
 }
 
 /**

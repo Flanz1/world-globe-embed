@@ -494,7 +494,7 @@ export async function start(ctx: StartContext): Promise<void> {
     invalidate();
     return true;
   };
-  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins, zoomToPins).then((l) => {
+  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins, zoomToPins, cfg.pinLegends).then((l) => {
     pinLayer = l;
     invalidate();
   });

@@ -74,7 +74,10 @@ if (regionId !== null) {
   // region=<id>: the region's own underlays go below it (under=0 leaves them out).
   const under = !stacked && !preview && entry?.u && q.get("under") !== "0" ? entry.u.filter((e) => e.id !== regionId && inIndex(e.id)) : [];
   // A region that includes pin maps shows their pins unless the embed code says otherwise (?pins=0 turns them off).
-  if (!stacked && !preview && entry?.pm?.length && !q.has("pins")) cfg.pins = entry.pm.join(",");
+  if (!stacked && !preview && entry?.pm?.length && !q.has("pins")) {
+    cfg.pins = entry.pm.join(",");
+    if (entry.pl) cfg.pinLegends = entry.pl;
+  }
   const ids = stacked ? stacked.filter(inIndex) : [...under.map((e) => e.id), regionId];
   // Stacked regions bring their own underlays (under=0 leaves them out): each goes just below its region, cut to it. Their ids are `<id>@<region>`, as one underlay can serve several regions.
   const stackPlan: { id: string; host?: string; label?: string; on?: boolean; clip?: boolean; fill?: number }[] = stacked

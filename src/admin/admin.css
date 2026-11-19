@@ -890,7 +890,6 @@ dialog.warp > .dlg-foot { display: flex; align-items: center; gap: 8px; padding:
 .pn-marker[data-ticked=true] { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
 
 /* Legend names: the pin kinds' own words for the embed legend (Pins tab). */
-.pn-kindbar .lg-open { margin-left: auto; position: sticky; right: 0; background-color: var(--md-sys-color-surface); }
 dialog.legend-dlg .lg-row { display: flex; align-items: center; gap: 10px; }
 dialog.legend-dlg .lg-row input { flex: 1; min-width: 0; }
 dialog.legend-dlg .lg-icon { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; }
@@ -899,3 +898,6 @@ dialog.legend-dlg .dlg-foot .grow { flex: 1 1 auto; }
 @media (max-width: 560px) {
   dialog.legend-dlg { width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 28px 28px 0 0; }
 }
+.ed-pinrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ed-pinrow .lg-open { flex: 0 0 auto; background-color: transparent; border-color: transparent; color: var(--md-sys-color-primary); }
+dialog.legend-dlg::backdrop { background: rgba(0, 0, 0, .45); }

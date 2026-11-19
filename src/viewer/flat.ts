@@ -449,7 +449,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     schedule();
     return true;
   };
-  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins, zoomToPins).then((l) => {
+  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins, zoomToPins, cfg.pinLegends).then((l) => {
     pinLayer = l;
     schedule();
   });

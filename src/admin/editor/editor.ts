@@ -123,6 +123,8 @@ import {
   type VRef,
 } from "./model.ts";
 import { pinMaps as allPinMaps } from "../pinmaps.ts";
+import { legendDialog } from "../legend-names.ts";
+import { cleanLegends } from "../../shared/pins.ts";
 import { pinEntries } from "../pins.ts";
 import { createPinsLayer } from "./pins-layer.ts";
 import { createPinTool } from "./pin-tool.ts";
@@ -1858,12 +1860,12 @@ export function openEditor(o: EditorOptions): void {
   let pinsSig = "";
   function sendPinsPreview(force = false): void {
     const show = (hist.state.props.pinMaps ?? []).join(",");
-    const sig = `${show}|${pinEntries().length}`;
+    const sig = `${show}|${pinEntries().length}|${JSON.stringify(hist.state.props.pinLegends ?? null)}`;
     if (!force && sig === pinsSig) return;
     pinsSig = sig;
-    sendPins(frameEl, slotName, show);
+    sendPins(frameEl, slotName, show, hist.state.props.pinLegends);
   }
-  keepPinsSent(frameEl, slotName, () => (hist.state.props.pinMaps ?? []).join(","));
+  keepPinsSent(frameEl, slotName, () => (hist.state.props.pinMaps ?? []).join(","), () => hist.state.props.pinLegends);
   frameEl.addEventListener("load", () => {
     lastSent = -1;
     sendRegion(frameEl, regionNow(), true, undefined, underFor(true));
@@ -2003,7 +2005,7 @@ export function openEditor(o: EditorOptions): void {
     const maps = mapsOfSlot(file, slotName);
     const on = hist.state.props.pinMaps ?? [];
     const tree = treeOf(file);
-    const key = JSON.stringify([maps.map((m) => [m.id, m.name]), file.folders.map((k) => [k.id, k.name, k.parent ?? null, k.regions]), on]);
+    const key = JSON.stringify([maps.map((m) => [m.id, m.name]), file.folders.map((k) => [k.id, k.name, k.parent ?? null, k.regions]), on, hist.state.props.pinLegends ?? null]);
     if (key === pinMapKey) return;
     pinMapKey = key;
     const here = new Set(maps.map((m) => m.id));
@@ -2017,12 +2019,32 @@ export function openEditor(o: EditorOptions): void {
           return setMsg(`A region can include at most ${REGION_PINMAPS_MAX} pin maps.`, "error");
         }
         setProp("pinMaps", next.length ? next : undefined, "Pin maps");
+        // Words for a pin map that is no longer included go with it.
+        if (hist.state.props.pinLegends?.[m.id] && !box.checked) {
+          const rest = { ...hist.state.props.pinLegends };
+          delete rest[m.id];
+          setProp("pinLegends", Object.keys(rest).length ? rest : undefined, "Pin maps");
+        }
         changed("panel");
         // Redraw so the folders' ticked counts update, keeping the keyboard focus on the box.
         renderPinMapBox();
         pinMapList.querySelector<HTMLInputElement>(`input[data-pinmap="${m.id}"]`)?.focus();
       });
-      return h("label", { className: "check" }, box, m.name);
+      const label = h("label", { className: "check" }, box, m.name);
+      if (!box.checked) return label;
+      const own = hist.state.props.pinLegends?.[m.id];
+      const names = h("button", { type: "button", className: "text tiny lg-open", textContent: own ? "Legend names ✓" : "Legend names…", title: `Change what the pin legend calls the panel and each kind of pin for "${m.name}" on this region's embed`, ariaLabel: own ? `Legend names for ${m.name}, custom names set` : `Legend names for ${m.name}`, dataset: { action: "legend-names", pinmap: m.id } });
+      names.addEventListener("click", () =>
+        legendDialog(own, `For pin map "${m.name}" on this region's embed.`, (legend) => {
+          const rest = { ...(hist.state.props.pinLegends ?? {}) };
+          if (legend) rest[m.id] = legend;
+          else delete rest[m.id];
+          setProp("pinLegends", Object.keys(rest).length ? rest : undefined, "Legend names");
+          changed("panel");
+          renderPinMapBox();
+        }),
+      );
+      return h("div", { className: "ed-pinrow" }, label, names);
     };
     /** The slot's pin maps in a folder (and below it), counted for the badge. */
     const inside = (id: string): PinMap[] => {
@@ -4018,6 +4040,7 @@ export function openEditor(o: EditorOptions): void {
         ...(provinceLines.length ? { provinceBorders: provinceLines } : {}),
         ...(props.nationalBorders ? { nationalBorders: true } : {}),
         ...(props.pinMaps?.length ? { pinMaps: props.pinMaps.slice(0, REGION_PINMAPS_MAX) } : {}),
+        ...(props.pinMaps?.length && cleanLegends(Object.fromEntries(Object.entries(props.pinLegends ?? {}).filter(([id]) => props.pinMaps!.includes(id)))) ? { pinLegends: cleanLegends(Object.fromEntries(Object.entries(props.pinLegends ?? {}).filter(([id]) => props.pinMaps!.includes(id)))) } : {}),
         ...(props.under?.length
           ? {
               under: props.under.map((e) => ({ id: e.id, ...(e.label?.trim() ? { label: e.label.trim().slice(0, LEGEND_LABEL_MAX) } : {}), ...(typeof e.on === "boolean" ? { on: e.on } : {}), ...(underFill(e.fill) !== undefined ? { fill: underFill(e.fill) } : {}) })),
