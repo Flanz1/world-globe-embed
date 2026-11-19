@@ -206,7 +206,7 @@ export function editLegend(slot: string, slotTitle = slot): void {
     ...rows.map((r) => h("label", { className: "lg-row" }, swatch(r.k), r.input)),
   );
   const go = h("button", { type: "submit", textContent: "Save", dataset: { action: "confirm-legend" } });
-  const reset = h("button", { type: "button", className: "ghost lg-reset", textContent: "Reset all", dataset: { action: "reset-legend" } });
+  const reset = h("button", { type: "button", className: "text lg-reset", textContent: "Reset all", dataset: { action: "reset-legend" } });
   reset.addEventListener("click", () => {
     title.value = "";
     for (const r of rows) r.input.value = "";
