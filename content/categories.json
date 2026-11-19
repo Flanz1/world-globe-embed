@@ -39,6 +39,7 @@
       "id": "ilrakhan",
       "name": "Ilrakhan",
       "regions": [
+        "rogyn",
         "vihr"
       ],
       "parent": "country",
