@@ -13,7 +13,7 @@ export function sendPins(frame: HTMLIFrameElement, slot: string, show: string): 
   const pins = pinEntries()
     .map((e) => e.feature)
     .filter((f): f is PinFeature => !!f && f.properties.slot === slot);
-  const file = JSON.parse(pinsJson(pins, mapsOfSlot(pinMaps(), slot)));
+  const file = JSON.parse(pinsJson(pins, mapsOfSlot(pinMaps(), slot), pinMaps().legends?.[slot]));
   frame.contentWindow?.postMessage({ type: "wge-pins", file, show }, SITE.origin);
 }
 

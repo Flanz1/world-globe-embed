@@ -754,6 +754,66 @@ await step(A, "the region preview shows the pins of its pin maps", async () => {
   await ctx.close();
 });
 
+await step(A, "legend names: rename the legend title and a kind, saved per slot", async () => {
+  const { ctx, page, errors } = await adminPage("Flanz1");
+  const btn = page.locator('.pn-kindbar [data-action="rename-legend"]');
+  check(A, "Legend names… sits at the end of the kind filter row", (await btn.count()) === 1 && (await page.locator(".pn-kindbar > :last-child").getAttribute("data-action")) === "rename-legend");
+  for (const [w, h] of [[375, 800], [1440, 900]])
+    for (const scheme of ["light", "dark"]) {
+      await page.setViewportSize({ width: w, height: h });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.locator(".pn-kindbar").scrollIntoViewIfNeeded();
+      await page.locator(".pn-below").screenshot({ path: path.join(OUT, `legend-names-${w}-${scheme}-button.png`) });
+    }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const n0 = mock.log.length;
+  await btn.click();
+  const dlg = page.locator("dialog.legend-dlg[open]");
+  await dlg.waitFor();
+  check(A, "one input per kind plus the title, default names as placeholders", (await dlg.locator("input").count()) === 11 && (await dlg.locator('input[data-field="legend-kind-temple"]').getAttribute("placeholder")) === "Temple or shrine");
+  for (const [w, h] of [[375, 800], [1440, 900]])
+    for (const scheme of ["light", "dark"]) {
+      await page.setViewportSize({ width: w, height: h });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(250);
+      await page.screenshot({ path: path.join(OUT, `legend-names-${w}-${scheme}-modal.png`) });
+    }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await dlg.locator('input[data-field="legend-title"]').fill("Places of note");
+  await dlg.locator('input[data-field="legend-kind-temple"]').fill("Holy site");
+  await dlg.locator('[data-action="confirm-legend"]').click();
+  await waitCommit(page, n0);
+  const f = onBranch("content/pinmaps.json");
+  check(A, "saved under legends[slot], other content untouched", JSON.stringify(f?.legends?.[SLOT.slug]) === JSON.stringify({ title: "Places of note", kinds: { temple: "Holy site" } }) && Array.isArray(f.maps), JSON.stringify(f?.legends));
+  await btn.click();
+  await dlg.waitFor();
+  check(A, "reopening shows the saved words", (await dlg.locator('input[data-field="legend-kind-temple"]').inputValue()) === "Holy site");
+  await dlg.locator('[data-action="reset-legend"]').click();
+  const n1 = mock.log.length;
+  await dlg.locator('[data-action="confirm-legend"]').click();
+  await waitCommit(page, n1);
+  check(A, "Reset all then Save removes the legend again", onBranch("content/pinmaps.json")?.legends === undefined);
+  check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+});
+
+await step(E, "embed shows a slot's own legend words", async () => {
+  const ctx = await browser.newContext({ viewport: { width: 900, height: 520 }, deviceScaleFactor: 1 });
+  await ctx.route("**/pins/*.json", async (r) => {
+    const j = JSON.parse(readFileSync(path.join(DIST, "pins", `${SLOT.slug}.json`), "utf8"));
+    j.legend = { title: "Places of note", kinds: { city: "Settlement" } };
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(j) });
+  });
+  const page = await ctx.newPage();
+  await page.goto(`${SITE}/v/${SLOT.slug}/?view=flat&pins=1`);
+  await ready(page);
+  await page.waitForSelector(".wpl-head", { timeout: 15000 });
+  check(E, "the panel title is the slot's own", (await page.locator(".wpl-head").textContent()) === "Places of note");
+  check(E, "a renamed kind shows its new label, the others keep theirs", (await page.locator(".wpl-chip").first().getAttribute("aria-label")).startsWith("Settlement,") && !(await page.locator(".wpl-chip").allTextContents()).join("|").includes("Places of note"));
+  check(E, "…and keeps its filter id (chip still toggles)", (await page.locator(".wpl-chip").first().getAttribute("aria-pressed")) === "true");
+  await ctx.close();
+});
+
 await browser.close();
 site.close();
 await writeFile(path.join(OUT, "report.json"), JSON.stringify(results, null, 2));

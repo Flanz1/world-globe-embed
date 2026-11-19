@@ -130,7 +130,7 @@ export function generateRegionFiles(content: Content): { path: string; json: str
 export function generatePinFiles(content: Content): { path: string; json: string }[] {
   const bySlot = new Map<string, PinFeature[]>();
   for (const pin of content.pins?.values() ?? []) bySlot.set(pin.properties.slot, [...(bySlot.get(pin.properties.slot) ?? []), pin]);
-  return [...bySlot].sort(([a], [b]) => a.localeCompare(b)).map(([slot, pins]) => ({ path: `pins/${slot}.json`, json: pinsJson(pins, (content.pinMaps?.maps ?? []).filter((m) => m.slot === slot)) }));
+  return [...bySlot].sort(([a], [b]) => a.localeCompare(b)).map(([slot, pins]) => ({ path: `pins/${slot}.json`, json: pinsJson(pins, (content.pinMaps?.maps ?? []).filter((m) => m.slot === slot), content.pinMaps?.legends?.[slot]) }));
 }
 
 /**

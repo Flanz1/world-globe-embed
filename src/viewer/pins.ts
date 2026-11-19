@@ -7,7 +7,7 @@
  */
 import { pinIcon, inkFor } from "../shared/pin-icons.ts";
 import { leftStack } from "./stack.ts";
-import { PIN_ID, PIN_KINDS, kindInfo, markerSize, parsePinsFile, parsePinsParam, pinColor, pinShown, safeLink, type PinData } from "../shared/pins.ts";
+import { PIN_ID, PIN_KINDS, kindInfo, kindLabel, legendTitle, markerSize, parsePinsFile, parsePinsParam, pinColor, pinShown, safeLink, type PinData } from "../shared/pins.ts";
 
 /** Where a pin is on screen, or that it can't be seen (far side of the globe, outside the flat view). */
 export interface PinPoint {
@@ -146,7 +146,7 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
     title.textContent = p.name;
     const kind = document.createElement("p");
     kind.className = "kind";
-    kind.textContent = labelOf(p) ? `${labelOf(p)} · ${kindInfo(p.kind).label}` : kindInfo(p.kind).label;
+    kind.textContent = labelOf(p) ? `${labelOf(p)} · ${kindLabel(p.kind, file?.legend)}` : kindLabel(p.kind, file?.legend);
     const x = document.createElement("button");
     x.type = "button";
     x.className = "x";
@@ -194,7 +194,7 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
     b.className = "wpin";
     b.hidden = true;
     b.dataset.name = p.name;
-    b.setAttribute("aria-label", `${p.name}, ${labelOf(p) ? `${labelOf(p)}, ` : ""}${kindInfo(p.kind).label}`);
+    b.setAttribute("aria-label", `${p.name}, ${labelOf(p) ? `${labelOf(p)}, ` : ""}${kindLabel(p.kind, file?.legend)}`);
     b.setAttribute("aria-expanded", "false");
     const bg = pinColor(p);
     b.style.background = bg;
@@ -218,7 +218,7 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
     const head = document.createElement("button");
     head.type = "button";
     head.className = "wpl-head";
-    head.textContent = "Pins";
+    head.textContent = legendTitle(file?.legend);
     const chips = document.createElement("div");
     chips.className = "wpl-chips";
     chips.id = "wpl-chips";
@@ -237,7 +237,7 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
       chip.type = "button";
       chip.className = "wpl-chip";
       chip.setAttribute("aria-pressed", "true");
-      chip.setAttribute("aria-label", `${k.label}, ${n} ${n === 1 ? "pin" : "pins"}`);
+      chip.setAttribute("aria-label", `${kindLabel(k.id, file?.legend)}, ${n} ${n === 1 ? "pin" : "pins"}`);
       const sw = document.createElement("i");
       sw.style.background = k.color;
       sw.style.color = inkFor(k.color);
@@ -246,7 +246,7 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
       const count = document.createElement("span");
       count.className = "n";
       count.textContent = String(n);
-      label.textContent = k.label;
+      label.textContent = kindLabel(k.id, file?.legend);
       const pill = document.createElement("span");
       pill.className = "wpl-pill";
       pill.append(sw, label, count);

@@ -4608,8 +4608,9 @@ return errors === 0;
 validate30.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 export const validatePinMaps = validate31;
-const schema51 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/pinmaps.schema.json","title":"Pin maps and their folders","description":"Pin maps are named sets of map pins on one slot (\"Holy sites\", \"Battles\"); a pin joins one by naming its id in properties.pinMap. An embed shows one with ?pins=<id>, and a region can include some (properties.pinMaps) so their pins show on its embed. Folders sort the pin maps in the admin page's Pins tab and nest like the Regions tab's folders: a folder lists the ids of its pin maps in `regions`, and a pin map is in at most one folder. Edited from the admin page; the public embed only reads the names (bundled into pins/<slot>.json).","type":"object","required":["folders","maps"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"folders":{"type":"array","maxItems":200,"items":{"type":"object","required":["id","name","regions"],"additionalProperties":false,"properties":{"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"name":{"type":"string","minLength":1,"maxLength":60},"parent":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"The id of the folder this one sits in. Absent at the top level."},"createdBy":{"$ref":"#/$defs/account"},"created":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},"regions":{"type":"array","maxItems":300,"uniqueItems":true,"items":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"description":"Ids of the pin maps in this folder (named `regions` so the folder code is shared with the Regions tab)."}}}},"maps":{"type":"array","maxItems":300,"items":{"type":"object","required":["id","name","slot"],"additionalProperties":false,"properties":{"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Permanent id (a slug made from the name when it was created); what ?pins= uses."},"name":{"type":"string","minLength":1,"maxLength":60,"description":"What it is called; can be renamed."},"slot":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"The slot whose map its pins are on."}}}}},"$defs":{"account":{"type":"object","required":["id","login"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1},"login":{"type":"string","maxLength":39}}}}};
+const schema51 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/pinmaps.schema.json","title":"Pin maps and their folders","description":"Pin maps are named sets of map pins on one slot (\"Holy sites\", \"Battles\"); a pin joins one by naming its id in properties.pinMap. An embed shows one with ?pins=<id>, and a region can include some (properties.pinMaps) so their pins show on its embed. Folders sort the pin maps in the admin page's Pins tab and nest like the Regions tab's folders: a folder lists the ids of its pin maps in `regions`, and a pin map is in at most one folder. Edited from the admin page; the public embed only reads the names (bundled into pins/<slot>.json).","type":"object","required":["folders","maps"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"folders":{"type":"array","maxItems":200,"items":{"type":"object","required":["id","name","regions"],"additionalProperties":false,"properties":{"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"name":{"type":"string","minLength":1,"maxLength":60},"parent":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"The id of the folder this one sits in. Absent at the top level."},"createdBy":{"$ref":"#/$defs/account"},"created":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},"regions":{"type":"array","maxItems":300,"uniqueItems":true,"items":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"description":"Ids of the pin maps in this folder (named `regions` so the folder code is shared with the Regions tab)."}}}},"legends":{"type":"object","maxProperties":100,"description":"Per slot (by slot id): the words the embed's pin legend uses instead of the defaults. Only labels change: a kind keeps its icon, colour and its id in ?pins=.","propertyNames":{"pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"additionalProperties":{"type":"object","additionalProperties":false,"properties":{"title":{"type":"string","minLength":1,"maxLength":30,"description":"The legend panel's title (default \"Pins\")."},"kinds":{"type":"object","additionalProperties":false,"description":"A label per pin kind id; kinds not listed keep their default label.","properties":{"city":{"$ref":"#/$defs/label"},"town":{"$ref":"#/$defs/label"},"fortress":{"$ref":"#/$defs/label"},"port":{"$ref":"#/$defs/label"},"temple":{"$ref":"#/$defs/label"},"ruin":{"$ref":"#/$defs/label"},"battle":{"$ref":"#/$defs/label"},"landmark":{"$ref":"#/$defs/label"},"mountain":{"$ref":"#/$defs/label"},"other":{"$ref":"#/$defs/label"}}}}}},"maps":{"type":"array","maxItems":300,"items":{"type":"object","required":["id","name","slot"],"additionalProperties":false,"properties":{"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Permanent id (a slug made from the name when it was created); what ?pins= uses."},"name":{"type":"string","minLength":1,"maxLength":60,"description":"What it is called; can be renamed."},"slot":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"The slot whose map its pins are on."}}}}},"$defs":{"label":{"type":"string","minLength":1,"maxLength":40},"account":{"type":"object","required":["id","login"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1},"login":{"type":"string","maxLength":39}}}}};
 const schema52 = {"type":"object","required":["id","login"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1},"login":{"type":"string","maxLength":39}}};
+const schema53 = {"type":"string","minLength":1,"maxLength":40};
 
 function validate31(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="https://flanz1.github.io/world-globe-embed/schema/pinmaps.schema.json" */;
@@ -4632,7 +4633,7 @@ return false;
 else {
 const _errs1 = errors;
 for(const key0 in data){
-if(!(((key0 === "$schema") || (key0 === "folders")) || (key0 === "maps"))){
+if(!((((key0 === "$schema") || (key0 === "folders")) || (key0 === "legends")) || (key0 === "maps"))){
 validate31.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
 return false;
 break;
@@ -4951,44 +4952,466 @@ else {
 var valid0 = true;
 }
 if(valid0){
-if(data.maps !== undefined){
-let data12 = data.maps;
+if(data.legends !== undefined){
+let data12 = data.legends;
 const _errs29 = errors;
 if(errors === _errs29){
-if(Array.isArray(data12)){
-if(data12.length > 300){
-validate31.errors = [{instancePath:instancePath+"/maps",schemaPath:"#/properties/maps/maxItems",keyword:"maxItems",params:{limit: 300},message:"must NOT have more than 300 items"}];
+if(data12 && typeof data12 == "object" && !Array.isArray(data12)){
+if(Object.keys(data12).length > 100){
+validate31.errors = [{instancePath:instancePath+"/legends",schemaPath:"#/properties/legends/maxProperties",keyword:"maxProperties",params:{limit: 100},message:"must NOT have more than 100 properties"}];
 return false;
 }
 else {
-var valid7 = true;
-const len2 = data12.length;
-for(let i3=0; i3<len2; i3++){
-let data13 = data12[i3];
+for(const key3 in data12){
 const _errs31 = errors;
-if(errors === _errs31){
-if(data13 && typeof data13 == "object" && !Array.isArray(data13)){
-let missing3;
-if((((data13.id === undefined) && (missing3 = "id")) || ((data13.name === undefined) && (missing3 = "name"))) || ((data13.slot === undefined) && (missing3 = "slot"))){
-validate31.errors = [{instancePath:instancePath+"/maps/" + i3,schemaPath:"#/properties/maps/items/required",keyword:"required",params:{missingProperty: missing3},message:"must have required property '"+missing3+"'"}];
-return false;
+if(typeof key3 === "string"){
+if(!pattern4.test(key3)){
+const err0 = {instancePath:instancePath+"/legends",schemaPath:"#/properties/legends/propertyNames/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9][a-z0-9-]{0,63}$"},message:"must match pattern \""+"^[a-z0-9][a-z0-9-]{0,63}$"+"\"",propertyName:key3};
+if(vErrors === null){
+vErrors = [err0];
 }
 else {
-const _errs33 = errors;
-for(const key3 in data13){
-if(!(((key3 === "id") || (key3 === "name")) || (key3 === "slot"))){
-validate31.errors = [{instancePath:instancePath+"/maps/" + i3,schemaPath:"#/properties/maps/items/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key3},message:"must NOT have additional properties"}];
+vErrors.push(err0);
+}
+errors++;
+}
+}
+var valid7 = _errs31 === errors;
+if(!valid7){
+const err1 = {instancePath:instancePath+"/legends",schemaPath:"#/properties/legends/propertyNames",keyword:"propertyNames",params:{propertyName: key3},message:"property name must be valid"};
+if(vErrors === null){
+vErrors = [err1];
+}
+else {
+vErrors.push(err1);
+}
+errors++;
+validate31.errors = vErrors;
 return false;
 break;
 }
 }
-if(_errs33 === errors){
-if(data13.id !== undefined){
-let data14 = data13.id;
-const _errs34 = errors;
-if(errors === _errs34){
+if(valid7){
+for(const key4 in data12){
+let data13 = data12[key4];
+const _errs33 = errors;
+if(errors === _errs33){
+if(data13 && typeof data13 == "object" && !Array.isArray(data13)){
+const _errs35 = errors;
+for(const key5 in data13){
+if(!((key5 === "title") || (key5 === "kinds"))){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1"),schemaPath:"#/properties/legends/additionalProperties/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key5},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs35 === errors){
+if(data13.title !== undefined){
+let data14 = data13.title;
+const _errs36 = errors;
+if(errors === _errs36){
 if(typeof data14 === "string"){
-if(!pattern4.test(data14)){
+if(func2(data14) > 30){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/title",schemaPath:"#/properties/legends/additionalProperties/properties/title/maxLength",keyword:"maxLength",params:{limit: 30},message:"must NOT have more than 30 characters"}];
+return false;
+}
+else {
+if(func2(data14) < 1){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/title",schemaPath:"#/properties/legends/additionalProperties/properties/title/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/title",schemaPath:"#/properties/legends/additionalProperties/properties/title/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid9 = _errs36 === errors;
+}
+else {
+var valid9 = true;
+}
+if(valid9){
+if(data13.kinds !== undefined){
+let data15 = data13.kinds;
+const _errs38 = errors;
+if(errors === _errs38){
+if(data15 && typeof data15 == "object" && !Array.isArray(data15)){
+const _errs40 = errors;
+for(const key6 in data15){
+if(!(func1.call(schema51.properties.legends.additionalProperties.properties.kinds.properties, key6))){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds",schemaPath:"#/properties/legends/additionalProperties/properties/kinds/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key6},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs40 === errors){
+if(data15.city !== undefined){
+let data16 = data15.city;
+const _errs41 = errors;
+const _errs42 = errors;
+if(errors === _errs42){
+if(typeof data16 === "string"){
+if(func2(data16) > 40){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/city",schemaPath:"#/$defs/label/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data16) < 1){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/city",schemaPath:"#/$defs/label/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/city",schemaPath:"#/$defs/label/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid10 = _errs41 === errors;
+}
+else {
+var valid10 = true;
+}
+if(valid10){
+if(data15.town !== undefined){
+let data17 = data15.town;
+const _errs44 = errors;
+const _errs45 = errors;
+if(errors === _errs45){
+if(typeof data17 === "string"){
+if(func2(data17) > 40){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/town",schemaPath:"#/$defs/label/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data17) < 1){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/town",schemaPath:"#/$defs/label/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/town",schemaPath:"#/$defs/label/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid10 = _errs44 === errors;
+}
+else {
+var valid10 = true;
+}
+if(valid10){
+if(data15.fortress !== undefined){
+let data18 = data15.fortress;
+const _errs47 = errors;
+const _errs48 = errors;
+if(errors === _errs48){
+if(typeof data18 === "string"){
+if(func2(data18) > 40){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/fortress",schemaPath:"#/$defs/label/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data18) < 1){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/fortress",schemaPath:"#/$defs/label/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/fortress",schemaPath:"#/$defs/label/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid10 = _errs47 === errors;
+}
+else {
+var valid10 = true;
+}
+if(valid10){
+if(data15.port !== undefined){
+let data19 = data15.port;
+const _errs50 = errors;
+const _errs51 = errors;
+if(errors === _errs51){
+if(typeof data19 === "string"){
+if(func2(data19) > 40){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/port",schemaPath:"#/$defs/label/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data19) < 1){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/port",schemaPath:"#/$defs/label/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/port",schemaPath:"#/$defs/label/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid10 = _errs50 === errors;
+}
+else {
+var valid10 = true;
+}
+if(valid10){
+if(data15.temple !== undefined){
+let data20 = data15.temple;
+const _errs53 = errors;
+const _errs54 = errors;
+if(errors === _errs54){
+if(typeof data20 === "string"){
+if(func2(data20) > 40){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/temple",schemaPath:"#/$defs/label/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data20) < 1){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/temple",schemaPath:"#/$defs/label/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/temple",schemaPath:"#/$defs/label/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid10 = _errs53 === errors;
+}
+else {
+var valid10 = true;
+}
+if(valid10){
+if(data15.ruin !== undefined){
+let data21 = data15.ruin;
+const _errs56 = errors;
+const _errs57 = errors;
+if(errors === _errs57){
+if(typeof data21 === "string"){
+if(func2(data21) > 40){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/ruin",schemaPath:"#/$defs/label/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data21) < 1){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/ruin",schemaPath:"#/$defs/label/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/ruin",schemaPath:"#/$defs/label/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid10 = _errs56 === errors;
+}
+else {
+var valid10 = true;
+}
+if(valid10){
+if(data15.battle !== undefined){
+let data22 = data15.battle;
+const _errs59 = errors;
+const _errs60 = errors;
+if(errors === _errs60){
+if(typeof data22 === "string"){
+if(func2(data22) > 40){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/battle",schemaPath:"#/$defs/label/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data22) < 1){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/battle",schemaPath:"#/$defs/label/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/battle",schemaPath:"#/$defs/label/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid10 = _errs59 === errors;
+}
+else {
+var valid10 = true;
+}
+if(valid10){
+if(data15.landmark !== undefined){
+let data23 = data15.landmark;
+const _errs62 = errors;
+const _errs63 = errors;
+if(errors === _errs63){
+if(typeof data23 === "string"){
+if(func2(data23) > 40){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/landmark",schemaPath:"#/$defs/label/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data23) < 1){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/landmark",schemaPath:"#/$defs/label/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/landmark",schemaPath:"#/$defs/label/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid10 = _errs62 === errors;
+}
+else {
+var valid10 = true;
+}
+if(valid10){
+if(data15.mountain !== undefined){
+let data24 = data15.mountain;
+const _errs65 = errors;
+const _errs66 = errors;
+if(errors === _errs66){
+if(typeof data24 === "string"){
+if(func2(data24) > 40){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/mountain",schemaPath:"#/$defs/label/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data24) < 1){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/mountain",schemaPath:"#/$defs/label/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/mountain",schemaPath:"#/$defs/label/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid10 = _errs65 === errors;
+}
+else {
+var valid10 = true;
+}
+if(valid10){
+if(data15.other !== undefined){
+let data25 = data15.other;
+const _errs68 = errors;
+const _errs69 = errors;
+if(errors === _errs69){
+if(typeof data25 === "string"){
+if(func2(data25) > 40){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/other",schemaPath:"#/$defs/label/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data25) < 1){
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/other",schemaPath:"#/$defs/label/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/other",schemaPath:"#/$defs/label/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid10 = _errs68 === errors;
+}
+else {
+var valid10 = true;
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+else {
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds",schemaPath:"#/properties/legends/additionalProperties/properties/kinds/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+var valid9 = _errs38 === errors;
+}
+else {
+var valid9 = true;
+}
+}
+}
+}
+else {
+validate31.errors = [{instancePath:instancePath+"/legends/" + key4.replace(/~/g, "~0").replace(/\//g, "~1"),schemaPath:"#/properties/legends/additionalProperties/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+var valid8 = _errs33 === errors;
+if(!valid8){
+break;
+}
+}
+}
+}
+}
+else {
+validate31.errors = [{instancePath:instancePath+"/legends",schemaPath:"#/properties/legends/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+var valid0 = _errs29 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.maps !== undefined){
+let data26 = data.maps;
+const _errs71 = errors;
+if(errors === _errs71){
+if(Array.isArray(data26)){
+if(data26.length > 300){
+validate31.errors = [{instancePath:instancePath+"/maps",schemaPath:"#/properties/maps/maxItems",keyword:"maxItems",params:{limit: 300},message:"must NOT have more than 300 items"}];
+return false;
+}
+else {
+var valid21 = true;
+const len2 = data26.length;
+for(let i3=0; i3<len2; i3++){
+let data27 = data26[i3];
+const _errs73 = errors;
+if(errors === _errs73){
+if(data27 && typeof data27 == "object" && !Array.isArray(data27)){
+let missing3;
+if((((data27.id === undefined) && (missing3 = "id")) || ((data27.name === undefined) && (missing3 = "name"))) || ((data27.slot === undefined) && (missing3 = "slot"))){
+validate31.errors = [{instancePath:instancePath+"/maps/" + i3,schemaPath:"#/properties/maps/items/required",keyword:"required",params:{missingProperty: missing3},message:"must have required property '"+missing3+"'"}];
+return false;
+}
+else {
+const _errs75 = errors;
+for(const key7 in data27){
+if(!(((key7 === "id") || (key7 === "name")) || (key7 === "slot"))){
+validate31.errors = [{instancePath:instancePath+"/maps/" + i3,schemaPath:"#/properties/maps/items/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key7},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs75 === errors){
+if(data27.id !== undefined){
+let data28 = data27.id;
+const _errs76 = errors;
+if(errors === _errs76){
+if(typeof data28 === "string"){
+if(!pattern4.test(data28)){
 validate31.errors = [{instancePath:instancePath+"/maps/" + i3+"/id",schemaPath:"#/properties/maps/items/properties/id/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9][a-z0-9-]{0,63}$"},message:"must match pattern \""+"^[a-z0-9][a-z0-9-]{0,63}$"+"\""}];
 return false;
 }
@@ -4998,23 +5421,23 @@ validate31.errors = [{instancePath:instancePath+"/maps/" + i3+"/id",schemaPath:"
 return false;
 }
 }
-var valid8 = _errs34 === errors;
+var valid22 = _errs76 === errors;
 }
 else {
-var valid8 = true;
+var valid22 = true;
 }
-if(valid8){
-if(data13.name !== undefined){
-let data15 = data13.name;
-const _errs36 = errors;
-if(errors === _errs36){
-if(typeof data15 === "string"){
-if(func2(data15) > 60){
+if(valid22){
+if(data27.name !== undefined){
+let data29 = data27.name;
+const _errs78 = errors;
+if(errors === _errs78){
+if(typeof data29 === "string"){
+if(func2(data29) > 60){
 validate31.errors = [{instancePath:instancePath+"/maps/" + i3+"/name",schemaPath:"#/properties/maps/items/properties/name/maxLength",keyword:"maxLength",params:{limit: 60},message:"must NOT have more than 60 characters"}];
 return false;
 }
 else {
-if(func2(data15) < 1){
+if(func2(data29) < 1){
 validate31.errors = [{instancePath:instancePath+"/maps/" + i3+"/name",schemaPath:"#/properties/maps/items/properties/name/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
 return false;
 }
@@ -5025,18 +5448,18 @@ validate31.errors = [{instancePath:instancePath+"/maps/" + i3+"/name",schemaPath
 return false;
 }
 }
-var valid8 = _errs36 === errors;
+var valid22 = _errs78 === errors;
 }
 else {
-var valid8 = true;
+var valid22 = true;
 }
-if(valid8){
-if(data13.slot !== undefined){
-let data16 = data13.slot;
-const _errs38 = errors;
-if(errors === _errs38){
-if(typeof data16 === "string"){
-if(!pattern4.test(data16)){
+if(valid22){
+if(data27.slot !== undefined){
+let data30 = data27.slot;
+const _errs80 = errors;
+if(errors === _errs80){
+if(typeof data30 === "string"){
+if(!pattern4.test(data30)){
 validate31.errors = [{instancePath:instancePath+"/maps/" + i3+"/slot",schemaPath:"#/properties/maps/items/properties/slot/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9][a-z0-9-]{0,63}$"},message:"must match pattern \""+"^[a-z0-9][a-z0-9-]{0,63}$"+"\""}];
 return false;
 }
@@ -5046,10 +5469,10 @@ validate31.errors = [{instancePath:instancePath+"/maps/" + i3+"/slot",schemaPath
 return false;
 }
 }
-var valid8 = _errs38 === errors;
+var valid22 = _errs80 === errors;
 }
 else {
-var valid8 = true;
+var valid22 = true;
 }
 }
 }
@@ -5061,8 +5484,8 @@ validate31.errors = [{instancePath:instancePath+"/maps/" + i3,schemaPath:"#/prop
 return false;
 }
 }
-var valid7 = _errs31 === errors;
-if(!valid7){
+var valid21 = _errs73 === errors;
+if(!valid21){
 break;
 }
 }
@@ -5073,10 +5496,11 @@ validate31.errors = [{instancePath:instancePath+"/maps",schemaPath:"#/properties
 return false;
 }
 }
-var valid0 = _errs29 === errors;
+var valid0 = _errs71 === errors;
 }
 else {
 var valid0 = true;
+}
 }
 }
 }
@@ -5094,8 +5518,8 @@ return errors === 0;
 validate31.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 export const validatePrefs = validate32;
-const schema53 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/prefs.schema.json","title":"Admin page preferences","description":"One account's colour theme for the admin page: the accent colour's seed and light, dark or the system's setting. Kept by the admin API, not in the repository.","type":"object","required":["seed","mode"],"additionalProperties":false,"properties":{"seed":{"type":"string","pattern":"^#[0-9a-f]{6}$"},"mode":{"enum":["light","dark","system"]}}};
-const pattern54 = new RegExp("^#[0-9a-f]{6}$", "u");
+const schema63 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/prefs.schema.json","title":"Admin page preferences","description":"One account's colour theme for the admin page: the accent colour's seed and light, dark or the system's setting. Kept by the admin API, not in the repository.","type":"object","required":["seed","mode"],"additionalProperties":false,"properties":{"seed":{"type":"string","pattern":"^#[0-9a-f]{6}$"},"mode":{"enum":["light","dark","system"]}}};
+const pattern55 = new RegExp("^#[0-9a-f]{6}$", "u");
 
 function validate32(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="https://flanz1.github.io/world-globe-embed/schema/prefs.schema.json" */;
@@ -5130,7 +5554,7 @@ let data0 = data.seed;
 const _errs2 = errors;
 if(errors === _errs2){
 if(typeof data0 === "string"){
-if(!pattern54.test(data0)){
+if(!pattern55.test(data0)){
 validate32.errors = [{instancePath:instancePath+"/seed",schemaPath:"#/properties/seed/pattern",keyword:"pattern",params:{pattern: "^#[0-9a-f]{6}$"},message:"must match pattern \""+"^#[0-9a-f]{6}$"+"\""}];
 return false;
 }
@@ -5150,7 +5574,7 @@ if(data.mode !== undefined){
 let data1 = data.mode;
 const _errs4 = errors;
 if(!(((data1 === "light") || (data1 === "dark")) || (data1 === "system"))){
-validate32.errors = [{instancePath:instancePath+"/mode",schemaPath:"#/properties/mode/enum",keyword:"enum",params:{allowedValues: schema53.properties.mode.enum},message:"must be equal to one of the allowed values"}];
+validate32.errors = [{instancePath:instancePath+"/mode",schemaPath:"#/properties/mode/enum",keyword:"enum",params:{allowedValues: schema63.properties.mode.enum},message:"must be equal to one of the allowed values"}];
 return false;
 }
 var valid0 = _errs4 === errors;
