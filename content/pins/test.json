@@ -1,0 +1,26 @@
+{
+  "$schema": "../../schema/pin.schema.json",
+  "type": "Feature",
+  "id": "test",
+  "properties": {
+    "slot": "inara",
+    "map": "globe-map",
+    "name": "test",
+    "kind": "city",
+    "pinMap": "test",
+    "updatedBy": {
+      "id": 45669787,
+      "login": "Flanz1"
+    },
+    "updated": "2026-11-19T10:27:32Z",
+    "createdBy": {
+      "id": 45669787,
+      "login": "Flanz1"
+    },
+    "created": "2026-11-19T10:27:32Z"
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [-40.4602, 37.8362]
+  }
+}
