@@ -18,7 +18,7 @@ import type { GitHub } from "./github.ts";
 import { optimistic } from "./optimistic.ts";
 import { loadMapImage } from "./images.ts";
 import { confirmBox, modal } from "./region-dialogs.ts";
-import { canOrganise, initPinMaps, loadPinMaps, moveMapDialog, editLegend, newFolder, newMap, pinMaps, removeMap, renameMap, renderTree } from "./pinmaps.ts";
+import { canOrganise, initPinMaps, loadPinMaps, moveMapDialog, newFolder, newMap, pinMaps, removeMap, renameMap, renderTree } from "./pinmaps.ts";
 import { mapById, mapsOfSlot, type PinMap } from "../shared/pinmaps.ts";
 import { account, can, canDelete, canEdit, refusal } from "./session.ts";
 import { moreMenu } from "./more-menu.ts";
@@ -930,7 +930,6 @@ function build(): void {
   const embed = h("button", { type: "button", className: "ghost", textContent: "Embed code…" });
   const addMap = h("button", { type: "button", className: "ghost", textContent: "+ Pin map", dataset: { action: "new-pinmap" } });
   const addFolder = h("button", { type: "button", className: "ghost", textContent: "+ Folder", dataset: { action: "new-pinfolder" } });
-  const legendBtn = h("button", { type: "button", className: "text tiny lg-open", textContent: "Legend names…", title: "Change what this slot's embeds call the pin panel and each kind of pin", dataset: { action: "rename-legend" } });
   const selectBtn = h("button", { type: "button", className: "ghost", textContent: "Select pins", title: "Tick several pins to move them to another pin map, or delete them together", ariaPressed: "false", dataset: { action: "select-pins" } });
   Object.assign(el, { addMap, addFolder, select: selectBtn });
   const canvas = h("canvas", { className: "pn-canvas" });
@@ -952,7 +951,7 @@ function build(): void {
       renderList();
     });
     return b;
-  }), legendBtn);
+  }));
   const kindNote = h("p", { className: "pn-kindnote small muted", hidden: true });
   const kindSummary = (): void => {
     const n = kindFilter.size;
@@ -1049,7 +1048,6 @@ function build(): void {
   });
   embed.addEventListener("click", () => embedDialog());
   addMap.addEventListener("click", () => newMap(slot, null));
-  legendBtn.addEventListener("click", () => editLegend(slot, deps.slots().slots[slot]?.title || slot));
   selectBtn.addEventListener("click", () => void setSelecting(!sel.on));
   // Clicking a pin row's empty space is handled by the row itself; Esc leaves selection mode.
   root.addEventListener("keydown", (e) => {

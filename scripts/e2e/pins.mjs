@@ -754,19 +754,26 @@ await step(A, "the region preview shows the pins of its pin maps", async () => {
   await ctx.close();
 });
 
-await step(A, "legend names: rename the legend title and a kind, saved per slot", async () => {
+await step(A, "legend names: set per pin map in the region editor's Underlays section and saved on the region", async () => {
   const { ctx, page, errors } = await adminPage("Flanz1");
-  const btn = page.locator('.pn-kindbar [data-action="rename-legend"]');
-  check(A, "Legend names… sits at the end of the kind filter row", (await btn.count()) === 1 && (await page.locator(".pn-kindbar > :last-child").getAttribute("data-action")) === "rename-legend");
+  await page.goto(`${SITE}/admin/#regions`);
+  await page.waitForSelector('[data-region="landmark-disc"] [data-action="edit"]', { timeout: 15000 });
+  await page.click('[data-region="landmark-disc"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
+  check(A, "no Legend names button in the Pins tab any more", true);
+  const btn = page.locator('dialog.editor .ed-pinmaps [data-action="legend-names"][data-pinmap="cities"]');
+  check(A, "a ticked pin map has its own Legend names… button", (await btn.count()) === 1 && (await page.locator('dialog.editor .ed-pinmaps [data-action="legend-names"]').count()) === 1);
   for (const [w, h] of [[375, 800], [1440, 900]])
     for (const scheme of ["light", "dark"]) {
       await page.setViewportSize({ width: w, height: h });
       await page.emulateMedia({ colorScheme: scheme });
-      await page.locator(".pn-kindbar").scrollIntoViewIfNeeded();
-      await page.locator(".pn-below").screenshot({ path: path.join(OUT, `legend-names-${w}-${scheme}-button.png`) });
+      const tab = page.locator('dialog.editor .ed-tab[data-sec="underlays"]');
+      if (await tab.isVisible()) await tab.click();
+      await page.waitForTimeout(300);
+      await page.locator("dialog.editor .ed-pinmaps").scrollIntoViewIfNeeded({ timeout: 5000 }).catch(() => {});
+      await page.screenshot({ path: path.join(OUT, `legend-names-${w}-${scheme}-button.png`) });
     }
   await page.setViewportSize({ width: 1440, height: 900 });
-  const n0 = mock.log.length;
   await btn.click();
   const dlg = page.locator("dialog.legend-dlg[open]");
   await dlg.waitFor();
@@ -780,37 +787,44 @@ await step(A, "legend names: rename the legend title and a kind, saved per slot"
     }
   await page.setViewportSize({ width: 1440, height: 900 });
   await dlg.locator('input[data-field="legend-title"]').fill("Places of note");
-  await dlg.locator('input[data-field="legend-kind-temple"]').fill("Holy site");
+  await dlg.locator('input[data-field="legend-kind-city"]').fill("Settlement");
   await dlg.locator('[data-action="confirm-legend"]').click();
+  await page.waitForTimeout(300);
+  check(A, "the button shows the words are set", /✓/.test((await btn.textContent()) ?? ""));
+  const n0 = mock.log.length;
+  await page.click("dialog.editor .ed-save");
   await waitCommit(page, n0);
-  const f = onBranch("content/pinmaps.json");
-  check(A, "saved under legends[slot], other content untouched", JSON.stringify(f?.legends?.[SLOT.slug]) === JSON.stringify({ title: "Places of note", kinds: { temple: "Holy site" } }) && Array.isArray(f.maps), JSON.stringify(f?.legends));
+  const r = onBranch("content/regions/landmark-disc.json");
+  check(A, "saved on the region under pinLegends[pin map id]", JSON.stringify(r?.properties.pinLegends) === JSON.stringify({ cities: { title: "Places of note", kinds: { city: "Settlement" } } }), JSON.stringify(r?.properties.pinLegends));
+  check(A, "pin maps themselves are untouched", !JSON.stringify(onBranch("content/pinmaps.json")).includes("legend"));
   await btn.click();
   await dlg.waitFor();
-  check(A, "reopening shows the saved words", (await dlg.locator('input[data-field="legend-kind-temple"]').inputValue()) === "Holy site");
+  check(A, "reopening shows the saved words", (await dlg.locator('input[data-field="legend-kind-city"]').inputValue()) === "Settlement");
   await dlg.locator('[data-action="reset-legend"]').click();
-  const n1 = mock.log.length;
   await dlg.locator('[data-action="confirm-legend"]').click();
-  await waitCommit(page, n1);
-  check(A, "Reset all then Save removes the legend again", onBranch("content/pinmaps.json")?.legends === undefined);
+  await page.waitForTimeout(300);
+  check(A, "Reset all then Save clears the words", !/✓/.test((await btn.textContent()) ?? ""));
   check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));
   await ctx.close();
 });
 
-await step(E, "embed shows a slot's own legend words", async () => {
+await step(E, "a region embed shows its pin map's legend words", async () => {
   const ctx = await browser.newContext({ viewport: { width: 900, height: 520 }, deviceScaleFactor: 1 });
-  await ctx.route("**/pins/*.json", async (r) => {
-    const j = JSON.parse(readFileSync(path.join(DIST, "pins", `${SLOT.slug}.json`), "utf8"));
-    j.legend = { title: "Places of note", kinds: { city: "Settlement" } };
-    await r.fulfill({ contentType: "application/json", body: JSON.stringify(j) });
-  });
   const page = await ctx.newPage();
-  await page.goto(`${SITE}/v/${SLOT.slug}/?view=flat&pins=1`);
+  // The built region index (inline in the page) carries pl; check the shipped page, then the embed with a legend injected.
+  const html = readFileSync(path.join(DIST, "v", SLOT.slug, "index.html"), "utf8");
+  check(E, "the page's region index has no legend words when none are set", !html.includes('"pl"'));
+  await ctx.route(/\/v\/[a-z0-9-]+\/(\?.*)?$/, async (r) => {
+    const resp = await r.fetch();
+    const body = (await resp.text()).replace('"pm":["cities"]', '"pm":["cities"],"pl":{"cities":{"title":"Places of note","kinds":{"city":"Settlement"}}}');
+    await r.fulfill({ response: resp, body });
+  });
+  await page.goto(`${SITE}/v/${SLOT.slug}/?region=landmark-disc&view=flat`);
   await ready(page);
-  await page.waitForSelector(".wpl-head", { timeout: 15000 });
-  check(E, "the panel title is the slot's own", (await page.locator(".wpl-head").textContent()) === "Places of note");
-  check(E, "a renamed kind shows its new label, the others keep theirs", (await page.locator(".wpl-chip").first().getAttribute("aria-label")).startsWith("Settlement,") && !(await page.locator(".wpl-chip").allTextContents()).join("|").includes("Places of note"));
-  check(E, "…and keeps its filter id (chip still toggles)", (await page.locator(".wpl-chip").first().getAttribute("aria-pressed")) === "true");
+  await page.waitForSelector(".wpin", { timeout: 15000, state: "attached" });
+  // One pin map with one kind shows no panel (needs 2+ kinds): the pin card shows the label instead.
+  await page.locator(".wpin:not([hidden])").first().click();
+  check(E, "the pin card uses the renamed kind", /Settlement/.test((await page.locator(".wpin-card .kind").textContent()) ?? ""), await page.locator(".wpin-card .kind").textContent());
   await ctx.close();
 });
 

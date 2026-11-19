@@ -1,4 +1,5 @@
 /** Region types and helpers shared by the build, the viewer and the admin page. */
+import type { PinLegends } from "./pins.ts";
 import { BASE_DISTANCE, FOV_DEG, ZOOM_MAX, ZOOM_MIN, clamp } from "./params.ts";
 import { largestPart, partPlacements, type LabelPlacement } from "./label-place.ts";
 import {
@@ -123,6 +124,8 @@ export interface RegionProperties {
   under?: UnderEntry[];
   /** Ids of pin maps (content/pinmaps.json) of this slot whose pins show on this region's embed. */
   pinMaps?: string[];
+  /** Per pin map (ids in pinMaps): the words its pins' legend uses on this region's embed instead of the defaults (title and a label per kind). Set in the editor's Underlays section. */
+  pinLegends?: PinLegends;
   /** With under: false to show the underlays outside this region's outline too. Missing: cut to the outline. */
   underClip?: boolean;
   /** With under: heading of the toggle list in the embed (default "Layers"). */
@@ -218,6 +221,8 @@ export interface RegionIndexEntry {
   u?: UnderEntry[];
   /** Ids of the pin maps (RegionProperties.pinMaps) that exist on this slot: their pins show unless the embed says otherwise. */
   pm?: string[];
+  /** RegionProperties.pinLegends, only for the pin maps in pm. */
+  pl?: PinLegends;
   /** underClip, when false. */
   uc?: false;
   /** underTitle and layerLabel, when set. */

@@ -7,7 +7,7 @@
  */
 import { pinIcon, inkFor } from "../shared/pin-icons.ts";
 import { leftStack } from "./stack.ts";
-import { PIN_ID, PIN_KINDS, kindInfo, kindLabel, legendTitle, markerSize, parsePinsFile, parsePinsParam, pinColor, pinShown, safeLink, type PinData } from "../shared/pins.ts";
+import { PIN_ID, PIN_KINDS, kindInfo, cleanLegends, kindLabel, legendTitle, markerSize, resolveLegend, type PinLegends, parsePinsFile, parsePinsParam, pinColor, pinShown, safeLink, type PinData } from "../shared/pins.ts";
 
 /** Where a pin is on screen, or that it can't be seen (far side of the globe, outside the flat view). */
 export interface PinPoint {
@@ -72,7 +72,7 @@ const CSS = `
 
 /** Fetches and draws this slot's pins if the page asked for them (?pins=…); null when it didn't or there is nothing to show. */
 /** `fallback` is what a region embed asks for by itself (the region's pin maps) when the URL has no ?pins=. */
-export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: string, search = location.search, fallback?: string, zoomTo?: ZoomTo): Promise<PinLayer | null> {
+export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: string, search = location.search, fallback?: string, zoomTo?: ZoomTo, legends?: PinLegends): Promise<PinLayer | null> {
   const sel = parsePinsParam(new URLSearchParams(search).get("pins") ?? fallback);
   // The admin preview page has no pins file of its own: it gets them from the admin page (watchPreviewPins).
   if (!sel || !PIN_ID.test(slug)) return null;
@@ -83,7 +83,8 @@ export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: s
   } catch {
     file = null;
   }
-  return buildPins(stage, canvas, file, sel, zoomTo);
+  // The legend words belong to the region's pin maps, so they only apply when the embed shows those (not an own ?pins=).
+  return buildPins(stage, canvas, file, sel, zoomTo, new URLSearchParams(search).has("pins") ? undefined : legends, fallback?.split(",") ?? []);
 }
 
 /**
@@ -96,18 +97,19 @@ export function watchPreviewPins(stage: HTMLElement, canvas: HTMLElement, set: (
     if (e.origin !== location.origin || e.source !== window.parent || e.data?.type !== "wge-pins") return;
     layer?.destroy();
     const sel = parsePinsParam(typeof e.data.show === "string" ? e.data.show : null);
-    layer = sel ? buildPins(stage, canvas, parsePinsFile(e.data.file), sel, zoomTo) : null;
+    layer = sel ? buildPins(stage, canvas, parsePinsFile(e.data.file), sel, zoomTo, cleanLegends(e.data.legends), typeof e.data.show === "string" ? e.data.show.split(",") : []) : null;
     set(layer);
   });
   // The viewer starts after the page has loaded, so the admin page can't know when it's listening: ask for the pins.
   if (window.parent !== window) window.parent.postMessage({ type: "wge-pins-wanted" }, location.origin);
 }
 
-function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typeof parsePinsFile>, sel: NonNullable<ReturnType<typeof parsePinsParam>>, zoomTo?: ZoomTo): PinLayer | null {
+function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typeof parsePinsFile>, sel: NonNullable<ReturnType<typeof parsePinsParam>>, zoomTo?: ZoomTo, legends?: PinLegends, order: string[] = []): PinLayer | null {
   const mapName = new Map((file?.maps ?? []).map((m) => [m.id, m.name]));
   const labelOf = (p: PinData) => (p.pinMap && mapName.get(p.pinMap)) || "";
   const pins = (file?.pins ?? []).filter((p) => pinShown(sel, p));
   if (!pins.length) return null;
+  const legend = resolveLegend(pins, legends, order);
 
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -146,7 +148,7 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
     title.textContent = p.name;
     const kind = document.createElement("p");
     kind.className = "kind";
-    kind.textContent = labelOf(p) ? `${labelOf(p)} · ${kindLabel(p.kind, file?.legend)}` : kindLabel(p.kind, file?.legend);
+    kind.textContent = labelOf(p) ? `${labelOf(p)} · ${kindLabel(p.kind, legend)}` : kindLabel(p.kind, legend);
     const x = document.createElement("button");
     x.type = "button";
     x.className = "x";
@@ -194,7 +196,7 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
     b.className = "wpin";
     b.hidden = true;
     b.dataset.name = p.name;
-    b.setAttribute("aria-label", `${p.name}, ${labelOf(p) ? `${labelOf(p)}, ` : ""}${kindLabel(p.kind, file?.legend)}`);
+    b.setAttribute("aria-label", `${p.name}, ${labelOf(p) ? `${labelOf(p)}, ` : ""}${kindLabel(p.kind, legend)}`);
     b.setAttribute("aria-expanded", "false");
     const bg = pinColor(p);
     b.style.background = bg;
@@ -218,7 +220,7 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
     const head = document.createElement("button");
     head.type = "button";
     head.className = "wpl-head";
-    head.textContent = legendTitle(file?.legend);
+    head.textContent = legendTitle(legend);
     const chips = document.createElement("div");
     chips.className = "wpl-chips";
     chips.id = "wpl-chips";
@@ -237,7 +239,7 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
       chip.type = "button";
       chip.className = "wpl-chip";
       chip.setAttribute("aria-pressed", "true");
-      chip.setAttribute("aria-label", `${kindLabel(k.id, file?.legend)}, ${n} ${n === 1 ? "pin" : "pins"}`);
+      chip.setAttribute("aria-label", `${kindLabel(k.id, legend)}, ${n} ${n === 1 ? "pin" : "pins"}`);
       const sw = document.createElement("i");
       sw.style.background = k.color;
       sw.style.color = inkFor(k.color);
@@ -246,7 +248,7 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
       const count = document.createElement("span");
       count.className = "n";
       count.textContent = String(n);
-      label.textContent = kindLabel(k.id, file?.legend);
+      label.textContent = kindLabel(k.id, legend);
       const pill = document.createElement("span");
       pill.className = "wpl-pill";
       pill.append(sw, label, count);

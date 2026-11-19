@@ -1,3 +1,4 @@
+import type { PinLegends } from "./pins.ts";
 /** Shapes shared by the viewer, the build scripts and the admin page. */
 import type { TileLevel, TileLevelWidth } from "./tiles.ts";
 
@@ -108,6 +109,8 @@ export interface MapMeta {
 export interface ViewerConfig extends ViewDefaults {
   /** Default for ?pins= on a region embed: the region's pin maps (ids, comma separated). Set by the page, never by the slot. */
   pins?: string;
+  /** The legend words of those pin maps (RegionProperties.pinLegends), when the region sets any. */
+  pinLegends?: PinLegends;
   slug: string;
   title: string;
   /** Available textures, URLs relative to the slot page, smallest first. */

@@ -36,7 +36,7 @@ export const kindInfo = (k: PinKind) => PIN_KINDS.find((x) => x.id === k)!;
 export const PIN_LEGEND_TITLE = "Pins";
 export const LEGEND_TITLE_MAX = 30;
 export const LEGEND_LABEL_MAX = 40;
-/** A slot's own words for the embed's pin legend: its title and a label per kind. Anything missing keeps the default. */
+/** A pin map's own words for the embed's pin legend (set per pin map in the region editor, RegionProperties.pinLegends): its title and a label per kind. Anything missing keeps the default. */
 export interface PinLegend {
   title?: string;
   kinds?: Partial<Record<PinKind, string>>;
@@ -134,18 +134,17 @@ export function pinData(f: PinFeature): PinData {
 }
 
 /** The body of pins/<slot>.json, minified. Stable order (by id) so rebuilds don't change the file for nothing. */
-export function pinsJson(pins: readonly PinFeature[], maps: readonly { id: string; name: string }[] = [], legend?: PinLegend | null): string {
+export function pinsJson(pins: readonly PinFeature[], maps: readonly { id: string; name: string }[] = []): string {
   const sorted = [...pins].sort((a, b) => a.id.localeCompare(b.id));
   if (sorted.length > MAX_PINS_PER_SLOT) throw new Error(`a slot can show at most ${MAX_PINS_PER_SLOT} pins`);
   const used = new Set(sorted.map((p) => p.properties.pinMap));
-  return JSON.stringify({ pins: sorted.map(pinData), maps: maps.filter((m) => used.has(m.id)).map((m) => ({ id: m.id, name: m.name })), ...(cleanLegend(legend) ? { legend: cleanLegend(legend) } : {}) });
+  return JSON.stringify({ pins: sorted.map(pinData), maps: maps.filter((m) => used.has(m.id)).map((m) => ({ id: m.id, name: m.name })) });
 }
 
 /** What an embed reads from pins/<slot>.json: the pins and the names of the pin maps they are in. */
 export interface PinsFile {
   pins: PinData[];
   maps: { id: string; name: string }[];
-  legend?: PinLegend;
 }
 
 /** The legend with only what is usable (known kinds, plain text, within the length limits); undefined when nothing is left. */
@@ -188,8 +187,7 @@ export function parsePinsFile(j: unknown): PinsFile | null {
   const maps = ((j as { maps?: unknown }).maps instanceof Array ? ((j as { maps: unknown[] }).maps) : [])
     .map((m) => m as { id?: unknown; name?: unknown })
     .filter((m): m is { id: string; name: string } => !!m && typeof m.id === "string" && PIN_ID.test(m.id) && text(m.name, 60) && !!(m.name as string).trim());
-  const legend = cleanLegend((j as { legend?: unknown }).legend);
-  return { pins: out, maps, ...(legend ? { legend } : {}) };
+  return { pins: out, maps };
 }
 
 /** What ?pins= asked for: every pin, or the pins of those pin maps (by id) or of those kinds. */
@@ -212,3 +210,41 @@ export const pinShown = (sel: PinSelection, p: { kind: PinKind; pinMap?: string 
 
 /** Pin markers shrink a little on small embeds so they don't swamp the map. */
 export const markerSize = (stageMin: number): number => Math.round(clamp(stageMin / 18, 18, 28));
+
+/** Per pin map id: its own legend words. */
+export type PinLegends = Record<string, PinLegend>;
+export const PIN_LEGENDS_MAX = 8;
+
+/** The legends with only what is usable (valid pin map ids, clean words); undefined when nothing is left. */
+export function cleanLegends(v: unknown): PinLegends | undefined {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const out: PinLegends = {};
+  for (const [id, l] of Object.entries(v).slice(0, PIN_LEGENDS_MAX)) {
+    const c = PIN_ID.test(id) ? cleanLegend(l) : undefined;
+    if (c) out[id] = c;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * The words one embed's legend uses, when several pin maps are shown: the title of the first pin map (in `order`) that has
+ * one, and for each kind the label from the first pin map that has pins of that kind and gives it a label.
+ */
+export function resolveLegend(pins: readonly { kind: PinKind; pinMap?: string }[], legends: PinLegends | undefined, order: readonly string[]): PinLegend | undefined {
+  if (!legends) return undefined;
+  const shown = new Set(pins.map((p) => p.pinMap).filter((x): x is string => !!x));
+  const ids = [...order, ...Object.keys(legends)].filter((id, i, all) => all.indexOf(id) === i && shown.has(id) && legends[id]);
+  const out: PinLegend = {};
+  for (const id of ids) if (!out.title && legends[id].title) out.title = legends[id].title;
+  const kinds: Partial<Record<PinKind, string>> = {};
+  for (const k of KIND_IDS as PinKind[])
+    for (const id of ids) {
+      const l = legends[id].kinds?.[k];
+      if (l && pins.some((p) => p.kind === k && p.pinMap === id)) {
+        kinds[k] = l;
+        break;
+      }
+    }
+  if (Object.keys(kinds).length) out.kinds = kinds;
+  return out.title || out.kinds ? out : undefined;
+}

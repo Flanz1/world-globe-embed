@@ -281,7 +281,7 @@ function card(e: RegionEntry): HTMLElement {
       !canEdit(f) && !linked && can("regions") ? btn("Suggest changes", () => suggest(e), "tonal", "") : null,
       !canEdit(f) || !openCountFor(e.id) || linked ? null : h("button", { type: "button", className: "text small", textContent: `${openCountFor(e.id)} comment${openCountFor(e.id) > 1 ? "s" : ""}`, title: "Open the editor on the comments", dataset: { action: "comments", region: e.id }, onclick: () => edit(e, true) }),
       !canEdit(f) || !pendingFor(e.id) ? null : h("span", { className: "badge warn", textContent: `${pendingFor(e.id)} suggestion${pendingFor(e.id) > 1 ? "s" : ""}`, title: "Waiting in the list above the regions" }),
-      btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot, p.pinMaps)),
+      btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot, p.pinMaps, p.pinLegends)),
       h("button", { type: "button", className: "ghost", textContent: "Embed code…", title: "Choose what to show and copy the embed code", dataset: { action: "embed" }, onclick: () => openEmbedDialog({ region: { id: e.id, name: e.id, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot }) }),
       moreMenu(`More actions for ${e.id}`, [
         // Editors who can edit it themselves can still send a suggestion for somebody else to accept (same name as everywhere).

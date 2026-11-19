@@ -6,6 +6,7 @@
  * (no repeated closing position) and *unwrapped* (longitudes continuous along the ring, so a ring
  * across the antimeridian may run from 170 to 190). toStoredGeometry() wraps and closes them on save.
  */
+import type { PinLegends } from "../../shared/pins.ts";
 import * as clip from "polygon-clipping";
 import {
   MAX_VERTICES,
@@ -73,6 +74,8 @@ export interface RegionProps {
   under?: UnderEntry[];
   /** Ids of the pin maps whose pins show on this region's embed (RegionProperties.pinMaps). */
   pinMaps?: string[];
+  /** Per pin map: its own legend words on this region's embed (RegionProperties.pinLegends). */
+  pinLegends?: PinLegends;
   /** false: the underlays aren't cut to this region's outline. */
   underClip?: boolean;
   underTitle?: string;
@@ -178,6 +181,7 @@ export function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"
       legend,
       nationalBorders: fp?.nationalBorders === true,
       ...(fp?.pinMaps?.length ? { pinMaps: [...fp.pinMaps] } : {}),
+      ...(fp?.pinLegends && fp?.pinMaps?.length ? { pinLegends: structuredClone(fp.pinLegends) } : {}),
       ...(fp?.under?.length ? { under: fp.under.map((e) => ({ ...e })), underClip: fp.underClip !== false, underTitle: fp.underTitle ?? "", layerLabel: fp.layerLabel ?? "", ...(fp.ownToggle === true ? { ownToggle: true } : {}) } : {}),
     },
   };
