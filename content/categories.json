@@ -164,7 +164,9 @@
     {
       "id": "vihr",
       "name": "Vihr",
-      "regions": [],
+      "regions": [
+        "breza"
+      ],
       "parent": "ilrakhan"
     }
   ]
