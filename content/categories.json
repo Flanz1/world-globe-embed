@@ -165,7 +165,8 @@
       "id": "vihr",
       "name": "Vihr",
       "regions": [
-        "breza"
+        "breza",
+        "crownlands"
       ],
       "parent": "ilrakhan"
     }
