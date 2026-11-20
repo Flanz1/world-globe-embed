@@ -160,6 +160,12 @@
         "revelle"
       ],
       "parent": "ilrakhan"
+    },
+    {
+      "id": "vihr",
+      "name": "Vihr",
+      "regions": [],
+      "parent": "ilrakhan"
     }
   ]
 }
