@@ -166,7 +166,8 @@
       "name": "Vihr",
       "regions": [
         "breza",
-        "crownlands"
+        "crownlands",
+        "iztaw"
       ],
       "parent": "ilrakhan"
     }
