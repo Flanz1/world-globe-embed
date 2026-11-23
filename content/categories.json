@@ -160,6 +160,32 @@
         "revelle"
       ],
       "parent": "ilrakhan"
+    },
+    {
+      "id": "vihr",
+      "name": "Vihr",
+      "regions": [
+        "breza",
+        "crownlands",
+        "crownlands-combined",
+        "iztaw",
+        "levazci",
+        "nuv-werm",
+        "opuzna",
+        "pretko",
+        "rovgi",
+        "selbia",
+        "silver-towns",
+        "silver-wheel",
+        "szievek",
+        "szulblod",
+        "taar",
+        "tloky",
+        "torry",
+        "trazlova",
+        "wytlords"
+      ],
+      "parent": "ilrakhan"
     }
   ]
 }
