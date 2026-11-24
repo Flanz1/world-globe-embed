@@ -673,6 +673,11 @@ export function openEditor(o: EditorOptions): void {
     ],
   });
   const title = h("h2", {});
+  /** "Edit region: rogyn": the words before the colon go in their own span, which phones hide visually so the name fits. */
+  const setTitle = (text: string): void => {
+    const i = text.indexOf(": ");
+    title.replaceChildren(...(i < 0 ? [text] : [h("span", { className: "ed-title-verb", textContent: text.slice(0, i + 2) }), text.slice(i + 2)]));
+  };
   // The Pin tool: place, edit and move pins on this map (they save on their own, apart from the region).
   const pinTool = createPinTool({
     canvas,
@@ -817,15 +822,10 @@ export function openEditor(o: EditorOptions): void {
   // Phones: the view group floats over the top right of the map, so the title bar keeps to Undo, Redo, Save and Close.
   const phoneQuery = matchMedia("(max-width: 600px)");
   const placeViewTools = (): void => {
-    // (the sun/moon switch goes with it, so the region's name has room)
-    if (phoneQuery.matches) {
-      canvasWrap.append(viewTools);
-      viewTools.append(themeBtn);
-    } else {
-      const [a, b] = headRow.querySelectorAll(".ed-head-sep");
-      a.after(viewTools);
-      b.after(themeBtn);
-    }
+    // (the sun/moon switch isn't a map control: phones change it on the admin page, so the region's name has room)
+    if (phoneQuery.matches) canvasWrap.append(viewTools);
+    else headRow.querySelector(".ed-head-sep")!.after(viewTools);
+    themeBtn.hidden = phoneQuery.matches;
     viewTools.classList.toggle("floating", phoneQuery.matches);
   };
   placeViewTools();
@@ -1801,6 +1801,9 @@ export function openEditor(o: EditorOptions): void {
     redoBtn.disabled = !hist.canRedo;
     histTitles();
     for (const b of dlg.querySelectorAll<HTMLButtonElement>("button.tool")) b.setAttribute("aria-pressed", String(b.dataset.tool === tool && !pinTool.active() && !commentTool.active()));
+    // When the rail runs across (phones, tablets) and scrolls, keep the active tool in view.
+    const railEl = canvas.closest("dialog")?.querySelector<HTMLElement>(".ed-rail");
+    if (railEl && railEl.scrollWidth > railEl.clientWidth) railEl.querySelector<HTMLElement>('button[aria-pressed="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
     gridBtn.setAttribute("aria-pressed", String(gridOn));
     snapBtn.setAttribute("aria-pressed", String(snapOn));
     optBar.hidden = tool !== "freehand" || lineTarget();
@@ -1938,16 +1941,16 @@ export function openEditor(o: EditorOptions): void {
     if (document.activeElement !== colorLabelIn) colorLabelIn.value = s.colorLabel;
     syncColours();
     idIn.disabled = !isNew;
-    title.textContent = live
+    setTitle(live
       ? link
         ? `${link.sha ? "Edit" : "New"} linked region ${link.id}: ${live.map((x) => x.id).join(", ")}`
-        : `Edit together: ${live.map((x) => x.id).join(", ")}` : review ? `Suggestion from ${review.by} for ${id}` : propose ? `Suggest changes to ${id}` : `${isNew ? "New region" : "Edit region"}: ${id || "(no id yet)"}`;
+        : `Edit together: ${live.map((x) => x.id).join(", ")}` : review ? `Suggestion from ${review.by} for ${id}` : propose ? `Suggest changes to ${id}` : `${isNew ? "New region" : "Edit region"}: ${id || "(no id yet)"}`);
   }
   const setProp = <K extends keyof EditorState["props"]>(k: K, v: EditorState["props"][K], label: string) =>
     hist.apply(label, { ...hist.state, props: { ...hist.state.props, [k]: v } }, `prop:${k}`);
   idIn.addEventListener("input", () => {
     id = idIn.value.trim();
-    title.textContent = `New region: ${id || "(no id yet)"}`;
+    setTitle(`New region: ${id || "(no id yet)"}`);
   });
   idIn.addEventListener("change", () => {
     id = slugify(idIn.value) || id;
