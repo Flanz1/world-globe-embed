@@ -89,7 +89,13 @@ const CSS = `
 body{margin:0;background:var(--surface);color:var(--on);font:15px/1.5 system-ui,sans-serif}
 main{max-width:72rem;margin:0 auto;padding:16px}
 h1{font-size:24px;margin:8px 0 4px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-h2{font-size:16px;font-weight:600;margin:24px 0 8px}
+h2{font-size:16px;font-weight:600;margin:24px 0 8px;display:flex;align-items:baseline;gap:8px;scroll-margin-top:64px}
+h2 small{font-size:12px;font-weight:500;color:var(--on-var)}
+.jump{position:sticky;top:0;z-index:2;display:flex;gap:6px;overflow-x:auto;margin:12px -16px 0;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+.jump a{flex:none;white-space:nowrap;font-size:13px;font-weight:500;padding:5px 12px;border-radius:999px;border:1px solid var(--line);color:var(--primary);text-decoration:none}
+.jump a:hover{background:var(--card)}
+.jump a:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.jump a small{margin-left:6px;color:var(--on-var);font-size:12px}
 .pill{font-size:12px;font-weight:500;padding:2px 10px;border-radius:999px;background:var(--chip);color:var(--on-chip)}
 .hint{color:var(--on-var);margin:0 0 8px;font-size:14px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
@@ -101,10 +107,9 @@ section{content-visibility:auto;contain-intrinsic-size:auto 400px}
 .view iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .name{font-weight:600;font-size:16px;overflow-wrap:anywhere}
 code{font:12px ui-monospace,monospace;color:var(--on-var);overflow-wrap:anywhere}
-.row{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto}
+.row{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin-top:auto;padding-top:4px}
 button{flex:none;white-space:nowrap}
 button{font:500 13px system-ui,sans-serif;height:32px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--primary);cursor:pointer}
-button.text{border-color:transparent}
 button[hidden]{display:none}
 button.tonal{background:var(--tonal);color:var(--on-tonal);border-color:transparent}
 button:hover{filter:brightness(.96)}
@@ -140,7 +145,7 @@ export function generateAtlasPages(content: Content, cats?: CategoriesFile): Gen
     const groups = atlasGroups(slug, regions, cats);
     const title = slot.title ?? content.maps.get(slot.map)?.name ?? slug;
     const sections = !groups.length ? `<p class="empty">No regions on this slot yet.</p>` : groups
-      .map((g) => {
+      .map((g, gi) => {
         const tiles = g.ids
           .map((id) => {
             const r = regions.get(id)!;
@@ -152,10 +157,10 @@ export function generateAtlasPages(content: Content, cats?: CategoriesFile): Gen
             return `<li class="tile" data-src="${escapeHtml(src)}" data-title="${escapeHtml(`Live view of ${displayName(r)}`)}">
 <div class="view"><svg viewBox="0 0 ${VIEW_W} ${VIEW_H}" role="img" aria-label="Outline of ${escapeHtml(displayName(r))}"><path d="${outlinePath(r)}" fill="${col}" fill-opacity="${op}" stroke="${col}" stroke-width="1.2" fill-rule="evenodd" stroke-linejoin="round"/></svg></div>
 <div class="name">${escapeHtml(displayName(r))}</div>${displayName(r) !== id ? `<code>${escapeHtml(id)}</code>` : ""}
-<div class="row"><button type="button" class="tonal" data-live>Load live view</button><button type="button" class="text" data-unload hidden>Show preview</button><button type="button" data-copy data-code="${escapeHtml(code)}" aria-live="polite">Copy embed code</button></div></li>`;
+<div class="row"><button type="button" class="tonal" data-live>Load live view</button><button type="button" class="tonal" data-unload hidden>Show preview</button><button type="button" data-copy data-code="${escapeHtml(code)}" aria-live="polite">Copy embed code</button></div></li>`;
           })
           .join("\n");
-        return `<section><h2>${escapeHtml(g.name)}</h2><ul class="grid" style="list-style:none;margin:0;padding:0">${tiles}</ul></section>`;
+        return `<section id="g${gi}"><h2>${escapeHtml(g.name)} <small>${g.ids.length}</small></h2><ul class="grid" style="list-style:none;margin:0;padding:0">${tiles}</ul></section>`;
       })
       .join("\n");
     pages.push({
@@ -165,7 +170,7 @@ export function generateAtlasPages(content: Content, cats?: CategoriesFile): Gen
 <meta name="robots" content="noindex"><title>Atlas: ${escapeHtml(title)} (experimental)</title><style>${CSS}</style></head>
 <body><main><h1>${escapeHtml(title)} atlas <span class="pill">Experimental</span></h1>
 <p class="hint">Every region on this map. Click a tile to load its live view; Copy embed code gives the iframe for your notes.</p>
-${sections}</main><script>${ATLAS_JS}</script></body></html>
+${groups.length > 1 ? `<nav class="jump" aria-label="Folders">${groups.map((g, gi) => `<a href="#g${gi}">${escapeHtml(g.name)}<small>${g.ids.length}</small></a>`).join("")}</nav>\n` : ""}${sections}</main><script>${ATLAS_JS}</script></body></html>
 `,
     });
   }
