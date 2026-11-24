@@ -545,7 +545,10 @@ button.account-btn { font-weight: 700; font-size: 15px; background-color: var(--
   .to-top:not([hidden]) { bottom: calc(88px + env(safe-area-inset-bottom)); }
   .strip-long, .strip-more-l { display: none; }
   .strip-short { display: inline; }
-  .strip-pop { left: 0 !important; right: 0; top: auto !important; bottom: 0; width: 100%; max-width: none; max-height: 75vh; border-radius: 28px 28px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
+  .strip-pop { left: 0 !important; right: 0 !important; top: auto !important; bottom: 0; width: 100%; max-width: none; max-height: 75vh; border-radius: 28px 28px 0 0; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); box-shadow: 0 -2px 12px rgba(0, 0, 0, .25); }
+  /* A sheet: a scrim behind it (a tap on it still closes the popup) and a drag handle on top. */
+  .strip-pop::backdrop { background: rgba(0, 0, 0, .32); }
+  .strip-pop::before { content: ""; justify-self: center; width: 32px; height: 4px; margin: 0 0 8px; border-radius: 2px; background: var(--md-sys-color-on-surface-variant); opacity: .4; }
 }
 @media (max-width: 600px) {
   header { padding-left: 16px; }
