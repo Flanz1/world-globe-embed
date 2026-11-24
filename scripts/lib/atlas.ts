@@ -92,6 +92,8 @@ h1{font-size:24px;margin:8px 0 4px;display:flex;flex-wrap:wrap;gap:8px;align-ite
 h2{font-size:16px;font-weight:600;margin:24px 0 8px;display:flex;align-items:baseline;gap:8px;scroll-margin-top:64px}
 h2 small{font-size:12px;font-weight:500;color:var(--on-var)}
 .jump{position:sticky;top:0;z-index:2;display:flex;gap:6px;overflow-x:auto;margin:12px -16px 0;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+@media (max-width:767px){.jump{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent)}}
+@media (min-width:768px){.jump{position:static;flex-wrap:wrap;overflow:visible;border-bottom:0;padding-left:0;padding-right:0;margin:12px 0 0}}
 .jump a{flex:none;white-space:nowrap;font-size:13px;font-weight:500;padding:5px 12px;border-radius:999px;border:1px solid var(--line);color:var(--primary);text-decoration:none}
 .jump a:hover{background:var(--card)}
 .jump a:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
