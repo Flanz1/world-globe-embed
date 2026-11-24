@@ -310,24 +310,33 @@ kbd { font: 12px ui-monospace, monospace; padding: 1px 6px; border: 1px solid va
 /* ── Region editor ── */
 /* Nearly full screen, so a 16 px radius rather than the 28 px of small dialogs. */
 dialog.editor { width: calc(100vw - 16px); height: calc(100vh - 16px); max-width: none; max-height: none; padding: 0; border: 0; border-radius: 16px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-shadow: var(--app-shadow); overflow: hidden; }
-dialog.editor > .pv-head { padding: 10px 12px 8px 20px; background: var(--md-sys-color-surface-container); }
+dialog.editor > .pv-head { padding: 8px 12px 8px 20px; background: var(--md-sys-color-surface-container); }
 dialog.editor > .pv-head .row { flex-wrap: nowrap; }
-dialog.editor[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
-/* One row; at narrow widths it scrolls sideways instead of wrapping. */
-.ed-toolbar { display: flex; flex-wrap: nowrap; gap: 4px; padding: 4px 12px 8px; background: var(--md-sys-color-surface-container); align-items: center; overflow-x: auto; }
-.ed-toolbar > * { flex: 0 0 auto; white-space: nowrap; }
+dialog.editor[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
+/* Canvas first: a slim title bar (name, Undo/Redo, the view group, Save/Close), a tool rail on the left, the map in the middle. */
+.ed-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1 1 auto; }
+.ed-title h2 { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ed-subtitle { flex: 0 1 auto; min-width: 0; font-size: 13px; color: var(--md-sys-color-on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ed-head-row { flex: 0 0 auto; align-items: center; gap: 6px; }
+.ed-view-tools { display: flex; align-items: center; gap: 6px; }
+dialog.editor button.ed-hb { display: inline-flex; align-items: center; gap: 6px; background-color: transparent; color: var(--md-sys-color-primary); border-color: var(--md-sys-color-outline); }
+dialog.editor button.ed-hb.plain { border-color: transparent; color: var(--md-sys-color-on-surface-variant); }
+dialog.editor button.ed-hb.icon-only { position: relative; justify-content: center; min-width: 36px; padding: 0; }
 /* Pressed (toggled-on) editor tools: a lighter tint with an inset edge, so they never look like the filled Save button and are not colour-only. */
 dialog.editor button[aria-pressed="true"], .ed-ov-btn.active, .ed-part-row.locked .ed-lock { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: var(--md-sys-color-outline); }
-/* In the toolbar a pressed toggle also gets a tick (a mask, so not part of its name). */
-.ed-toolbar button[aria-pressed="true"]::before, .ed-ov-btn.active::before { content: ""; display: inline-block; width: 14px; height: 14px; margin: 0 4px -2px -2px; background: currentColor; -webkit-mask: var(--app-tick) center / contain no-repeat; mask: var(--app-tick) center / contain no-repeat; }
-dialog.editor .ed-toolbar button { padding: 0 8px; }
-/* The four drawing tools: one connected segmented button. */
-dialog.editor .ed-toolbar .tool { border-radius: 0; border-color: var(--md-sys-color-outline); color: var(--md-sys-color-on-surface); }
-dialog.editor .ed-toolbar .tool + .tool { margin-left: -5px; }
-dialog.editor .ed-toolbar .tool:first-child { border-radius: 16px 0 0 16px; padding-left: 12px; }
-dialog.editor .ed-toolbar .tool:not(:has(+ .tool)) { border-radius: 0 16px 16px 0; padding-right: 12px; }
-.ed-toolbar .sep { width: 1px; align-self: stretch; background: var(--md-sys-color-outline-variant); margin: 0 4px; }
-.ed-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 34%); min-height: 0; }
+/* In the title bar a pressed toggle also gets a tick (a mask, so not part of its name). */
+.ed-hb[aria-pressed="true"]::before, .ed-ov-btn.active::before { content: ""; display: inline-block; width: 14px; height: 14px; margin: 0 -2px -2px -2px; background: currentColor; -webkit-mask: var(--app-tick) center / contain no-repeat; mask: var(--app-tick) center / contain no-repeat; }
+/* A pressed icon-only button keeps the tick, small, on the icon's corner. */
+.ed-hb.icon-only[aria-pressed="true"]::before { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; margin: 0; }
+/* The tool rail: icon over a short name; pressed = tonal fill. */
+.ed-rail { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 0; padding: 8px 4px; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; background: var(--md-sys-color-surface-container); }
+dialog.editor .ed-rail button { position: relative; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 58px; min-height: 46px; padding: 4px 0; border: 0; border-radius: 12px; background-color: transparent; color: var(--md-sys-color-on-surface); }
+dialog.editor .ed-rail button:hover:not(:disabled) { background-color: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent); }
+dialog.editor .ed-rail button[aria-pressed="true"] { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+.ed-rail .ed-lbl { font-size: 11px; font-weight: 500; line-height: 13px; white-space: nowrap; }
+.ed-rail .sep { flex: none; width: 32px; height: 1px; margin: 4px 0; background: var(--md-sys-color-outline-variant); }
+.ed-rail [data-act="comment-tool"] .ed-cm-count { position: absolute; top: 2px; right: 4px; min-width: 14px; height: 14px; margin: 0; padding: 0 3px; font-size: 10px; line-height: 14px; }
+.ed-body { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(300px, 34%); min-height: 0; }
 .ed-canvas-wrap { position: relative; min-height: 0; overflow: hidden; }
 .ed-canvas { width: 100%; height: 100%; display: block; touch-action: none; background: var(--app-map-bg); }
 .ed-canvas:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: -3px; }
@@ -414,7 +423,10 @@ dialog.editor .ed-sec-toggle { width: 100%; justify-content: flex-start; padding
 .ed-thumb-hit { display: none; }
 .ed-sub { margin: 4px 0 -4px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--md-sys-color-on-surface-variant); }
 @media (max-width: 860px) {
-  .ed-body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) var(--ed-sheet, 112px); overflow: hidden; }
+  .ed-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) var(--ed-sheet, 112px); overflow: hidden; }
+  /* The rail runs across, under the title bar, and scrolls sideways. */
+  .ed-rail { flex-direction: row; gap: 2px; padding: 4px 8px; overflow-x: auto; overflow-y: hidden; border-top: 1px solid var(--md-sys-color-outline-variant); }
+  .ed-rail .sep { width: 1px; height: 32px; margin: 0 4px; }
   /* The bottom sheet: non-modal, no scrim, a hairline instead of a shadow. Heights: peek / half / full. */
   .ed-side { display: flex; flex-direction: column; gap: 0; padding: 0; min-height: 0; overflow: hidden; border: 0; border-top: 1px solid var(--md-sys-color-outline-variant); border-radius: 28px 28px 0 0; background: var(--md-sys-color-surface-container-high); }
   .ed-sheet-head { display: block; flex: none; touch-action: none; }
@@ -455,7 +467,6 @@ dialog.editor .ed-sec-toggle { width: 100%; justify-content: flex-start; padding
 .ed-part-row .ed-labelbtn[aria-pressed=false] { opacity: .75; }
 
 /* Editor: "Other regions" tool (button at the toolbar's right end, panel at the top right of the map) */
-.ed-toolbar-end { margin-left: auto; display: flex; }
 .ed-ov-panel { position: absolute; right: 8px; top: 8px; z-index: 3; display: grid; gap: 6px; width: min(340px, calc(100% - 16px)); max-height: min(70vh, 520px); grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); border: 0; box-shadow: var(--app-shadow); }
 .ed-ov-layers { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid var(--md-sys-color-outline-variant); }
 .ed-pin-pop, .ed-cm-pop { position: absolute; left: 8px; top: 8px; z-index: 5; width: min(320px, calc(100% - 16px)); max-height: calc(100% - 16px); display: flex; flex-direction: column; border-radius: 12px; background: var(--md-sys-color-surface-container-high); box-shadow: var(--app-shadow); }
@@ -700,12 +711,8 @@ header button.account-btn { display: none; }
 body.bulk-on .snackbar { bottom: 88px; }
 .error-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 16px; border-radius: 12px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); font-size: 14px; }
 .error-banner button { color: var(--md-sys-color-on-error-container); flex: 0 0 auto; }
-/* Editor toolbar icons (icons.ts): the common tools keep a label, the rest are icon-only (aria-label + tooltip). */
-.ed-toolbar button[data-icon] { display: inline-flex; align-items: center; gap: 6px; }
+/* Editor icons (icons.ts): rail tools show a short name under the icon; title-bar toggles are icon-only below 1100 px (aria-label + tooltip). */
 .ed-ic { flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
-dialog.editor .ed-toolbar button.icon-only { position: relative; justify-content: center; min-width: 40px; padding: 0; }
-/* A pressed icon-only button keeps the tick, small, on the icon's corner. */
-.ed-toolbar button.icon-only[aria-pressed="true"]::before { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; margin: 0; }
 .shortcuts kbd { white-space: normal; }
 dialog.help-dlg { width: min(640px, calc(100vw - 32px)); }
 .sc-icons { display: grid; grid-template-columns: minmax(auto, 14em) minmax(0, 1fr); gap: 6px 12px; align-items: center; margin: 0; }
@@ -759,9 +766,8 @@ body.bulk-on { padding-bottom: 96px; }
     content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px);
     transform: translate(-50%, -50%);
   }
-  dialog.editor .ed-toolbar button { min-height: 40px; }
-  dialog.editor .ed-toolbar button::after { height: 44px; }
-  .ed-toolbar { padding-bottom: 6px; }
+  dialog.editor .pv-head .ed-hb { min-height: 40px; }
+  dialog.editor .ed-hb::after { height: 44px; }
 }
 
 /* Touch: each permission checkbox row gets the 44 px minimum hit height. */
@@ -865,20 +871,25 @@ dialog.warp > .dlg-foot { display: flex; align-items: center; gap: 8px; padding:
 .ed-cm-count { display: inline-block; min-width: 16px; height: 16px; margin-left: 6px; padding: 0 4px; border-radius: 8px; font-size: 11px; line-height: 16px; text-align: center; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
 .ed-cm-count[hidden] { display: none; }
 
-/* Narrower desktops: keep "Other regions" in view. Undo, Redo, Snap (and below 1400 px Pin) become icon-only; the label stays
-   as visually hidden text, so the buttons keep their names. */
-@media (max-width: 1600px) {
-  .ed-toolbar [data-act="undo"] .ed-lbl, .ed-toolbar [data-act="redo"] .ed-lbl, .ed-toolbar [data-act="snap"] .ed-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  dialog.editor .ed-toolbar [data-act="undo"], dialog.editor .ed-toolbar [data-act="redo"], dialog.editor .ed-toolbar [data-act="snap"] { position: relative; justify-content: center; min-width: 40px; padding: 0; }
-  .ed-toolbar [data-act="snap"][aria-pressed="true"]::before { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; margin: 0; }
+/* Narrower screens: Snap and Other regions become icon-only; the label stays as visually hidden text, so they keep their names. */
+@media (max-width: 1100px) {
+  .ed-subtitle { display: none; }
+  .ed-view-tools [data-act="snap"] .ed-lbl, .ed-view-tools .ed-ov-btn .ed-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  dialog.editor .ed-view-tools [data-act="snap"], dialog.editor .ed-view-tools .ed-ov-btn { position: relative; justify-content: center; min-width: 36px; padding: 0; }
+  .ed-view-tools [data-act="snap"][aria-pressed="true"]::before, .ed-view-tools .ed-ov-btn.active::before { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; margin: 0; }
 }
-@media (max-width: 1400px) {
-  .ed-toolbar [data-act="pin-tool"] .ed-lbl, .ed-toolbar [data-act="comment-tool"] .ed-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  dialog.editor .ed-toolbar [data-act="pin-tool"], dialog.editor .ed-toolbar [data-act="comment-tool"] { position: relative; justify-content: center; min-width: 40px; padding: 0; }
-  .ed-toolbar [data-act="pin-tool"][aria-pressed="true"]::before { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; margin: 0; }
-  /* Icon-only Comments: the open count stays, as a small pill on the icon's top right. */
-  .ed-toolbar [data-act="comment-tool"] .ed-cm-count { position: absolute; top: 1px; right: 1px; min-width: 14px; height: 14px; margin: 0; padding: 0 3px; font-size: 10px; line-height: 14px; }
-  .ed-toolbar [data-act="comment-tool"][aria-pressed="true"]::before { position: absolute; top: 3px; left: 3px; width: 10px; height: 10px; margin: 0; }
+/* Phones: the title bar keeps Undo, Redo, Save and Close; the view group floats over the top right of the map. */
+@media (max-width: 600px) {
+  dialog.editor > .pv-head { padding-left: 16px; gap: 6px; }
+  dialog.editor > .pv-head h2 { font-size: 18px; }
+  .ed-subtitle, .ed-head-sep { display: none; }
+  .ed-head-row { gap: 2px; }
+  .ed-view-tools.floating { position: absolute; right: 8px; top: 8px; z-index: 3; flex-direction: column; gap: 4px; padding: 4px; border-radius: 16px; background: var(--md-sys-color-surface-container-high); box-shadow: var(--app-shadow); }
+  dialog.editor .ed-view-tools.floating .ed-hb { min-width: 40px; min-height: 40px; border-color: transparent; color: var(--md-sys-color-on-surface); }
+  dialog.editor .ed-view-tools.floating .ed-hb[aria-pressed="true"], dialog.editor .ed-view-tools.floating .ed-ov-btn.active { color: var(--md-sys-color-on-secondary-container); }
+  dialog.editor .ed-view-tools.floating .theme-mode { width: 40px; min-height: 40px; border-color: transparent; color: var(--md-sys-color-on-surface); }
+  .ed-layer-bar { right: 64px; }
+  .ed-ov-panel { right: 64px; width: calc(100% - 72px); }
 }
 
 /* Pins: a row you can tick (checkbox beside the row) */

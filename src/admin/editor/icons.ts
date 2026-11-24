@@ -2,7 +2,7 @@
 
 export type IconName =
   | "select" | "polygon" | "freehand" | "fill" | "add-part" | "cut" | "split" | "combine" | "extend" | "province-border"
-  | "undo" | "redo" | "simplify" | "smooth" | "snap" | "coast" | "grid" | "pin" | "comment" | "layers";
+  | "undo" | "redo" | "simplify" | "smooth" | "snap" | "coast" | "grid" | "pin" | "comment" | "layers" | "help";
 
 /** Each icon: path data, drawn on a 20 x 20 grid. */
 export const ICON_PATHS: Record<IconName, string[]> = {
@@ -26,6 +26,7 @@ export const ICON_PATHS: Record<IconName, string[]> = {
   pin: ["M10 17s5-4.6 5-8.5a5 5 0 00-10 0C5 12.4 10 17 10 17z", "M10 9.5h.01"],
   comment: ["M3 4h14v9H9l-4 3.5V13H3z"],
   layers: ["M10 3l7 4-7 4-7-4z", "M3 10.5l7 4 7-4", "M3 13.5l7 4 7-4"],
+  help: ["M7.5 7.5a2.5 2.5 0 114 2c-1 .6-1.5 1.2-1.5 2.5", "M10 15h.01"],
 };
 
 const NS = "http://www.w3.org/2000/svg";

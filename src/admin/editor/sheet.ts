@@ -73,7 +73,14 @@ export function sidePanel(opts: { frame: HTMLElement; banners: HTMLElement[]; se
   el.append(h("div", { className: "ed-sheet-head" }, handle, peek), scroll);
 
   const bodyEl = (): HTMLElement | null => el.parentElement;
-  const total = () => bodyEl()?.clientHeight ?? 600;
+  /** The height the sheet and the map share: the body, less anything else stacked in it (the tool rail on phones). */
+  const total = (): number => {
+    const b = bodyEl();
+    if (!b) return 600;
+    let t = b.clientHeight;
+    for (const c of b.children) if (c !== el && !c.classList.contains("ed-canvas-wrap")) t -= (c as HTMLElement).offsetHeight;
+    return t;
+  };
   const applyHeight = (px: number | null): void => {
     const b = bodyEl();
     if (!b) return;
