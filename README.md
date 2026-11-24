@@ -284,7 +284,7 @@ npm run build
 set -e GITHUB_REPOSITORY
 
 # Point the admin page at an admin API (worker/). The branch it writes to is the API's BRANCH setting;
-# the page says "Writing to branch … (not main)" at the top when that isn't the default branch.
+# the strip under the page's header shows a "Branch …" tag when that isn't the default branch.
 env VITE_ADMIN_API=https://admin-api.garmeley.com npm run build
 
 # Timings for a region embed (globe, then flat)

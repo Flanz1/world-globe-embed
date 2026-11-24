@@ -23,7 +23,8 @@ import { needsRenewal, sessionRemembers } from "./session-token.ts";
 import { initUsers, loadUsers } from "./users.ts";
 import { initAccountMenu } from "./account-menu.ts";
 import { initBackToTop } from "./back-to-top.ts";
-import { setChecks, type Check } from "./status.ts";
+import { initStrip, setBranch, setChecks, setDeploysBadge, setStrip, type Check } from "./status.ts";
+import { ago } from "../shared/activity.ts";
 import { initErrorBanner, initSnackbar, showError, showSnackbar } from "./snackbar.ts";
 
 declare const __REPO__: string;
@@ -80,7 +81,7 @@ function fieldError(sel: string, text: string | null): void {
 }
 
 /**
- * The Status card keeps the latest line (saving…, results, errors). Successes also pop up as a snackbar so they are seen
+ * The popup's Checks pane keeps the latest line (saving…, results, errors). Successes also pop up as a snackbar so they are seen
  * wherever you are on the page; errors also show in the banner at the top. A new action clears the old error.
  */
 function setStatus(text: string, kind: "muted" | "error" | "ok" = "muted"): void {
@@ -278,6 +279,8 @@ function renderChecks(runs: WorkflowRun[]): void {
 
 function renderRuns(runs: WorkflowRun[]): void {
   renderChecks(runs);
+  setDeploysBadge(latestPerWorkflow(runs).filter((r) => r.status !== "completed" || r.conclusion === "failure").length);
+  updateStrip();
   $("#runs").replaceChildren(
     ...runs.map((r) => {
       const state = r.status === "completed" ? (r.conclusion ?? "done") : r.status.replace("_", " ");
@@ -291,9 +294,50 @@ function renderRuns(runs: WorkflowRun[]): void {
         h("span", { className: "muted", textContent: ` · ${new Date(r.created_at).toLocaleString()} · ${(r.head_commit?.message ?? "").split("\n")[0]}` }),
       );
     }),
-    h("li", {}, h("a", { href: `https://github.com/${__REPO__}/actions`, target: "_blank", rel: "noopener", textContent: "All workflow runs" })),
+    ...(runs.length ? [] : [h("li", { className: "muted", textContent: "No workflow runs yet." })]),
   );
 }
+
+/** Each workflow's newest run: an older failure that a later run fixed doesn't count. */
+const latestPerWorkflow = (runs: WorkflowRun[]): WorkflowRun[] => {
+  const seen = new Set<string>();
+  return runs.filter((r) => !seen.has(r.name) && !!seen.add(r.name));
+};
+
+/* ── The strip under the header: saved / saving / deploying / failed ── */
+
+/** What `act` is doing right now (a commit the page waits for), or null. */
+let acting: string | null = null;
+let loaded = false;
+function updateStrip(): void {
+  if (!gh) return;
+  const test = gh.branch !== gh.defaultBranch;
+  const runs = latestPerWorkflow(lastRuns);
+  if (!loaded) return setStrip({ state: "loading", long: "Loading…", short: "Loading…" });
+  // `act` labels already say what is happening ("Adding slot x…"); background saves name the change ("Move region x to …").
+  const saving = acting ? acting.replace(/…$/, "") : saveCheck?.state === "pending" ? `Saving · ${saveCheck.detail ?? "your change"}` : null;
+  if (saving) return setStrip({ state: "saving", long: `${saving}…${test ? "" : " then deploying (about 2 min)"}`, short: "Saving…", pane: "checks" });
+  if (saveCheck?.state === "error")
+    return setStrip({ state: "failed", long: `Last change wasn't saved and was undone · ${saveCheck.detail ?? ""}`.replace(/ · $/, ""), short: "Save failed · Details", pane: "checks" });
+  if (runs.some((r) => r.status !== "completed"))
+    return setStrip({ state: "deploying", long: test ? "Saved · checks are running on this branch" : "Saved · deploying to the embeds (about 2 min)", short: test ? "Saved · checks running" : "Deploying · ~2 min", pane: "deploys" });
+  const failed = runs.find((r) => r.conclusion === "failure");
+  if (failed) {
+    const when = new Date(failed.updated_at ?? failed.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return setStrip({
+      state: "failed",
+      long: `${failed.name} failed (${when}) · your changes are saved${test ? "" : ", but the embeds may still show the previous version"}`,
+      short: `${failed.name} failed · Details`,
+      pane: "deploys",
+    });
+  }
+  if (test) return setStrip({ state: "saved", long: "All changes saved to the test branch · they don't go live from here", short: "All saved (test branch)" });
+  const deploy = runs.find((r) => r.name === "Deploy" && r.conclusion === "success");
+  const when = deploy ? ago(deploy.updated_at ?? deploy.created_at) : "";
+  setStrip({ state: "saved", long: when ? `All changes saved · live on the embeds ${when}` : "All changes saved", short: when ? `All saved · live ${when}` : "All saved" });
+}
+// "live 2 min ago" keeps counting.
+setInterval(updateStrip, 30_000);
 
 /* ── Data ── */
 
@@ -367,12 +411,16 @@ async function afterCommit(sha: string, reload = true): Promise<void> {
 async function act(label: string, fn: () => Promise<string>): Promise<void> {
   document.querySelectorAll("button").forEach((b) => b.setAttribute("aria-busy", "true"));
   setStatus(label);
+  acting = label;
+  updateStrip();
   try {
     const sha = await fn();
     await afterCommit(sha);
   } catch (e) {
     setStatus((e as Error).message, "error");
   } finally {
+    acting = null;
+    updateStrip();
     document.querySelectorAll("button").forEach((b) => b.removeAttribute("aria-busy"));
   }
 }
@@ -511,7 +559,6 @@ function showTab(name: Tab): void {
     b.hidden = !allowed.includes(t);
     b.setAttribute("aria-selected", String(t === name));
     b.tabIndex = t === name ? 0 : -1;
-    if (t === name) b.scrollIntoView?.({ inline: "nearest", block: "nearest" });
   }
   if (name === "regions") renderRegions();
   watchEditing(name === "regions");
@@ -528,29 +575,45 @@ function wireTabs(): void {
       history.replaceState(null, "", t === "maps" ? location.pathname + location.search : `#${t}`);
       showTab(t);
     });
-  $(".tabs").addEventListener("keydown", (e) => {
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  $("#tabs").addEventListener("keydown", (e) => {
+    // A rail on wide screens (up / down), a bottom bar on phones (left / right): both pairs work everywhere.
+    const fwd = e.key === "ArrowRight" || e.key === "ArrowDown";
+    if (!fwd && e.key !== "ArrowLeft" && e.key !== "ArrowUp") return;
+    e.preventDefault();
     const allowed = allowedTabs();
     const i = allowed.indexOf(tabFromHash());
-    const next = allowed[(Math.max(0, i) + (e.key === "ArrowRight" ? 1 : allowed.length - 1)) % allowed.length];
+    const next = allowed[(Math.max(0, i) + (fwd ? 1 : allowed.length - 1)) % allowed.length];
     $(`#tab-btn-${next}`).click();
     $(`#tab-btn-${next}`).focus();
   });
   window.addEventListener("hashchange", () => gh && showTab(tabFromHash()));
 }
 
-/** The repository / signed-in line: in the header, and (on phones) in the account menu. */
-let account: ReturnType<typeof initAccountMenu> = { setWho: () => {}, show: () => {} };
-function setWho(text: string): void {
-  $("#who").textContent = text;
-  account.setWho(text);
-}
+/** The repository / signed-in line, in the account menu. */
+let account: ReturnType<typeof initAccountMenu> = { setWho: () => {}, setLogin: () => {}, show: () => {} };
+const setWho = (text: string): void => account.setWho(text);
 
-/** Shows which branch the page writes to whenever it isn't the default branch. */
-function showBranch(client: GitHub): void {
-  const el = $("#branch");
-  el.hidden = client.branch === client.defaultBranch;
-  el.textContent = `Writing to branch ${client.branch} (not ${client.defaultBranch})`;
+/** The rail's icons (24 x 24, stroked): maps, regions, pins, health, users. */
+const RAIL_ICONS: Record<Tab, string[]> = {
+  maps: ["M9 4L3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5z", "M9 4v13.5", "M15 6.5V20"],
+  regions: ["M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z"],
+  pins: ["M12 21s6-5.4 6-10.5a6 6 0 00-12 0C6 15.6 12 21 12 21z", "M12 10.5h.01"],
+  health: ["M3 12h4l2.5-6 5 12 2.5-6H21"],
+  users: ["M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7z", "M2.5 20a6.5 6.5 0 0113 0", "M16 4.3a3.5 3.5 0 010 6.4", "M18 14.2a6.5 6.5 0 013.5 5.8"],
+};
+function railIcons(): void {
+  const NS = "http://www.w3.org/2000/svg";
+  for (const t of TABS) {
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    for (const d of RAIL_ICONS[t]) {
+      const p = document.createElementNS(NS, "path");
+      p.setAttribute("d", d);
+      svg.append(p);
+    }
+    $(`#tab-btn-${t}`).prepend(h("span", { className: "nav-pill" }, svg));
+  }
 }
 
 /* ── Sign in ── */
@@ -593,6 +656,7 @@ function showSignIn(error = ""): void {
   $("#signin").hidden = false;
   $("#main").hidden = true;
   $("#tabs").hidden = true;
+  $("#strip-bar").hidden = true;
   $("#signin-error").textContent = error;
   const ready = !!ADMIN_API;
   $<HTMLButtonElement>("#signin-github").disabled = !ready;
@@ -611,8 +675,9 @@ async function signIn(token: string): Promise<void> {
     connectAccount((p) => client.savePrefs(p), () => setStatus("Couldn't save your colour theme to your account; it only applies in this browser for now.", "error"));
     $("#theme-ctl").hidden = false;
     setWho(`${__REPO__} · signed in as ${me.login}`);
-    showBranch(client);
-    $("#forget").hidden = false;
+    account.setLogin(me.login);
+    setBranch(client.branch, client.defaultBranch);
+    $("#strip-bar").hidden = false;
     account.show(true);
     $("#signin").hidden = true;
     $("#waiting").hidden = true;
@@ -620,14 +685,17 @@ async function signIn(token: string): Promise<void> {
     $("#tabs").hidden = false;
     showTab(tabFromHash());
     setStatus("Loading…");
+    updateStrip();
     await loadAll();
+    loaded = true;
+    updateStrip();
     setStatus("Ready.");
     void refreshRuns();
   } catch (e) {
     if (e instanceof NotListed) {
       // Signed in, but nobody has added them yet: the owner sees them in the Users tab.
       $("#theme-ctl").hidden = false;
-      $("#forget").hidden = false;
+      account.setLogin(e.login);
       account.show(true);
       $("#signin").hidden = true;
       $("#waiting").hidden = false;
@@ -680,13 +748,14 @@ if (framed) {
   initErrorBanner();
   initBackToTop();
   $("#theme-ctl").append(modeButton(), colourMenu());
-  $("#forget").addEventListener("click", signOut);
+  initStrip(__REPO__);
+  railIcons();
   account = initAccountMenu(signOut);
   $("#waiting-out").addEventListener("click", signOut);
   $("#signin-github").addEventListener("click", signInWithGitHub);
   wireUpload();
   wireNewSlot();
-  initOptimistic({ setCheck: (c) => { saveCheck = c; renderChecks(lastRuns); }, setStatus, committed: afterCommit, reload: loadAll });
+  initOptimistic({ setCheck: (c) => { saveCheck = c; renderChecks(lastRuns); updateStrip(); }, setStatus, committed: afterCommit, reload: loadAll });
   initActivity({ gh: () => gh!, openRegion: openRegionById, regionName: regionDisplayName });
   initRegions({ gh: () => gh!, maps: () => maps, slots: () => slots, act, afterCommit });
   initPins({ gh: () => gh!, maps: () => maps, slots: () => slots, act, regions: regionFeatures });

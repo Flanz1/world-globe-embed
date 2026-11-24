@@ -73,6 +73,7 @@ export interface WorkflowRun {
   conclusion: string | null;
   html_url: string;
   created_at: string;
+  updated_at?: string;
   head_commit?: { message: string } | null;
 }
 

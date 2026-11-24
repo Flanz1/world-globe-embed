@@ -407,7 +407,7 @@ await step(A, "sign in and Regions tab", async () => {
   await page.goto(`${SITE}/admin/#regions`);
   await page.waitForSelector("#regions .rcard", { timeout: 15000 });
   await page.waitForTimeout(800);
-  check(A, "shows the target branch", (await page.textContent("#branch")) === `Writing to branch ${BRANCH} (not main)` && (await page.isVisible("#branch")), await page.textContent("#branch"));
+  check(A, "shows the target branch as a tag in the strip", (await page.textContent("#branch")) === `Branch ${BRANCH}` && (await page.getAttribute("#branch", "title"))?.startsWith(`Writing to branch ${BRANCH} (not main)`) && (await page.isVisible("#strip #branch")), await page.textContent("#branch"));
   check(A, "Regions tab selected from #regions", (await page.isVisible("#tab-regions")) && !(await page.isVisible("#tab-maps")));
   const n = await page.locator("#regions .rcard").count();
   check(A, "lists every region", n === 6, `${n} cards`);
