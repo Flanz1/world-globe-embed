@@ -337,7 +337,7 @@ dialog.editor .ed-rail button[aria-pressed="true"] { background-color: var(--md-
 .ed-rail .ed-lbl { font-size: 11px; font-weight: 500; line-height: 13px; white-space: nowrap; }
 .ed-rail .sep { flex: none; width: 32px; height: 1px; margin: 4px 0; background: var(--md-sys-color-outline-variant); }
 .ed-rail [data-act="comment-tool"] .ed-cm-count { position: absolute; top: 2px; right: 4px; min-width: 14px; height: 14px; margin: 0; padding: 0 3px; font-size: 10px; line-height: 14px; }
-.ed-body { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(300px, 34%); min-height: 0; }
+.ed-body { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(300px, 30%); min-height: 0; }
 .ed-canvas-wrap { position: relative; min-height: 0; overflow: hidden; }
 .ed-canvas { width: 100%; height: 100%; display: block; touch-action: none; background: var(--app-map-bg); }
 .ed-canvas:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: -3px; }
