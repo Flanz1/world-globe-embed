@@ -724,7 +724,6 @@ await step(A, "conflict detection", async () => {
   check(A, "save refuses to overwrite a file changed on GitHub, offers reload", title === "Changed on GitHub" && mock.log.length === n);
   await page.click('dialog.small-dlg button:has-text("Reload from GitHub")');
   await page.waitForTimeout(400);
-  const s = await ed.state();
   check(A, "reload brings in the newer version (the name changed elsewhere shows in the Name field)", (await page.inputValue('dialog.editor input[name="name"]')) === "Changed elsewhere", await page.inputValue('dialog.editor input[name="name"]'));
   await edTab(page, "region");
   await page.click('dialog.editor [data-act="centre"]');
