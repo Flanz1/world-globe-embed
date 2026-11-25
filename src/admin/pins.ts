@@ -13,7 +13,7 @@ import { traceGeometry } from "../shared/raster.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
 import type { RegionFeature } from "../shared/region.ts";
 import { clamp } from "../shared/params.ts";
-import { $, SITE, folderIcon, h } from "./dom.ts";
+import { $, SITE, folderIcon, h, switchPopup, switchRow } from "./dom.ts";
 import type { GitHub } from "./github.ts";
 import { optimistic } from "./optimistic.ts";
 import { loadMapImage } from "./images.ts";
@@ -511,7 +511,7 @@ function renderForm(rebuild: boolean): void {
     h("label", {}, "Name", name),
     h("div", { className: "pn-field" }, kindLabel, kind),
     h("label", {}, "Pin map (optional: an embed can show one pin map)", pinMap),
-    h("div", { className: "pn-color" }, h("label", { className: "check" }, useColor, "Custom colour"), color),
+    h("div", { className: "pn-color" }, switchRow("Custom colour", useColor, { className: "pn-usecolor" }), color),
     h("label", {}, `Description (optional, up to ${PIN_DESCRIPTION_MAX} characters)`, desc),
     h("label", {}, "Link to the note (optional)", link),
     h("p", { className: "muted small" }, "Position: ", h("span", { className: "pn-pos", textContent: posText(f) }), ok ? " · drag the marker, or use the arrow keys (Shift: bigger steps)" : ""),
@@ -1039,8 +1039,14 @@ function build(): void {
   const zoomIn = h("button", { type: "button", className: "ghost", textContent: "+", title: "Zoom in", ariaLabel: "Zoom in" });
   const zoomOut = h("button", { type: "button", className: "ghost", textContent: "−", title: "Zoom out", ariaLabel: "Zoom out" });
   const fitBtn = h("button", { type: "button", className: "ghost", textContent: "Fit", title: "Show the whole map" });
-  const labelsBtn = h("button", { type: "button", className: "ghost", textContent: "Labels", title: "Show each pin's name next to it", ariaPressed: "false", dataset: { action: "pin-labels" } });
-  const regionsBtn = h("button", { type: "button", className: "ghost", textContent: "Regions", title: "Show the outlines of this slot's regions behind the pins", ariaPressed: "false", dataset: { action: "pin-regions" } });
+  const showCount = h("span", { className: "sw-count", hidden: true, title: "Switched on" });
+  const showBtn = h("button", { type: "button", className: "ghost sw-dd", ariaHasPopup: "dialog", ariaExpanded: "false", title: "What to show on the map", dataset: { action: "pin-show" } }, h("span", { textContent: "Show" }), showCount, h("span", { className: "sw-chev", ariaHidden: "true" }));
+  const syncShow = (): void => {
+    const n = Number(showLabels) + Number(showRegions);
+    showCount.textContent = String(n);
+    showCount.hidden = !n;
+  };
+  syncShow();
   const placing = h("p", { className: "pn-placing small", hidden: true, role: "status", ariaLive: "polite" }, h("span", { textContent: "Placing pins: click the map to drop one. " }), h("button", { type: "button", className: "ghost tiny", textContent: "Done", dataset: { action: "place-done" } }));
   const kindBar = h("div", { className: "pn-kindbar", role: "group", ariaLabel: "Show only these kinds" }, ...PIN_KINDS.map((k) => {
     const b = h("button", { type: "button", className: "ghost tiny pn-kind", ariaPressed: String(kindFilter.has(k.id)), dataset: { kind: k.id }, title: `Show only ${k.label.toLowerCase()} pins`, ariaLabel: `Show only ${k.label.toLowerCase()} pins` }, pinIcon(k.id, 20));
@@ -1069,7 +1075,7 @@ function build(): void {
     kindNote.replaceChildren(h("span", { textContent: `Showing ${n} of ${PIN_KINDS.length} kinds · ` }), all);
   };
   kindSummary();
-  const pane = h("div", { className: "pn-pane", tabIndex: 0, role: "application", ariaLabel: "Map. Drag to move, scroll to zoom." }, canvas, layer, h("div", { className: "pn-zoom" }, labelsBtn, regionsBtn, zoomIn, zoomOut, fitBtn));
+  const pane = h("div", { className: "pn-pane", tabIndex: 0, role: "application", ariaLabel: "Map. Drag to move, scroll to zoom." }, canvas, layer, h("div", { className: "pn-zoom" }, showBtn, zoomIn, zoomOut, fitBtn));
   const form = h("div", { className: "pn-formbox" });
   const list = h("div", { className: "pn-list r-tree pn-tree" });
   const count = h("p", { className: "muted small" });
@@ -1137,15 +1143,17 @@ function build(): void {
       stopPlacing();
     }
   });
-  labelsBtn.addEventListener("click", () => {
-    showLabels = !showLabels;
-    labelsBtn.setAttribute("aria-pressed", String(showLabels));
-    redraw();
-  });
-  regionsBtn.addEventListener("click", () => {
-    showRegions = !showRegions;
-    regionsBtn.setAttribute("aria-pressed", String(showRegions));
-    redraw();
+  let showPop: { close(): void } | null = null;
+  showBtn.addEventListener("click", () => {
+    if (showPop) return showPop.close();
+    showPop = switchPopup(
+      showBtn,
+      () => [
+        switchRow("Pin names", h("input", { type: "checkbox", checked: showLabels, title: "Show each pin's name next to it", dataset: { action: "pin-labels" }, onchange: (e: Event) => ((showLabels = (e.target as HTMLInputElement).checked), syncShow(), redraw()) }), { help: "Each pin's name next to it" }),
+        switchRow("Region outlines", h("input", { type: "checkbox", checked: showRegions, title: "Show the outlines of this slot's regions behind the pins", dataset: { action: "pin-regions" }, onchange: (e: Event) => ((showRegions = (e.target as HTMLInputElement).checked), syncShow(), redraw()) }), { help: "This slot's regions behind the pins" }),
+      ],
+      { title: "On this map", label: "Show on the map", align: "right", onClose: () => (showPop = null) },
+    );
   });
   embed.addEventListener("click", () => embedDialog());
   addMap.addEventListener("click", () => newMap(slot, null));

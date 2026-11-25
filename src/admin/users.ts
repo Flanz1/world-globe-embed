@@ -5,7 +5,7 @@
  * change their own entry or the owner's, and can only give or take away permissions they hold themselves.
  */
 import { ACCESS_PATH, LOGIN, PERMISSIONS, PERMISSION_LABELS, PRESETS, presetOf, summaryOf, type AccessFile, type AccessUser, type Permission } from "../shared/access.ts";
-import { $, h } from "./dom.ts";
+import { $, h, switchPopup, switchRow } from "./dom.ts";
 import { GitHubError, type GitHub } from "./github.ts";
 import { OWNER_ID, can, currentUser } from "./session.ts";
 
@@ -25,8 +25,36 @@ const clone = (u: AccessUser[]) => u.map((x) => ({ ...x, permissions: [...x.perm
 const sortPerms = (p: Permission[]) => PERMISSIONS.filter((x) => p.includes(x));
 const dirty = () => JSON.stringify(draft) !== JSON.stringify(loaded.users);
 
-/** Whose "Permissions…" list the person opened (kept across redraws). Custom roles always show it. */
-const openPerms = new Set<string>();
+/** The open permissions popup; a change redraws the table, so the popup is reopened on the new row (and the focused switch kept). */
+let permPopup: { login: string; close(): void } | null = null;
+let reopen: string | null = null;
+let reopenPerm: string | undefined;
+
+function openPermissions(u: AccessUser, btn: HTMLElement, focusPerm?: string): void {
+  permPopup?.close();
+  const isOwner = u.id === OWNER_ID;
+  const build = () =>
+    PERMISSIONS.map((p) => {
+      const box = h("input", {
+        type: "checkbox",
+        checked: isOwner || u.permissions.includes(p),
+        disabled: isOwner || !editable(u, p),
+        dataset: { perm: p },
+        onchange: () => {
+          u.permissions = sortPerms(box.checked ? [...u.permissions, p] : u.permissions.filter((x) => x !== p));
+          reopen = u.login;
+          reopenPerm = p;
+          render();
+        },
+      });
+      return switchRow(PERMISSION_LABELS[p].label, box, { help: PERMISSION_LABELS[p].help });
+    });
+  const handle = switchPopup(btn, build, { title: "What they can do", sheetTitle: `${u.login} · Permissions ${isOwner ? PERMISSIONS.length : u.permissions.length}/${PERMISSIONS.length}`, label: `Permissions for ${u.login}`, onClose: () => { if (permPopup === handle2) permPopup = null; } });
+  const handle2 = { login: u.login, close: handle.close };
+  permPopup = handle2;
+  reopen = null;
+  if (focusPerm) document.querySelector<HTMLElement>(`.sw-menu [data-perm="${focusPerm}"]`)?.focus();
+}
 
 const note = (text: string, cls = "muted small") => {
   const el = $("#users-note");
@@ -61,32 +89,15 @@ function row(u: AccessUser): HTMLElement {
     u.permissions = sortPerms([...new Set([...keep, ...set])]);
     render();
   });
-  const boxes = PERMISSIONS.map((p) =>
-    h(
-      "label",
-      { className: "check", title: PERMISSION_LABELS[p].help },
-      h("input", {
-        type: "checkbox",
-        checked: isOwner || u.permissions.includes(p),
-        disabled: isOwner || !editable(u, p),
-        dataset: { perm: p },
-        onchange: (e: Event) => {
-          const on = (e.target as HTMLInputElement).checked;
-          u.permissions = sortPerms(on ? [...u.permissions, p] : u.permissions.filter((x) => x !== p));
-          render();
-        },
-      }),
-      PERMISSION_LABELS[p].label,
-    ),
-  );
   const isNew = !loaded.users.some((x) => x.id === u.id);
-  // The individual permissions sit behind "Permissions…"; a Custom role (no preset fits) shows them at once.
-  const permsList = h("details", { className: "uperm-more", dataset: { perms: u.login } }, h("summary", { textContent: "Permissions…" }), h("div", { className: "uperms" }, ...boxes));
-  permsList.open = !current || openPerms.has(u.login);
-  permsList.addEventListener("toggle", () => {
-    if (permsList.open) openPerms.add(u.login);
-    else openPerms.delete(u.login);
+  // The individual permissions sit behind "Permissions n/6": a popup of switches over the page (a bottom sheet on phones),
+  // so the card never grows. Flipping one switch makes the role Custom.
+  const permBtn = h("button", { type: "button", className: "ghost sw-dd", ariaHasPopup: "dialog", ariaExpanded: "false", dataset: { perms: u.login } }, h("span", { textContent: "Permissions" }), h("span", { className: "sw-count", textContent: `${isOwner ? PERMISSIONS.length : u.permissions.length}/${PERMISSIONS.length}`, title: "Permissions on" }), h("span", { className: "sw-chev", ariaHidden: "true" }));
+  permBtn.addEventListener("click", () => {
+    if (permPopup?.login === u.login) permPopup.close();
+    else openPermissions(u, permBtn);
   });
+  if (reopen === u.login) queueMicrotask(() => openPermissions(u, permBtn, reopenPerm));
   return h(
     "div",
     { className: `urow${isNew ? " new" : ""}`, dataset: { user: u.login } },
@@ -106,7 +117,7 @@ function row(u: AccessUser): HTMLElement {
           "div",
           { className: "uaccess" },
           h("p", { className: "usummary small", textContent: summaryOf(u.permissions), dataset: { summary: "1" } }),
-          permsList,
+          permBtn,
         ),
     isOwner
       ? null
@@ -126,6 +137,7 @@ function row(u: AccessUser): HTMLElement {
 }
 
 function render(): void {
+  permPopup?.close();
   const owner = draft.find((u) => u.id === OWNER_ID);
   const rest = draft.filter((u) => u !== owner);
   $("#users").replaceChildren(...[...(owner ? [owner] : []), ...rest].map(row));

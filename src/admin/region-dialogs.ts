@@ -6,7 +6,7 @@ import { defaultEmbedOptions, regionEmbedCode, type EmbedOptions } from "../shar
 import type { RegionData } from "../shared/region.ts";
 import { DEFAULT_VIEW, type Slot } from "../shared/types.ts";
 import type { RegionMessage } from "../viewer/contract.ts";
-import { SITE, h } from "./dom.ts";
+import { SITE, h, switchRow } from "./dom.ts";
 import type { PinLegends } from "../shared/pins.ts";
 import { keepPinsSent } from "./preview-pins.ts";
 
@@ -83,7 +83,7 @@ export function openEmbedDialog(t: EmbedTarget): void {
   const radio = (v: "globe" | "flat", text: string) =>
     h("label", { className: "check" }, h("input", { type: "radio", name: "embed-view", value: v, checked: o.view === v, onchange: () => ((o.view = v), update()) }), text);
   const check = (key: "label" | "dim" | "lock" | "key" | "pins", text: string) =>
-    h("label", { className: "check" }, h("input", { type: "checkbox", checked: !!o[key], dataset: { opt: key }, onchange: (e: Event) => ((o[key] = (e.target as HTMLInputElement).checked), update()) }), text);
+    switchRow(text, h("input", { type: "checkbox", checked: !!o[key], dataset: { opt: key }, onchange: (e: Event) => ((o[key] = (e.target as HTMLInputElement).checked), update()) }));
   const height = h("input", { type: "number", min: "100", max: "2000", step: "10", value: String(o.height), ariaLabel: "Height in pixels" });
   height.addEventListener("input", () => {
     const v = Number(height.value);
@@ -96,12 +96,8 @@ export function openEmbedDialog(t: EmbedTarget): void {
       { className: "embed-opts" },
       h("fieldset", {}, h("legend", { textContent: "View" }), radio("globe", "Globe"), radio("flat", "Flat map")),
       h("label", {}, "Height (px)", height),
-      check("label", "Show label"),
-      check("dim", "Dim outside the region"),
-      check("lock", "Start locked"),
-      ...(t.region.hasLegend ? [check("key", "Show legend")] : []),
-      check("pins", "Show map pins"),
     ),
+    h("div", { className: "sw-list" }, check("label", "Show label"), check("dim", "Dim outside the region"), check("lock", "Start locked"), ...(t.region.hasLegend ? [check("key", "Show legend")] : []), check("pins", "Show map pins")),
     code,
     h("p", { className: "muted small", textContent: "Paste this into an Obsidian note. Changing the region's id (More… → Rename…) or deleting the region breaks this embed." }),
   );
@@ -203,9 +199,10 @@ export function openRegionPreview(region: RegionData, slot: Slot, slotTitle: str
       },
     });
   const check = (key: "label" | "dim", text: string) =>
-    h("label", { className: "check" }, h("input", { type: "checkbox", checked: state[key], onchange: (e: Event) => ((state[key] = (e.target as HTMLInputElement).checked), load()) }), text);
+    switchRow(text, h("input", { type: "checkbox", checked: state[key], onchange: (e: Event) => ((state[key] = (e.target as HTMLInputElement).checked), load()) }));
   m.body.append(
-    h("div", { className: "row" }, h("div", { className: "seg" }, seg("globe", "Globe"), seg("flat", "Flat map")), check("label", "Label"), check("dim", "Dim outside")),
+    h("div", { className: "row" }, h("div", { className: "seg" }, seg("globe", "Globe"), seg("flat", "Flat map"))),
+    h("div", { className: "sw-list" }, check("label", "Show label"), check("dim", "Dim outside")),
     frame,
     h("p", { className: "muted small", textContent: `Exactly what the embed shows on ${slotTitle}: it starts locked; press the padlock to move it.` }),
   );

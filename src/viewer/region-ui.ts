@@ -220,6 +220,7 @@ export function makeLegend(stage: HTMLElement): {
         const label = document.createElement("label");
         const cb = document.createElement("input");
         cb.type = "checkbox";
+        cb.setAttribute("role", "switch");
         cb.checked = !hidden.has(it.id);
         cb.addEventListener("change", () => onToggle(it.id, cb.checked));
         const t = document.createElement("span");
