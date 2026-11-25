@@ -93,6 +93,7 @@ function row(u: AccessUser): HTMLElement {
     h(
       "div",
       { className: "uname" },
+      h("span", { className: "uavatar", ariaHidden: "true", textContent: u.login.slice(0, 1).toUpperCase() }),
       h("a", { href: `https://github.com/${encodeURIComponent(u.login)}`, target: "_blank", rel: "noopener noreferrer", textContent: u.login }),
       isOwner ? h("span", { className: "badge", textContent: "owner" }) : null,
       me && u.id === me.id ? h("span", { className: "badge", textContent: "you" }) : null,
@@ -128,6 +129,7 @@ function render(): void {
   const owner = draft.find((u) => u.id === OWNER_ID);
   const rest = draft.filter((u) => u !== owner);
   $("#users").replaceChildren(...[...(owner ? [owner] : []), ...rest].map(row));
+  $("#users-count").textContent = String(draft.length);
   if (!owner) $("#users").prepend(h("p", { className: "muted small", textContent: "The repository owner isn't listed, but can always do everything." }));
   const d = dirty();
   $<HTMLButtonElement>("#users-save").disabled = !d;
@@ -169,6 +171,7 @@ async function renderWaiting(): Promise<void> {
     return;
   }
   const presets = PRESETS.filter((p) => p.permissions.every(can));
+  $("#waiting-count").textContent = String(list.length);
   box.replaceChildren(
     ...(list.length
       ? list.map((w) => {
@@ -176,7 +179,7 @@ async function renderWaiting(): Promise<void> {
           return h(
             "div",
             { className: "urow", dataset: { waiting: w.login } },
-            h("div", { className: "uname" }, h("a", { href: `https://github.com/${encodeURIComponent(w.login)}`, target: "_blank", rel: "noopener noreferrer", textContent: w.login }), h("span", { className: "muted small", textContent: ` asked ${new Date(w.at).toLocaleString()}` })),
+            h("div", { className: "uname" }, h("span", { className: "uavatar", ariaHidden: "true", textContent: w.login.slice(0, 1).toUpperCase() }), h("a", { href: `https://github.com/${encodeURIComponent(w.login)}`, target: "_blank", rel: "noopener noreferrer", textContent: w.login }), h("span", { className: "muted small", textContent: ` asked ${new Date(w.at).toLocaleString()}` })),
             sel,
             h("button", {
               type: "button",

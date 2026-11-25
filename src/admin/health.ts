@@ -41,7 +41,7 @@ export function renderHealth(checked = false): void {
   const count = problems && notices ? `${plural(problems, "problem", "problems")}, ${plural(notices, "notice", "notices")}` : problems ? plural(problems, "problem", "problems") : plural(notices, "notice", "notices");
   btn.setAttribute("aria-label", issues.length ? `Health, ${count}` : "Health");
 
-  const summary = !loaded ? "Loading…" : !issues.length ? "✓ All clear" : [problems ? `✕ ${plural(problems, "problem", "problems")}` : "", notices ? `! ${plural(notices, "notice", "notices")}` : ""].filter(Boolean).join(" · ");
+  const summary = !loaded ? "Loading…" : !issues.length ? "✓ All clear · nothing to fix" : [problems ? `✕ ${plural(problems, "problem", "problems")}` : "", notices ? `! ${plural(notices, "notice", "notices")}` : ""].filter(Boolean).join(" · ");
 
   // Groups holding a problem first (open), then notice-only groups (closed).
   const groups = groupIssues(issues);
@@ -54,16 +54,19 @@ export function renderHealth(checked = false): void {
     h(
       "section",
       { className: "card" },
-      h("h2", { textContent: "Content health" }),
-      h("p", { className: "muted", textContent: "Things in regions, pins and folders worth a look. Nothing here blocks saving." }),
+      h(
+        "div",
+        { className: "card-head" },
+        h("h2", {}, "Content health", issues.length ? h("span", { className: "rcount-pill", textContent: String(issues.length) }) : null),
+        h("button", { type: "button", className: "ghost", textContent: "Check again", onclick: () => renderHealth(true) }),
+      ),
+      h("p", { className: "muted small", textContent: "Things in regions, pins and folders worth a look. Nothing here blocks saving." }),
       h(
         "div",
         { className: "row hl-head" },
         h("strong", { id: "hl-summary", textContent: summary }),
-        h("button", { type: "button", className: "ghost text", textContent: "Check again", onclick: () => renderHealth(true) }),
         h("span", { className: "muted small", ariaLive: "polite", textContent: checked ? "Checked just now" : "" }),
       ),
-      loaded && !issues.length ? h("div", { className: "empty" }, h("p", { textContent: "Nothing to fix. Everything checked out." })) : "",
       ...ordered.map((g) =>
         h(
           "details",
