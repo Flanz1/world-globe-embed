@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ATLAS_JS, atlasGroups, displayName, generateAtlasPages, outlinePath, SITE_TOKEN } from "../scripts/lib/atlas.ts";
+import { ATLAS_JS, atlasGroups, displayName, tileTitle, generateAtlasPages, outlinePath, SITE_TOKEN } from "../scripts/lib/atlas.ts";
 import type { Content } from "../scripts/lib/content.ts";
 import type { CategoriesFile } from "../src/shared/categories.ts";
 import type { RegionFeature } from "../src/shared/region.ts";
@@ -33,6 +33,11 @@ describe("atlas", () => {
   it("names a region like the admin card: name, first part label, id", () => {
     expect(displayName(regions.get("a")!)).toBe("a");
     expect(displayName(regions.get("b")!)).toBe("Bee <b>");
+  });
+  it("titles a tile with the name, else the first part label, else the id made readable", () => {
+    expect(tileTitle(regions.get("b")!)).toBe("Bee <b>");
+    expect(tileTitle(region("niridya-religions"))).toBe("Niridya Religions");
+    expect(tileTitle(region("a"))).toBe("A");
   });
   it("draws a small closed outline", () => {
     const d = outlinePath(regions.get("a")!);
