@@ -63,7 +63,7 @@ import { TEXTURE_WIDTHS, type MapMeta, type SlotsFile, type TextureWidth } from 
 import { deviceLimit, nextTier } from "../../shared/tiers.ts";
 import { h } from "../dom.ts";
 import { iconify, withIcon, type IconName } from "./icons.ts";
-import { sidePanel } from "./sheet.ts";
+import { SHEET_QUERY, sidePanel } from "./sheet.ts";
 import { mapLimit, type GitHub } from "../github.ts";
 import { childrenOf, regionsPerCommit } from "../../shared/categories.ts";
 import { loadMapImage } from "../images.ts";
@@ -839,6 +839,15 @@ export function openEditor(o: EditorOptions): void {
   };
   placeViewTools();
   phoneQuery.addEventListener("change", placeViewTools);
+  // Phones and tablets: the tools run across the top of the bottom sheet, above its tabs; wide screens: the rail on the left.
+  const sheetQuery = matchMedia(SHEET_QUERY);
+  const placeRail = (): void => {
+    if (sheetQuery.matches) side.el.querySelector(".ed-handle")!.after(rail);
+    else canvasWrap.before(rail);
+    rail.setAttribute("aria-orientation", sheetQuery.matches ? "horizontal" : "vertical");
+  };
+  placeRail();
+  sheetQuery.addEventListener("change", placeRail);
   document.body.append(dlg);
   if (live) {
     // Editing together: settings that belong to one region stay as each region has them, so they're not shown.
