@@ -19,6 +19,7 @@ import { makeFixture } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { ADMIN_API, sessionFor, useAdminApi } from "./admin-api.mjs";
 import { port } from "./ports.mjs";
+import { pickFolder, pickRegion } from "./regions-ui.mjs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
@@ -184,32 +185,40 @@ const C = "contributor";
 await step(C, "tabs and buttons", async () => {
   const { ctx, page, errors } = await open("carto-ann");
   await page.goto(`${ADMIN}`);
-  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await page.waitForSelector("#regions .rrow", { timeout: 15000 });
   check(C, "no Maps & slots tab; opens on Regions", !(await visible(page, "#tab-btn-maps")) && !(await visible(page, "#tab-maps")) && (await visible(page, "#tab-regions")));
   check(C, "no Users tab", !(await visible(page, "#tab-btn-users")));
   await page.goto(`${ADMIN}#users`);
-  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await page.waitForSelector("#regions .rrow", { timeout: 15000 });
   check(C, "#users in the address still shows Regions", !(await visible(page, "#tab-users")) && (await visible(page, "#tab-regions")));
+  await pickRegion(page, "landmark-disc");
   check(C, "own region: Edit and Delete enabled", !(await disabled(page, '[data-region="landmark-disc"] [data-action="edit"]')) && !(await disabled(page, '[data-region="landmark-disc"] [data-action="delete"]')));
+  await pickRegion(page, "provinces");
   check(C, "someone else's region: Delete disabled, and Suggest changes instead of Edit", (await disabled(page, '[data-region="provinces"] [data-action="delete"]')) && (await page.locator('[data-region="provinces"] [data-action="edit"]').count()) === 0 && !(await disabled(page, '[data-region="provinces"] [data-action="suggest-changes"]')));
+  await pickRegion(page, "provinces");
   check(C, "…with the reason on hover", /created this region/.test((await page.getAttribute('[data-region="provinces"] [data-action="delete"]', "title")) ?? ""));
-  check(C, "creator shown on the card", (await page.textContent('[data-region="landmark-disc"] .rcreator')) === "carto-ann" && (await page.textContent('[data-region="provinces"] .rcreator')) === "the owner");
+  await pickRegion(page, "landmark-disc");
+  const annCreator = await page.textContent('[data-region="landmark-disc"] .rcreator');
+  await pickRegion(page, "provinces");
+  check(C, "creator shown on the card", annCreator === "carto-ann" && (await page.textContent('[data-region="provinces"] .rcreator')) === "the owner", annCreator);
   // Filter and sort by creator.
   await page.selectOption("#r-creator", "me");
-  const mine = await page.locator("#regions .rcard").evaluateAll((els) => els.map((e) => e.dataset.region));
+  const mine = await page.locator("#regions .rrow").evaluateAll((els) => els.map((e) => e.dataset.region));
   check(C, "Created by: Me shows only their regions", mine.length === 1 && mine[0] === "landmark-disc", mine.join(","));
   await page.selectOption("#r-creator", "45669787");
-  const owners = await page.locator("#regions .rcard").evaluateAll((els) => els.map((e) => e.dataset.region));
+  const owners = await page.locator("#regions .rrow").evaluateAll((els) => els.map((e) => e.dataset.region));
   check(C, "Created by: the owner hides theirs", owners.length > 0 && !owners.includes("landmark-disc"), owners.join(","));
   await page.selectOption("#r-creator", "");
   await page.selectOption("#r-sort", "creator");
-  const sorted = await page.locator("#regions .rcard .rcreator").allTextContents();
+  const sorted = await page.locator("#regions .rrow").evaluateAll((els) => els.map((e) => e.dataset.creator));
   check(C, "Sort: Creator groups by creator", JSON.stringify(sorted) === JSON.stringify([...sorted].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))), sorted.join(","));
   await page.screenshot({ path: path.join(OUT, "contributor.png"), fullPage: true });
 
   // Duplicating someone else's region makes a new region that is theirs.
   const n = mock.log.length;
+  await pickRegion(page, "provinces");
   await page.click('[data-region="provinces"] [data-action="more"]');
+  await pickRegion(page, "provinces");
   await page.click('[data-region="provinces"] [data-action="duplicate"]');
   await page.waitForSelector("dialog.editor[open]");
   await page.click("dialog.editor .ed-save");
@@ -248,10 +257,13 @@ const E = "editor";
 await step(E, "edits other people's regions, can't delete them", async () => {
   const { ctx, page } = await open("drafter-bo");
   await page.goto(`${ADMIN}#regions`);
-  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await page.waitForSelector("#regions .rrow", { timeout: 15000 });
+  await pickRegion(page, "landmark-disc");
   check(E, "Edit enabled, Delete disabled on someone else's region", !(await disabled(page, '[data-region="landmark-disc"] [data-action="edit"]')) && (await disabled(page, '[data-region="landmark-disc"] [data-action="delete"]')));
+  await pickRegion(page, "landmark-disc");
   check(E, "an editor can also Suggest changes (in More…), next to Edit; a contributor gets it instead of Edit", (await page.locator('[data-region="landmark-disc"] .actions > [data-action="suggest-changes"]').count()) === 0 && (await page.locator('[data-region="landmark-disc"] .rmenu [data-action="suggest-changes"]').count()) === 1);
   const n = mock.log.length;
+  await pickRegion(page, "landmark-disc");
   await page.click('[data-region="landmark-disc"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open]");
   await page.click("dialog.editor .ed-save");
@@ -341,7 +353,7 @@ await step(U, "Users tab", async () => {
 const K = "categories";
 const cats = () => JSON.parse(mock.read("main", "content/categories.json") ?? '{"categories":[]}').categories;
 const folders = (page) => page.locator("#regions .rfolder").evaluateAll((els) => els.map((e) => e.dataset.category));
-const inFolder = (page, id) => page.locator(`#regions .rfolder[data-category="${id}"] .rcard`).evaluateAll((els) => els.map((e) => e.dataset.region));
+const inFolder = (page, id) => page.locator(`#regions .rfolder[data-category="${id}"] .rrow`).evaluateAll((els) => els.map((e) => e.dataset.region));
 /** Runs `fn` (a click) and waits until it has made a commit and the page has reloaded the list. */
 async function commits(page, fn) {
   const n = mock.log.length;
@@ -349,7 +361,7 @@ async function commits(page, fn) {
   await waitFor(page, async () => mock.log.length > n);
   // The page shows the change at once; wait until the save has landed and the list has been reloaded.
   await waitFor(page, async () => !/saving/.test((await page.textContent("#status")) ?? ""));
-  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await page.waitForSelector("#regions .rrow", { timeout: 15000 });
 }
 async function addCategory(page, name) {
   await commits(page, async () => {
@@ -362,8 +374,8 @@ async function addCategory(page, name) {
 await step(K, "the owner adds, renames, reorders, fills and deletes categories", async () => {
   const { ctx, page, errors } = await open("Flanz1");
   await page.goto(`${ADMIN}#regions`);
-  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
-  check(K, "with no categories the list is flat, as before", (await folders(page)).length === 0 && (await page.locator("#regions .rcard").count()) > 2);
+  await page.waitForSelector("#regions .rrow", { timeout: 15000 });
+  check(K, "with no categories the list is flat, as before", (await folders(page)).length === 0 && (await page.locator("#regions .rrow").count()) > 2);
   check(K, "no Category menu on cards yet", (await page.locator(".rcat").count()) === 0);
   await addCategory(page, "Kingdoms");
   await addCategory(page, "Seas");
@@ -377,32 +389,39 @@ await step(K, "the owner adds, renames, reorders, fills and deletes categories",
   check(K, "a duplicate name is refused", /already a folder/.test((await page.textContent("dialog .error")) ?? ""));
   await page.click("dialog.small-dlg .pv-head button");
   // Move a region into Kingdoms with its Category menu.
+  await pickRegion(page, "provinces");
   await commits(page, () => page.selectOption('[data-region="provinces"] [data-action="category"]', "kingdoms"));
   check(K, "the region moved into the folder", (await inFolder(page, "kingdoms")).join() === "provinces" && !(await inFolder(page, "~uncategorized")).includes("provinces"), (await inFolder(page, "kingdoms")).join());
   check(K, "…and is saved in categories.json", JSON.stringify(cats()[0].regions) === '["provinces"]');
   // Collapse and reopen.
   await page.click('.rfolder[data-category="kingdoms"] .rfolder-toggle');
-  check(K, "a folder collapses", (await page.locator('.rfolder[data-category="kingdoms"] .rcard').first().isHidden()) && (await page.getAttribute('.rfolder[data-category="kingdoms"] .rfolder-toggle', "aria-expanded")) === "false");
+  check(K, "a folder collapses", (await page.locator('.rfolder[data-category="kingdoms"] .rrow').first().isHidden()) && (await page.getAttribute('.rfolder[data-category="kingdoms"] .rfolder-toggle', "aria-expanded")) === "false");
   await page.screenshot({ path: path.join(OUT, "categories-owner.png"), fullPage: true });
   await page.click('.rfolder[data-category="kingdoms"] .rfolder-toggle');
   // Searching opens folders and hides the empty ones.
   await page.fill("#r-search", "provinces");
-  check(K, "searching hides folders with nothing to show, and opens the others", !(await folders(page)).includes("seas") && (await folders(page)).includes("kingdoms") && (await page.locator('.rfolder[data-category="kingdoms"] .rcard').first().isVisible()), (await folders(page)).join());
+  check(K, "searching hides folders with nothing to show, and opens the others", !(await folders(page)).includes("seas") && (await folders(page)).includes("kingdoms") && (await page.locator('.rfolder[data-category="kingdoms"] .rrow').first().isVisible()), (await folders(page)).join());
   await page.fill("#r-search", "");
   // Reorder.
-  await commits(page, () => page.click('.rfolder[data-category="seas"] .rfolder-head [data-action="up"]'));
+  await pickFolder(page, "seas");
+  await commits(page, () => page.click('#r-inspector [data-insp-folder="seas"] .r-insp-actions [data-action="up"]'));
   check(K, "↑ moves a folder up", (await folders(page)).join() === "seas,kingdoms,~uncategorized" && cats()[0].id === "seas", (await folders(page)).join());
-  check(K, "first folder can't go further up, last can't go down", (await disabled(page, '.rfolder[data-category="seas"] .rfolder-head [data-action="up"]')) && (await disabled(page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="down"]')));
+  await pickFolder(page, "seas");
+  const firstUp = await disabled(page, '#r-inspector [data-insp-folder="seas"] .r-insp-actions [data-action="up"]');
+  await pickFolder(page, "kingdoms");
+  check(K, "first folder can't go further up, last can't go down", firstUp && (await disabled(page, '#r-inspector [data-insp-folder="kingdoms"] .r-insp-actions [data-action="down"]')));
   // Rename.
   await commits(page, async () => {
-    await page.click('.rfolder[data-category="seas"] .rfolder-head [data-action="rename"]');
+    await pickFolder(page, "seas");
+    await page.click('#r-inspector [data-insp-folder="seas"] .r-insp-actions [data-action="rename"]');
     await page.fill('dialog [data-field="category-name"]', "Oceans");
     await page.click('dialog [data-action="confirm-category"]');
   });
   check(K, "rename keeps the id", cats().some((k) => k.id === "seas" && k.name === "Oceans") && (await page.textContent('.rfolder[data-category="seas"] .rfolder-name')) === "Oceans");
   // Delete a category that has a region: the region isn't deleted.
   await commits(page, async () => {
-    await page.click('.rfolder[data-category="kingdoms"] .rfolder-head [data-action="delete"]');
+    await pickFolder(page, "kingdoms");
+    await page.click('#r-inspector [data-insp-folder="kingdoms"] .r-insp-actions [data-action="delete"]');
     await page.click('dialog button:has-text("Delete folder")');
   });
   check(K, "deleting a category keeps its regions, now uncategorized", cats().length === 1 && !!regionOn("provinces") && (await inFolder(page, "~uncategorized")).includes("provinces"));
@@ -434,27 +453,30 @@ await step(K, "folders nest: subfolders, dragging regions and folders, moving, d
     await page.mouse.up();
   };
   const parents = () => Object.fromEntries(cats().map((k) => [k.id, k.parent ?? null]));
-  const direct = (id) => page.locator(`.rfolder[data-category="${id}"] > .rfolder-body > .rcard`).evaluateAll((els) => els.map((e) => e.dataset.region));
+  const direct = (id) => page.locator(`.rfolder[data-category="${id}"] > .rfolder-body > .rrow`).evaluateAll((els) => els.map((e) => e.dataset.region));
   await commits(page, async () => {
-    await page.click(`${head("kingdoms")} [data-action="subfolder"]`);
+    await pickFolder(page, "kingdoms");
+    await page.click(`#r-inspector [data-insp-folder="kingdoms"] .r-insp-actions [data-action="subfolder"]`);
     await page.fill('dialog [data-field="category-name"]', "Cities");
     await page.click('dialog [data-action="confirm-category"]');
   });
   check(K, "a subfolder is saved with its parent and drawn inside it", parents().cities === "kingdoms" && (await page.locator('.rfolder[data-category="kingdoms"] > .rfolder-body > .rfolder[data-category="cities"]').count()) === 1, JSON.stringify(parents()));
-  await commits(page, () => drag('.rcard[data-region="provinces"]', head("cities")));
+  await commits(page, () => drag('.rrow[data-region="provinces"]', head("cities")));
   check(K, "dragging a region onto a folder moves it there", (await direct("cities")).join() === "provinces" && JSON.stringify(cats().find((k) => k.id === "cities").regions) === '["provinces"]', (await direct("cities")).join());
   await commits(page, () => drag(head("seas"), head("kingdoms")));
   check(K, "dragging a folder onto another nests it", parents().seas === "kingdoms", JSON.stringify(parents()));
   check(K, "…and the folder it was dropped on stays at the top", parents().kingdoms === null);
   await page.screenshot({ path: path.join(OUT, "folders-nested.png"), fullPage: true });
   await commits(page, async () => {
-    await page.click(`${head("seas")} [data-action="move"]`);
+    await pickFolder(page, "seas");
+    await page.click(`#r-inspector [data-insp-folder="seas"] .r-insp-actions [data-action="move"]`);
     await page.selectOption('dialog [data-field="folder-parent"]', "");
     await page.click('dialog [data-action="confirm-move-folder"]');
   });
   check(K, "Move puts a folder back at the top level", parents().seas === null, JSON.stringify(parents()));
   await commits(page, async () => {
-    await page.click(`${head("kingdoms")} [data-action="delete"]`);
+    await pickFolder(page, "kingdoms");
+    await page.click(`#r-inspector [data-insp-folder="kingdoms"] .r-insp-actions [data-action="delete"]`);
     await page.click('dialog button:has-text("Delete folder")');
   });
   check(K, "deleting a folder moves the folders inside it up, with their regions", parents().cities === null && !!regionOn("provinces") && (await direct("cities")).join() === "provinces", JSON.stringify(parents()));
@@ -479,6 +501,7 @@ await step(K, "a category change shows at once, and is undone with the reason if
     await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ message: "GitHub is having a bad day." }) });
   });
   const before = cats()[0].regions.join();
+  await pickRegion(page, "provinces");
   await page.selectOption('[data-region="provinces"] [data-action="category"]', "kingdoms");
   await waitFor(page, async () => (await inFolder(page, "kingdoms")).includes("provinces"), 3000);
   check(K, "the region is in its new folder while the save is still pending", (await inFolder(page, "kingdoms")).includes("provinces") && cats()[0].regions.join() === before, (await inFolder(page, "kingdoms")).join());
@@ -512,27 +535,41 @@ await step(K, "contributors and editors manage any folder and sort any region", 
   await ann.page.goto(`${ADMIN}#regions`);
   await ann.page.waitForSelector("#regions .rfolder", { timeout: 15000 });
   check(K, "a contributor can add a category", !(await disabled(ann.page, "#r-new-category")));
-  check(K, "…and rename or delete anyone's", !(await disabled(ann.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]')) && !(await disabled(ann.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="delete"]')));
+  await pickFolder(ann.page, "kingdoms");
+  check(K, "…and rename or delete anyone's", !(await disabled(ann.page, '#r-inspector [data-insp-folder="kingdoms"] .r-insp-actions [data-action="rename"]')) && !(await disabled(ann.page, '#r-inspector [data-insp-folder="kingdoms"] .r-insp-actions [data-action="delete"]')));
   check(K, "folders show no creator name", (await ann.page.locator("#regions .rfolder-head").allTextContents()).every((t) => !/\bby\b/.test(t)));
-  check(K, "she can move her own region and someone else's", !(await disabled(ann.page, '[data-region="landmark-disc"] [data-action="category"]')) && !(await disabled(ann.page, '[data-region="provinces"] [data-action="category"]')));
+  await pickRegion(ann.page, "landmark-disc");
+  const ownMove = !(await disabled(ann.page, '[data-region="landmark-disc"] [data-action="category"]'));
+  await pickRegion(ann.page, "provinces");
+  check(K, "she can move her own region and someone else's", ownMove && !(await disabled(ann.page, '[data-region="provinces"] [data-action="category"]')));
+  await pickRegion(ann.page, "landmark-disc");
   await commits(ann.page, () => ann.page.selectOption('[data-region="landmark-disc"] [data-action="category"]', "kingdoms"));
   check(K, "her region goes into the owner's folder", (await inFolder(ann.page, "kingdoms")).includes("landmark-disc"), (await inFolder(ann.page, "kingdoms")).join());
   // Pin to the top of a folder, and reorder the pins.
   const kPins = () => cats().find((k) => k.id === "kingdoms")?.pinned;
+  await pickRegion(ann.page, "landmark-disc");
   await commits(ann.page, () => ann.page.click('[data-region="landmark-disc"] [data-action="pin"]'));
+  await pickRegion(ann.page, "provinces");
   await commits(ann.page, () => ann.page.click('[data-region="provinces"] [data-action="pin"]'));
   check(K, "Pin puts regions at the top of the folder, in the order pinned", JSON.stringify(kPins()) === '["landmark-disc","provinces"]' && (await inFolder(ann.page, "kingdoms")).join() === "landmark-disc,provinces", JSON.stringify([kPins(), await inFolder(ann.page, "kingdoms")]));
-  check(K, "the first pin can't go up, the last can't go down", (await disabled(ann.page, '[data-region="landmark-disc"] [data-action="pin-up"]')) && (await disabled(ann.page, '[data-region="provinces"] [data-action="pin-down"]')));
+  await pickRegion(ann.page, "landmark-disc");
+  const firstPinUp = await disabled(ann.page, '[data-region="landmark-disc"] [data-action="pin-up"]');
+  await pickRegion(ann.page, "provinces");
+  check(K, "the first pin can't go up, the last can't go down", firstPinUp && (await disabled(ann.page, '[data-region="provinces"] [data-action="pin-down"]')));
+  await pickRegion(ann.page, "provinces");
   await commits(ann.page, () => ann.page.click('[data-region="provinces"] [data-action="pin-up"]'));
   check(K, "↑ reorders the pins", JSON.stringify(kPins()) === '["provinces","landmark-disc"]' && (await inFolder(ann.page, "kingdoms")).join() === "provinces,landmark-disc", JSON.stringify([kPins(), await inFolder(ann.page, "kingdoms")]));
+  await pickRegion(ann.page, "provinces");
   await commits(ann.page, () => ann.page.click('[data-region="provinces"] [data-action="unpin"]'));
   check(K, "Unpin takes one off the top", JSON.stringify(kPins()) === '["landmark-disc"]');
+  await pickRegion(ann.page, "landmark-disc");
   await commits(ann.page, () => ann.page.click('[data-region="landmark-disc"] [data-action="unpin"]'));
   check(K, "…and the list goes when the last pin does", kPins() === undefined);
   await addCategory(ann.page, "Ann's places");
   const mineCat = cats().find((k) => k.name === "Ann's places");
   check(K, "her new category has no creator", mineCat && mineCat.createdBy === undefined, JSON.stringify(mineCat));
-  check(K, "she can rename and delete it", !(await disabled(ann.page, `.rfolder[data-category="${mineCat.id}"] .rfolder-head [data-action="rename"]`)) && !(await disabled(ann.page, `.rfolder[data-category="${mineCat.id}"] .rfolder-head [data-action="delete"]`)));
+  await pickFolder(ann.page, `${mineCat.id}`);
+  check(K, "she can rename and delete it", !(await disabled(ann.page, `#r-inspector [data-insp-folder="${mineCat.id}"] .r-insp-actions [data-action="rename"]`)) && !(await disabled(ann.page, `#r-inspector [data-insp-folder="${mineCat.id}"] .r-insp-actions [data-action="delete"]`)));
   await ann.page.screenshot({ path: path.join(OUT, "categories-contributor.png"), fullPage: true });
   // The API takes the same rename.
   const cur = JSON.parse(mock.read("main", "content/categories.json"));
@@ -544,10 +581,13 @@ await step(K, "contributors and editors manage any folder and sort any region", 
   const bo = await open("drafter-bo");
   await bo.page.goto(`${ADMIN}#regions`);
   await bo.page.waitForSelector("#regions .rfolder", { timeout: 15000 });
-  check(K, "an editor can rename and delete any category", !(await disabled(bo.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]')) && !(await disabled(bo.page, '.rfolder[data-category="kingdoms"] .rfolder-head [data-action="delete"]')));
+  await pickFolder(bo.page, "kingdoms");
+  check(K, "an editor can rename and delete any category", !(await disabled(bo.page, '#r-inspector [data-insp-folder="kingdoms"] .r-insp-actions [data-action="rename"]')) && !(await disabled(bo.page, '#r-inspector [data-insp-folder="kingdoms"] .r-insp-actions [data-action="delete"]')));
+  await pickRegion(bo.page, "provinces");
   check(K, "…and move anyone's region", !(await disabled(bo.page, '[data-region="provinces"] [data-action="category"]')));
   await commits(bo.page, async () => {
-    await bo.page.click('.rfolder[data-category="kingdoms"] .rfolder-head [data-action="rename"]');
+    await pickFolder(bo.page, "kingdoms");
+    await bo.page.click('#r-inspector [data-insp-folder="kingdoms"] .r-insp-actions [data-action="rename"]');
     await bo.page.fill('dialog [data-field="category-name"]', "Realms");
     await bo.page.click('dialog [data-action="confirm-category"]');
   });
@@ -560,11 +600,13 @@ const T = "transfer";
 await step(T, "only the owner and admins can hand a region over", async () => {
   const ann = await open("carto-ann");
   await ann.page.goto(`${ADMIN}#regions`);
-  await ann.page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await ann.page.waitForSelector("#regions .rrow", { timeout: 15000 });
+  await pickRegion(ann.page, "landmark-disc");
   check(T, "a contributor has no Transfer button", (await ann.page.locator('[data-region="landmark-disc"] [data-action="transfer"]').count()) === 0);
   const bo = await open("drafter-bo");
   await bo.page.goto(`${ADMIN}#regions`);
-  await bo.page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await bo.page.waitForSelector("#regions .rrow", { timeout: 15000 });
+  await pickRegion(bo.page, "landmark-disc");
   check(T, "an editor has no Transfer button", (await bo.page.locator('[data-region="landmark-disc"] [data-action="transfer"]').count()) === 0);
   const r = await forceCommit(bo.page, { path: "content/regions/landmark-disc.json", content: JSON.stringify({ ...regionOn("landmark-disc"), properties: { ...regionOn("landmark-disc").properties, createdBy: { id: 5003, login: "drafter-bo" }, updatedBy: { id: 5003, login: "drafter-bo" } } }) + "\n" });
   check(T, "API refuses an editor taking a region over", r.status === 403 && /owner or an admin/.test(r.body.message), `${r.status} ${r.body.message}`);
@@ -572,9 +614,11 @@ await step(T, "only the owner and admins can hand a region over", async () => {
   await bo.ctx.close();
   const { ctx, page } = await open("e2e-user");
   await page.goto(`${ADMIN}#regions`);
-  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await page.waitForSelector("#regions .rrow", { timeout: 15000 });
   const n = mock.log.length;
+  await pickRegion(page, "landmark-disc");
   await page.click('[data-region="landmark-disc"] [data-action="more"]');
+  await pickRegion(page, "landmark-disc");
   await page.click('[data-region="landmark-disc"] [data-action="transfer"]');
   await page.waitForSelector("dialog[open] select");
   await page.selectOption("dialog[open] select", { label: "drafter-bo" });
@@ -594,7 +638,7 @@ await step(O, "owner sees everything; a removed person is locked out", async () 
   // Remove drafter-bo; their open session can't save any more.
   const bo = await open("drafter-bo");
   await bo.page.goto(`${ADMIN}#regions`);
-  await bo.page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await bo.page.waitForSelector("#regions .rrow", { timeout: 15000 });
   await page.goto(`${ADMIN}#users`);
   await page.waitForSelector('#users [data-user="drafter-bo"]', { timeout: 15000 });
   await page.click('#users [data-user="drafter-bo"] [data-action="remove-user"]');
@@ -614,8 +658,9 @@ const sugCount = (page, list) => page.locator(`#suggestions [data-list="${list}"
 await step(G, "a contributor suggests a change; the owner reviews, accepts and declines", async () => {
   const ann = await open("carto-ann");
   await ann.page.goto(`${ADMIN}#regions`);
-  await ann.page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await ann.page.waitForSelector("#regions .rrow", { timeout: 15000 });
   const headBefore = mock.refs.get("main");
+  await pickRegion(ann.page, "provinces");
   await ann.page.click('[data-region="provinces"] [data-action="suggest-changes"]');
   await ann.page.waitForSelector("dialog.editor[open]");
   check(G, "the editor says it's a suggestion", /Suggest changes to provinces/.test((await ann.page.textContent("dialog.editor h2")) ?? "") && /Send suggestion/.test((await ann.page.textContent("dialog.editor .ed-save")) ?? ""));
@@ -644,7 +689,7 @@ await step(G, "a contributor suggests a change; the owner reviews, accepts and d
   // Someone who may not edit provinces sees nothing; the owner sees it with Review and Decline.
   const simon = await open("LoopSimon");
   await simon.page.goto(`${ADMIN}#regions`);
-  await simon.page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await simon.page.waitForSelector("#regions .rrow", { timeout: 15000 });
   check(G, "a person who can't edit that region doesn't see the suggestion", (await sugCount(simon.page, "review")) === 0 && (await sugCount(simon.page, "mine")) === 0);
   await simon.ctx.close();
 
@@ -652,6 +697,7 @@ await step(G, "a contributor suggests a change; the owner reviews, accepts and d
   await owner.page.goto(`${ADMIN}#regions`);
   await owner.page.waitForSelector("#suggestions [data-list=\"review\"] [data-suggestion]", { timeout: 15000 });
   check(G, "the owner sees it to review, with the note", /carto-ann suggests changes to provinces/.test((await owner.page.textContent("#suggestions")) ?? "") && /greener please/.test((await owner.page.textContent("#suggestions")) ?? ""));
+  await pickRegion(owner.page, "provinces");
   check(G, "the region card shows a badge", /1 suggestion/.test((await owner.page.textContent('[data-region="provinces"]')) ?? ""));
   await owner.page.click('#suggestions [data-action="review"]');
   await owner.page.waitForSelector("dialog.editor[open]");
@@ -669,7 +715,7 @@ await step(G, "a contributor suggests a change; the owner reviews, accepts and d
   await owner.page.click("dialog.editor .pv-head button.ghost");
   await waitFor(ann.page, async () => true);
   await ann.page.reload();
-  await ann.page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await ann.page.waitForSelector("#regions .rrow", { timeout: 15000 });
   await waitFor(ann.page, async () => /accepted by Flanz1/.test((await ann.page.textContent("#suggestions")) ?? ""));
   check(G, "the sender sees it was accepted", /accepted by Flanz1/.test((await ann.page.textContent("#suggestions")) ?? ""));
   await ann.page.click('#suggestions [data-action="clear"]');
@@ -677,6 +723,7 @@ await step(G, "a contributor suggests a change; the owner reviews, accepts and d
   check(G, "and can clear it away", (await sugCount(ann.page, "mine")) === 0);
 
   // A second suggestion, declined with a reason.
+  await pickRegion(ann.page, "provinces");
   await ann.page.click('[data-region="provinces"] [data-action="suggest-changes"]');
   await ann.page.waitForSelector("dialog.editor[open]");
   await ann.page.evaluate(() => {
@@ -699,7 +746,7 @@ await step(G, "a contributor suggests a change; the owner reviews, accepts and d
   await waitFor(owner.page, async () => (await sugCount(owner.page, "review")) === 0);
   check(G, "declining removes it from the owner's list and leaves the region alone", (await sugCount(owner.page, "review")) === 0 && regionOn("provinces").properties.color === "#12ab34");
   await ann.page.reload();
-  await ann.page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await ann.page.waitForSelector("#regions .rrow", { timeout: 15000 });
   await waitFor(ann.page, async () => /declined by Flanz1: too pink/.test((await ann.page.textContent("#suggestions")) ?? ""));
   check(G, "the sender sees the decline and the reason", /declined by Flanz1: too pink/.test((await ann.page.textContent("#suggestions")) ?? ""));
   check(G, "no page errors", ann.errors.length === 0 && owner.errors.length === 0, [...ann.errors, ...owner.errors].join(" | ") || "none");

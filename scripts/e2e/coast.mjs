@@ -23,6 +23,7 @@ import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 
 import { port } from "./ports.mjs";
+import { pickRegion } from "./regions-ui.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 const sharp = require("sharp");
@@ -161,7 +162,8 @@ const onShore = (t, d = 0) => [(shore(t) + d) * Math.cos(t), (shore(t) + d) * Ma
 
 await step(A, "open the editor", async () => {
   await page.goto(`${SITE}/admin/#regions`);
-  await page.waitForSelector('#regions .rcard[data-region="coast-test"]', { timeout: 15000 });
+  await page.waitForSelector('#regions .rrow[data-region="coast-test"]', { timeout: 15000 });
+  await pickRegion(page, "coast-test");
   await page.locator('[data-region="coast-test"] [data-action="edit"]').click();
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForFunction(() => document.querySelector("dialog.editor").wgeEditor.coastLines() > 0, null, { timeout: 10000 });

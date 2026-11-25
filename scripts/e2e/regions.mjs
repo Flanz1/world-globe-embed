@@ -26,6 +26,7 @@ import { ADMIN_API, useAdminApi } from "./admin-api.mjs";
 import { checkGeometry } from "../../src/shared/geo.ts";
 
 import { port } from "./ports.mjs";
+import { pickRegion } from "./regions-ui.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 const sharp = require("sharp");
@@ -405,21 +406,24 @@ async function mdrag(x, y, dx, dy, mods = []) {
 
 await step(A, "sign in and Regions tab", async () => {
   await page.goto(`${SITE}/admin/#regions`);
-  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await page.waitForSelector("#regions .rrow", { timeout: 15000 });
   await page.waitForTimeout(800);
   check(A, "shows the target branch as a tag in the strip", (await page.textContent("#branch")) === `Branch ${BRANCH}` && (await page.getAttribute("#branch", "title"))?.startsWith(`Writing to branch ${BRANCH} (not main)`) && (await page.isVisible("#strip #branch")), await page.textContent("#branch"));
   check(A, "Regions tab selected from #regions", (await page.isVisible("#tab-regions")) && !(await page.isVisible("#tab-maps")));
-  const n = await page.locator("#regions .rcard").count();
+  const n = await page.locator("#regions .rrow").count();
   check(A, "lists every region", n === 6, `${n} cards`);
-  check(A, "'drawn on a different map' badge", (await page.locator('[data-region="old-map-region"] .badge.warn').textContent()) === "drawn on a different map");
+  await pickRegion(page, "old-map-region");
+  check(A, "'drawn on a different map' badge", (await page.locator('#r-inspector .rcard[data-region="old-map-region"] .badge.warn').textContent()) === "drawn on a different map" && (await page.locator('#r-tree .rrow[data-region="old-map-region"] .badge.warn').textContent()) === "different map");
+  await pickRegion(page, "evil-name");
   const evil = await page.locator('[data-region="evil-name"] .rlabels').textContent();
   check(A, "hostile name shown as plain text", evil === '"><script>alert(1)</script>' && dialogs.length === 0);
+  await pickRegion(page, "evil-name");
   check(A, "cards are titled by id, with no Rename button", (await page.locator('[data-region="evil-name"] .rname').textContent()) === "evil-name" && (await page.locator('.rcard [data-action="rename"]').count()) === 0);
   await page.fill("#r-search", "dateline");
-  check(A, "search filters by id/labels", (await page.locator("#regions .rcard").count()) === 1);
+  check(A, "search filters by id/labels", (await page.locator("#regions .rrow").count()) === 1);
   await page.fill("#r-search", "");
   await page.selectOption("#r-slot", "inara");
-  check(A, "slot filter", (await page.locator("#regions .rcard").count()) === 1);
+  check(A, "slot filter", (await page.locator("#regions .rrow").count()) === 1);
   await page.selectOption("#r-slot", "");
   await page.selectOption("#r-sort", "updated");
   await page.selectOption("#r-sort", "name");
@@ -427,7 +431,7 @@ await step(A, "sign in and Regions tab", async () => {
   check(A, "sort by id", JSON.stringify(names) === JSON.stringify([...names].sort((a, b) => a.localeCompare(b))), names.join(", "));
   await page.screenshot({ path: path.join(OUT, "admin-regions-tab.png"), fullPage: true });
   await page.reload();
-  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await page.waitForSelector("#regions .rrow", { timeout: 15000 });
   check(A, "reload stays on the Regions tab", await page.isVisible("#tab-regions"));
   await page.click("#tab-btn-maps");
   check(A, "Maps & slots tab still there, hash cleared", (await page.isVisible("#tab-maps")) && !page.url().includes("#regions"));
@@ -572,12 +576,15 @@ await step(A, "editor: save", async () => {
   await page.click("dialog.editor .pv-head button.ghost");
   await page.waitForTimeout(300);
   check(A, "no prompt when nothing is unsaved; editor closes", !(await page.isVisible("dialog.editor")));
+  await pickRegion(page, "test-kingdom");
   await page.waitForSelector('[data-region="test-kingdom"]', { timeout: 10000 });
 });
 
 await step(A, "duplicate", async () => {
   const n = mock.log.length;
+  await pickRegion(page, "test-kingdom");
   await page.click('[data-region="test-kingdom"] [data-action="more"]');
+  await pickRegion(page, "test-kingdom");
   await page.click('[data-region="test-kingdom"] [data-action="duplicate"]');
   await page.waitForSelector("dialog.editor[open]");
   check(A, "duplicate opens the editor with a new id", (await ed.id()) === "test-kingdom-copy", await ed.id());
@@ -588,6 +595,7 @@ await step(A, "duplicate", async () => {
   const copy = JSON.parse(mock.read(BRANCH, "content/regions/test-kingdom-copy.json") ?? "null");
   check(A, "duplicate: one commit adding the copy with the same shape", c.length === 1 && copy && JSON.stringify(copy.geometry) === JSON.stringify(orig.geometry) && JSON.stringify(copy.properties.partLabels) === JSON.stringify(orig.properties.partLabels), c.map((x) => x.message).join(" | "));
   await page.click("dialog.editor .pv-head button.ghost");
+  await pickRegion(page, "test-kingdom-copy");
   await page.waitForSelector('[data-region="test-kingdom-copy"]', { timeout: 10000 });
 });
 
@@ -637,12 +645,15 @@ await step(A, "combine", async () => {
     c.map((x) => x.message).join(" | "),
   );
   await page.click("dialog.editor .pv-head button.ghost");
+  await pickRegion(page, `${id}`);
   await page.waitForSelector(`[data-region="${id}"]`, { timeout: 10000 });
 });
 
 await step(A, "delete", async () => {
   const n = mock.log.length;
+  await pickRegion(page, "test-kingdom-copy");
   await page.click('[data-region="test-kingdom-copy"] [data-action="more"]');
+  await pickRegion(page, "test-kingdom-copy");
   await page.click('[data-region="test-kingdom-copy"] [data-action="delete"]');
   const btn = page.locator('dialog.small-dlg button:has-text("Delete region")');
   check(A, "delete is disabled until the id is typed", await btn.isDisabled());
@@ -665,8 +676,11 @@ await step(A, "version history and restore", async () => {
   moved.geometry.coordinates = moved.geometry.type === "Polygon" ? moved.geometry.coordinates.map(shift) : moved.geometry.coordinates.map((poly) => poly.map(shift));
   mock.externalWrite(BRANCH, p, JSON.stringify(moved, null, 2) + "\n");
   await page.reload();
+  await pickRegion(page, `${id}`);
   await page.waitForSelector(`[data-region="${id}"] [data-action="history"]`, { timeout: 15000, state: "attached" });
+  await pickRegion(page, `${id}`);
   await page.click(`[data-region="${id}"] [data-action="more"]`);
+  await pickRegion(page, `${id}`);
   await page.click(`[data-region="${id}"] [data-action="history"]`);
   await page.waitForSelector("dialog.history .hist-item", { timeout: 10000 });
   const items = await page.locator("dialog.history .hist-item").count();
@@ -687,7 +701,9 @@ await step(A, "version history and restore", async () => {
 });
 
 await step(A, "conflict detection", async () => {
+  await pickRegion(page, "landmark-disc");
   await page.waitForSelector('[data-region="landmark-disc"]');
+  await pickRegion(page, "landmark-disc");
   await page.click('[data-region="landmark-disc"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(1500);
@@ -713,6 +729,7 @@ await step(A, "conflict detection", async () => {
 });
 
 await step(A, "editor: colours and legend", async () => {
+  await pickRegion(page, "provinces");
   await page.click('[data-region="provinces"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(1200);
@@ -772,11 +789,13 @@ await step(A, "editor: colours and legend", async () => {
   );
   await page.click("dialog.editor .pv-head button.ghost");
   await page.waitForTimeout(300);
+  await pickRegion(page, "provinces");
   const meta = await page.locator('[data-region="provinces"] .rinfo .muted.small', { hasText: "vertices" }).first().textContent();
   check(A, "region card counts the colours", /3 colours/.test(meta), meta);
 });
 
 await step(A, "editor speed at 2,000 vertices", async () => {
+  await pickRegion(page, "big-ring");
   await page.click('[data-region="big-ring"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(2500);
@@ -840,6 +859,7 @@ await step(A, "editor speed at 2,000 vertices", async () => {
 });
 
 await step(A, "preview and embed code", async () => {
+  await pickRegion(page, "landmark-disc");
   await page.click('[data-region="landmark-disc"] [data-action="preview"]');
   await page.waitForSelector("dialog.rpreview iframe");
   const pf = () => page.frames().find((f) => f.url().includes("/preview/"));
@@ -851,11 +871,13 @@ await step(A, "preview and embed code", async () => {
   await pf().waitForFunction(() => document.documentElement.dataset.state === "hires" && document.documentElement.classList.contains("flatview"), null, { timeout: 60000 });
   await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(OUT, "admin-preview-flat.png") });
+  await pickRegion(page, "landmark-disc");
   const want = await page.textContent('[data-region="landmark-disc"] .rlabels');
   const got = await pf().evaluate(() => document.querySelector(".rlabel")?.textContent);
   check(A, "Preview: globe/flat switch shows the region embed", got === want, `${got}`);
   await page.click("dialog.rpreview .pv-head button");
 
+  await pickRegion(page, "evil-name");
   await page.click('[data-region="evil-name"] [data-action="embed"]');
   const code = await page.inputValue("dialog.embed-dlg textarea");
   check(A, "embed snippet is titled by id and has nothing unescaped", code.includes('title="evil-name (Alignment test)"') && !code.includes("<script"), code);

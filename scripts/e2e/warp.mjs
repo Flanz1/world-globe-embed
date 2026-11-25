@@ -95,7 +95,7 @@ async function adminPage(as, viewport = { width: 1440, height: 900 }, scheme = "
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && !/^Failed to load resource/.test(m.text()) && errors.push(m.text()));
   await page.goto(`${SITE}/admin/#regions`);
-  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await page.waitForSelector("#regions .rrow", { timeout: 15000 });
   return { ctx, page, errors };
 }
 const slotCard = (page) => page.locator("#slots .slot", { has: page.locator(`code:text-is("${SLOT.slug}")`) });
@@ -129,7 +129,7 @@ const shots = [];
 try {
   const owner = await adminPage("Flanz1");
   const { page } = owner;
-  const badge = await page.locator("#regions .badge.warn", { hasText: "drawn on a different map" }).count();
+  const badge = await page.locator("#r-tree .rrow .badge.warn", { hasText: "different map" }).count();
   check("regions still on the old map keep the 'drawn on a different map' badge", badge >= Object.keys(before).length, `${badge} badges`);
   await page.click("#tab-btn-maps");
   await page.waitForTimeout(500);

@@ -46,7 +46,7 @@ export function refreshBoxes(root: ParentNode, sel: Selection): void {
       box.setAttribute("aria-checked", box.indeterminate ? "mixed" : String(box.checked));
     } else if (box.dataset.id) {
       box.checked = sel.has(box.dataset.id);
-      box.closest(".rcard, .pn-item")?.classList.toggle("selected", box.checked);
+      box.closest(".rrow, .rcard, .pn-item")?.classList.toggle("selected", box.checked);
     }
   }
 }

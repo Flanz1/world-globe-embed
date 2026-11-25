@@ -18,6 +18,7 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { makeFixture } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
+import { tickRegion } from "./regions-ui.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 import { port } from "./ports.mjs";
 
@@ -70,13 +71,13 @@ async function adminPage(as) {
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && !/^Failed to load resource/.test(m.text()) && errors.push(m.text()));
   await page.goto(`${SITE}/admin/#regions`);
-  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await page.waitForSelector("#regions .rrow", { timeout: 15000 });
   return { ctx, page, errors };
 }
 
 const A = "landmark-disc";
 const B = "dateline-box";
-const tick = (page, id) => page.locator(`#regions .rcard[data-region="${id}"] input.bulk-box`).check();
+const tick = (page, id) => tickRegion(page, id);
 const cats = () => onBranch("content/categories.json")?.categories ?? [];
 
 try {
@@ -123,7 +124,7 @@ try {
   await page.click('dialog [data-action="confirm-bulk-delete"]');
   await waitCommit(page, n);
   check("deleting both is one commit", mock.log.length === n + 1 && !onBranch(`content/regions/${A}.json`) && !onBranch(`content/regions/${B}.json`), mock.log.slice(n).map((c) => c.message).join(","));
-  check("the cards are gone and the selection is empty", (await page.locator(`#regions .rcard[data-region="${A}"]`).count()) === 0 && (await page.locator(".bulk-bar:not([hidden]) .bulk-count").textContent()) !== "2 selected");
+  check("the cards are gone and the selection is empty", (await page.locator(`#regions .rrow[data-region="${A}"]`).count()) === 0 && (await page.locator(".bulk-bar:not([hidden]) .bulk-count").textContent()) !== "2 selected");
 
   await page.click("#r-trash");
   await page.waitForSelector("dialog .hist-list li", { timeout: 15000 });

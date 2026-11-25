@@ -27,6 +27,7 @@ import { geometryBounds } from "../../src/shared/geo.ts";
 import { flatFit } from "../../src/shared/region.ts";
 
 import { port } from "./ports.mjs";
+import { pickRegion } from "./regions-ui.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 const sharp = require("sharp");
@@ -146,7 +147,8 @@ const undo = async () => (await page.keyboard.press("Control+z"), await page.wai
 
 await step(A, "open the editor", async () => {
   await page.goto(`${SITE}/admin/#regions`);
-  await page.waitForSelector('#regions .rcard[data-region="snap-test"]', { timeout: 15000 });
+  await page.waitForSelector('#regions .rrow[data-region="snap-test"]', { timeout: 15000 });
+  await pickRegion(page, "snap-test");
   await page.locator('[data-region="snap-test"] [data-action="edit"]').click();
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(600);

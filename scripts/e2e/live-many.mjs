@@ -19,6 +19,7 @@ import { SLOT, MAP, makeFixture } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 import { port } from "./ports.mjs";
+import { pickRegion } from "./regions-ui.mjs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
@@ -96,7 +97,7 @@ async function saveAll(commits) {
 }
 async function openTogether(picked, link) {
   await page.goto(`${SITE}/admin/#regions`);
-  await page.waitForSelector(`#regions .rcard[data-region="${ids[0]}"]`, { timeout: 20000 });
+  await page.waitForSelector(`#regions .rrow[data-region="${ids[0]}"]`, { timeout: 20000 });
   await page.click("#r-combine");
   await page.waitForSelector("dialog.combine-dlg[open]");
   for (const id of picked) await page.check(`dialog.combine-dlg input[value="${id}"]`);
@@ -135,7 +136,7 @@ await step(E, "linked region over 20 regions", async () => {
   let c = await saveAll(1);
   check(E, "a new linked region is written on its own", c.length === 1 && c[0].changes.length === 1 && read("many-link")?.properties.linked.length === 20, JSON.stringify(c.map((x) => x.changes.map((y) => y.path))));
   await page.click("dialog.editor .pv-head button.ghost");
-  await page.waitForSelector('#regions .rcard[data-region="many-link"] [data-action="edit"]', { timeout: 20000 });
+  await pickRegion(page, "many-link");
   await page.click('#regions .rcard[data-region="many-link"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(1200);

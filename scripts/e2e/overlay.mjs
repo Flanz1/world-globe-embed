@@ -21,6 +21,7 @@ import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 
 import { port } from "./ports.mjs";
+import { pickRegion } from "./regions-ui.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
@@ -136,7 +137,8 @@ async function outlinePixels(lon) {
 const open = async () => {
   await page.goto("about:blank");
   await page.goto(`${SITE}/admin/#regions`);
-  await page.waitForSelector('#regions .rcard[data-region="ov-edit"]', { timeout: 15000 });
+  await page.waitForSelector('#regions .rrow[data-region="ov-edit"]', { timeout: 15000 });
+  await pickRegion(page, "ov-edit");
   await page.locator('[data-region="ov-edit"] [data-action="edit"]').click();
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(600);

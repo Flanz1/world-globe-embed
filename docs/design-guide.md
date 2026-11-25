@@ -59,8 +59,10 @@ Region, part, colour folder, pin, pin map, folder / subfolder, slot, map, embed 
 *Recently deleted*, *Save to slot*, *Collapse all* / *Expand all*.
 
 ## Folder trees
-Full width below the map or form, collapsible folders with an arrow and a count badge, *Collapse all* above the tree
-(#121, #123, #124). Folder actions sit in the folder head on one line (as above). Regions and pins use the same tree.
+Collapsible folders with an arrow and a count, *Collapse all* above the tree (#121, #123, #124). Regions: a list +
+inspector. Rows are compact (swatch, name, badges, part count); picking a folder or a region shows its actions (and the
+region card) in the inspector beside the list, a bottom sheet at 860 px and below (Close and Esc close it). Folder
+actions sit in the inspector as a two-column grid, Delete last. Pins get the same layout next.
 
 ## Touch
 On `(pointer: coarse)` every control has a 44 px hit area (admin, editor, embed). The editor toolbar uses 40 px.

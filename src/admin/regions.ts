@@ -229,19 +229,12 @@ function card(e: RegionEntry): HTMLElement {
   const differs = !!slot && slot.map !== p.map;
   const swatch = h("span", { className: "swatch", ariaHidden: "true" });
   swatch.style.backgroundColor = safeColor(p.color);
-  const btn = (text: string, onclick: () => void, cls = "ghost", why = "") =>
-    h("button", { type: "button", className: cls, textContent: text, onclick, disabled: !!why, title: why, dataset: { action: text.toLowerCase().replace(/\W+/g, "-") } });
-  const someoneElse = ownerOf(f) !== currentUser()?.id;
+  const btn = regionBtn;
   const linked = p.linked ?? null;
-  const linkBlock = linked ? linkProblem(e) : "";
-  const noEdit = linkBlock ? linkBlock : canEdit(f) ? "" : someoneElse ? `${creatorName(e)} created this region, and you can't edit other people's regions.` : "You don't have permission to edit regions.";
-  const noDelete = canDelete(f) ? "" : someoneElse ? `${creatorName(e)} created this region, and you can't delete other people's regions.` : "You don't have permission to delete regions.";
-  const noRename = linkedNoRename(e, f);
-  const noCreate = can("regions") ? "" : "You don't have permission to create regions.";
+  const { noEdit, noDelete } = regionWhy(e, f);
   return h(
     "div",
-    { className: `rcard${sel.on ? " selectable" : ""}${sel.on && sel.has(e.id) ? " selected" : ""}`, dataset: { region: e.id }, draggable: !sel.on && can("regions") && !!categories().categories.length, title: "" },
-    sel.on ? cardBox(sel, e.id, domOrder, refreshSelection) : null,
+    { className: "rcard", dataset: { region: e.id }, title: "" },
     thumbnail(f, map),
     h(
       "div",
@@ -277,24 +270,54 @@ function card(e: RegionEntry): HTMLElement {
     h(
       "div",
       { className: "actions" },
-      canEdit(f) || !can("regions") || linked ? btn("Edit", () => edit(e), "tonal", noEdit) : null,
-      !canEdit(f) && !linked && can("regions") ? btn("Suggest changes", () => suggest(e), "tonal", "") : null,
+      ...editButtons(e, f, noEdit, btn),
       !canEdit(f) || !openCountFor(e.id) || linked ? null : h("button", { type: "button", className: "text small", textContent: `${openCountFor(e.id)} comment${openCountFor(e.id) > 1 ? "s" : ""}`, title: "Open the editor on the comments", dataset: { action: "comments", region: e.id }, onclick: () => edit(e, true) }),
       !canEdit(f) || !pendingFor(e.id) ? null : h("span", { className: "badge warn", textContent: `${pendingFor(e.id)} suggestion${pendingFor(e.id) > 1 ? "s" : ""}`, title: "Waiting in the list above the regions" }),
       btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot, p.pinMaps, p.pinLegends)),
       h("button", { type: "button", className: "ghost", textContent: "Embed code…", title: "Choose what to show and copy the embed code", dataset: { action: "embed" }, onclick: () => openEmbedDialog({ region: { id: e.id, name: e.id, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot }) }),
-      moreMenu(`More actions for ${e.id}`, [
-        // Editors who can edit it themselves can still send a suggestion for somebody else to accept (same name as everywhere).
-        canEdit(f) && can("regions") && !linked ? item("Suggest changes", () => suggest(e), "", "Draw changes and send them for somebody else to accept or decline") : null,
-        item("Rename…", () => changeId(e), noRename, "Change the id that embed links use"),
-        item("Duplicate", () => duplicate(e), noCreate),
-        item("History", () => openHistory({ gh: deps.gh(), id: e.id, path: e.path, feature: f, map, noRestore: noEdit, act: deps.act }), linked ? "A linked region has no history of its own: open the regions it combines." : ""),
-        canTransfer() ? item("Transfer", () => transfer(e, f), "") : null,
-        item("Delete", () => del(e), noDelete, "", true),
-      ], { data: { region: e.id } }),
+      regionMore(e, f, map, noEdit, noDelete),
     ),
   );
 }
+
+type Btn = (text: string, onclick: () => void, cls?: string, why?: string) => HTMLButtonElement;
+
+/** Edit (or Suggest changes, for people who may not edit it): on the region's card and in its folder's list. */
+function editButtons(e: RegionEntry, f: RegionFeature, noEdit: string, btn: Btn): (HTMLElement | null)[] {
+  const linked = !!f.properties.linked;
+  return [
+    canEdit(f) || !can("regions") || linked ? btn("Edit", () => edit(e), "tonal", noEdit) : null,
+    !canEdit(f) && !linked && can("regions") ? btn("Suggest changes", () => suggest(e), "tonal", "") : null,
+  ];
+}
+
+/** Why someone may not edit / delete this region ("" when they may). */
+function regionWhy(e: RegionEntry, f: RegionFeature): { noEdit: string; noDelete: string } {
+  const someoneElse = ownerOf(f) !== currentUser()?.id;
+  const linkBlock = f.properties.linked ? linkProblem(e) : "";
+  return {
+    noEdit: linkBlock ? linkBlock : canEdit(f) ? "" : someoneElse ? `${creatorName(e)} created this region, and you can't edit other people's regions.` : "You don't have permission to edit regions.",
+    noDelete: canDelete(f) ? "" : someoneElse ? `${creatorName(e)} created this region, and you can't delete other people's regions.` : "You don't have permission to delete regions.",
+  };
+}
+
+/** The region's More… menu (the same on its card and in its folder's list). */
+function regionMore(e: RegionEntry, f: RegionFeature, map: MapMeta | undefined, noEdit: string, noDelete: string): HTMLElement {
+  const linked = f.properties.linked ?? null;
+  const noCreate = can("regions") ? "" : "You don't have permission to create regions.";
+  return moreMenu(`More actions for ${e.id}`, [
+    // Editors who can edit it themselves can still send a suggestion for somebody else to accept (same name as everywhere).
+    canEdit(f) && can("regions") && !linked ? item("Suggest changes", () => suggest(e), "", "Draw changes and send them for somebody else to accept or decline") : null,
+    item("Rename…", () => changeId(e), linkedNoRename(e, f), "Change the id that embed links use"),
+    item("Duplicate", () => duplicate(e), noCreate),
+    item("History", () => openHistory({ gh: deps.gh(), id: e.id, path: e.path, feature: f, map, noRestore: noEdit, act: deps.act }), linked ? "A linked region has no history of its own: open the regions it combines." : ""),
+    canTransfer() ? item("Transfer", () => transfer(e, f), "") : null,
+    item("Delete", () => del(e), noDelete, "", true),
+  ], { data: { region: e.id } });
+}
+
+const regionBtn: Btn = (text, onclick, cls = "ghost", why = "") =>
+  h("button", { type: "button", className: cls, textContent: text, onclick, disabled: !!why, title: why, dataset: { action: text.toLowerCase().replace(/\W+/g, "-") } });
 
 export const item = (text: string, onclick: () => void, why = "", hint = "", danger = false): MoreItem => ({ text, onclick, why, hint, danger });
 
@@ -471,36 +494,96 @@ function pinnable(el: HTMLElement, e: RegionEntry, k: Category, ordered: readonl
   return el;
 }
 
-/** A subtree of folders: a header (open/close, name, count, and the buttons for whoever may change it) over its region cards and the folders inside it. */
+/* ── The list (a tree of folders and region rows) and the inspector beside it ── */
+
+/** What the inspector shows: a region, a folder (UNCATEGORIZED for regions in no folder), or nothing. */
+let picked: { kind: "region" | "folder"; id: string } | null = null;
+/** Per folder on screen: what its inspector needs (rebuilt with the list). */
+const folderInfo = new Map<string, { k: Category | null; title: string; members: RegionEntry[]; subs: number; total: number; pos: { first: boolean; last: boolean } }>();
+
+/** Shows a region or folder in the inspector (null closes it; on phones that closes the sheet). */
+export function pick(next: typeof picked, focus = false): void {
+  picked = next;
+  renderRegions();
+  // On phones and tablets the inspector is a sheet over the list: move focus into it. On desktop it sits beside the list.
+  if (focus && window.matchMedia("(max-width: 860px)").matches) $("#r-inspector").querySelector<HTMLElement>(".r-insp-title")?.focus();
+}
+
+const SVGNS = "http://www.w3.org/2000/svg";
+function folderIcon(): SVGSVGElement {
+  const svg = document.createElementNS(SVGNS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "r-ficon");
+  const path = document.createElementNS(SVGNS, "path");
+  path.setAttribute("d", "M3 6.5A1.5 1.5 0 014.5 5H9l2 2h8.5A1.5 1.5 0 0121 8.5v9a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 17.5z");
+  svg.append(path);
+  return svg;
+}
+
+const partsText = (e: RegionEntry): string => {
+  if (!e.feature) return "can't be read";
+  const n = polygonsOf(e.feature.geometry).length;
+  return `${n} part${n === 1 ? "" : "s"}`;
+};
+
+/** One region in the list: swatch, name, parts. Picking it shows its card in the inspector; while selecting it ticks it. */
+function row(e: RegionEntry, k: Category | null): HTMLElement {
+  const on = picked?.kind === "region" && picked.id === e.id;
+  const swatch = h("span", { className: "swatch", ariaHidden: "true" });
+  swatch.style.backgroundColor = e.feature ? safeColor(e.feature.properties.color) : "transparent";
+  const pinnedHere = !!k?.pinned?.includes(e.id);
+  const el = h(
+    "div",
+    {
+      className: `rrow${e.feature ? "" : " broken"}${sel.on && sel.has(e.id) ? " selected" : ""}${on ? " picked" : ""}`,
+      dataset: { region: e.id, creator: creatorName(e) },
+      draggable: !sel.on && !!e.feature && can("regions") && !!categories().categories.length,
+    },
+    sel.on && e.feature ? cardBox(sel, e.id, domOrder, refreshSelection, "rrow-sel") : null,
+    h(
+      "button",
+      { type: "button", className: "rrow-pick", ariaPressed: String(on), dataset: { pick: e.id }, title: sel.on ? "Tick or untick this region" : "Show this region's details and actions" },
+      swatch,
+      h("span", { className: "rrow-name", textContent: e.id }),
+      pinnedHere ? h("span", { className: "badge rrow-pin", title: "Pinned to the top of this folder", textContent: "pinned" }) : null,
+      e.problem || !e.feature ? h("span", { className: "badge error", textContent: e.feature ? "invalid shape" : "can't be read" }) : null,
+      rowSlotBadge(e),
+      e.feature && canEdit(e.feature) && pendingFor(e.id) ? h("span", { className: "badge warn", textContent: `${pendingFor(e.id)} suggestion${pendingFor(e.id) > 1 ? "s" : ""}` }) : null,
+      h("span", { className: "rrow-meta", textContent: e.feature ? partsText(e) : "" }),
+    ),
+  );
+  return el;
+}
+
+/** A row's short warning when the slot's map changed under the region or the slot is gone (the card says more). */
+function rowSlotBadge(e: RegionEntry): HTMLElement | null {
+  const p = e.feature?.properties;
+  if (!p) return null;
+  const slot = deps.slots().slots[p.slot];
+  if (!slot) return h("span", { className: "badge error", textContent: "slot missing", title: `Slot "${p.slot}" doesn't exist any more.` });
+  if (slot.map === p.map) return null;
+  return h("span", { className: "badge warn", textContent: "different map", title: `Drawn on "${p.map}"; the slot now shows "${slot.map}".` });
+}
+
+/** A folder in the list: open/close arrow, then its name (picking it shows its actions in the inspector) and count. */
 function folder(id: string, title: string, members: RegionEntry[], k: Category | null, pos: { first: boolean; last: boolean }, forceOpen: boolean, inner: HTMLElement[] = [], total = members.length): HTMLElement {
   const el = h("section", { className: "rfolder", dataset: { category: id } });
   const edit = !!k && canAddCategory();
-  const small = (text: string, action: string, onclick: () => void, why = "", cls = "ghost") =>
-    h("button", { type: "button", className: cls, textContent: text, onclick, disabled: !!why, title: why, dataset: { action } });
-  const noEdit = k && !edit ? "You don't have permission to change folders." : "";
+  const on = picked?.kind === "folder" && picked.id === id;
+  folderInfo.set(id, { k, title, members, subs: inner.length, total, pos });
   const head = h(
     "div",
-    { className: "rfolder-head", draggable: edit && !sel.on },
+    { className: `rfolder-head${on ? " picked" : ""}`, draggable: edit && !sel.on },
     sel.on ? groupBox(sel, members.filter((m) => m.feature).map((m) => m.id), `Select all regions in ${title}`, refreshSelection) : null,
+    h("button", { type: "button", className: "rfolder-toggle", onclick: () => toggleFolder(id, el), ariaExpanded: "true", ariaLabel: `Open or close ${title}`, title: "Open or close this folder" }, h("span", { className: "rfolder-arrow", ariaHidden: "true", textContent: "▾" })),
     h(
       "button",
-      { type: "button", className: "rfolder-toggle ghost", onclick: () => toggleFolder(id, el), ariaExpanded: "true", title: "Open or close this folder" },
-      h("span", { className: "rfolder-arrow", ariaHidden: "true", textContent: "▾" }),
-      h("strong", { className: "rfolder-name", textContent: title }),
-      h("span", { className: "badge", textContent: String(total), title: `${total} region${total === 1 ? "" : "s"}` }),
+      { type: "button", className: "rfolder-pick", ariaPressed: String(on), dataset: { pickFolder: id }, title: "Show this folder's actions", onclick: () => pick(on ? null : { kind: "folder", id }, !on) },
+      folderIcon(),
+      h("span", { className: "rfolder-name", textContent: title }),
+      h("span", { className: "rcount", textContent: String(total), title: `${total} region${total === 1 ? "" : "s"}` }),
     ),
-    k
-      ? h(
-          "div",
-          { className: "actions" },
-          small("+ Subfolder", "subfolder", () => newCategory(k.id), canAddCategory() ? "" : "You don't have permission to create folders.", "ghost"),
-          small("↑", "up", () => void shiftCategory(k, -1), pos.first ? "Already first" : can_reorder() ? "" : "You don't have permission to reorder folders."),
-          small("↓", "down", () => void shiftCategory(k, 1), pos.last ? "Already last" : can_reorder() ? "" : "You don't have permission to reorder folders."),
-          small("Move", "move", () => moveFolder(k), noEdit),
-          small("Rename", "rename", () => renameCategory(k), noEdit),
-          small("Delete", "delete", () => void removeCategory(k), noEdit, "ghost danger"),
-        )
-      : null,
   );
   if (k) {
     head.addEventListener("dragstart", (ev) => {
@@ -513,9 +596,104 @@ function folder(id: string, title: string, members: RegionEntry[], k: Category |
   dropTarget(head, k ? id : null);
   const empty = !members.length && !inner.length;
   const ordered = k ? pinFirst(k, members) : members;
-  el.append(head, h("div", { className: "rfolder-body" }, ...ordered.map((e) => (k ? pinnable(card(e), e, k, ordered) : card(e))), ...inner, ...(empty ? [h("p", { className: "muted small", textContent: k ? "This folder is empty. Drag a region here, or use a region's Folder menu." : "" })] : [])));
+  el.append(head, h("div", { className: "rfolder-body" }, ...ordered.map((e) => row(e, k)), ...inner, ...(empty ? [h("p", { className: "muted small rfolder-empty", textContent: k ? "Empty. Drag a region here, or use a region's Folder menu." : "" })] : [])));
   setFolderOpen(el, forceOpen || !collapsed.has(id));
   return el;
+}
+
+/** The inspector's top line: icon or swatch, the name as a heading, a count, and (on phones and tablets) Close. */
+function inspHead(lead: Element | null, title: string, count: string | null): HTMLElement {
+  return h(
+    "div",
+    { className: "r-insp-head" },
+    lead,
+    h("h3", { className: "r-insp-title", tabIndex: -1, textContent: title }),
+    count ? h("span", { className: "rcount", textContent: count }) : null,
+    h("button", { type: "button", className: "text r-insp-close", textContent: "Close", ariaLabel: "Close the details", onclick: () => pick(null) }),
+  );
+}
+
+/** A folder's actions and the regions directly in it. */
+function folderInspector(id: string): HTMLElement | null {
+  const f = folderInfo.get(id);
+  if (!f) return null;
+  const { k, title, members, subs, total, pos } = f;
+  const noEdit = k && !canAddCategory() ? "You don't have permission to change folders." : "";
+  const noOrder = can_reorder() ? "" : "You don't have permission to reorder folders.";
+  const act = (text: string, action: string, onclick: () => void, why = "", cls = "ghost") =>
+    h("button", { type: "button", className: cls, textContent: text, onclick, disabled: !!why, title: why, dataset: { action } });
+  const path = k ? pathName(categories(), k.id) : title;
+  const summary = `${path === title ? "" : `${path.replace(/ › [^›]*$/, "")} › ${title} · `}${total} region${total === 1 ? "" : "s"}${subs ? `, ${subs} subfolder${subs === 1 ? "" : "s"}` : k ? ", no subfolders" : ""}`;
+  const rows = (k ? pinFirst(k, members) : members).map((e) => {
+    const sw = h("span", { className: "swatch", ariaHidden: "true" });
+    sw.style.backgroundColor = e.feature ? safeColor(e.feature.properties.color) : "transparent";
+    const slot = e.feature ? deps.slots().slots[e.feature.properties.slot] : undefined;
+    const map = e.feature ? deps.maps().find((m) => m.id === (slot?.map ?? e.feature!.properties.map)) : undefined;
+    const why = e.feature ? regionWhy(e, e.feature) : null;
+    return h(
+      "div",
+      { className: "r-mini", dataset: { mini: e.id } },
+      h("button", { type: "button", className: "r-mini-name", title: "Show this region's details", onclick: () => pick({ kind: "region", id: e.id }, true) }, sw, h("span", { textContent: e.id })),
+      ...(e.feature && why ? [...editButtons(e, e.feature, why.noEdit, regionBtn), regionMore(e, e.feature, map, why.noEdit, why.noDelete)] : [h("span", { className: "badge error", textContent: "can't be read" })]),
+    );
+  });
+  return h(
+    "div",
+    { className: "r-insp-body", dataset: { inspFolder: id } },
+    inspHead(folderIcon(), title, String(total)),
+    h("p", { className: "muted small r-insp-sub", textContent: summary }),
+    k
+      ? h(
+          "div",
+          { className: "r-insp-actions" },
+          act("+ Subfolder", "subfolder", () => newCategory(k.id), canAddCategory() ? "" : "You don't have permission to create folders.", "tonal"),
+          act("Rename", "rename", () => renameCategory(k), noEdit),
+          act("↑ Move up", "up", () => void shiftCategory(k, -1), pos.first ? "Already first" : noOrder),
+          act("↓ Move down", "down", () => void shiftCategory(k, 1), pos.last ? "Already last" : noOrder),
+          act("Move to…", "move", () => moveFolder(k), noEdit),
+          act("Delete", "delete", () => void removeCategory(k), noEdit, "ghost danger"),
+        )
+      : h("p", { className: "muted small", textContent: "Regions that aren't in a folder. Move them into one with a region's Folder menu, or by dragging." }),
+    members.length ? h("h4", { className: "r-insp-h", textContent: k ? "Regions in this folder" : "Regions" }) : null,
+    ...rows,
+  );
+}
+
+/** A region's card (thumbnail, details and every action) in the inspector. */
+function regionInspector(id: string): HTMLElement | null {
+  const e = entries.find((x) => x.id === id);
+  if (!e) return null;
+  const home = placements(categories()).get(e.id);
+  const k = categories().categories.find((x) => x.id === home) ?? null;
+  const c = card(e);
+  if (k && e.feature) {
+    const members = entries.filter((x) => placements(categories()).get(x.id) === k.id);
+    pinnable(c, e, k, pinFirst(k, members));
+  }
+  // Actions first, right under the title: the thumbnail and the long details come after them. The pin/move buttons
+  // stay on the thumbnail's corner.
+  const thumb = c.querySelector<HTMLElement>(":scope > .rthumb");
+  if (thumb) {
+    const wrap = h("div", { className: "r-insp-thumb" });
+    thumb.replaceWith(wrap);
+    wrap.append(thumb);
+    const bar = c.querySelector(":scope > .rpin-bar");
+    if (bar) wrap.append(bar);
+  }
+  const acts = c.querySelector(":scope > .actions");
+  if (acts) c.prepend(acts);
+  const sw = h("span", { className: "swatch", ariaHidden: "true" });
+  sw.style.backgroundColor = e.feature ? safeColor(e.feature.properties.color) : "transparent";
+  return h("div", { className: "r-insp-body", dataset: { inspRegion: id } }, inspHead(sw, e.id, null), h("p", { className: "muted small r-insp-sub", textContent: `${k ? `${pathName(categories(), k.id)} · ` : ""}${partsText(e)}` }), c);
+}
+
+function renderInspector(): void {
+  const box = $("#r-inspector");
+  const body = !picked ? null : picked.kind === "folder" ? folderInspector(picked.id) : regionInspector(picked.id);
+  // The picked thing is gone (deleted, or filtered out of the list): nothing to show.
+  if (picked && !body) picked = null;
+  box.replaceChildren(body ?? h("p", { className: "muted r-insp-empty", textContent: entries.length ? "Pick a folder or region to see its actions." : "" }));
+  box.classList.toggle("open", !!body);
 }
 const can_reorder = () => canAddCategory();
 
@@ -620,9 +798,10 @@ export function renderRegions(): void {
   $<HTMLButtonElement>("#r-new-category").disabled = !canAddCategory();
   $<HTMLButtonElement>("#r-new-category").title = canAddCategory() ? "Add a folder to sort regions into" : "You don't have permission to create folders.";
   const filtering = !!(q || slot || whoId != null);
+  folderInfo.clear();
   let out: HTMLElement[];
   if (entries.length && !shown.length) out = [h("p", { className: "muted", textContent: "No regions match." })];
-  else if (!cats.length) out = shown.map(card);
+  else if (!cats.length) out = shown.map((e) => row(e, null));
   else {
     // Folders in their saved order (each with the folders inside it), then whatever isn't in one. Regions whose folder is gone count as uncategorized.
     const home = placements(categories());
@@ -644,8 +823,44 @@ export function renderRegions(): void {
     const rest = shown.filter((e) => !known.has(home.get(e.id) ?? ""));
     if (rest.length) out.push(folder(UNCATEGORIZED, "Uncategorized", rest, null, { first: true, last: true }, filtering));
   }
-  $("#regions").replaceChildren(...out);
+  $("#r-tree").replaceChildren(...out);
+  const nFolders = folderInfo.size - (folderInfo.has(UNCATEGORIZED) ? 1 : 0);
+  $("#r-summary").textContent = !entries.length
+    ? ""
+    : `${shown.length === entries.length ? "" : `${shown.length} of `}${entries.length} region${entries.length === 1 ? "" : "s"}${cats.length ? ` in ${cats.length} folder${cats.length === 1 ? "" : "s"}` : ""} · pick ${nFolders ? "a folder or region" : "a region"} to see its actions`;
+  const coll = $<HTMLButtonElement>("#r-collapse");
+  coll.hidden = !cats.length;
+  coll.textContent = cats.length && cats.every((k) => collapsed.has(k.id)) ? "Expand all" : "Collapse all";
+  $("#r-split").hidden = !entries.length;
+  // Phones: the toolbar keeps New region and + Folder; the rest go in More….
+  const click = (sel: string) => () => $<HTMLButtonElement>(sel).click();
+  $("#r-more").replaceChildren(
+    moreMenu("More region actions", [
+      item($("#r-select").getAttribute("aria-pressed") === "true" ? "Stop selecting" : "Select regions", click("#r-select"), entries.length ? "" : "There are no regions yet."),
+      item("Combine regions…", click("#r-combine"), $<HTMLButtonElement>("#r-combine").disabled ? "You don't have permission to create regions." : entries.length ? "" : "There are no regions yet."),
+      item("Recently deleted…", click("#r-trash")),
+    ]),
+  );
+  renderInspector();
   bar?.update();
+}
+
+/** Collapse all / Expand all (remembered like the folders' own arrows). */
+function collapseAll(): void {
+  const cats = categories().categories;
+  const shut = !cats.every((k) => collapsed.has(k.id));
+  for (const k of cats) {
+    if (shut) collapsed.add(k.id);
+    else collapsed.delete(k.id);
+  }
+  if (shut) collapsed.add(UNCATEGORIZED);
+  else collapsed.delete(UNCATEGORIZED);
+  try {
+    localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed]));
+  } catch {
+    /* remembering is a convenience */
+  }
+  renderRegions();
 }
 
 /** What the search, creator filter and sorting see of a region (shared with the editor's overlay panel). */
@@ -689,7 +904,8 @@ export function openRegionById(id: string): boolean {
   if (e.feature && canEdit(e.feature)) edit(e);
   else {
     location.hash = "#regions";
-    document.querySelector(`[data-region="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "center" });
+    pick({ kind: "region", id });
+    document.querySelector(`#r-tree [data-region="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "center" });
   }
   return true;
 }
@@ -891,6 +1107,8 @@ function changeId(e: RegionEntry): void {
         /* no folders file, or it couldn't be updated: the region just shows as uncategorized */
       }
       renamedNotes.set(id, `Renamed from ${oldId}: update embeds that use the old id (v/${f.properties.slot}/?region=${oldId}).`);
+      // The inspector follows the region to its new id.
+      if (picked?.kind === "region" && picked.id === oldId) picked = { kind: "region", id };
       return last;
     });
   });
@@ -1274,7 +1492,7 @@ const refreshSelection = (): void => {
   bar?.update();
 };
 /** The ids of the region cards on screen, top to bottom (for "select all shown" and shift+click ranges). */
-const domOrder = (): string[] => [...document.querySelectorAll<HTMLElement>("#regions .rcard[data-region]:not(.broken)")].map((c) => c.dataset.region ?? "");
+const domOrder = (): string[] => [...document.querySelectorAll<HTMLElement>("#r-tree .rrow[data-region]:not(.broken)")].map((c) => c.dataset.region ?? "");
 const byIds = (ids: string[]): RegionEntry[] => ids.map((id) => entries.find((x) => x.id === id)).filter((e): e is RegionEntry => !!e?.feature);
 const perCommit = (): number => regionsPerCommit(!!currentUser()?.owner);
 const plural = (n: number, what: string) => `${n} ${what}${n === 1 ? "" : "s"}`;
@@ -1432,14 +1650,26 @@ export function initRegions(d: RegionsDeps): void {
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && sel.on && !document.querySelector("dialog[open]") && !ev.defaultPrevented) setSelecting(false);
   });
-  // Clicking a card (not one of its buttons) ticks it while selecting.
-  $("#regions").addEventListener("click", (ev) => {
-    if (!sel.on) return;
+  // A region row: while selecting, a click ticks it; otherwise it shows the region in the inspector (a second click closes it).
+  $("#r-tree").addEventListener("click", (ev) => {
     const t = ev.target as HTMLElement;
-    const c = t.closest<HTMLElement>(".rcard[data-region]:not(.broken)");
-    if (!c || t.closest("button, a, input, select, label, summary, [popover], textarea")) return;
-    sel.toggle(c.dataset.region ?? "");
-    refreshSelection();
+    const c = t.closest<HTMLElement>(".rrow[data-region]");
+    if (!c || t.closest("input, select, label, a, [popover]")) return;
+    const id = c.dataset.region ?? "";
+    if (sel.on) {
+      if (c.classList.contains("broken")) return;
+      sel.toggle(id);
+      refreshSelection();
+      return;
+    }
+    const on = picked?.kind === "region" && picked.id === id;
+    pick(on ? null : { kind: "region", id }, !on);
+  });
+  $("#r-collapse").addEventListener("click", collapseAll);
+  // Escape closes the inspector sheet (phones and tablets) when nothing else is open.
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || ev.defaultPrevented || sel.on || !picked || document.querySelector("dialog[open], [popover]:popover-open") || $("#tab-regions").hidden) return;
+    if (window.matchMedia("(max-width: 860px)").matches) pick(null);
   });
   initSuggestions({ gh: d.gh, review: (s) => void reviewSuggestion(s).catch((e: Error) => alertBox("Couldn't open the suggestion", e.message)) });
   ui.search().addEventListener("input", renderRegions);
@@ -1449,10 +1679,10 @@ export function initRegions(d: RegionsDeps): void {
   $("#r-combine").addEventListener("click", openCombine);
   $("#r-new-category").addEventListener("click", () => newCategory());
   $("#r-trash").addEventListener("click", () => openTrash({ gh: d.gh(), act: d.act }));
-  // Region cards can be dragged onto a folder (one listener for all cards: the list is rebuilt on every change).
-  const list = $("#regions");
+  // Region rows can be dragged onto a folder (one listener for all rows: the list is rebuilt on every change).
+  const list = $("#r-tree");
   list.addEventListener("dragstart", (ev) => {
-    const card = (ev.target as HTMLElement).closest<HTMLElement>(".rcard[draggable='true']");
+    const card = (ev.target as HTMLElement).closest<HTMLElement>(".rrow[draggable='true']");
     if (!card || !card.dataset.region) return;
     dragging = { kind: "region", id: card.dataset.region };
     ev.dataTransfer?.setData("text/plain", `region:${card.dataset.region}`);

@@ -22,6 +22,7 @@ import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 
 import { port } from "./ports.mjs";
+import { pickRegion } from "./regions-ui.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
@@ -87,7 +88,8 @@ async function fresh() {
 }
 async function openRegion(id) {
   await fresh();
-  await page.waitForSelector(`#regions .rcard[data-region="${id}"]`, { timeout: 15000 });
+  await page.waitForSelector(`#regions .rrow[data-region="${id}"]`, { timeout: 15000 });
+  await pickRegion(page, `${id}`);
   await page.locator(`[data-region="${id}"] [data-action="edit"]`).click();
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(700);

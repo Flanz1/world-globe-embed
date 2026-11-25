@@ -973,3 +973,95 @@ dialog.legend-dlg .dlg-foot .grow { flex: 1 1 auto; }
 .ed-pinrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ed-pinrow .lg-open { flex: 0 0 auto; background-color: transparent; border-color: transparent; color: var(--md-sys-color-primary); }
 dialog.legend-dlg::backdrop { background: rgba(0, 0, 0, .45); }
+
+/* ── Regions: list + inspector ── (folders and region rows on the left, the picked one's details and actions on the right;
+   at 860 px and below the inspector is a sheet over the bottom of the screen). Pins keep their own tree for now. */
+.r-h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.r-narrow { display: none; }
+.regions { margin-top: 4px; }
+.r-listhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; }
+.r-listhead p { margin: 0; }
+.r-listhead button { min-height: 32px; font-size: 13px; }
+.r-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); gap: 16px; align-items: start; margin-top: 8px; }
+.r-split[hidden] { display: none; }
+.r-tree { display: grid; gap: 2px; align-content: start; padding: 8px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 16px; min-width: 0; }
+.r-tree .rfolder { border: 0; border-radius: 0; padding: 0; }
+.r-tree .rfolder-head { flex-wrap: nowrap; justify-content: flex-start; gap: 0; min-height: 40px; padding: 0 8px 0 0; border-radius: 12px; }
+.r-tree .rfolder-head.picked, .r-tree .rrow.picked { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+.r-tree .rfolder-body { gap: 2px; margin: 2px 0 0 20px; }
+.r-tree .rfolder-body > .rfolder { margin-left: 0; }
+.r-tree .rfolder-empty { margin: 4px 12px 8px; }
+button.rfolder-toggle { flex: 0 0 auto; width: 32px; min-height: 40px; padding: 0; justify-content: center; background: transparent; border: 0; color: var(--md-sys-color-on-surface-variant); }
+button.rfolder-pick, button.rrow-pick { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; min-height: 40px; padding: 0 4px; border: 0; border-radius: 12px; background: transparent; color: inherit; font-weight: 400; font-size: 15px; text-align: left; }
+button.rfolder-pick:focus-visible, button.rrow-pick:focus-visible { outline-offset: -2px; }
+.rfolder-name, .rrow-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r-ficon { flex: 0 0 auto; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+.rcount, .rrow-meta { margin-left: auto; flex: 0 0 auto; font-size: 12px; color: var(--md-sys-color-on-surface-variant); font-variant-numeric: tabular-nums; }
+.picked .rcount, .picked .rrow-meta { color: inherit; }
+.rrow { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 8px 0 32px; border-radius: 12px; }
+.r-tree > .rrow { padding-left: 8px; }
+.rrow .swatch, .r-mini .swatch { flex: 0 0 auto; width: 14px; height: 14px; margin: 0; border-radius: 3px; }
+.rrow-pin { flex: 0 0 auto; margin-left: 2px; }
+.rrow .badge { flex: 0 0 auto; }
+.rrow.selected { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+.rrow[draggable="true"] { cursor: grab; }
+.rrow-sel { display: grid; place-items: center; flex: 0 0 auto; width: 28px; height: 40px; margin-left: -24px; cursor: pointer; }
+.rrow-sel .bulk-box { margin: 0; }
+.r-tree > .rrow > .rrow-sel { margin-left: 0; }
+.r-tree .rfolder-head > .bulk-box { margin: 0 4px 0 6px; }
+
+/* The inspector: sticky beside the list. */
+.r-inspector { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; padding: 16px; border-radius: 16px; background: var(--md-sys-color-surface-container); box-shadow: 0 1px 3px rgba(0, 0, 0, .12), 0 4px 12px rgba(0, 0, 0, .08); min-width: 0; }
+.r-insp-empty { margin: 8px 0; font-size: 14px; }
+.r-insp-body { display: grid; gap: 10px; min-width: 0; }
+.r-insp-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.r-insp-head .r-ficon { width: 24px; height: 24px; }
+.r-insp-head .swatch { flex: 0 0 auto; width: 18px; height: 18px; margin: 0; }
+.r-insp-title { margin: 0; min-width: 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.r-insp-title:focus-visible { outline-offset: 2px; border-radius: 4px; }
+.r-insp-head .rcount { margin-left: 0; padding: 0 8px; border-radius: 10px; line-height: 20px; background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+.r-insp-close { display: none; margin-left: auto; }
+.r-insp-sub { margin: -4px 0 0; }
+.r-insp-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.r-insp-actions button { min-height: 36px; padding: 0 12px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-insp-h { margin: 6px 0 0; font-size: 14px; font-weight: 600; }
+.r-mini { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 4px 4px 8px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); }
+button.r-mini-name { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; min-height: 36px; padding: 0 4px; border: 0; background: transparent; color: var(--md-sys-color-on-surface); font-weight: 400; text-align: left; }
+.r-mini-name span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r-mini > button:not(.r-mini-name), .r-mini .rmore > button { flex: 0 0 auto; min-height: 32px; padding: 0 12px; font-size: 13px; }
+.r-mini button.tonal { background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+/* The region's card inside the inspector: one column, thumbnail on top. */
+.r-inspector .rcard { grid-template-columns: minmax(0, 1fr); padding: 0; background: transparent; }
+.r-inspector .rthumb { width: 100%; height: auto; aspect-ratio: 168 / 96; }
+.r-inspector .rcard .actions { flex-wrap: wrap; overflow: visible; }
+.r-inspector .rcard.has-pin .rinfo > div:first-child { padding-right: 0; }
+.r-inspector .rpin-bar { top: 6px; right: 6px; padding: 2px; border-radius: 16px; background: var(--md-sys-color-surface-container-high); }
+
+/* Phones and tablets: the inspector is a sheet over the bottom of the screen (above the bottom bar on phones). */
+@media (max-width: 860px) {
+  .r-split { grid-template-columns: minmax(0, 1fr); }
+  .r-inspector:not(.open) { display: none; }
+  .r-inspector.open { position: fixed; z-index: 15; left: 0; right: 0; bottom: 0; top: auto; max-height: 70vh; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); border-radius: 28px 28px 0 0; background: var(--md-sys-color-surface-container-high); box-shadow: 0 -2px 12px rgba(0, 0, 0, .25); }
+  .r-inspector.open::before { content: ""; display: block; width: 32px; height: 4px; margin: 0 auto 10px; border-radius: 2px; background: var(--md-sys-color-on-surface-variant); opacity: .4; }
+  .r-insp-close { display: inline-flex; }
+  .r-mini { background: var(--md-sys-color-surface-container-highest); }
+  /* Room under the list, so its last rows can scroll out from under the sheet. */
+  #tab-regions:has(.r-inspector.open) .r-tree { margin-bottom: 50vh; }
+}
+@media (max-width: 720px) {
+  .r-inspector.open { bottom: calc(77px + env(safe-area-inset-bottom)); max-height: calc(70vh - 77px); border-radius: 28px 28px 0 0; }
+  body.bulk-on .r-inspector.open { display: none; }
+}
+@media (max-width: 600px) {
+  .r-wide { display: none; }
+  .r-narrow { display: inline-flex; align-self: center; }
+  .r-new-row { flex-wrap: wrap; overflow: visible; }
+  .r-tree { padding: 4px; border-radius: 12px; }
+  .r-tree .rfolder-body { margin-left: 12px; }
+  .rrow { padding-left: 24px; }
+}
+/* The inspector already names the region in its heading: the card's own name line keeps only the creator badge. */
+.r-inspector .rcard .rname, .r-inspector .rcard .rinfo > div:first-child > .swatch { display: none; }
+.r-inspector .rcard .rinfo > div:first-child > .rcreator { margin-left: 0; }
+.r-insp-thumb { position: relative; max-width: 336px; }
+.r-insp-thumb > .rthumb { display: block; }

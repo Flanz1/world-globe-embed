@@ -21,6 +21,7 @@ import { makeFixture } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 import { port } from "./ports.mjs";
+import { pickRegion } from "./regions-ui.mjs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
@@ -68,7 +69,7 @@ async function adminPage(as) {
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && !/^Failed to load resource/.test(m.text()) && errors.push(m.text()));
   await page.goto(`${SITE}/admin/#regions`);
-  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await page.waitForSelector("#regions .rrow", { timeout: 15000 });
   return { ctx, page, errors };
 }
 
@@ -80,6 +81,7 @@ try {
   check("the snackbar starts hidden", await page.locator("#snackbar").isHidden());
 
   const n0 = mock.log.length;
+  await pickRegion(page, ID);
   await page.click(`#regions .rcard[data-region="${ID}"] [data-action="more"]`);
   await page.locator(`.rmenu[data-region="${ID}"] button:has-text("Delete")`).click();
   await page.fill('dialog input[aria-label="Type the region id to confirm"]', ID);
@@ -102,7 +104,7 @@ try {
   await waitCommit(page, n1);
   const f = onBranch(FILE);
   check("Undo restores the file in one commit", !!f && mock.log.length === n1 + 1 && /^Restore region big-ring/.test(mock.log.at(-1).message), mock.log.slice(n1).map((c) => c.message).join(","));
-  await page.waitForSelector(`#regions .rcard[data-region="${ID}"]`, { timeout: 15000 });
+  await page.waitForSelector(`#regions .rrow[data-region="${ID}"]`, { timeout: 15000 });
   check("the region is back in the list", true);
   await page.waitForFunction(() => /Saved/.test(document.querySelector("#snackbar-text")?.textContent ?? "") || document.querySelector("#snackbar")?.hidden === false, null, { timeout: 8000 }).catch(() => {});
   await page.mouse.move(5, 5);
