@@ -19,7 +19,7 @@ export const PERMISSION_LABELS: Record<Permission, { label: string; help: string
   regions: { label: "Create regions", help: "Draw new regions, and edit or delete the regions they created. Also create region folders and manage your own." },
   editOthers: { label: "Edit others' regions", help: "Change regions other people created, and rename, move, delete or fill other people's region folders." },
   deleteOthers: { label: "Delete others' regions", help: "Delete regions other people created." },
-  renameIds: { label: "Change region ids", help: "Change a region's id (More… → Rename…). Every embed link that uses the old id stops working, so this is for administrators." },
+  renameIds: { label: "Change region ids", help: "Change a region's id (More… → Change id…). Every embed link that uses the old id stops working, so this is for administrators." },
   users: { label: "Manage users", help: "Open the Users tab: add people and change what they can do (only up to their own permissions)." },
 };
 

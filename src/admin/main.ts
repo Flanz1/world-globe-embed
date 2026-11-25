@@ -9,7 +9,7 @@ import { escapeHtml } from "../shared/page.ts";
 import { GitHub, GitHubError, NotListed, type FileChange, type WorkflowRun } from "./github.ts";
 import { hasPendingSaves, initOptimistic, optimistic } from "./optimistic.ts";
 import { openPreview } from "./preview.ts";
-import { modal } from "./region-dialogs.ts";
+import { modal, nameDialog } from "./region-dialogs.ts";
 import { $, SITE, h } from "./dom.ts";
 import { initRegions, item, loadRegions, openRegionById, regionDisplayName, regionFeatures, renderRegions, watchEditing } from "./regions.ts";
 import { moreMenu } from "./more-menu.ts";
@@ -142,6 +142,7 @@ function renderMaps(): void {
               "div",
               { className: "map-foot" },
               h("button", { type: "button", className: "ghost", textContent: "Preview", onclick: () => openPreview({ maps, mapId: m.id }) }),
+              can("maps") ? h("button", { type: "button", className: "ghost", textContent: "Rename…", title: "Change the name shown for this map. Its id and the slots that use it stay the same", dataset: { action: "rename-map", map: m.id }, onclick: () => renameMap(m) }) : null,
               h("span", { className: "muted small", textContent: usedBy(m.id) }),
             ),
           ),
@@ -149,6 +150,26 @@ function renderMaps(): void {
       : [h("p", { className: "muted", textContent: "No maps yet." })]),
   );
   document.querySelectorAll<HTMLSelectElement>("select.map-select").forEach((s) => mapOptions(s, s.value));
+}
+
+/** Renames a map's display name only: its id, files and the slots that show it stay as they are. */
+function renameMap(m: MapMeta): void {
+  nameDialog({
+    title: "Rename map",
+    label: "Name",
+    initial: m.name,
+    max: 120,
+    note: `Only the name changes. The id (${m.id}) and the slots that show this map stay the same.`,
+    then: (name) => {
+      const path = `content/maps/${m.id}.json`;
+      void act(`Renaming map ${m.id}…`, () =>
+        gh!.commit(`Rename map ${m.id} to "${name}"`, async () => {
+          const fresh = JSON.parse(await gh!.readText(path)) as MapMeta;
+          return [{ path, content: `${JSON.stringify({ ...fresh, name }, null, 2)}\n` }];
+        }),
+      );
+    },
+  });
 }
 
 function renderSlots(): void {
