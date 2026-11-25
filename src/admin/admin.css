@@ -360,6 +360,28 @@ dialog.editor input:not([type=checkbox], [type=radio], [type=range], [type=color
 .ed-colours { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; min-width: 0; }
 .ed-colours > legend { padding: 0 4px; font-size: 13px; font-weight: 600; }
 .ed-colours > button { justify-self: start; }
+/* Layer groups: one card per group (region groups and pin map groups), sections separated by a line. */
+.ed-lgroups { display: grid; gap: 8px; }
+.ed-sec-body > .ed-lgroups + .ed-lgroups { padding-top: 12px; border-top: 1px solid var(--md-sys-color-outline-variant); }
+.ed-groups-list { display: grid; gap: 8px; }
+.ed-group { display: grid; gap: 8px; padding: 8px; border-radius: 12px; background: var(--md-sys-color-surface-container-low); min-width: 0; }
+.ed-group-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ed-group-head input[type="text"] { flex: 1; min-width: 0; font-weight: 600; }
+.ed-group-head .muted { flex: none; white-space: nowrap; }
+.ed-group-fold { flex: none; display: grid; place-items: center; width: 32px; min-height: 32px; padding: 0; border-color: transparent; }
+.ed-group.closed .rfolder-arrow { transform: rotate(-90deg); }
+.ed-group-body { display: grid; gap: 8px; }
+.ed-group-body[hidden] { display: none; }
+.ed-group-rows { display: grid; gap: 4px; }
+.ed-group-row { display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 2px 4px 2px 8px; border-radius: 8px; background: var(--md-sys-color-surface-container); min-width: 0; }
+.ed-group-row .ed-group-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-group-row .muted { flex: none; white-space: nowrap; }
+.ed-group-row button { flex: none; min-width: 32px; min-height: 32px; padding: 0 6px; }
+.ed-group-swatch { flex: none; width: 16px; height: 16px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25); }
+.ed-group-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ed-group-foot button:first-child { margin-right: auto; }
+button.danger { color: var(--md-sys-color-error); border-color: var(--md-sys-color-error); }
+.ed-group-on { margin: 0; }
 .ed-under { display: grid; gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; min-width: 0; }
 .ed-under > legend { padding: 0 4px; font-size: 13px; font-weight: 600; }
 .ed-under-list { display: grid; gap: 6px; }
@@ -439,8 +461,8 @@ dialog.editor button.ed-ib[aria-pressed="true"] { background-color: var(--md-sys
 /* Inside a section the tab is the heading: no box or legend of its own for these fieldsets. */
 .ed-sec-body > fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .ed-sec-body > fieldset > legend { padding: 0; }
-.ed-sec-body > .ed-colours > legend, .ed-sec-body > .ed-under > legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.ed-sec-body > .ed-overlaps > legend, .ed-sec-body > .ed-pinmaps > legend { margin-bottom: 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--md-sys-color-on-surface-variant); }
+.ed-sec-body > .ed-colours > legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ed-sec-body > .ed-overlaps > legend, .ed-sec-body > .ed-lgroups > legend { margin-bottom: 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--md-sys-color-on-surface-variant); }
 /* The minimap: the globe preview as a disc over the map's bottom left (the embed's corner buttons fall outside it). */
 .ed-mini { position: absolute; left: 12px; bottom: 34px; z-index: 2; width: 148px; height: 148px; }
 .ed-mini.big { width: min(340px, 60vh); height: min(340px, 60vh); }

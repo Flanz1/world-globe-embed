@@ -3,6 +3,7 @@
  * someone should look at. Pure (no DOM, no network), so the admin page's Health tab and the weekly
  * scripts/content-health.ts run give the same answer from the same data.
  */
+import { groupPinMapIds, pinGroups } from "./groups.ts";
 import { MAX_VERTICES, WARN_VERTICES, pointInGeometry, polygonsOf, vertexCount } from "./geo.ts";
 import { placements, type CategoriesFile } from "./categories.ts";
 import type { PinFeature } from "./pins.ts";
@@ -74,7 +75,7 @@ export function checkHealth(input: HealthInput): HealthIssue[] {
   // Pins of a pin map that regions show, but lying in none of those regions.
   const showers = new Map<string, RegionFeature[]>();
   for (const { feature: f } of regions)
-    for (const pm of f!.properties.pinMaps ?? []) showers.set(pm, [...(showers.get(pm) ?? []), f!]);
+    for (const pm of groupPinMapIds(pinGroups(f!.properties))) showers.set(pm, [...(showers.get(pm) ?? []), f!]);
   for (const { id, feature: f } of pins) {
     const pm = f!.properties.pinMap;
     const shown = pm ? showers.get(pm) : undefined;
@@ -88,7 +89,7 @@ export function checkHealth(input: HealthInput): HealthIssue[] {
   }
 
   for (const { id, feature: f } of regions)
-    for (const pm of f!.properties.pinMaps ?? []) if (!pinMapIds.has(pm)) add("missing-pin-map", "problem", "region", id, `Shows the pin map "${pm}", which doesn't exist.`);
+    for (const pm of groupPinMapIds(pinGroups(f!.properties))) if (!pinMapIds.has(pm)) add("missing-pin-map", "problem", "region", id, `Shows the pin map "${pm}", which doesn't exist.`);
   for (const { id, feature: f } of pins) {
     const pm = f!.properties.pinMap;
     if (pm && !pinMapIds.has(pm)) add("missing-pin-map", "problem", "pin", id, `Belongs to the pin map "${pm}", which doesn't exist.`);

@@ -2204,7 +2204,7 @@ export function openEditor(o: EditorOptions): void {
             update((x) => ({ ...x, pinMaps: cur }), "Pin map order");
             changed("panel");
           };
-          const names = h("button", { type: "button", className: "text tiny lg-open", textContent: own ? "Legend names ✓" : "Legend names…", title: `Change what the pin legend calls the panel and each kind of pin for "${nameOfMap(mid)}" on this region's embed`, ariaLabel: own ? `Legend names for ${nameOfMap(mid)}, custom names set` : `Legend names for ${nameOfMap(mid)}` });
+          const names = h("button", { type: "button", className: "text tiny lg-open", textContent: own ? "Legend names ✓" : "Legend names…", dataset: { action: "legend-names", pinmap: mid }, title: `Change what the pin legend calls the panel and each kind of pin for "${nameOfMap(mid)}" on this region's embed`, ariaLabel: own ? `Legend names for ${nameOfMap(mid)}, custom names set` : `Legend names for ${nameOfMap(mid)}` });
           names.addEventListener("click", () =>
             legendDialog(own, `For pin map "${nameOfMap(mid)}" on this region's embed.`, (legend) => {
               const rest = { ...(hist.state.props.pinLegends ?? {}) };

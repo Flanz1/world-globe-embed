@@ -85,7 +85,9 @@ if (regionId !== null) {
     ? ids.flatMap((id) => {
         const e = inIndex(id);
         const us = q.get("under") !== "0" && e?.u ? e.u.filter((u) => u.id !== id && inIndex(u.id)) : [];
-        return [...us.map((u, i) => ({ id: u.id, host: id, label: u.label, on: u.on ?? i === 0, clip: e?.uc !== false, fill: underFill(u.fill) })), { id }];
+        // A group of one is named after the group; a bigger one has no single name here, so its regions are named by themselves.
+        const single = new Map((e?.lg ?? []).flatMap((g) => (g.ids.length === 1 ? [[g.ids[0], g.n] as const] : [])));
+        return [...us.map((u, i) => ({ id: u.id, host: id, label: u.label ?? single.get(u.id), on: u.on ?? i === 0, clip: e?.uc !== false, fill: underFill(u.fill) })), { id }];
       })
     : [];
   const stackUnder = stackPlan.filter((s) => s.host);

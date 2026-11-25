@@ -3,6 +3,7 @@
  * duplicate, delete, preview, copy embed code), and combining several regions into a new one. Each
  * action that writes is one commit.
  */
+import { groupPinMapIds, pinGroups } from "../shared/groups.ts";
 import { stringifyCompact } from "../shared/json.ts";
 import { LINKED_MAX, baseKey, combineRegions, combinedName, regionBases, resolveLinked, type RegionBase } from "../shared/combine.ts";
 import { checkGeometry, geometryBounds, polygonsOf, vertexCount } from "../shared/geo.ts";
@@ -273,7 +274,7 @@ function card(e: RegionEntry): HTMLElement {
       ...editButtons(e, f, noEdit, btn),
       !canEdit(f) || !openCountFor(e.id) || linked ? null : h("button", { type: "button", className: "text small", textContent: `${openCountFor(e.id)} comment${openCountFor(e.id) > 1 ? "s" : ""}`, title: "Open the editor on the comments", dataset: { action: "comments", region: e.id }, onclick: () => edit(e, true) }),
       !canEdit(f) || !pendingFor(e.id) ? null : h("span", { className: "badge warn", textContent: `${pendingFor(e.id)} suggestion${pendingFor(e.id) > 1 ? "s" : ""}`, title: "Waiting in the list above the regions" }),
-      btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot, p.pinMaps, p.pinLegends)),
+      btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot, groupPinMapIds(pinGroups(p)), p.pinLegends, pinGroups(p).map((g) => ({ n: g.name, ids: g.pinMaps, ...(g.on === false ? { off: true as const } : {}) })))),
       h("button", { type: "button", className: "ghost", textContent: "Embed code…", title: "Choose what to show and copy the embed code", dataset: { action: "embed" }, onclick: () => openEmbedDialog({ region: { id: e.id, name: regionTitle(e), label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot }) }),
       regionMore(e, f, map, noEdit, noDelete),
     ),

@@ -180,7 +180,7 @@ describe("regions in the build", () => {
     const e = dataOf(generateSlotPages(c, "", "g.js")[0].html).regions!.host;
     // Older flat lists show up as one group each, so every toggle stays.
     expect(e.u).toEqual([{ id: "evil", on: true, fill: 0.7 }, { id: "other", on: false, fill: 0.1 }]);
-    expect(e.lg).toEqual([{ n: "Faith", ids: ["evil"] }, { n: "other", ids: ["other"] }]);
+    expect(e.lg).toEqual([{ n: "Faith", ids: ["evil"] }, { n: evil, ids: ["other"] }]);
   });
 
   it("indexes layer groups and pin groups: a section per group, the group's fill and start state for its members", () => {

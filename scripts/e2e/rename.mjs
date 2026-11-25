@@ -42,7 +42,7 @@ const regionsDir = path.join(dir, "content/regions");
 const base = JSON.parse(readFileSync(path.join(regionsDir, "big-ring.json"), "utf8"));
 const other = structuredClone(base);
 other.id = "shows-ring";
-other.properties.under = [{ id: "big-ring" }];
+other.properties.layerGroups = [{ name: "Rings", regions: [{ id: "big-ring" }] }];
 writeFileSync(path.join(regionsDir, "shows-ring.json"), JSON.stringify(other));
 writeFileSync(path.join(dir, "content/categories.json"), JSON.stringify({ categories: [{ id: "rings", name: "Rings", regions: ["big-ring"] }] }));
 const accessFile = path.join(dir, "content/access.json");
@@ -113,7 +113,7 @@ try {
   await waitCommit(page, n0 + 1);
   const moved = onBranch("content/regions/small-ring.json");
   check("the region is saved under the new id, the old file is gone", moved?.id === "small-ring" && !onBranch(FILE) && moved.properties.updatedBy.login === "Flanz1" && moved.geometry.coordinates[0].length > 1000);
-  check("a region that showed it now shows the new id", onBranch("content/regions/shows-ring.json")?.properties.under?.[0]?.id === "small-ring");
+  check("a region that showed it now shows the new id", onBranch("content/regions/shows-ring.json")?.properties.layerGroups?.[0]?.regions?.[0]?.id === "small-ring");
   check("the folder lists the new id", JSON.stringify(onBranch("content/categories.json")?.categories?.[0]?.regions) === '["small-ring"]');
   await page.waitForSelector('#regions .rrow[data-region="small-ring"]', { timeout: 15000 });
   check("the card shows under the new id with a note about the old embeds", (await card(ID).count()) === 0 && /Renamed from big-ring/.test(await card("small-ring").locator("[data-renamed]").textContent()));

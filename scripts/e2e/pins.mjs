@@ -84,6 +84,14 @@ writeFileSync(path.join(dir, "content/pinmaps.json"), JSON.stringify(PINMAPS, nu
   r.properties.pinMaps = ["cities"];
   writeFileSync(rf, JSON.stringify(r, null, 2) + "\n");
 }
+{
+  // A region with pin groups: Holy sites shown, Battles starting hidden.
+  const gf = JSON.parse(readFileSync(path.join(dir, "content/regions/dateline-box.json"), "utf8"));
+  gf.id = "groupy";
+  delete gf.properties.under;
+  gf.properties.pinGroups = [{ name: "Holy sites", pinMaps: ["holy-sites"] }, { name: "Battles", pinMaps: ["battles"], on: false }];
+  writeFileSync(path.join(dir, "content/regions/groupy.json"), JSON.stringify(gf, null, 2) + "\n");
+}
 mkdirSync(path.join(dir, "content/pins"), { recursive: true });
 for (const p of SEED) writeFileSync(path.join(dir, "content/pins", `${p.id}.json`), JSON.stringify(p, null, 2) + "\n");
 const accessFile = path.join(dir, "content/access.json");
@@ -230,6 +238,28 @@ for (const view of ["flat", "globe"]) {
   });
 }
 
+/* ── Embed: one switch per pin group ── */
+for (const view of ["flat", "globe"]) {
+  await step(E, `${view} pin groups`, async () => {
+    const ctx = await browser.newContext({ viewport: { width: 900, height: 520 }, deviceScaleFactor: 1 });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(String(e)));
+    await page.goto(`${SITE}/v/${SLOT.slug}/?region=groupy&view=${view}`);
+    await ready(page);
+    await page.waitForSelector(".wpl-group", { timeout: 15000 });
+    const rows = await page.locator(".wpl-group span").allTextContents();
+    check(E, `${view}: a switch per pin group, with its pin count`, rows.join("|") === "Holy sites (1)|Battles (1)", rows.join("|"));
+    const on = await page.locator(".wpl-group input").evaluateAll((e) => e.map((x) => x.checked));
+    check(E, `${view}: a group that starts hidden is off`, JSON.stringify(on) === JSON.stringify([true, false]), JSON.stringify(on));
+    await page.locator(".wpl-group input").nth(1).check();
+    await page.waitForTimeout(200);
+    check(E, `${view}: switching a group on works`, (await page.locator(".wpl-group input").nth(1).isChecked()) === true);
+    check(E, `${view}: no page errors`, errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  });
+}
+
 /* ── Embed: kind filter chips and clusters (a synthetic pins file served by the test) ── */
 for (const view of ["flat", "globe"]) {
   await step(E, `${view} filter and clusters`, async () => {
@@ -331,17 +361,17 @@ await step(A, "the region editor lists pin maps in collapsible folders", async (
   await page.waitForSelector("dialog.editor[open]");
   await edTab(page, "underlays");
   await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
-  const picker = page.locator("dialog.editor .ed-pinmaps-list");
-  check(A, "pin maps sit in the folders of the Pins tab, nested", (await picker.locator('.ed-pinfolder input[data-pinmap="holy-sites"]').count()) === 1 && (await picker.locator('.ed-pinfolder .ed-pinfolder input[data-pinmap="battles"]').count()) === 1);
-  check(A, "a pin map in no folder is listed on its own", (await picker.locator('input[data-pinmap="cities"]').isChecked()) && (await picker.locator('.ed-pinfolder input[data-pinmap="cities"]').count()) === 0);
-  check(A, "folders without a ticked pin map start closed", !(await picker.locator('input[data-pinmap="holy-sites"]').isVisible()));
-  await picker.locator('.ed-pinfolder-toggle[data-pinfolder="places"]').click();
-  check(A, "opening a folder shows its pin maps", await picker.locator('input[data-pinmap="holy-sites"]').isVisible());
-  check(A, "a subfolder opens on its own", !(await picker.locator('input[data-pinmap="battles"]').isVisible()));
-  await picker.locator('.ed-pinfolder-toggle[data-pinfolder="war"]').click();
-  await picker.locator('input[data-pinmap="battles"]').check();
+  const box = page.locator("dialog.editor .ed-pinmaps");
+  check(A, "an older pinMaps list opens as one group per pin map, named after it", (await box.locator(".ed-group").count()) === 1 && (await box.locator('.ed-group input[name="group-name"]').inputValue()) === "Cities" && (await box.locator('.ed-group-row[data-pinmap="cities"]').count()) === 1);
+  await box.locator('[data-act="pin-group-new"]').click();
+  check(A, "+ New pin map group adds an empty open card", (await box.locator(".ed-group").count()) === 2 && (await box.locator('.ed-group[data-group="p1"] .ed-group-body').isVisible()));
+  await box.locator('.ed-group[data-group="p1"] input[name="group-name"]').fill("Sacred and war");
+  const addOpts = await box.locator('.ed-group[data-group="p1"] select[name="pin-group-add"] option').allTextContents();
+  check(A, "the picker lists the slot's pin maps that are in no group", addOpts.some((t) => t === "Holy sites") && addOpts.some((t) => t === "Battles") && !addOpts.some((t) => t === "Cities"), addOpts.join("|"));
+  await box.locator('.ed-group[data-group="p1"] select[name="pin-group-add"]').selectOption("holy-sites");
+  await box.locator('.ed-group[data-group="p1"] select[name="pin-group-add"]').selectOption("battles");
   await page.waitForTimeout(200);
-  check(A, "ticking inside a folder keeps it open and shows the count on its badge", (await picker.locator('input[data-pinmap="battles"]').isVisible()) && /1\/2/.test((await picker.locator('.ed-pinfolder-toggle[data-pinfolder="places"] .badge').textContent()) ?? ""), await picker.locator('.ed-pinfolder-toggle[data-pinfolder="places"] .badge').textContent());
+  check(A, "two pin maps in one group", (await box.locator('.ed-group[data-group="p1"] .ed-group-row').count()) === 2 && /2 pin maps/.test((await box.locator('.ed-group[data-group="p1"] .ed-group-head .muted').textContent()) ?? ""));
   await page.screenshot({ path: path.join(OUT, "editor-pin-folders.png"), clip: (await page.locator("dialog.editor .ed-pinmaps").boundingBox()) ?? undefined });
   check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));
   await ctx.close();

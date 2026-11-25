@@ -290,10 +290,11 @@ await step(E, "linked combined region", async () => {
   check(E, "nothing to save after reopening", (await saveAndWait()).length === 0, await ed.msg());
   // The linked region has its own "show under": saved on it only (its regions get it when the site is built).
   await edTab(page, "underlays");
-  check(E, "the linked region's editor has the show-under controls", await page.isVisible("dialog.editor .ed-under"));
-  await page.selectOption('dialog.editor select[name="under-add"]', "live-b");
+  check(E, "the linked region's editor has the show-under controls", await page.isVisible("dialog.editor .ed-lgroups"));
+  await page.click('dialog.editor [data-act="group-new"]');
+  await page.selectOption('dialog.editor select[name="group-add"]', "live-b");
   c = await saveAndWait();
-  check(E, "adding a region to show under writes just the linked region's file", c.length === 1 && JSON.stringify(changedPaths(c)) === JSON.stringify(["content/regions/live-link.json"]) && read("live-link").properties.under?.[0]?.id === "live-b" && !read("live-a").properties.under && !read("live-c").properties.under, JSON.stringify(c) + (await ed.msg()));
+  check(E, "adding a region to show under writes just the linked region's file", c.length === 1 && JSON.stringify(changedPaths(c)) === JSON.stringify(["content/regions/live-link.json"]) && read("live-link").properties.layerGroups?.[0]?.regions?.[0]?.id === "live-b" && !read("live-a").properties.layerGroups && !read("live-c").properties.under, JSON.stringify(c) + (await ed.msg()));
   await page.click("dialog.editor .pv-head button.ghost");
 
   // Editing one of its regions on its own changes the linked region.

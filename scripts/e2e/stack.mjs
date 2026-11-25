@@ -35,13 +35,17 @@ function check(name, ok, detail = "") {
 const dir = await makeFixture({ quiet: true });
 const file = path.join(dir, "content/regions/provinces.json");
 const f = JSON.parse(readFileSync(file, "utf8"));
-f.properties.under = [
-  { id: "landmark-disc", label: "Magenta layer", on: true },
-  { id: "dateline-box", label: "Yellow layer", on: false },
+f.properties.layerGroups = [
+  { name: "Magenta layer", regions: [{ id: "landmark-disc" }], on: true },
+  { name: "Yellow layer", regions: [{ id: "dateline-box" }], on: false },
 ];
-f.properties.underTitle = "Overlays";
 f.properties.layerLabel = "Provinces";
 writeFileSync(file, JSON.stringify(f, null, 2) + "\n");
+// A group of two regions: one switch, one section.
+const grouped = structuredClone(f);
+grouped.id = "grouped";
+grouped.properties.layerGroups = [{ name: "Overlays", regions: [{ id: "landmark-disc" }, { id: "dateline-box" }], on: true, fill: 0.6 }];
+writeFileSync(path.join(dir, "content/regions/grouped.json"), JSON.stringify(grouped, null, 2) + "\n");
 execFileSync("npm", ["run", "build"], { cwd: dir, stdio: "pipe" });
 const DIST = path.join(dir, "dist");
 
@@ -69,7 +73,6 @@ try {
     await ready(page);
     await page.waitForSelector(".rlayers label", { timeout: 15000 });
     check(`[${view}] toggles use the names set in the editor`, JSON.stringify(await names(page)) === JSON.stringify(["Magenta layer", "Yellow layer"]), (await names(page)).join(" | "));
-    check(`[${view}] heading is the one set`, (await page.locator(".rlayers-head").textContent()) === "Overlays");
     check(`[${view}] starts as set (on, off)`, JSON.stringify(await checked(page)) === JSON.stringify([true, false]));
     const before = await page.locator("#globe, canvas").first().screenshot();
     await page.locator(".rlayers label", { hasText: "Yellow layer" }).locator("input").check();
@@ -89,6 +92,14 @@ try {
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
+  await page.goto(`${SITE}/v/${SLOT.slug}/?region=grouped&view=flat`);
+  await ready(page);
+  await page.waitForSelector(".rgroup", { timeout: 15000 });
+  check("a group of two regions is one section with one switch", (await page.locator(".rgroup").count()) === 1 && (await names(page)).join("|") === "Overlays" && (await checked(page)).join() === "true");
+  const keysOn = await page.locator(".rgroup-keys li").allTextContents();
+  await page.locator(".rgroup input").uncheck();
+  check("switching the group off folds its colour keys", await page.locator(".rgroup-keys").evaluate((e) => !e || e.hidden).catch(() => true), keysOn.join("|"));
+  await page.locator(".rgroup input").check();
   await page.goto(`${SITE}/v/${SLOT.slug}/?region=provinces&view=flat&under=0`);
   await ready(page);
   await page.waitForTimeout(500);
