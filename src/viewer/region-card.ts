@@ -40,7 +40,7 @@ const CSS = `
 .wfact li small{color:#c9bfab}
 .wfact .x{all:unset;position:absolute;right:4px;top:4px;width:32px;height:32px;display:grid;place-items:center;border-radius:6px;cursor:pointer;font-size:20px;line-height:1}\n@media (pointer:coarse){.wfact .x{width:44px;height:44px;right:0;top:0}}\n.wfact-hl{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .wfact .x:hover{background:rgba(255,255,255,.15)}
-.wfact .x:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.wfact .x:focus-visible{outline:2px solid #fff;outline-offset:-2px}
 `.replace(/\n/g, "");
 
 const NEIGHBOURS_SHOWN = 8;
