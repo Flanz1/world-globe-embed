@@ -418,7 +418,7 @@ await step(A, "sign in and Regions tab", async () => {
   const evil = await page.locator('[data-region="evil-name"] .rlabels').textContent();
   check(A, "hostile name shown as plain text", evil === '"><script>alert(1)</script>' && dialogs.length === 0);
   await pickRegion(page, "evil-name");
-  check(A, "cards are titled by id, with no Rename button", (await page.locator('[data-region="evil-name"] .rname').textContent()) === "evil-name" && (await page.locator('.rcard [data-action="rename"]').count()) === 0);
+  check(A, "cards are titled by name (plain text), with no Rename button", (await page.locator('[data-region="evil-name"] .rname').textContent()) === '"><script>alert(1)</script>' && (await page.locator('[data-region="evil-name"] .rname').getAttribute("title")) === "evil-name" && (await page.locator('.rcard [data-action="rename"]').count()) === 0);
   await page.fill("#r-search", "dateline");
   check(A, "search filters by id/labels", (await page.locator("#regions .rrow").count()) === 1);
   await page.fill("#r-search", "");
@@ -722,7 +722,7 @@ await step(A, "conflict detection", async () => {
   await page.click('dialog.small-dlg button:has-text("Reload from GitHub")');
   await page.waitForTimeout(400);
   const s = await ed.state();
-  check(A, "reload brings in the newer version (an older region's name becomes part 1's label)", s.labels[0] === "Changed elsewhere", JSON.stringify(s.labels));
+  check(A, "reload brings in the newer version (the name changed elsewhere shows in the Name field)", (await page.inputValue('dialog.editor input[name="name"]')) === "Changed elsewhere", await page.inputValue('dialog.editor input[name="name"]'));
   await edTab(page, "region");
   await page.click('dialog.editor [data-act="centre"]');
   await page.click("dialog.editor .pv-head button.ghost");
@@ -785,7 +785,7 @@ await step(A, "editor: colours and legend", async () => {
   check(
     A,
     "saved file has the legend and one colour per part",
-    mock.log.length === n + 1 && f.properties.legendTitle === "Provinces" && JSON.stringify(f.properties.legend.map((e) => e.label)) === JSON.stringify(["<img src=x onerror=alert(3)>", "Capital"]) && JSON.stringify(f.properties.partLegend) === "[1,-1,0]" && JSON.stringify(f.properties.partLabels) === JSON.stringify(["Red Reach", "Green March <i>", "Blue Coast"]) && !("name" in f.properties),
+    mock.log.length === n + 1 && f.properties.legendTitle === "Provinces" && JSON.stringify(f.properties.legend.map((e) => e.label)) === JSON.stringify(["<img src=x onerror=alert(3)>", "Capital"]) && JSON.stringify(f.properties.partLegend) === "[1,-1,0]" && JSON.stringify(f.properties.partLabels) === JSON.stringify(["Red Reach", "Green March <i>", "Blue Coast"]) && f.properties.name === "Three Provinces",
     JSON.stringify({ legend: f.properties.legend, partLegend: f.properties.partLegend, partLabels: f.properties.partLabels }),
   );
   await page.click("dialog.editor .pv-head button.ghost");
@@ -881,7 +881,7 @@ await step(A, "preview and embed code", async () => {
   await pickRegion(page, "evil-name");
   await page.click('[data-region="evil-name"] [data-action="embed"]');
   const code = await page.inputValue("dialog.embed-dlg textarea");
-  check(A, "embed snippet is titled by id and has nothing unescaped", code.includes('title="evil-name (Alignment test)"') && !code.includes("<script"), code);
+  check(A, "embed snippet is titled by name and has nothing unescaped", code.includes("title=\"&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt; (Alignment test)\"") && !code.includes("<script"), code);
   await page.click('dialog.embed-dlg input[data-opt="lock"]');
   await page.click('dialog.embed-dlg input[value="flat"]');
   const code2 = await page.inputValue("dialog.embed-dlg textarea");
