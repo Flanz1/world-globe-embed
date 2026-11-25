@@ -304,6 +304,9 @@ kbd { font: 12px ui-monospace, monospace; padding: 1px 6px; border: 1px solid va
 dialog.editor { width: calc(100vw - 16px); height: calc(100vh - 16px); max-width: none; max-height: none; padding: 0; border: 0; border-radius: 16px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-shadow: var(--app-shadow); overflow: hidden; }
 dialog.editor > .pv-head { padding: 8px 12px 8px 20px; background: var(--md-sys-color-surface-container); }
 dialog.editor > .pv-head .row { flex-wrap: nowrap; }
+/* Modal dialogs (editor, preview, small dialogs): lock the page behind them and keep wheel scrolling inside the panel under the cursor. */
+html:has(dialog[open]) { overflow: hidden; }
+dialog[open], dialog[open] * { overscroll-behavior: contain; }
 dialog.editor[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
 /* Canvas first: a slim title bar (name, Undo/Redo, the view group, Save/Close), a tool rail on the left, the map in the middle. */
 .ed-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1 1 auto; }
