@@ -98,6 +98,10 @@ try {
     await nd.waitFor();
     check("Rename… opens a name dialog with Save off until the name changes", await nd.locator('[data-action="name-save"]').isDisabled());
     await nd.locator('input[name="display-name"]').fill("The Big Ring Union");
+    await page.screenshot({ path: path.join(OUT, "rename-name-1440.png") });
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.screenshot({ path: path.join(OUT, "rename-name-375.png") });
+    await page.setViewportSize({ width: 1440, height: 900 });
     await nd.locator('[data-action="name-save"]').click();
     await waitCommit(page, n);
     const f = onBranch(FILE);
