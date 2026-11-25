@@ -169,3 +169,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const dir = await makeFixture();
   console.log(dir);
 }
+
+/** The region editor's inspector shows one tab at a time (Region, Parts, Layers = "underlays"): open the one a step needs. */
+export async function edTab(page, id) {
+  const tab = page.locator(`dialog.editor .ed-tab[data-sec="${id}"]`);
+  if (await tab.isVisible()) {
+    if ((await tab.getAttribute("aria-selected")) !== "true") await tab.click();
+    return;
+  }
+  // Folded inspector: its strip has a button per tab.
+  const pick = page.locator(`dialog.editor [data-act="inspector-${id}"]`);
+  if (await pick.isVisible()) await pick.click();
+}

@@ -20,7 +20,7 @@ import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { makeFixture, PROVINCES, SLOT } from "./fixture.mjs";
+import { makeFixture, PROVINCES, SLOT, edTab } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { ADMIN_API, useAdminApi } from "./admin-api.mjs";
 import { checkGeometry } from "../../src/shared/geo.ts";
@@ -488,6 +488,7 @@ await step(A, "editor: draw and edit", async () => {
   await mdrag(x, y, -44, 0);
   s = await ed.state();
   check(A, "a new part starts locked: dragging inside it doesn't move it", s.locked[0] === true && s.parts[0][0].every((p, i) => p[0] === before[i]), JSON.stringify(s.locked));
+  await edTab(page, "parts"); // a new region opens on the Region tab (its id)
   await page.click('dialog.editor [data-act="part-lock"]');
   await mdrag(x, y, -44, 0);
   s = await ed.state();
@@ -705,6 +706,7 @@ await step(A, "conflict detection", async () => {
   await page.waitForTimeout(400);
   const s = await ed.state();
   check(A, "reload brings in the newer version (an older region's name becomes part 1's label)", s.labels[0] === "Changed elsewhere", JSON.stringify(s.labels));
+  await edTab(page, "region");
   await page.click('dialog.editor [data-act="centre"]');
   await page.click("dialog.editor .pv-head button.ghost");
   await page.waitForTimeout(200);
