@@ -11,24 +11,52 @@
 </head>
 <body>
 <header>
-  <h1>Globe maps</h1>
-  <div class="tabs" id="tabs" hidden role="tablist" aria-label="Admin sections">
-    <button type="button" role="tab" id="tab-btn-maps" aria-controls="tab-maps" aria-selected="true">Maps &amp; slots</button>
-    <button type="button" role="tab" id="tab-btn-regions" aria-controls="tab-regions" aria-selected="false">Regions</button>
-    <button type="button" role="tab" id="tab-btn-pins" aria-controls="tab-pins" aria-selected="false">Pins</button>
-    <button type="button" role="tab" id="tab-btn-health" aria-controls="tab-health" aria-selected="false">Health</button>
-    <button type="button" role="tab" id="tab-btn-users" aria-controls="tab-users" aria-selected="false" hidden>Users</button>
-  </div>
-  <span id="who" class="muted"></span>
+  <h1><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9M12 3c-2.5 2.7-3.8 5.7-3.8 9s1.3 6.3 3.8 9"/></svg><span class="h1-text">Globe maps</span></h1>
   <span id="theme-ctl" class="theme-ctl" hidden></span>
   <button id="account" type="button" class="icon account-btn" aria-label="Account" title="Account" aria-haspopup="menu" aria-expanded="false" hidden></button>
-  <button id="forget" type="button" class="ghost" hidden>Sign out</button>
   <div id="account-menu" class="account-menu" popover="auto" role="menu" aria-label="Account">
-    <p id="who-menu" class="muted small"></p>
+    <p id="who" class="muted small"></p>
     <button id="forget-menu" type="button" role="menuitem" class="ghost text theme-item">Sign out</button>
   </div>
 </header>
-<div id="branch" class="branch" role="note" hidden></div>
+<div id="strip-bar" class="strip-bar" hidden>
+  <button id="strip" type="button" class="strip" data-state="loading" aria-haspopup="dialog" aria-expanded="false" aria-controls="strip-pop">
+    <span class="strip-icon" aria-hidden="true"></span>
+    <span class="strip-text"><span id="strip-long" class="strip-long">Loading…</span><span id="strip-short" class="strip-short" aria-hidden="true">Loading…</span></span>
+    <span id="branch" class="strip-branch" hidden></span>
+    <span class="strip-more"><span class="strip-more-l">Activity and deploys</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
+  </button>
+  <div id="strip-pop" class="strip-pop" popover="auto" role="dialog" aria-label="Activity, deploys and checks">
+    <div class="seg strip-seg" role="group" aria-label="Show">
+      <button type="button" id="pop-btn-activity" data-pane="activity" aria-pressed="true">Activity</button>
+      <button type="button" id="pop-btn-deploys" data-pane="deploys" aria-pressed="false">Deploys <span id="deploys-badge" class="badge" hidden></span></button>
+      <button type="button" id="pop-btn-checks" data-pane="checks" aria-pressed="false">Checks</button>
+    </div>
+    <div id="pop-activity" class="pop-pane">
+      <ul id="activity-list" class="activity compact"></ul>
+      <p id="activity-note" class="muted small" aria-live="polite"></p>
+    </div>
+    <div id="pop-deploys" class="pop-pane" hidden>
+      <ul id="runs" class="runs"></ul>
+    </div>
+    <div id="pop-checks" class="pop-pane" hidden>
+      <p id="status" aria-live="polite" class="muted">Loading…</p>
+      <ul id="checks" class="checks"></ul>
+    </div>
+    <div class="row pop-foot">
+      <button id="activity-open" type="button" class="ghost">Open full activity</button>
+      <a id="runs-all" class="small" target="_blank" rel="noopener">All workflow runs ↗</a>
+    </div>
+  </div>
+</div>
+<div class="shell">
+<nav id="tabs" class="nav-rail" hidden role="tablist" aria-label="Admin sections" aria-orientation="vertical">
+  <button type="button" role="tab" id="tab-btn-maps" aria-controls="tab-maps" aria-selected="true" data-icon="maps"><span class="nav-lbl">Maps</span></button>
+  <button type="button" role="tab" id="tab-btn-regions" aria-controls="tab-regions" aria-selected="false" data-icon="regions"><span class="nav-lbl">Regions</span></button>
+  <button type="button" role="tab" id="tab-btn-pins" aria-controls="tab-pins" aria-selected="false" data-icon="pins"><span class="nav-lbl">Pins</span></button>
+  <button type="button" role="tab" id="tab-btn-health" aria-controls="tab-health" aria-selected="false" data-icon="health"><span class="nav-lbl">Health</span></button>
+  <button type="button" role="tab" id="tab-btn-users" aria-controls="tab-users" aria-selected="false" data-icon="users" hidden><span class="nav-lbl">Users</span></button>
+</nav>
 <main id="app">
   <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-banner-text"></span><button id="error-banner-close" type="button" class="text" aria-label="Dismiss this message">Dismiss</button></div>
   <section id="signin" class="card" hidden>
@@ -48,13 +76,6 @@
   </section>
 
   <div id="main" hidden>
-    <div class="layout">
-    <aside id="activity-card" class="card sidebar sidebar-left" aria-label="Recent activity">
-      <h2>Recent activity</h2>
-      <ul id="activity-list" class="activity compact"></ul>
-      <p id="activity-note" class="muted small" aria-live="polite"></p>
-      <button id="activity-open" type="button" class="ghost">Open full activity</button>
-    </aside>
     <div class="content">
     <div id="tab-maps" role="tabpanel" aria-labelledby="tab-btn-maps" class="tabpanel">
     <section class="card">
@@ -152,17 +173,9 @@
       </section>
     </div>
     </div>
-    <aside id="status-card" class="card sidebar" aria-label="Save and deploy status">
-      <h2>Status</h2>
-      <p id="status" aria-live="polite" class="muted">Loading…</p>
-      <h3>Checks</h3>
-      <ul id="checks" class="checks"></ul>
-      <h3>Workflows</h3>
-      <ul id="runs" class="runs"></ul>
-    </aside>
-    </div>
   </div>
 </main>
+</div>
 <dialog id="preview" aria-labelledby="pv-title">
   <div class="pv-head">
     <h2 id="pv-title">Preview</h2>

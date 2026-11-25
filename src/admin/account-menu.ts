@@ -1,14 +1,16 @@
 /**
- * Account menu for phones: the repository / signed-in text and Sign out move behind one button in the header
- * (CSS shows the button, and hides the text and the Sign out button, only on phones). Same popover pattern as the
+ * Account menu: the repository / signed-in text and Sign out sit behind one button in the header (the signed-in
+ * person's initial, or a person icon before sign-in). Same popover pattern as the
  * colour menu: Escape or a click outside closes it, focus goes to the first item and back to the button.
  */
+import { h } from "./dom.ts";
+
 const SVG = "http://www.w3.org/2000/svg";
 
-export function initAccountMenu(signOut: () => void): { setWho: (text: string) => void; show: (on: boolean) => void } {
+export function initAccountMenu(signOut: () => void): { setWho: (text: string) => void; setLogin: (login: string) => void; show: (on: boolean) => void } {
   const btn = document.getElementById("account") as HTMLButtonElement;
   const menu = document.getElementById("account-menu") as HTMLElement;
-  const who = document.getElementById("who-menu") as HTMLElement;
+  const who = document.getElementById("who") as HTMLElement;
   const out = document.getElementById("forget-menu") as HTMLButtonElement;
   const svg = document.createElementNS(SVG, "svg");
   svg.setAttribute("viewBox", "0 0 24 24");
@@ -38,6 +40,11 @@ export function initAccountMenu(signOut: () => void): { setWho: (text: string) =
   });
   return {
     setWho: (text) => void (who.textContent = text),
+    setLogin: (login) => {
+      btn.replaceChildren(h("span", { className: "avatar", ariaHidden: "true", textContent: login.slice(0, 1).toUpperCase() }));
+      btn.setAttribute("aria-label", `Account: ${login}`);
+      btn.title = `Account: ${login}`;
+    },
     show: (on) => void (btn.hidden = !on),
   };
 }

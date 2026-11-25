@@ -1,11 +1,11 @@
 /**
  * Activity: who saved, moved or deleted what, from the admin API's save log (GET /history).
- * The left sidebar shows the latest few; "Open full activity" opens a dialog with every save, filterable by
+ * The strip's popup (Activity pane) shows the latest few, grouped by day; "Open full activity" opens a dialog with every save, filterable by
  * person and by how far back to look (default 7 days), in pages of a size you pick.
  */
 import { $, h } from "./dom.ts";
 import { modal } from "./region-dialogs.ts";
-import { DEFAULT_PAGE_SIZE, DEFAULT_RANGE, PAGE_SIZES, RANGES, ago, cutoffFor, filterChanges, pageOf, parseMessage, people, type Change } from "../shared/activity.ts";
+import { DEFAULT_PAGE_SIZE, DEFAULT_RANGE, PAGE_SIZES, RANGES, ago, cutoffFor, dayGroup, filterChanges, pageOf, parseMessage, people, type Change } from "../shared/activity.ts";
 import type { HistoryEntry } from "../shared/history.ts";
 import type { GitHub } from "./github.ts";
 
@@ -68,7 +68,8 @@ function sentence(c: Change, compact: boolean, afterOpen?: () => void): HTMLElem
   return h("li", { className: "act-row", dataset: { sha: c.sha } }, text, time);
 }
 
-/* ── Sidebar ── */
+/* ── Popup (the strip's Activity pane) ── */
+
 
 export async function loadActivity(): Promise<void> {
   const list = $("#activity-list");
@@ -76,7 +77,14 @@ export async function loadActivity(): Promise<void> {
   try {
     const r = await deps.gh().history({ limit: SIDEBAR_COUNT });
     const changes = r.entries.map(toChange);
-    list.replaceChildren(...changes.map((c) => sentence(c, true)));
+    const rows: HTMLElement[] = [];
+    let day = "";
+    for (const c of changes) {
+      const g = dayGroup(c.date);
+      if (g !== day) rows.push(h("li", { className: "act-day", textContent: (day = g) }));
+      rows.push(sentence(c, true));
+    }
+    list.replaceChildren(...rows);
     note.textContent = changes.length ? "" : "Nothing has been saved yet.";
   } catch (e) {
     note.textContent = `Couldn't load the activity: ${(e as Error).message}`;

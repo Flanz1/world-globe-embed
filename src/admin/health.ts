@@ -35,7 +35,9 @@ export function renderHealth(checked = false): void {
   const notices = issues.length - problems;
 
   const btn = $("#tab-btn-health");
-  btn.replaceChildren("Health", ...(issues.length ? [h("span", { className: `badge ${problems ? "error" : "warn"}`, textContent: String(issues.length), ariaHidden: "true" })] : []));
+  // The rail item keeps its icon and name; only the small count pill on its icon changes.
+  btn.querySelector(".nav-badge")?.remove();
+  if (issues.length) btn.append(h("span", { className: `nav-badge ${problems ? "error" : "warn"}`, textContent: String(issues.length), ariaHidden: "true" }));
   const count = problems && notices ? `${plural(problems, "problem", "problems")}, ${plural(notices, "notice", "notices")}` : problems ? plural(problems, "problem", "problems") : plural(notices, "notice", "notices");
   btn.setAttribute("aria-label", issues.length ? `Health, ${count}` : "Health");
 
