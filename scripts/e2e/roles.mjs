@@ -299,19 +299,40 @@ await step(U, "Users tab", async () => {
   await page.goto(`${ADMIN}#users`);
   await page.waitForSelector('#users [data-user="carto-ann"]', { timeout: 15000 });
   check(U, "Users tab shown, Maps & slots not", (await visible(page, "#tab-users")) && !(await visible(page, "#tab-btn-maps")));
-  check(U, "the owner's row and their own row can't be changed", (await page.locator('#users [data-user="Flanz1"] input, #users [data-user="Flanz1"] select').count()) === 0 && (await disabled(page, '#users [data-user="e2e-user"] [data-perm="regions"]')));
-  check(U, "they can't hand out Maps & slots", await disabled(page, '#users [data-user="carto-ann"] [data-perm="maps"]'));
-  check(U, "they can't take Maps & slots away either", (await disabled(page, '#users [data-user="LoopSimon"] [data-perm="maps"]')) && (await disabled(page, '#users [data-user="LoopSimon"] [data-action="remove-user"]')));
+  // The permission switches live in a popup opened by the row's "Permissions" button.
+  const openPerms = async (login) => {
+    await page.locator(`#users [data-user="${login}"] button[data-perms]`).click();
+    await page.waitForSelector(".sw-menu [data-perm]", { timeout: 5000 });
+  };
+  const closePerms = async () => {
+    await page.keyboard.press("Escape");
+    await page.waitForSelector(".sw-menu", { state: "detached", timeout: 5000 });
+  };
+  check(U, "the owner's row can't be changed", (await page.locator('#users [data-user="Flanz1"] input, #users [data-user="Flanz1"] select').count()) === 0);
+  await openPerms("e2e-user");
+  check(U, "their own row can't be changed", await disabled(page, '.sw-menu [data-perm="regions"]'));
+  await closePerms();
+  await openPerms("carto-ann");
+  check(U, "they can't hand out Maps & slots", await disabled(page, '.sw-menu [data-perm="maps"]'));
+  await closePerms();
+  await openPerms("LoopSimon");
+  check(U, "they can't take Maps & slots away either", (await disabled(page, '.sw-menu [data-perm="maps"]')) && (await disabled(page, '#users [data-user="LoopSimon"] [data-action="remove-user"]')));
+  await closePerms();
   check(U, "the presets offered are only ones they can give", JSON.stringify(await page.locator("#user-preset option").allTextContents()) === JSON.stringify(["Contributor", "Editor"]), (await page.locator("#user-preset option").allTextContents()).join(","));
   await page.screenshot({ path: path.join(OUT, "users.png"), fullPage: true });
 
   // Each person shows a role and a one-line summary; the permission boxes sit behind "Permissions…" until the role is Custom.
   const annRow = page.locator('#users [data-user="carto-ann"]');
-  check(U, "a role has a one-line summary and its boxes are folded away", /^Create regions$/.test((await annRow.locator("[data-summary]").textContent()) ?? "") && !(await annRow.locator('[data-perm="regions"]').isVisible()));
+  check(U, "a role has a one-line summary and its switches are folded away", /^Create regions$/.test((await annRow.locator("[data-summary]").textContent()) ?? "") && (await page.locator(".sw-menu").count()) === 0);
   check(U, "the Save / Undo bar is hidden while nothing changed", !(await visible(page, "#users-bar")));
-  await annRow.locator("summary").click();
-  check(U, "Permissions… opens the boxes", await annRow.locator('[data-perm="regions"]').isVisible());
-  await annRow.locator("summary").click();
+  await openPerms("carto-ann");
+  check(U, "Permissions opens a popup of switches over the page", await page.locator('.sw-menu [data-perm="regions"]').isVisible() && (await page.locator('.sw-menu [role="switch"]').count()) === 6);
+  const h0 = (await annRow.boundingBox()).height;
+  await page.locator('.sw-menu [data-perm="regions"]').uncheck({ force: true });
+  await page.waitForSelector('.sw-menu [data-perm="regions"]');
+  check(U, "flipping a switch keeps the popup open, makes the role Custom and doesn't grow the card", (await annRow.locator("select").inputValue()) === "" && (await page.locator(".sw-menu").count()) === 1 && Math.abs((await annRow.boundingBox()).height - h0) < 2);
+  await page.locator('.sw-menu [data-perm="regions"]').check({ force: true });
+  await closePerms();
   // Make carto-ann an Editor and add someone new, in one save.
   await page.selectOption('#users [data-user="carto-ann"] select', "Editor");
   check(U, "a change shows the Save / Undo bar and the new summary", (await visible(page, "#users-bar")) && /^Create regions, edit others'$/.test((await annRow.locator("[data-summary]").textContent()) ?? ""), await annRow.locator("[data-summary]").textContent());
