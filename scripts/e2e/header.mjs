@@ -68,15 +68,32 @@ try {
   const phone = await adminPage("Flanz1", 375);
   const p = phone.page;
   const vis = (sel) => p.locator(sel).isVisible();
-  check("phone: the Account button shows; the repo text and Sign out are not in the header", (await vis("#account")) && !(await vis("#who")) && !(await vis("#forget")));
+  check("phone: the Account button shows the initial; the repo text and Sign out wait in its menu", (await vis("#account")) && (await p.textContent("#account"))?.trim() === "F" && !(await vis("#who")) && !(await vis("#forget-menu")));
   check("phone: the colour controls stay in the header", (await vis("#theme-ctl .theme-mode")) && (await vis("#theme-ctl .theme-swatch")));
   const head = await p.locator("header").boundingBox();
-  check("phone: the header is two rows (title + controls, tabs), under 150 px", !!head && head.height < 150, `header ${Math.round(head?.height ?? 0)} px`);
-  const banner = await p.locator("#branch").boundingBox();
-  check("phone: the test-branch warning is a banner under the header", !!banner && !!head && banner.y >= head.y + head.height - 1 && banner.height < 40, JSON.stringify(banner));
+  check("phone: the header is one row, under 72 px", !!head && head.height < 72, `header ${Math.round(head?.height ?? 0)} px`);
+  const strip = await p.locator("#strip").boundingBox();
+  check("phone: the strip sits right under the header, 40 px tall, with the branch tag", !!strip && !!head && strip.y >= head.y + head.height - 1 && strip.height <= 41 && (await vis("#strip #branch")), JSON.stringify(strip));
+  const nav = await p.evaluate(() => {
+    const n = document.querySelector("#tabs");
+    const r = n.getBoundingClientRect();
+    return { bottom: Math.round(r.bottom), vh: innerHeight, h: Math.round(r.height), items: [...n.querySelectorAll("button")].filter((b) => b.offsetParent).length, fixed: getComputedStyle(n).position };
+  });
+  check("phone: the sections are a bottom bar, at least 56 px tall", nav.fixed === "fixed" && Math.abs(nav.bottom - nav.vh) <= 1 && nav.h >= 56 && nav.items >= 4, JSON.stringify(nav));
+  await p.click("#strip");
+  await p.waitForSelector("#strip-pop:popover-open", { timeout: 3000 });
+  const sheet = await p.evaluate(() => {
+    const r = document.querySelector("#strip-pop").getBoundingClientRect();
+    return { bottom: Math.round(r.bottom), vh: innerHeight, w: Math.round(r.width), vw: document.documentElement.clientWidth };
+  });
+  check("phone: the strip's popup is a bottom sheet", Math.abs(sheet.bottom - sheet.vh) <= 1 && sheet.w >= sheet.vw - 1, JSON.stringify(sheet));
+  check("phone: the popup opens on Activity, and the strip says it is expanded", (await p.getAttribute("#pop-btn-activity", "aria-pressed")) === "true" && (await p.getAttribute("#strip", "aria-expanded")) === "true");
+  await p.keyboard.press("Escape");
+  await p.waitForFunction(() => !document.querySelector("#strip-pop")?.matches(":popover-open"));
+  check("phone: Escape closes the popup and focus returns to the strip", (await p.evaluate(() => document.activeElement?.id)) === "strip");
   await p.click("#account");
   await p.waitForSelector("#account-menu:popover-open", { timeout: 3000 });
-  check("phone: the menu shows who is signed in", /signed in as Flanz1/.test((await p.textContent("#who-menu")) ?? ""), await p.textContent("#who-menu"));
+  check("phone: the menu shows who is signed in", /signed in as Flanz1/.test((await p.textContent("#who")) ?? ""), await p.textContent("#who"));
   await p.waitForFunction(() => document.activeElement?.id === "forget-menu", null, { timeout: 3000 }).catch(() => {}); // focus moves after the popover opens; busy CI lags a frame
   check("phone: focus goes to Sign out and the button says it is expanded", (await p.evaluate(() => document.activeElement?.id)) === "forget-menu" && (await p.getAttribute("#account", "aria-expanded")) === "true");
   await p.screenshot({ path: path.join(OUT, "phone-menu.png") });
@@ -93,16 +110,31 @@ try {
   await phone.ctx.close();
 
   const tiny = await adminPage("Flanz1", 320);
-  const t = await tiny.page.evaluate(() => ({ page: document.documentElement.scrollWidth, w: document.documentElement.clientWidth, tabsScroll: document.querySelector("#tabs").scrollWidth > document.querySelector("#tabs").clientWidth, mask: getComputedStyle(document.querySelector("#tabs")).maskImage, wide: [...document.querySelectorAll("body *")].filter((e) => e.getBoundingClientRect().right > document.documentElement.clientWidth + 1 && e.offsetParent).slice(0, 6).map((e) => `${e.tagName}.${e.className}#${e.id}[${e.getAttribute("name") ?? e.type ?? ""}] ${Math.round(e.getBoundingClientRect().right)} w=${Math.round(e.getBoundingClientRect().width)}`) }));
+  const t = await tiny.page.evaluate(() => ({ page: document.documentElement.scrollWidth, w: document.documentElement.clientWidth, navFits: document.querySelector("#tabs").scrollWidth <= document.querySelector("#tabs").clientWidth, wide: [...document.querySelectorAll("body *")].filter((e) => e.getBoundingClientRect().right > document.documentElement.clientWidth + 1 && e.offsetParent).slice(0, 6).map((e) => `${e.tagName}.${e.className}#${e.id}[${e.getAttribute("name") ?? e.type ?? ""}] ${Math.round(e.getBoundingClientRect().right)} w=${Math.round(e.getBoundingClientRect().width)}`) }));
   check("320 px: the page doesn't scroll sideways", t.page <= t.w, JSON.stringify(t));
-  check("320 px: the tab row scrolls inside itself and fades at the right edge", t.tabsScroll && /linear-gradient/.test(t.mask), JSON.stringify(t));
+  check("320 px: every section fits in the bottom bar", t.navFits, JSON.stringify(t));
   await tiny.page.screenshot({ path: path.join(OUT, "phone-320.png") });
   await tiny.ctx.close();
 
   const desk = await adminPage("Flanz1", 1440);
   const d = desk.page;
-  check("desktop: the text and Sign out are in the header, no Account button", (await d.locator("#who").isVisible()) && (await d.locator("#forget").isVisible()) && !(await d.locator("#account").isVisible()));
-  check("desktop: the test-branch warning is the banner under the header", /test\/header/.test((await d.textContent("#branch")) ?? "") && (await d.locator("#branch").isVisible()));
+  check("desktop: the Account button is in the header; the repo text waits in its menu", (await d.locator("#account").isVisible()) && !(await d.locator("#who").isVisible()));
+  check("desktop: the test branch is a tag in the strip", /test\/header/.test((await d.textContent("#branch")) ?? "") && (await d.locator("#strip #branch").isVisible()));
+  const rail = await d.evaluate(() => {
+    const n = document.querySelector("#tabs").getBoundingClientRect();
+    const m = document.querySelector("#main").getBoundingClientRect();
+    return { left: Math.round(n.left), right: Math.round(n.right), h: Math.round(n.height), w: Math.round(n.width), main: Math.round(m.left) };
+  });
+  check("desktop: the sections are a rail on the left, beside the content", rail.left === 0 && rail.h > rail.w && rail.main >= rail.right, JSON.stringify(rail));
+  check("desktop: no sidebars any more", (await d.locator("aside").count()) === 0);
+  await d.click("#strip");
+  await d.waitForSelector("#strip-pop:popover-open", { timeout: 3000 });
+  await d.click("#pop-btn-deploys");
+  check("desktop: the popup switches to Deploys", (await d.locator("#pop-deploys").isVisible()) && !(await d.locator("#pop-activity").isVisible()));
+  await d.screenshot({ path: path.join(OUT, "desktop-popup.png") });
+  await d.click("#strip");
+  await d.waitForFunction(() => !document.querySelector("#strip-pop")?.matches(":popover-open"));
+  check("desktop: a second click on the strip closes the popup", (await d.getAttribute("#strip", "aria-expanded")) === "false");
   await d.screenshot({ path: path.join(OUT, "desktop.png") });
   check("no errors on the desktop page", desk.errors.length === 0, desk.errors.join(" | "));
   await desk.ctx.close();
