@@ -20,7 +20,7 @@ import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { makeFixture, PROVINCES, SLOT } from "./fixture.mjs";
+import { makeFixture, PROVINCES, SLOT, edTab } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { ADMIN_API, useAdminApi } from "./admin-api.mjs";
 import { checkGeometry } from "../../src/shared/geo.ts";
@@ -488,6 +488,7 @@ await step(A, "editor: draw and edit", async () => {
   await mdrag(x, y, -44, 0);
   s = await ed.state();
   check(A, "a new part starts locked: dragging inside it doesn't move it", s.locked[0] === true && s.parts[0][0].every((p, i) => p[0] === before[i]), JSON.stringify(s.locked));
+  await edTab(page, "parts"); // a new region opens on the Region tab (its id)
   await page.click('dialog.editor [data-act="part-lock"]');
   await mdrag(x, y, -44, 0);
   s = await ed.state();
@@ -705,6 +706,7 @@ await step(A, "conflict detection", async () => {
   await page.waitForTimeout(400);
   const s = await ed.state();
   check(A, "reload brings in the newer version (an older region's name becomes part 1's label)", s.labels[0] === "Changed elsewhere", JSON.stringify(s.labels));
+  await edTab(page, "region");
   await page.click('dialog.editor [data-act="centre"]');
   await page.click("dialog.editor .pv-head button.ghost");
   await page.waitForTimeout(200);
@@ -782,7 +784,7 @@ await step(A, "editor speed at 2,000 vertices", async () => {
   const v = s.parts[0][0][0];
   // A 60-step vertex drag. Measures wall time per pointer move, the editor's own work per move
   // (pointer handler + its canvas redraw), and how many region updates reached the globe preview.
-  const dragOnce = async (dx, settled) => {
+  const dragOnce = async (dx) => {
     const [x, y] = await ed.xy(v[0], v[1]);
     const t0 = Date.now();
     await page.mouse.move(x, y);
@@ -791,8 +793,6 @@ await step(A, "editor speed at 2,000 vertices", async () => {
     await page.mouse.up();
     const ms = Date.now() - t0;
     await page.waitForTimeout(300);
-    // The preview's catch-up update can land well after 300 ms on a loaded CI runner: wait for it before undoing.
-    if (settled) await settled();
     await page.keyboard.press("Control+z");
     return ms;
   };
@@ -801,7 +801,7 @@ await step(A, "editor speed at 2,000 vertices", async () => {
     window.__updates = 0;
     addEventListener("message", (e) => e.data?.type === "wge-region" && window.__updates++);
   });
-  const withPreview = await dragOnce(1, () => pf.waitForFunction(() => window.__updates >= 1, null, { timeout: 10000 }).catch(() => {}));
+  const withPreview = await dragOnce(1);
   const updates = await pf.evaluate(() => window.__updates);
   // Same drag with the preview iframe emptied: the editor alone.
   await page.evaluate(() => (document.querySelector("dialog.editor iframe.ed-globe").src = "about:blank"));

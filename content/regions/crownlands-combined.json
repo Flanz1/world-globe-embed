@@ -10,71 +10,71 @@
     "label": true,
     "legend": [
       {
-        "label": "Iztaw",
+        "label": "iztaw",
         "color": "#ff0000"
       },
       {
-        "label": "Levazci",
+        "label": "levazci",
         "color": "#df9d2a"
       },
       {
-        "label": "Nuv werm",
+        "label": "nuv-werm",
         "color": "#000000"
       },
       {
-        "label": "Opuzna",
+        "label": "opuzna",
         "color": "#0fd263"
       },
       {
-        "label": "Breza",
+        "label": "breza",
         "color": "#fff047"
       },
       {
-        "label": "Pretko",
+        "label": "pretko",
         "color": "#fa4b00"
       },
       {
-        "label": "Rovgi",
+        "label": "rovgi",
         "color": "#1ca2ce"
       },
       {
-        "label": "Selbia",
+        "label": "selbia",
         "color": "#e42151"
       },
       {
-        "label": "Silver Towns",
+        "label": "silver-towns",
         "color": "#f8f7f7"
       },
       {
-        "label": "Silver Wheel",
+        "label": "silver-wheel",
         "color": "#bbacaa"
       },
       {
-        "label": "Szievek",
+        "label": "szievek",
         "color": "#3f0061"
       },
       {
-        "label": "Szulblod",
+        "label": "szulblod",
         "color": "#c9ba0d"
       },
       {
-        "label": "Taar",
+        "label": "taar",
         "color": "#7da70c"
       },
       {
-        "label": "Tloky",
+        "label": "tloky",
         "color": "#455478"
       },
       {
-        "label": "Torry",
+        "label": "torry",
         "color": "#17b814"
       },
       {
-        "label": "Trazlova",
+        "label": "trazlova",
         "color": "#2a20bc"
       },
       {
-        "label": "Wytlords",
+        "label": "wytlords",
         "color": "#072207"
       }
     ],
@@ -150,104 +150,15 @@
       "trazlova",
       "wytlords"
     ],
-    "linkedNames": {
-      "legend": [
-        {
-          "color": "#ff0000",
-          "from": "iztaw",
-          "label": "Iztaw"
-        },
-        {
-          "color": "#df9d2a",
-          "from": "levazci",
-          "label": "Levazci"
-        },
-        {
-          "color": "#000000",
-          "from": "nuv-werm",
-          "label": "Nuv werm"
-        },
-        {
-          "color": "#0fd263",
-          "from": "opuzna",
-          "label": "Opuzna"
-        },
-        {
-          "color": "#fff047",
-          "from": "breza",
-          "label": "Breza"
-        },
-        {
-          "color": "#fa4b00",
-          "from": "pretko",
-          "label": "Pretko"
-        },
-        {
-          "color": "#1ca2ce",
-          "from": "rovgi",
-          "label": "Rovgi"
-        },
-        {
-          "color": "#e42151",
-          "from": "selbia",
-          "label": "Selbia"
-        },
-        {
-          "color": "#f8f7f7",
-          "from": "silver-towns",
-          "label": "Silver Towns"
-        },
-        {
-          "color": "#bbacaa",
-          "from": "silver-wheel",
-          "label": "Silver Wheel"
-        },
-        {
-          "color": "#3f0061",
-          "from": "szievek",
-          "label": "Szievek"
-        },
-        {
-          "color": "#c9ba0d",
-          "from": "szulblod",
-          "label": "Szulblod"
-        },
-        {
-          "color": "#7da70c",
-          "from": "taar",
-          "label": "Taar"
-        },
-        {
-          "color": "#455478",
-          "from": "tloky",
-          "label": "Tloky"
-        },
-        {
-          "color": "#17b814",
-          "from": "torry",
-          "label": "Torry"
-        },
-        {
-          "color": "#2a20bc",
-          "from": "trazlova",
-          "label": "Trazlova"
-        },
-        {
-          "color": "#072207",
-          "from": "wytlords",
-          "label": "Wytlords"
-        }
-      ]
-    },
     "created": "2026-11-20T19:29:08Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
-    "updated": "2026-11-24T22:30:47Z",
+    "updated": "2026-11-20T19:29:08Z",
     "updatedBy": {
-      "id": 45669787,
-      "login": "Flanz1"
+      "id": 138310181,
+      "login": "LoopSimon"
     }
   },
   "geometry": {

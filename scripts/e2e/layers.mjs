@@ -456,7 +456,7 @@ const partBox = (s, p) => {
 const moved = (a, b) => a.map((v, i) => +(b[i] - v).toFixed(4));
 /** Unselects by clicking empty map, so the selection outline doesn't cover the borders. */
 const unselect = async () => {
-  const [x, y] = await ed.xy(134, -58); // empty map, clear of the layer bar at the top right
+  const [x, y] = await ed.xy(134, -58); // empty map, clear of the layer bar at the top left
   await page.mouse.click(x, y);
   await page.waitForTimeout(80);
 };
@@ -596,17 +596,17 @@ if (want("editor")) {
     await page.keyboard.press("[");
     await page.keyboard.press("]");
     check(A, "[ then ] ends where it started", JSON.stringify((await ed.state()).styles) === "[-1,0]");
-    // The layer bar in the top right of the map, while a part is selected.
+    // The layer bar in the top left of the map, while a part is selected.
     // (The bar updates on the next frame.)
     const bar = () => page.evaluate(async () => {
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const b = document.querySelector("dialog.editor .ed-layer-bar");
       const r = b.getBoundingClientRect();
       const w = document.querySelector("dialog.editor .ed-canvas-wrap").getBoundingClientRect();
-      return { shown: !b.hidden, text: b.querySelector(".ed-layer-name").textContent, fwd: b.querySelector('[data-act="layer-forward"]').disabled, back: b.querySelector('[data-act="layer-backward"]').disabled, topRight: Math.abs(r.right - w.right) < 20 && Math.abs(r.top - w.top) < 20 };
+      return { shown: !b.hidden, text: b.querySelector(".ed-layer-name").textContent, fwd: b.querySelector('[data-act="layer-forward"]').disabled, back: b.querySelector('[data-act="layer-backward"]').disabled, topLeft: Math.abs(r.left - w.left) < 20 && Math.abs(r.top - w.top) < 20 };
     });
     let lb = await bar();
-    check(A, "a selected part shows the layer bar in the map's top right", lb.shown && lb.topRight && lb.text === "Part 2 of 2" && lb.fwd && !lb.back, JSON.stringify(lb));
+    check(A, "a selected part shows the layer bar in the map's top left", lb.shown && lb.topLeft && lb.text === "Part 2 of 2" && lb.fwd && !lb.back, JSON.stringify(lb));
     await page.click('dialog.editor .ed-layer-bar [data-act="layer-backward"]');
     lb = await bar();
     check(A, "its Back sends the part under the other", JSON.stringify((await ed.state()).styles) === "[0,-1]" && (await ed.sel()) === 0 && lb.text === "Part 1 of 2" && !lb.fwd && lb.back, JSON.stringify(lb));

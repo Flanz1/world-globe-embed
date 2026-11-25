@@ -625,6 +625,7 @@ export function openEditor(o: EditorOptions): void {
       {
         id: "region",
         title: "Region",
+        icon: "region",
         children: [
           h("div", { className: "row" }, btn("Centre on region", "Turn the globe preview to face the region", () => sendPreview(true), "centre"), btn("Embed code…", "Copy the iframe code for this region", () => embed(), "embed")),
           h("label", {}, "Id (permanent; embeds use it)", idIn),
@@ -640,6 +641,7 @@ export function openEditor(o: EditorOptions): void {
       {
         id: "parts",
         title: "Parts",
+        icon: "parts",
         children: [
         h(
           "fieldset",
@@ -669,8 +671,15 @@ export function openEditor(o: EditorOptions): void {
           stats,
         ],
       },
-      { id: "underlays", title: "Underlays", children: [underBox, pinMapBox] },
+      { id: "underlays", title: "Layers", icon: "layers", children: [underBox, pinMapBox] },
     ],
+    embed: () => embed(),
+    start: o.isNew ? "region" : "parts",
+    // Folding the inspector (or crossing into the bottom sheet) changes the visible map: re-centre in it.
+    onLayout: () => {
+      measure();
+      draw();
+    },
   });
   const title = h("h2", {});
   /** "Edit region: rogyn": the words before the colon go in their own span, which phones hide visually so the name fits. */
@@ -812,7 +821,7 @@ export function openEditor(o: EditorOptions): void {
     declineBtn,
     closeBtn,
   );
-  const canvasWrap = h("div", { className: "ed-canvas-wrap" }, canvas, pinsLayer.tip, commentTool.markers, pinTool.popover, commentTool.popover, overlays.panel, layerBar.el, optBar, ctxMenu, tip, simpPanel, combPanel, status);
+  const canvasWrap = h("div", { className: "ed-canvas-wrap" }, canvas, pinsLayer.tip, commentTool.markers, pinTool.popover, commentTool.popover, overlays.panel, h("div", { className: "ed-map-tl" }, layerBar.el, optBar, simpPanel, combPanel), ctxMenu, tip, side.minimap, status);
   const dlg = h(
     "dialog",
     { className: "editor", ariaLabel: "Region editor" },
@@ -865,14 +874,19 @@ export function openEditor(o: EditorOptions): void {
   let touched = false;
   // The canvas's CSS size, cached: reading clientWidth in sx()/sy() forced a layout per vertex
   // (seconds per frame at 2,000 vertices). Refreshed by the ResizeObserver below and when opened.
-  let cssSize = { w: 1, h: 1 };
-  const measure = () => (cssSize = { w: Math.max(1, canvas.clientWidth), h: Math.max(1, canvas.clientHeight) });
+  // vw: the width left visible beside the floating inspector (wide screens); the view centres in that.
+  let cssSize = { w: 1, h: 1, vw: 1 };
+  const measure = () => {
+    const w = Math.max(1, canvas.clientWidth);
+    const cover = side.el.dataset.mode === "panel" && side.el.dataset.folded !== "true" ? Math.min(w / 2, side.el.offsetWidth + 24) : 0;
+    cssSize = { w, h: Math.max(1, canvas.clientHeight), vw: Math.max(1, w - cover) };
+  };
   const size = () => cssSize;
-  const sx = (lon: number) => (lon - view.cx) * view.k + size().w / 2;
+  const sx = (lon: number) => (lon - view.cx) * view.k + size().vw / 2;
   const sy = (lat: number) => (view.cy - lat) * view.k * ky + size().h / 2;
   pinPos.sx = sx;
   pinPos.sy = sy;
-  const wx = (x: number) => view.cx + (x - size().w / 2) / view.k;
+  const wx = (x: number) => view.cx + (x - size().vw / 2) / view.k;
   const wy = (y: number) => view.cy - (y - size().h / 2) / (view.k * ky);
   const nearest = (lon: number, near: number) => lon + 360 * Math.round((near - lon) / 360);
   const kLimits = () => {
@@ -880,9 +894,9 @@ export function openEditor(o: EditorOptions): void {
     return [flatMinK(aspect, w, hh) * 0.5, 400] as const;
   };
   function fitView(): void {
-    const { w, h: hh } = size();
+    const { vw, h: hh } = size();
     const b: [number, number, number, number] = hist.state.parts.length ? geometryBounds(toGeometry(hist.state.parts)) : [-180, -90, 180, 90];
-    const v = flatFit(b, aspect, w, hh);
+    const v = flatFit(b, aspect, vw, hh);
     view = { cx: v.cx, cy: v.cy, k: v.k };
   }
   function zoomAt(f: number, x: number, y: number): void {
@@ -890,7 +904,7 @@ export function openEditor(o: EditorOptions): void {
     const lat = wy(y);
     const [lo, hi] = kLimits();
     view.k = Math.min(hi, Math.max(lo, view.k * f));
-    view.cx = lon - (x - size().w / 2) / view.k;
+    view.cx = lon - (x - size().vw / 2) / view.k;
     view.cy = lat + (y - size().h / 2) / (view.k * ky);
     view.cy = Math.max(-90, Math.min(90, view.cy));
     touched = true;
@@ -1134,7 +1148,10 @@ export function openEditor(o: EditorOptions): void {
     draw();
   }
   function selectPart(p: number, hint = ""): void {
+    const was = selPart;
     selPart = p >= 0 && p < parts().length ? p : -1;
+    // Picking a part shows it in the inspector's Parts tab.
+    if (selPart >= 0 && selPart !== was) side.show("parts");
     pickHint = selPart >= 0 ? hint : "";
     folders.querySelectorAll<HTMLElement>(".ed-part-row").forEach((row) => {
       const on = Number(row.dataset.row) === selPart;
@@ -1815,6 +1832,7 @@ export function openEditor(o: EditorOptions): void {
     const real = validRadius(slot.radius) ? ` (about ${formatArea((area / 100) * sphereAreaKm2(slot.radius), "km")} · ${formatArea((area / 100) * sphereAreaKm2(slot.radius), "mi")})` : "";
     stats.textContent = `${n.toLocaleString()} vertices in ${parts_} part${parts_ === 1 ? "" : "s"} · about ${area < 0.01 ? area.toFixed(4) : area.toFixed(2)}% of the globe's surface${real}`;
     stats.classList.toggle("error", !live && n >= WARN_VERTICES);
+    side.badge("parts", parts_ > 1 ? String(parts_) : "");
     if (!live && n >= WARN_VERTICES) stats.textContent += ` · close to the ${MAX_VERTICES.toLocaleString()}-vertex limit`;
   }
 
@@ -2248,8 +2266,8 @@ export function openEditor(o: EditorOptions): void {
   function centrePart(p: number): void {
     const rings = parts()[p];
     if (!rings) return;
-    const { w, h: hh } = size();
-    const v = flatFit(geometryBounds(toGeometry([rings])), aspect, w, hh);
+    const { vw, h: hh } = size();
+    const v = flatFit(geometryBounds(toGeometry([rings])), aspect, vw, hh);
     view = { cx: v.cx, cy: v.cy, k: v.k };
     touched = true;
     setTool("select");

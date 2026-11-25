@@ -16,7 +16,7 @@ import { existsSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { SLOT, MAP, makeFixture } from "./fixture.mjs";
+import { SLOT, MAP, makeFixture, edTab } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 
@@ -99,6 +99,7 @@ let outsideBefore = [];
 await step(A, "adding an underlay", async () => {
   plain = await pixel(104, -46);
   outsideBefore = await pixel(95, -46);
+  await edTab(page, "underlays");
   check(A, "no layer list before anything is added", (await page.locator(`${D} .ed-under-row`).count()) === 0);
   await page.selectOption(`${D} select[name="under-add"]`, "faith");
   // No wait: the row must be there straight away.

@@ -48,24 +48,22 @@ transition:opacity .4s ease}
 .ready #globe{opacity:1}.ready #poster{opacity:0}
 .flat{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .note{position:absolute;inset:auto 16px;top:45%;margin:0;text-align:center;font-size:14px;color:#9d927b}
-#ui{position:fixed;right:8px;bottom:8px;display:flex;flex-direction:column;gap:2px;padding:4px;border-radius:10px;background:var(--embed-panel);-webkit-backdrop-filter:var(--embed-blur);backdrop-filter:var(--embed-blur)}
+#ui{position:fixed;right:8px;bottom:8px;display:flex;gap:4px}
 #ui:hover,#ui:focus-within{opacity:1}
-#ui button{all:unset;box-sizing:border-box;width:28px;height:28px;display:grid;place-items:center;border-radius:7px;cursor:pointer;color:#e8dcc8}
-#ui button:hover{background:rgba(232,220,200,.12)}
+#ui button{all:unset;box-sizing:border-box;width:28px;height:28px;display:grid;place-items:center;border-radius:6px;cursor:pointer;color:#e8dcc8;background:var(--embed-panel);-webkit-backdrop-filter:var(--embed-blur);backdrop-filter:var(--embed-blur)}
 #ui button:focus-visible{outline:2px solid #c9a94e}
-#ui button[aria-pressed=true]{color:#e8c44a;background:rgba(232,196,74,.22)}
+#ui button[aria-pressed=true]{color:#e8c44a;background:rgba(20,18,14,.88)}
 #ui button{position:relative}
-#ui button::after{content:attr(aria-label);position:absolute;right:calc(100% + 10px);top:50%;transform:translateY(-50%);padding:3px 8px;border-radius:5px;background:rgba(20,18,14,.92);color:#f3ead8;font:600 12px/1.3 system-ui,sans-serif;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .12s}
+#ui button::after{content:attr(aria-label);position:absolute;right:0;bottom:calc(100% + 6px);padding:3px 8px;border-radius:5px;background:rgba(20,18,14,.92);color:#f3ead8;font:600 12px/1.3 system-ui,sans-serif;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .12s}
 @media (hover:hover){#ui button:hover::after{opacity:1;transition-delay:.4s}}
 #ui button:focus-visible::after{opacity:1}
 #ui.notip button::after{opacity:0!important}
 #btn-lock::before{content:"";position:absolute;right:3px;bottom:3px;width:9px;height:9px;border-radius:50%;background:#e8c44a center/7px 7px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.2 4.2l2 2 3.6-4.4' fill='none' stroke='%231a1710' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
 #btn-lock[aria-pressed=false]::before{width:2px;height:20px;right:13px;bottom:4px;border-radius:1px;background:#e8dcc8;box-shadow:0 0 0 1px rgba(20,18,14,.9);transform:rotate(45deg)}
-@media (pointer:coarse){#ui{gap:4px;border-radius:14px}#ui button{width:44px;height:44px;border-radius:10px}#ui button::after{display:none}}
+@media (pointer:coarse){#ui{gap:6px}#ui button{width:44px;height:44px;border-radius:8px}#ui button::after{display:none}}
 #hint{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);padding:6px 12px;border-radius:14px;background:rgba(20,18,14,.8);color:#f3ead8;font:600 13px/1.3 system-ui,sans-serif;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .4s}
 #hint.on{opacity:1}
 @media (prefers-reduced-motion:reduce){#hint{transition:none}#ui button::after{transition:none}}
-#ui:not(:has(button:not([hidden]))){display:none}
 #ui [hidden],#legend[hidden],#ui[hidden]{display:none}
 #legend{position:fixed;left:8px;bottom:8px;padding:6px 8px;border-radius:6px;color:#e8dcc8;background:rgba(20,18,14,.6);display:grid;gap:4px}
 #legend i{display:inline-block;width:16px;height:3px;border-radius:1px;margin-right:6px;vertical-align:middle}
