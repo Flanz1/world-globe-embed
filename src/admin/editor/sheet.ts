@@ -194,7 +194,7 @@ export function sidePanel(opts: { frame: HTMLElement; banners: HTMLElement[]; se
   let drag: { y: number; h0: number; moved: boolean } | null = null;
   const sheetHead = el.firstElementChild as HTMLElement;
   sheetHead.addEventListener("pointerdown", (e) => {
-    if (!mq.matches || (e.target as HTMLElement).closest(".ed-tab")) return;
+    if (!mq.matches || (e.target as HTMLElement).closest(".ed-tab, .ed-rail")) return;
     drag = { y: e.clientY, h0: el.getBoundingClientRect().height, moved: false };
     sheetHead.setPointerCapture(e.pointerId);
   });
