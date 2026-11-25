@@ -12,7 +12,7 @@ import { childrenOf, moveTargets, pathName, pinFirst, placements, withDescendant
 import { paintSpecOf, regionClashes } from "../shared/region-paint.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
 import { categories, canAddCategory, initCategories, loadCategories, moveFolder, moveFolderTo, moveRegions, newCategory, pin as pinRegion, reorderPin, remove as removeCategory, rename as renameCategory, shift as shiftCategory } from "./categories.ts";
-import { $, h } from "./dom.ts";
+import { $, folderIcon, h } from "./dom.ts";
 import { hasPendingSaves, optimistic } from "./optimistic.ts";
 import { openEditor, type EditorOptions } from "./editor/editor.ts";
 import { joinNames } from "./editor/presence.ts";
@@ -509,17 +509,6 @@ export function pick(next: typeof picked, focus = false): void {
   if (focus && window.matchMedia("(max-width: 860px)").matches) $("#r-inspector").querySelector<HTMLElement>(".r-insp-title")?.focus();
 }
 
-const SVGNS = "http://www.w3.org/2000/svg";
-function folderIcon(): SVGSVGElement {
-  const svg = document.createElementNS(SVGNS, "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("class", "r-ficon");
-  const path = document.createElementNS(SVGNS, "path");
-  path.setAttribute("d", "M3 6.5A1.5 1.5 0 014.5 5H9l2 2h8.5A1.5 1.5 0 0121 8.5v9a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 17.5z");
-  svg.append(path);
-  return svg;
-}
 
 const partsText = (e: RegionEntry): string => {
   if (!e.feature) return "can't be read";

@@ -42,3 +42,35 @@ export async function openFoldersAround(page, selector) {
     }
   }, selector);
 }
+
+/* ── Pins tab: the same list + inspector. ── */
+
+/** Shows pin map `id`'s actions and pins in the Pins inspector (no-op when it already shows). */
+export async function pickPinMap(page, id) {
+  const box = page.locator(`#pn-inspector [data-insp-pinmap="${id}"]`);
+  if (await box.count()) return;
+  await page.waitForSelector(`#tab-pins .pinmap[data-pinmap="${id}"]`, { state: "attached", timeout: 20000 });
+  await openPinFoldersAround(page, `#tab-pins .pinmap[data-pinmap="${id}"]`);
+  await page.locator(`#tab-pins [data-pick-pinmap="${id}"]`).click();
+  await box.waitFor({ timeout: 10000 });
+}
+
+/** Shows pin folder `id`'s actions in the Pins inspector (no-op when it already shows). */
+export async function pickPinFolder(page, id) {
+  const box = page.locator(`#pn-inspector [data-insp-pinfolder="${id}"]`);
+  if (await box.count()) return;
+  await page.waitForSelector(`#tab-pins .rfolder[data-pinfolder="${id}"]`, { state: "attached", timeout: 20000 });
+  await openPinFoldersAround(page, `#tab-pins .rfolder[data-pinfolder="${id}"] > .rfolder-head`);
+  await page.locator(`#tab-pins [data-pick-pinfolder="${id}"]`).click();
+  await box.waitFor({ timeout: 10000 });
+}
+
+async function openPinFoldersAround(page, selector) {
+  await page.evaluate((sel) => {
+    let el = document.querySelector(sel)?.parentElement;
+    while (el && el.id !== "tab-pins") {
+      if (el.classList.contains("rfolder") && el.classList.contains("closed")) el.querySelector(":scope > .rfolder-head .rfolder-toggle")?.click();
+      el = el.parentElement;
+    }
+  }, selector);
+}

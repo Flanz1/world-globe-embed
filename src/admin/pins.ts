@@ -13,15 +13,15 @@ import { traceGeometry } from "../shared/raster.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
 import type { RegionFeature } from "../shared/region.ts";
 import { clamp } from "../shared/params.ts";
-import { $, SITE, h } from "./dom.ts";
+import { $, SITE, folderIcon, h } from "./dom.ts";
 import type { GitHub } from "./github.ts";
 import { optimistic } from "./optimistic.ts";
 import { loadMapImage } from "./images.ts";
 import { confirmBox, modal } from "./region-dialogs.ts";
-import { canOrganise, initPinMaps, loadPinMaps, moveMapDialog, newFolder, newMap, pinMaps, removeMap, renameMap, renderTree } from "./pinmaps.ts";
-import { mapById, mapsOfSlot, type PinMap } from "../shared/pinmaps.ts";
+import { canOrganise, folderActions, folderInfo, initPinMaps, loadPinMaps, moveMapDialog, newFolder, newMap, pinMaps, removeMap, renameMap, renderTree } from "./pinmaps.ts";
+import { folderOf, mapById, mapsOfSlot, treeOf, type PinMap } from "../shared/pinmaps.ts";
+import { pathName } from "../shared/categories.ts";
 import { account, can, canDelete, canEdit, refusal } from "./session.ts";
-import { moreMenu } from "./more-menu.ts";
 import { Selection, blockedList, cardBox, groupBox, refreshBoxes, selectionBar } from "./bulk.ts";
 import { TRASH_DAYS } from "../shared/trash.ts";
 
@@ -110,6 +110,10 @@ let slot = "";
 /** The pin being looked at or edited: a saved one (its id), or "new". */
 let selected: string | null = null;
 let draft: PinFeature | null = null;
+/** A folder or pin map shown in the inspector (when no pin is). */
+let group: { kind: "folder" | "pinmap"; id: string } | null = null;
+/** Pin maps whose pins are folded away in the list. */
+const closedMaps = new Set<string>();
 let adding = false;
 /** The kind and pin map of the last pin, so placing several in a row doesn't mean choosing them each time. */
 let lastKind: PinKind = "city";
@@ -293,6 +297,7 @@ function editable(): boolean {
 
 function select(id: string | null): void {
   selected = id;
+  if (id) group = null;
   const e = entryOf(id);
   draft = id === "new" ? draft : e?.feature ? structuredClone(e.feature) : null;
   if (id !== "new") adding = false;
@@ -343,8 +348,88 @@ async function leave(): Promise<boolean> {
   return confirmBox("Unsaved pin", "The pin you are editing has changes that aren't saved. Discard them?", "Discard pin", "Keep editing", true);
 }
 
+const narrow = () => window.matchMedia("(max-width: 1023px)").matches;
+
+/** Shows a folder or pin map in the inspector (a bottom sheet on phones and tablets), or closes it (null). */
+function pickGroup(next: typeof group): void {
+  void leave().then((go) => {
+    if (!go) return;
+    if (next) {
+      selected = null;
+      draft = null;
+    }
+    group = next;
+    renderForm(true);
+    renderList();
+    syncControls();
+    redraw();
+    if (next && narrow()) el.form.querySelector<HTMLElement>(".r-insp-title")?.focus();
+  });
+}
+
+function inspHead(lead: Element | null, title: string, count: string | null, close: boolean): HTMLElement {
+  return h(
+    "div",
+    { className: "r-insp-head" },
+    lead,
+    h("h3", { className: "r-insp-title", tabIndex: -1, textContent: title }),
+    count ? h("span", { className: "rcount", textContent: count }) : null,
+    close ? h("button", { type: "button", className: "text r-insp-close", textContent: "Close", ariaLabel: "Close the details", onclick: () => pickGroup(null) }) : null,
+  );
+}
+
+const inspBtn = (text: string, action: string, onclick: () => void, why = "", cls = "ghost") => h("button", { type: "button", className: cls, textContent: text, onclick, disabled: !!why, title: why, dataset: { action } });
+
+/** A pin map in the inspector: its actions, then its pins. */
+function pinMapInspector(id: string): HTMLElement | null {
+  const m = mapById(pinMaps(), id);
+  if (!m || m.slot !== slot) return null;
+  const all = pinsIn(m);
+  const why = canOrganise() ? "" : "You don't have permission to change pin maps.";
+  const home = folderOf(pinMaps(), m.id);
+  const sub = `${home ? `${pathName(treeOf(pinMaps()), home)} · ` : "Not in a folder · "}${all.length} pin${all.length === 1 ? "" : "s"}`;
+  return h(
+    "div",
+    { className: "r-insp-body", dataset: { inspPinmap: m.id } },
+    inspHead(null, m.name, String(all.length), true),
+    h("p", { className: "muted small r-insp-sub", textContent: sub }),
+    h(
+      "div",
+      { className: "r-insp-actions" },
+      inspBtn("Embed code…", "embed-map", () => embedDialog(m.id), "", "tonal"),
+      inspBtn("Rename", "rename-map", () => renameMap(m), why),
+      inspBtn("Move to…", "move-map", () => moveMapDialog(m), why),
+      inspBtn("Delete", "delete-map", () => void removeMap(m, all.length), why, "ghost danger"),
+    ),
+    all.length ? h("h4", { className: "r-insp-h", textContent: "Pins in this pin map" }) : h("p", { className: "muted small", textContent: "No pins yet. Pick this pin map in a pin's form to put it here." }),
+    ...(all.length ? [h("div", { className: "pn-list" }, ...all.map((e) => pinRow(e, true)))] : []),
+  );
+}
+
+/** A folder in the inspector: its actions. */
+function folderInspector(id: string): HTMLElement | null {
+  const f = folderInfo(id);
+  if (!f) return null;
+  const parts = [`${f.maps.length} pin map${f.maps.length === 1 ? "" : "s"}`, ...(f.subs ? [`${f.subs} subfolder${f.subs === 1 ? "" : "s"}`] : [])];
+  return h(
+    "div",
+    { className: "r-insp-body", dataset: { inspPinfolder: id } },
+    inspHead(folderIcon(), f.k.name || "(no name)", String(f.maps.length), true),
+    h("p", { className: "muted small r-insp-sub", textContent: `${pathName(treeOf(pinMaps()), id)} · ${parts.join(", ")}` }),
+    h("div", { className: "r-insp-actions" }, ...folderActions(f, slot)),
+  );
+}
+
 function renderForm(rebuild: boolean): void {
   const box = el.form;
+  const side = box.parentElement;
+  const groupBody = !draft && group ? (group.kind === "folder" ? folderInspector(group.id) : pinMapInspector(group.id)) : null;
+  if (!draft && group && !groupBody) group = null;
+  side?.classList.toggle("open", !!groupBody);
+  if (groupBody) {
+    box.replaceChildren(groupBody);
+    return;
+  }
   if (!draft) {
     const hint = h("p", { className: "muted small", textContent: !can("regions") ? "Pick a pin on the map or in the list. You need the “Create regions” permission to place pins." : adding ? "Click the map to drop a pin. Press Done or Esc to stop." : "Press “Place pins” and click the map, or pick a pin on the map or in the list." });
     const empty = h("div", { className: "empty" }, hint);
@@ -421,6 +506,8 @@ function renderForm(rebuild: boolean): void {
   const form = h(
     "form",
     { className: "pn-form" },
+    inspHead(null, selected === "new" ? "New pin" : p.name || "Pin", null, false),
+    h("div", { className: "row pn-form-actions" }, ok ? save : null, selected !== "new" && canDelete(entryOf(selected)?.feature) ? del : null, cancel),
     h("label", {}, "Name", name),
     h("div", { className: "pn-field" }, kindLabel, kind),
     h("label", {}, "Pin map (optional: an embed can show one pin map)", pinMap),
@@ -430,7 +517,6 @@ function renderForm(rebuild: boolean): void {
     h("p", { className: "muted small" }, "Position: ", h("span", { className: "pn-pos", textContent: posText(f) }), ok ? " · drag the marker, or use the arrow keys (Shift: bigger steps)" : ""),
     p.createdBy ? h("p", { className: "muted small", textContent: `Placed by ${p.createdBy.login}${p.updated ? ` · saved ${new Date(p.updated).toLocaleString()}` : ""}` }) : null,
     err,
-    h("div", { className: "row" }, ok ? save : null, selected !== "new" && canDelete(entryOf(selected)?.feature) ? del : null, cancel),
     ok ? null : h("p", { className: "muted small", textContent: "You can look at this pin, but only the person who placed it (or someone allowed to edit others' regions) can change it." }),
   );
   form.addEventListener("submit", (e) => {
@@ -666,19 +752,19 @@ async function remove_(): Promise<void> {
 /* ── The list and the controls above it ── */
 
 /** One pin in the list. */
-function pinRow(e: PinEntry): HTMLElement {
+function pinRow(e: PinEntry, inInspector = false): HTMLElement {
   const p = e.feature!.properties;
   const sw = h("span", { className: "pn-sw" }, pinIcon(p.kind, 12));
   sw.style.background = pinColor(p);
   sw.style.color = inkFor(pinColor(p));
   const row = h(
     "button",
-    { type: "button", className: `pn-row${selected === e.id ? " on" : ""}`, onclick: () => void leave().then((ok) => ok && (select(e.id), centreOn(e.feature!))) },
+    { type: "button", className: `pn-row${selected === e.id ? " on" : ""}`, dataset: { pinRow: e.id }, onclick: () => void leave().then((ok) => ok && (select(e.id), centreOn(e.feature!), showPinOnPhone())) },
     sw,
     h("span", { className: "pn-name", textContent: p.name }),
     h("span", { className: "muted small", textContent: kindInfo(p.kind).label }),
   );
-  if (!sel.on) return row;
+  if (!sel.on || inInspector) return row;
   // Selecting: the row ticks instead of opening the pin.
   row.onclick = () => (sel.toggle(e.id), refreshSelection());
   const item = h("div", { className: `pn-item${sel.has(e.id) ? " selected" : ""}`, dataset: { pin: e.id } }, cardBox(sel, e.id, domOrder, refreshSelection, "pn-sel"), row);
@@ -695,47 +781,46 @@ function renderList(): void {
   const bad = entries.filter((e) => !e.feature);
   const nMaps = mapsOfSlot(pinMaps(), slot).length;
   el.count.textContent = `${slotPins().length} pin${slotPins().length === 1 ? "" : "s"} and ${nMaps} pin map${nMaps === 1 ? "" : "s"} on this slot`;
-  const ok = canOrganise();
-  const small = (text: string, action: string, onclick: () => void, why = "", cls = "ghost") => h("button", { type: "button", className: cls, textContent: text, onclick, disabled: !!why, title: why, dataset: { action } });
   const mapBody = (m: PinMap | null): HTMLElement => {
     const all = pinsIn(m);
     const nameHit = !!m && !!q && m.name.toLowerCase().includes(q);
     const rows = all.filter((e) => nameHit || pinMatches(e, q));
-    const why = ok ? "" : "You don't have permission to change pin maps.";
-    return h(
-      "section",
-      { className: `pinmap${m ? "" : " loose"}`, dataset: m ? { pinmap: m.id } : { pinmap: "" } },
+    const key = m ? m.id : "";
+    const open = !!q || !closedMaps.has(key);
+    const on = !!m && group?.kind === "pinmap" && group.id === m.id;
+    const body = h("div", { className: "pinmap-body", hidden: !open }, ...rows.map((e) => pinRow(e)), rows.length ? null : h("p", { className: "muted small", textContent: m ? (all.length ? "No pin matches." : "No pins yet. Pick this pin map in a pin's form to put it here.") : "Every pin is in a pin map." }));
+    const section = h("section", { className: `pinmap${m ? "" : " loose"}${open ? "" : " closed"}`, dataset: m ? { pinmap: m.id } : { pinmap: "" } });
+    const toggle = h("button", { type: "button", className: "rfolder-toggle", ariaExpanded: String(open), ariaLabel: `Open or close ${m ? m.name : "pins not in a pin map"}`, title: "Show or hide its pins" }, h("span", { className: "rfolder-arrow", ariaHidden: "true", textContent: "▾" }));
+    toggle.addEventListener("click", () => {
+      const now = body.hidden;
+      body.hidden = !now;
+      section.classList.toggle("closed", !now);
+      toggle.setAttribute("aria-expanded", String(now));
+      if (now) closedMaps.delete(key);
+      else closedMaps.add(key);
+    });
+    const label = [pinMapIcon(), h("span", { className: "rfolder-name", textContent: m ? m.name : "Not in a pin map" }), h("span", { className: "rcount", textContent: String(all.length), title: `${all.length} pin${all.length === 1 ? "" : "s"}` })];
+    section.append(
       h(
         "div",
-        { className: "pinmap-head" },
+        { className: `pinmap-head${on ? " picked" : ""}` },
         sel.on && rows.length ? groupBox(sel, rows.map((e) => e.id), `Select all shown pins in ${m ? m.name : "no pin map"}`, refreshSelection) : null,
-        h("strong", { textContent: m ? m.name : "Not in a pin map" }),
-        h("span", { className: "badge", textContent: String(all.length), title: `${all.length} pin${all.length === 1 ? "" : "s"}` }),
+        toggle,
         m
-          ? h(
-              "div",
-              { className: "actions" },
-              small("Embed code…", "embed-map", () => embedDialog(m.id)),
-              small("Move", "move-map", () => moveMapDialog(m), why, "ghost act-extra"),
-              small("Rename", "rename-map", () => renameMap(m), why, "ghost act-extra"),
-              small("Delete", "delete-map", () => void removeMap(m, all.length), why, "ghost danger act-extra"),
-              moreMenu(`More actions for pin map ${m.name}`, [
-                { text: "Move…", action: "menu-move-map", onclick: () => moveMapDialog(m), why },
-                { text: "Rename…", action: "menu-rename-map", onclick: () => renameMap(m), why },
-                { text: "Delete…", action: "menu-delete-map", onclick: () => void removeMap(m, all.length), why, danger: true },
-              ], { wrap: "act-more" }),
-            )
-          : null,
+          ? h("button", { type: "button", className: "rfolder-pick", ariaPressed: String(on), dataset: { pickPinmap: m.id }, title: "Show this pin map's actions", onclick: () => pickGroup(on ? null : { kind: "pinmap", id: m.id }) }, ...label)
+          : h("span", { className: "rfolder-pick pinmap-loose" }, ...label),
       ),
-      ...rows.map(pinRow),
-      rows.length ? null : h("p", { className: "muted small", textContent: m ? (all.length ? "No pin matches." : "No pins yet. Pick this pin map in a pin's form to put it here.") : "Every pin is in a pin map." }),
+      body,
     );
+    return section;
   };
   const looseEmpty = !pinsIn(null).length;
   const tree = renderTree({
     slot,
     mapBody: (m) => (m === null && looseEmpty ? h("span") : mapBody(m)),
     filtering: !!q,
+    picked: group?.kind === "folder" ? group.id : null,
+    pick: (id) => pickGroup(group?.kind === "folder" && group.id === id ? null : { kind: "folder", id }),
     hasMatch: (m) => !!q && (m ? m.name.toLowerCase().includes(q) || pinsIn(m).some((e) => pinMatches(e, q)) : pinsIn(null).some((e) => pinMatches(e, q))),
   });
   el.list.replaceChildren(
@@ -744,6 +829,23 @@ function renderList(): void {
     ...bad.map((e) => h("p", { className: "error small", textContent: `${e.path}: ${e.problem ?? "can't be used"}` })),
   );
   bar?.update();
+}
+
+/** A pin map's icon in the list: a map pin. */
+function pinMapIcon(): SVGSVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "r-ficon");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M12 21s-6.5-6.2-6.5-11.2a6.5 6.5 0 0113 0C18.5 14.8 12 21 12 21zm0-8.7a2.5 2.5 0 100-5 2.5 2.5 0 000 5z");
+  svg.append(path);
+  return svg;
+}
+
+/** Phones and tablets: after picking a pin in the list, bring the map (centred on it) and the form under it into view. */
+function showPinOnPhone(): void {
+  if (narrow()) window.scrollTo({ top: Math.max(0, el.pane.getBoundingClientRect().top + window.scrollY - 8), behavior: "smooth" });
 }
 
 function centreOn(f: PinFeature): void {
@@ -969,7 +1071,7 @@ function build(): void {
   kindSummary();
   const pane = h("div", { className: "pn-pane", tabIndex: 0, role: "application", ariaLabel: "Map. Drag to move, scroll to zoom." }, canvas, layer, h("div", { className: "pn-zoom" }, labelsBtn, regionsBtn, zoomIn, zoomOut, fitBtn));
   const form = h("div", { className: "pn-formbox" });
-  const list = h("div", { className: "pn-list" });
+  const list = h("div", { className: "pn-list r-tree pn-tree" });
   const count = h("p", { className: "muted small" });
   Object.assign(el, { slotSel, add, canvas, layer, pane, form, list, count, placing });
   root.replaceChildren(
@@ -980,8 +1082,7 @@ function build(): void {
       h("p", { className: "muted", textContent: "Mark cities, ruins, battle sites and other places on a slot's map. Group pins into pin maps (“Holy sites”, “Battles”) and sort those into folders, like regions. An embed shows one pin map (?pins=holy-sites), or every pin (?pins=1), and a region can include pin maps so their pins show on its embed. A pin can link to its note in the vault." }),
       h("div", { className: "row pn-tools" }, h("label", {}, "Slot", slotSel), h("label", { className: "grow" }, "Search", searchBox), h("div", { className: "pn-actions" }, add, embed)),
       placing,
-      h("div", { className: "pn-body" }, pane, h("div", { className: "pn-side" }, form)),
-      h("div", { className: "pn-below" }, count, kindBar, kindNote, h("div", { className: "pn-listbar" }, addMap, addFolder, selectBtn), list),
+      h("div", { className: "pn-body" }, pane, h("div", { className: "pn-side", id: "pn-inspector", role: "region", ariaLabel: "Details" }, form), h("div", { className: "pn-below" }, count, kindBar, kindNote, h("div", { className: "pn-listbar" }, addMap, addFolder, selectBtn), list)),
     ),
   );
   slotSel.addEventListener("change", () => {
@@ -1054,6 +1155,10 @@ function build(): void {
     if (e.key === "Escape" && sel.on && !document.querySelector("dialog[open]") && !e.defaultPrevented) setSelecting(false);
   });
   addFolder.addEventListener("click", () => newFolder(null));
+  // Esc closes a folder's or pin map's sheet (phones and tablets).
+  root.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && group && !draft && !sel.on && !e.defaultPrevented && !document.querySelector("dialog[open], [popover]:popover-open") && narrow()) pickGroup(null);
+  });
   zoomIn.addEventListener("click", () => zoomAt(1.6, paneSize().w / 2, paneSize().h / 2));
   zoomOut.addEventListener("click", () => zoomAt(1 / 1.6, paneSize().w / 2, paneSize().h / 2));
   fitBtn.addEventListener("click", () => (fit(), redraw()));
