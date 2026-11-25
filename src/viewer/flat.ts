@@ -128,6 +128,11 @@ export async function start(ctx: FlatStartContext): Promise<void> {
 
   /* ── Render on demand ── */
   let raf = 0;
+  let panning = false;
+  let panSettled = false;
+  let panTimer = 0;
+  let panSnap: HTMLCanvasElement | null = null;
+  let drawnView: { cx: number; cy: number; k: number; w: number; h: number } | null = null;
   function render(): void {
     raf = 0;
     if (ease) {
@@ -148,6 +153,38 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       canvas.width = Math.round(w * d);
       canvas.height = Math.round(h * d);
     }
+    // Dragging a view with a region on it: repainting every part each move is the slow part, so the last frame is
+    // slid across the canvas and the real repaint happens when the pointer rests for a moment or is let go.
+    const slide = panning && pointers.size === 1 && !panSettled && !ease && drawnView && drawnView.k === view.k && drawnView.w === canvas.width && drawnView.h === canvas.height && !!reg;
+    if (slide) {
+      if (!panSnap) {
+        panSnap = document.createElement("canvas");
+        panSnap.width = canvas.width;
+        panSnap.height = canvas.height;
+        panSnap.getContext("2d")!.drawImage(canvas, 0, 0);
+      }
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.clearRect(0, 0, canvas.width, canvas.height);
+      g.drawImage(panSnap, Math.round((drawnView!.cx - view.cx) * view.k * d), Math.round((view.cy - drawnView!.cy) * view.k * ky * d));
+      window.clearTimeout(panTimer);
+      panTimer = window.setTimeout(() => {
+        panSettled = true;
+        schedule();
+      }, 140);
+    } else {
+      window.clearTimeout(panTimer);
+      panSettled = false;
+      panSnap = null;
+      paintMap(w, h, d);
+      drawnView = { cx: view.cx, cy: view.cy, k: view.k, w: canvas.width, h: canvas.height };
+    }
+    paintOverlays(w, h);
+    if (!slide) {
+      maybeUpgrade();
+      maybeTiles();
+    }
+  }
+  function paintMap(w: number, h: number, d: number): void {
     g.setTransform(d, 0, 0, d, 0, 0);
     g.clearRect(0, 0, w, h);
     const span = 360 * view.k;
@@ -173,6 +210,8 @@ export async function start(ctx: FlatStartContext): Promise<void> {
         dim: !!R?.dim,
       }, { w, h });
     }
+  }
+  function paintOverlays(w: number, h: number): void {
     labelAt.forEach((pt, i) => {
       // The copy of the label point nearest the middle of the view.
       const shift = 360 * Math.round((view.cx - pt.at[0]) / 360);
@@ -187,8 +226,6 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       return { x, y, visible: x >= -12 && x <= w + 12 && y >= -12 && y <= h + 12 };
     });
     labels?.settle(stage);
-    maybeUpgrade();
-    maybeTiles();
   }
   function schedule(): void {
     if (!raf) raf = requestAnimationFrame(render);
@@ -363,6 +400,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     const p = pointers.get(e.pointerId);
     if (!p) return;
     if (pointers.size === 1) {
+      panning = true;
       view.cx -= (e.clientX - p.x) / view.k;
       view.cy += (e.clientY - p.y) / (view.k * ky);
       limit();
@@ -383,7 +421,13 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   const up = (e: PointerEvent) => {
     pointers.delete(e.pointerId);
     pinchDist = pointers.size === 2 ? pinchDistance() : 0;
-    if (!pointers.size) canvas.style.cursor = "";
+    if (!pointers.size) {
+      canvas.style.cursor = "";
+      if (panning) {
+        panning = false;
+        schedule();
+      }
+    }
   };
   canvas.addEventListener("pointerup", up);
   canvas.addEventListener("pointercancel", up);

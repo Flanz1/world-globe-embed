@@ -1353,6 +1353,37 @@ export function openEditor(o: EditorOptions): void {
     return true;
   }
   let bg: { key: string; img: HTMLImageElement | null; canvas: HTMLCanvasElement } | null = null;
+  /*
+   * Panning: repainting the map, tiles and every part at each pointer move is the slow part (a region with
+   * many parts costs ~100 ms a frame). While the map is dragged the last full frame is just slid across
+   * the canvas, and the real repaint happens once the pointer rests for a moment and when it is let go.
+   */
+  let drawnView: { cx: number; cy: number; k: number } | null = null;
+  let panSnap: HTMLCanvasElement | null = null;
+  let panSettled = false;
+  let panTimer = 0;
+  function panFrame(dpr: number): void {
+    if (!panSnap) {
+      panSnap = document.createElement("canvas");
+      panSnap.width = canvas.width;
+      panSnap.height = canvas.height;
+      panSnap.getContext("2d")!.drawImage(canvas, 0, 0);
+    }
+    const dx = (drawnView!.cx - view.cx) * view.k * dpr;
+    const dy = (view.cy - drawnView!.cy) * view.k * ky * dpr;
+    mainCtx.setTransform(1, 0, 0, 1, 0, 0);
+    mainCtx.fillStyle = "#14120f";
+    mainCtx.fillRect(0, 0, canvas.width, canvas.height);
+    mainCtx.drawImage(panSnap, Math.round(dx), Math.round(dy));
+    pinTool.reposition();
+    commentTool.reposition();
+    updateStatus();
+    window.clearTimeout(panTimer);
+    panTimer = window.setTimeout(() => {
+      panSettled = true;
+      draw();
+    }, 140);
+  }
   function render(): void {
     raf = 0;
     syncLayerBar();
@@ -1361,7 +1392,13 @@ export function openEditor(o: EditorOptions): void {
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(hh * dpr)) {
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(hh * dpr);
+      panSnap = null;
+      drawnView = null;
     }
+    if (drag?.kind === "pan" && !panSettled && drawnView && drawnView.k === view.k) return panFrame(dpr);
+    window.clearTimeout(panTimer);
+    panSettled = false;
+    panSnap = null;
     const offs = offsets();
     // Everything under the region (map, tiles, grid, coast, neighbour outlines) only changes with the view, so it's
     // painted once into an offscreen layer and copied each frame: dragging a vertex repaints just the region.
@@ -1586,6 +1623,7 @@ export function openEditor(o: EditorOptions): void {
       g.strokeRect(Math.min(drag.x0, drag.x1), Math.min(drag.y0, drag.y1), Math.abs(drag.x1 - drag.x0), Math.abs(drag.y1 - drag.y0));
       g.restore();
     }
+    drawnView = { cx: view.cx, cy: view.cy, k: view.k };
     updateStatus();
   }
 
