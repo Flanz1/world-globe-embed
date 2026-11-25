@@ -782,7 +782,7 @@ await step(A, "editor speed at 2,000 vertices", async () => {
   const v = s.parts[0][0][0];
   // A 60-step vertex drag. Measures wall time per pointer move, the editor's own work per move
   // (pointer handler + its canvas redraw), and how many region updates reached the globe preview.
-  const dragOnce = async (dx) => {
+  const dragOnce = async (dx, settled) => {
     const [x, y] = await ed.xy(v[0], v[1]);
     const t0 = Date.now();
     await page.mouse.move(x, y);
@@ -791,6 +791,8 @@ await step(A, "editor speed at 2,000 vertices", async () => {
     await page.mouse.up();
     const ms = Date.now() - t0;
     await page.waitForTimeout(300);
+    // The preview's catch-up update can land well after 300 ms on a loaded CI runner: wait for it before undoing.
+    if (settled) await settled();
     await page.keyboard.press("Control+z");
     return ms;
   };
@@ -799,7 +801,7 @@ await step(A, "editor speed at 2,000 vertices", async () => {
     window.__updates = 0;
     addEventListener("message", (e) => e.data?.type === "wge-region" && window.__updates++);
   });
-  const withPreview = await dragOnce(1);
+  const withPreview = await dragOnce(1, () => pf.waitForFunction(() => window.__updates >= 1, null, { timeout: 10000 }).catch(() => {}));
   const updates = await pf.evaluate(() => window.__updates);
   // Same drag with the preview iframe emptied: the editor alone.
   await page.evaluate(() => (document.querySelector("dialog.editor iframe.ed-globe").src = "about:blank"));
