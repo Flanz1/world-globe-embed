@@ -27,7 +27,7 @@ import { useAdminApi } from "./admin-api.mjs";
 import { checkGeometry, polygonsOf } from "../../src/shared/geo.ts";
 
 import { port } from "./ports.mjs";
-import { pickRegion } from "./regions-ui.mjs";
+import { pickRegion, openPartRow } from "./regions-ui.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
@@ -156,6 +156,7 @@ await step(E, "open together", async () => {
 
 await step(E, "edit and save", async () => {
   // Part 2 (live-a's Hills part) moves to live-b; live-b's label changes; a new part goes to live-a.
+  await openPartRow(page, 1);
   await page.selectOption('dialog.editor select[data-part-owner="1"]', "live-b");
   await page.fill('dialog.editor input[data-part-label="2"]', "B renamed");
   await edTab(page, "region");

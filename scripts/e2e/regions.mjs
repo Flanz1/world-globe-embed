@@ -26,7 +26,7 @@ import { ADMIN_API, useAdminApi } from "./admin-api.mjs";
 import { checkGeometry } from "../../src/shared/geo.ts";
 
 import { port } from "./ports.mjs";
-import { pickRegion } from "./regions-ui.mjs";
+import { pickRegion, openFolderMore, partAct, openPartRow } from "./regions-ui.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 const sharp = require("sharp");
@@ -496,7 +496,7 @@ await step(A, "editor: draw and edit", async () => {
   s = await ed.state();
   check(A, "a new part starts locked: dragging inside it doesn't move it", s.locked[0] === true && s.parts[0][0].every((p, i) => p[0] === before[i]), JSON.stringify(s.locked));
   await edTab(page, "parts"); // a new region opens on the Region tab (its id)
-  await page.click('dialog.editor [data-act="part-lock"]');
+  await partAct(page, 0, "part-lock");
   await mdrag(x, y, -44, 0);
   s = await ed.state();
   const moved = s.parts[0][0].map((p, i) => p[0] - before[i]);
@@ -770,7 +770,9 @@ await step(A, "editor: colours and legend", async () => {
   await page.keyboard.type("Capital");
   pn = await panel();
   check(A, "Add colour adds a row and focuses its label", pn.keys.length === 3 && pn.keys[2][1] === "Capital", JSON.stringify(pn.keys));
+  await openPartRow(page, 0);
   await page.selectOption('dialog.editor .ed-part-row select[data-part="0"]', "2");
+  await openFolderMore(page, 0);
   await page.click('dialog.editor .ed-folder[data-key="0"] [data-act="key-remove"]');
   pn = await panel();
   check(A, "removing a colour sends its parts back to the region colour and keeps the rest", pn.keys.length === 2 && JSON.stringify(pn.parts) === '["1","-1","0"]', JSON.stringify(pn));

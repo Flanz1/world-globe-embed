@@ -35,7 +35,7 @@ import { geometryBounds } from "../../src/shared/geo.ts";
 import { flatFit } from "../../src/shared/region.ts";
 
 import { port } from "./ports.mjs";
-import { pickRegion } from "./regions-ui.mjs";
+import { pickRegion, partAct, openFolderMore, openPartRow } from "./regions-ui.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 const sharp = require("sharp");
@@ -438,7 +438,7 @@ async function mdrag(x, y, dx, dy, mods = []) {
 /** Parts open locked (and new ones start locked): unlock every part that is, through the Parts list. */
 async function unlockAll() {
   const locked = page.locator('dialog.editor [data-act="part-lock"][aria-pressed="true"]');
-  while (await locked.count()) await locked.first().click();
+  while (await locked.count()) await locked.first().evaluate((b) => b.click());
 }
 const K = 20; // px per degree of longitude in the editor checks
 const KY = K * (2 / (MAP.w / MAP.h)); // px per degree of latitude (the map isn't 2:1)
@@ -514,6 +514,7 @@ if (want("editor")) {
     check(A, "one folder (Default colour) holding both parts", JSON.stringify(await folders()) === JSON.stringify([["-1", [0, 1]]]), JSON.stringify(await folders()));
     await page.click('dialog.editor [data-act="key-add"]');
     await page.keyboard.type("March");
+    await openPartRow(page, 1);
     await page.selectOption('dialog.editor select[data-part="1"]', "0");
     let s = await ed.state();
     B_COL = s.props.legend[0].color;
@@ -576,7 +577,7 @@ if (want("editor")) {
     check(A, "editor: …the other part's border too", dashed(bOver), fmt(bOver));
     await page.screenshot({ path: path.join(OUT, "editor-layers-b-on-top.png") });
     // Back on part 2: it goes under part 1 (and becomes part 1).
-    await page.click('dialog.editor .ed-part-row[data-row="1"] [data-act="part-backward"]');
+    await partAct(page, 1, "part-backward");
     s = await ed.state();
     check(A, "Back sends part 2 under part 1: they swap numbers, colours and labels go along", JSON.stringify(s.styles) === "[0,-1]" && JSON.stringify(s.labels) === JSON.stringify(["", HOSTILE]) && JSON.stringify(partBox(s, 1)) === JSON.stringify(ED.A), JSON.stringify([s.styles, s.labels]));
     check(A, "…says so, and the moved part stays selected", /Part 2 is now part 1, under part 2/.test(await ed.msg()) && (await ed.sel()) === 0, `${await ed.msg()} / ${await ed.sel()}`);
@@ -589,7 +590,7 @@ if (want("editor")) {
     await page.screenshot({ path: path.join(OUT, "editor-layers-a-on-top.png") });
     await page.waitForTimeout(500);
     // ] brings the selected part forward again.
-    await page.click('dialog.editor .ed-part-row[data-row="0"] [data-act="part-select"]');
+    await partAct(page, 0, "part-select");
     await page.focus("dialog.editor canvas.ed-canvas");
     await page.keyboard.press("]");
     s = await ed.state();
@@ -621,7 +622,7 @@ if (want("editor")) {
 
   await step(A, "contested (occupied) areas", async () => {
     // Part 2 (B) becomes an occupied area: A's own border shows, solid, under it; B's outline is dashed.
-    await page.click('dialog.editor .ed-part-row[data-row="1"] [data-act="part-occupied"]');
+    await partAct(page, 1, "part-occupied");
     const s = await ed.state();
     check(A, "a part's Contested button makes it an occupied area", JSON.stringify(s.contested) === "[-1,-2]" && (await page.getAttribute('dialog.editor .ed-part-row[data-row="1"] [data-act="part-occupied"]', "aria-pressed")) === "true", JSON.stringify(s.contested));
     // The Overlaps list is rebuilt on a later frame than the state change: wait for it rather than read it at once.
@@ -723,6 +724,7 @@ if (want("editor")) {
   });
 
   await step(A, "labels switch off per part and per colour folder", async () => {
+    await openPartRow(page, 0);
     const row0 = 'dialog.editor .ed-part-row[data-row="0"] [data-act="part-label"]';
     check(A, "a part's label starts on", (await page.getAttribute(row0, "aria-pressed")) === "true");
     await page.click(row0);
@@ -738,29 +740,30 @@ if (want("editor")) {
     await page.click('dialog.editor [data-act="undo"]');
     check(A, "undo shows it again", (await page.getAttribute(row0, "aria-pressed")) === "true");
     const folder = 'dialog.editor .ed-folder[data-key="-1"] [data-act="folder-labels"]';
+    await openFolderMore(page, -1);
     await page.click(folder);
-    check(A, "a colour folder's Labels button hides all its labels", (await page.textContent(folder)) === "Labels off" && (await page.getAttribute(row0, "aria-pressed")) === "false");
+    check(A, "a colour folder's Labels button hides all its labels", (await page.textContent(folder)) === "Show labels" && (await page.getAttribute(row0, "aria-pressed")) === "false");
     await page.click(folder);
-    check(A, "and shows them again", (await page.textContent(folder)) === "Labels on" && (await page.getAttribute(row0, "aria-pressed")) === "true");
+    check(A, "and shows them again", (await page.textContent(folder)) === "✓ Show labels" && (await page.getAttribute(row0, "aria-pressed")) === "true");
   });
 
   await step(A, "delete a whole part (always asks first)", async () => {
     const warn = "dialog.small-dlg.danger[open]";
     const s0 = await ed.state();
-    await page.click('dialog.editor .ed-part-row[data-row="2"] [data-act="part-delete"]');
+    await partAct(page, 2, "part-delete");
     await page.waitForSelector(warn);
     const text = await page.textContent(`${warn} .dlg-body`);
     check(A, "Delete in a folder row shows a warning first", /This deletes Part 3 with all \d+ of its vertices/.test(text) && /undo/i.test(text), text);
     await page.click(`${warn} button:has-text("Keep it")`);
     await page.waitForTimeout(150);
     check(A, "'Keep it' leaves the region as it was", JSON.stringify(await ed.state()) === JSON.stringify(s0));
-    await page.click('dialog.editor .ed-part-row[data-row="2"] [data-act="part-delete"]');
+    await partAct(page, 2, "part-delete");
     await page.click(`${warn} button:has-text("Delete part")`);
     await page.waitForTimeout(150);
     const s1 = await ed.state();
     check(A, "'Delete part' removes the whole part", s1.parts.length === 2 && JSON.stringify(s1.parts) === JSON.stringify(s0.parts.slice(0, 2)) && JSON.stringify(s1.styles) === "[-1,0]", JSON.stringify(s1.styles));
     // Delete key on a selected part also asks; Esc keeps it.
-    await page.click('dialog.editor .ed-part-row[data-row="0"] [data-act="part-select"]');
+    await partAct(page, 0, "part-select");
     await page.focus("dialog.editor canvas.ed-canvas");
     await page.keyboard.press("Delete");
     await page.waitForSelector(warn);
