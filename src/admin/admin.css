@@ -373,7 +373,10 @@ dialog.editor input:not([type=checkbox], [type=radio], [type=range], [type=color
 .ed-group-body { display: grid; gap: 8px; }
 .ed-group-body[hidden] { display: none; }
 .ed-group-rows { display: grid; gap: 4px; }
-.ed-group-row { display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 2px 4px 2px 8px; border-radius: 8px; background: var(--md-sys-color-surface-container); min-width: 0; }
+.ed-group-row { display: grid; gap: 4px; padding: 2px 4px 2px 8px; border-radius: 8px; background: var(--md-sys-color-surface-container); min-width: 0; }
+.ed-group-line { display: flex; align-items: center; gap: 6px; min-height: 36px; min-width: 0; }
+.ed-group-more { display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 6px; }
+.ed-group-more[hidden] { display: none; }
 .ed-group-row .ed-group-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-group-row .muted { flex: none; white-space: nowrap; }
 .ed-group-row button { flex: none; min-width: 32px; min-height: 32px; padding: 0 6px; }

@@ -836,6 +836,7 @@ await step(A, "legend names: set per pin map in the region editor's Underlays se
       await page.screenshot({ path: path.join(OUT, `legend-names-${w}-${scheme}-button.png`) });
     }
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.locator('dialog.editor .ed-group-row[data-pinmap="cities"] .ed-more').click();
   await btn.click();
   const dlg = page.locator("dialog.legend-dlg[open]");
   await dlg.waitFor();
@@ -864,6 +865,7 @@ await step(A, "legend names: set per pin map in the region editor's Underlays se
   const r = onBranch("content/regions/landmark-disc.json");
   check(A, "saved on the region under pinLegends[pin map id]", JSON.stringify(r?.properties.pinLegends) === JSON.stringify({ cities: { title: "Places of note", kinds: { city: "Settlement" } } }), JSON.stringify(r?.properties.pinLegends));
   check(A, "pin maps themselves are untouched", !JSON.stringify(onBranch("content/pinmaps.json")).includes("legend"));
+  await page.locator('dialog.editor .ed-group-row[data-pinmap="cities"] .ed-more').click();
   await btn.click();
   await dlg.waitFor();
   check(A, "reopening shows the saved words", (await dlg.locator('input[data-field="legend-kind-city"]').inputValue()) === "Settlement");

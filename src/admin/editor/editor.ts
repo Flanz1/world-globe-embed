@@ -2071,6 +2071,17 @@ export function openEditor(o: EditorOptions): void {
     Object.assign(btn("↑", titles[0], () => move(-1)), { disabled: i <= 0 }),
     Object.assign(btn("↓", titles[1], () => move(1)), { disabled: i >= len - 1 }),
   ];
+  /** A member row: what it is (swatch, name, count) on one line, and one ⋯ button that opens its actions (order, remove…) on a second line. */
+  function memberRow(data: Record<string, string>, head: HTMLElement[], actions: HTMLElement[], label: string): HTMLElement {
+    const more = h("div", { className: "ed-group-more", hidden: true }, ...actions);
+    const toggle = h("button", { type: "button", className: "ghost tiny ed-more", textContent: "⋯", title: `Move or remove ${label}`, ariaLabel: `More for ${label}`, ariaExpanded: "false" });
+    toggle.addEventListener("click", () => {
+      const now = more.hidden === true;
+      more.hidden = !now;
+      toggle.setAttribute("aria-expanded", String(now));
+    });
+    return h("div", { className: "ed-group-row", dataset: data }, h("div", { className: "ed-group-line" }, ...head, toggle), more);
+  }
   function renderGroups(): void {
     const p = hist.state.props;
     const lg = p.layerGroups ?? [];
@@ -2118,17 +2129,17 @@ export function openEditor(o: EditorOptions): void {
           };
           const swatch = h("i", { className: "ed-group-swatch", ariaHidden: "true" });
           swatch.style.background = n?.properties.color ?? "#7f8c8d";
-          return h(
-            "div",
-            { className: "ed-group-row", dataset: { region: e.id } },
-            swatch,
-            h("span", { className: "ed-group-name", textContent: regionTitle(e.id), title: `Region ${e.id}` }),
-            h("span", { className: "muted small", textContent: colourCount(n) ? plural(colourCount(n), "colour") : "no legend", title: "Colours this region lists in its legend" }),
-            ...arrowBtns(i, g.regions.length, ["Move down a layer (drawn lower)", "Move up a layer (drawn higher)"], move),
-            btn("×", `Take ${regionTitle(e.id)} out of this group`, () => {
-              update((x) => ({ ...x, regions: x.regions.filter((_, j) => j !== i) }), "Remove from group");
-              changed();
-            }),
+          return memberRow(
+            { region: e.id },
+            [swatch, h("span", { className: "ed-group-name", textContent: regionTitle(e.id), title: `Region ${e.id}` }), h("span", { className: "muted small", textContent: colourCount(n) ? plural(colourCount(n), "colour") : "no legend", title: "Colours this region lists in its legend" })],
+            [
+              ...arrowBtns(i, g.regions.length, ["Move down a layer (drawn lower)", "Move up a layer (drawn higher)"], move).map((b, k) => Object.assign(b, { textContent: k ? "Move up" : "Move down" })),
+              btn("Remove", `Take ${regionTitle(e.id)} out of this group`, () => {
+                update((x) => ({ ...x, regions: x.regions.filter((_, j) => j !== i) }), "Remove from group");
+                changed();
+              }),
+            ],
+            regionTitle(e.id),
           );
         });
         const add = h("select", { name: "group-add", ariaLabel: `Add a region to ${g.name || "this group"}` });
@@ -2216,17 +2227,18 @@ export function openEditor(o: EditorOptions): void {
               changed();
             }),
           );
-          return h(
-            "div",
-            { className: "ed-group-row", dataset: { pinmap: mid } },
-            h("span", { className: "ed-group-name", textContent: nameOfMap(mid), title: `Pin map ${mid}` }),
-            h("span", { className: "muted small", textContent: plural(pinCount(mid), "pin") }),
-            ...arrowBtns(i, g.pinMaps.length, ["Move up the list", "Move down the list"], move),
-            btn("×", `Take ${nameOfMap(mid)} out of this group`, () => {
-              update((x) => ({ ...x, pinMaps: x.pinMaps.filter((_, j) => j !== i) }), "Remove from group");
-              changed();
-            }),
-            names,
+          return memberRow(
+            { pinmap: mid },
+            [h("span", { className: "ed-group-name", textContent: nameOfMap(mid), title: `Pin map ${mid}` }), h("span", { className: "muted small", textContent: plural(pinCount(mid), "pin") })],
+            [
+              ...arrowBtns(i, g.pinMaps.length, ["Move up the list", "Move down the list"], move).map((b, k) => Object.assign(b, { textContent: k ? "Move down" : "Move up" })),
+              names,
+              btn("Remove", `Take ${nameOfMap(mid)} out of this group`, () => {
+                update((x) => ({ ...x, pinMaps: x.pinMaps.filter((_, j) => j !== i) }), "Remove from group");
+                changed();
+              }),
+            ],
+            nameOfMap(mid),
           );
         });
         const add = h("select", { name: "pin-group-add", ariaLabel: `Add a pin map to ${g.name || "this group"}` });
