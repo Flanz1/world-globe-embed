@@ -223,6 +223,7 @@ export function resolveLinked(f: RegionFeature, lookup: (id: string) => RegionFe
   if (!r.feature) return { feature: null, missing, errors: r.errors };
   const p = f.properties;
   r.feature.properties = {
+    ...(p.name ? { name: p.name } : {}),
     ...r.feature.properties,
     linked: [...ids],
     ...(names ? { linkedNames: names } : {}),
@@ -232,7 +233,6 @@ export function resolveLinked(f: RegionFeature, lookup: (id: string) => RegionFe
     ...(p.underTitle ? { underTitle: p.underTitle } : {}),
     ...(p.ownToggle ? { ownToggle: true } : {}),
     ...(p.layerLabel ? { layerLabel: p.layerLabel } : {}),
-    ...(p.name ? { name: p.name } : {}),
     ...(p.created ? { created: p.created } : {}),
     ...(p.createdBy ? { createdBy: p.createdBy } : {}),
     ...(p.updated ? { updated: p.updated } : {}),

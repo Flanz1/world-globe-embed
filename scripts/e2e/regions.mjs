@@ -449,6 +449,9 @@ await step(A, "editor: draw and edit", async () => {
   check(A, "the id is read-only text, not a field", (await page.locator('dialog.editor input[name="id"]').count()) === 0);
   await page.fill('dialog.editor input[name="name"]', "Test Kingdom");
   check(A, "typing a name makes the id from it, name keeps its capitals", (await ed.id()) === "test-kingdom" && (await page.inputValue('dialog.editor input[name="name"]')) === "Test Kingdom", await ed.id());
+  await page.getByRole("tab", { name: "Region", exact: true }).click().catch(() => {});
+  await page.screenshot({ path: path.join(OUT, "editor-name-and-id.png") });
+  await page.getByRole("tab", { name: "Parts", exact: true }).click().catch(() => {});
   await page.click("dialog.editor canvas.ed-canvas", { position: { x: 5, y: 5 }, button: "middle" });
   await ed.setView(180, 0, 22);
   const startTool = await page.getAttribute("dialog.editor button.tool[aria-pressed=true]", "data-tool").catch(() => null);

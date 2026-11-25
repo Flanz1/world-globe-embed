@@ -1985,7 +1985,7 @@ export function openEditor(o: EditorOptions): void {
     setTitle(live
       ? link
         ? `${link.sha ? "Edit" : "New"} linked region ${link.id}: ${live.map((x) => x.id).join(", ")}`
-        : `Edit together: ${live.map((x) => x.id).join(", ")}` : review ? `Suggestion from ${review.by} for ${id}` : propose ? `Suggest changes to ${id}` : `${isNew ? "New region" : "Edit region"}: ${id || "(no id yet)"}`);
+        : `Edit together: ${live.map((x) => x.id).join(", ")}` : review ? `Suggestion from ${review.by} for ${id}` : propose ? `Suggest changes to ${id}` : `${isNew ? "New region" : "Edit region"}: ${s.name?.trim() || id || "(no id yet)"}`);
   }
   const setProp = <K extends keyof EditorState["props"]>(k: K, v: EditorState["props"][K], label: string) =>
     hist.apply(label, { ...hist.state, props: { ...hist.state.props, [k]: v } }, `prop:${k}`);
@@ -4265,7 +4265,7 @@ export function openEditor(o: EditorOptions): void {
         const lp = link.feature.properties;
         const made = link.sha && lp.createdBy ? { ...(lp.created ? { created: lp.created } : {}), createdBy: lp.createdBy } : { created: stamp(), createdBy: account() };
         const under = hist.state.props.under;
-        const core: RegionFeature = { ...r.feature, properties: { ...r.feature.properties, ...(lp.name ? { name: lp.name } : {}), linked: live.map((x) => x.id), ...(under?.length ? { under: under.map((e) => ({ ...e })) } : {}), ...(names ? { linkedNames: names } : {}), ...made } };
+        const core: RegionFeature = { ...r.feature, properties: { ...(lp.name ? { name: lp.name } : {}), ...r.feature.properties, linked: live.map((x) => x.id), ...(under?.length ? { under: under.map((e) => ({ ...e })) } : {}), ...(names ? { linkedNames: names } : {}), ...made } };
         const strip = (f: RegionFeature) => {
           const rest = { ...f.properties };
           delete rest.updated;
