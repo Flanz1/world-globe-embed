@@ -97,6 +97,8 @@ On `(pointer: coarse)` every control has a 44 px hit area (admin, editor, embed)
 - The strip under the header always shows the save state: saved (tick), saving / deploying (spinner, wording differs),
   failed ("!", says what failed). The branch is an outlined tag when it isn't the default branch. The whole strip
   opens the Activity · Deploys · Checks popup (a bottom sheet on phones); a failed deploy opens it on Deploys.
+- Card heads: title (with a count pill where it lists things) on the left, the card's main button on the right: Slots
+  "+ Slot…", Maps "+ Upload map…", Health "Check again". Adding a slot and uploading a map are dialogs, not inline forms.
 - Top error banner (`role="alert"`, dismissible) only for errors with no inline home; field errors sit next to the
   field.
 - Under 600 px, rows use the shared **More…** menu (`src/admin/more-menu.ts`); don't copy it.
