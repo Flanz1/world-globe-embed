@@ -125,10 +125,11 @@ describe("contested cells", () => {
     expect(spec.parts[2].occupied).toBe(true);
     expect(spec.plain).toBe(false);
   });
-  it("an occupied area over nothing of another colour isn't contested", () => {
+  it("an occupied area over nothing of another colour has no contested cell, but is painted (hatched) and marked", () => {
     const one = { type: "MultiPolygon" as const, coordinates: [sq(0, 0, 10, 10)] };
     const spec = regionPaintSpec({ color: "#ff0000", legend: [], parts: [-1], occupied: [true], geometry: one });
     expect(spec.cells).toEqual([]);
-    expect(hasContestedMarks(spec)).toBe(false);
+    expect(spec.plain).toBe(false);
+    expect(hasContestedMarks(spec)).toBe(true);
   });
 });
