@@ -85,8 +85,13 @@ On `(pointer: coarse)` every control has a 44 px hit area (admin, editor, embed)
 - Mode-specific options (e.g. Freehand *Open line*, #175) are chips at the map's top-left, not toolbar buttons.
 
 ## Admin
-- Phone header: title and tabs, sun/moon, accent swatch, Account menu (repo/user and Sign out). The test-branch
-  warning is a banner under the header at every width.
+- Shell: a navigation rail on the left (Maps, Regions, Pins, Health, Users; icon in a pill over a short name, the
+  selected one filled and bold), a 5-item bottom bar at 720 px and below, hidden while the bulk selection bar is up.
+  Header: logo and title (title visually hidden under 600 px), sun/moon, accent swatch, Account avatar menu (repo/user
+  and Sign out) at every width.
+- The strip under the header always shows the save state: saved (tick), saving / deploying (spinner, wording differs),
+  failed ("!", says what failed). The branch is an outlined tag when it isn't the default branch. The whole strip
+  opens the Activity · Deploys · Checks popup (a bottom sheet on phones); a failed deploy opens it on Deploys.
 - Top error banner (`role="alert"`, dismissible) only for errors with no inline home; field errors sit next to the
   field.
 - Under 600 px, rows use the shared **More…** menu (`src/admin/more-menu.ts`); don't copy it.
