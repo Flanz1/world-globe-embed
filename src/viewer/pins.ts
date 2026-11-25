@@ -267,7 +267,6 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
         t.textContent = `${g.n} (${n})`;
         const cb = document.createElement("input");
         cb.type = "checkbox";
-        cb.className = "rsw";
         cb.setAttribute("role", "switch");
         cb.checked = !g.off;
         cb.addEventListener("change", () => {

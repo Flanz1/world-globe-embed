@@ -242,7 +242,6 @@ export function makeLegend(stage: HTMLElement): {
         t.textContent = sec.name;
         const cb = document.createElement("input");
         cb.type = "checkbox";
-        cb.className = "rsw";
         cb.setAttribute("role", "switch");
         cb.checked = !sec.ids.every((id) => hidden.has(id));
         label.append(t, cb);

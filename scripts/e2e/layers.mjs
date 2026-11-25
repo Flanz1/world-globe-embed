@@ -725,10 +725,11 @@ if (want("editor")) {
 
   await step(A, "labels switch off per part and per colour folder", async () => {
     await openPartRow(page, 0);
-    const row0 = 'dialog.editor .ed-part-row[data-row="0"] [data-act="part-label"]';
-    check(A, "a part's label starts on", (await page.getAttribute(row0, "aria-pressed")) === "true");
+    const row0 = 'dialog.editor .ed-part-row[data-row="0"] input[data-act="part-label"]';
+    const on = (sel) => page.isChecked(sel);
+    check(A, "a part's label starts on", await on(row0));
     await page.click(row0);
-    check(A, "the Label button turns the part's label off", (await page.getAttribute(row0, "aria-pressed")) === "false" && (await page.textContent(row0)) === "Label off");
+    check(A, "the label switch turns the part's label off", !(await on(row0)));
     check(A, "the text is kept", (await page.inputValue('dialog.editor .ed-part-row[data-row="0"] input[type=text]')) === HOSTILE);
     const n0 = mock.log.length;
     await page.click("dialog.editor .ed-save");
@@ -738,13 +739,13 @@ if (want("editor")) {
     const p = JSON.parse(mock.read(BRANCH, "content/regions/editor-test.json")).properties;
     check(A, "saved as partLabelHidden with the label text kept", JSON.stringify(p.partLabelHidden) === "[true,false,false]" && p.partLabels[0] === HOSTILE, JSON.stringify([p.partLabelHidden, p.partLabels]));
     await page.click('dialog.editor [data-act="undo"]');
-    check(A, "undo shows it again", (await page.getAttribute(row0, "aria-pressed")) === "true");
-    const folder = 'dialog.editor .ed-folder[data-key="-1"] [data-act="folder-labels"]';
+    check(A, "undo shows it again", await on(row0));
+    const folder = 'dialog.editor .ed-folder[data-key="-1"] input[data-act="folder-labels"]';
     await openFolderMore(page, -1);
     await page.click(folder);
-    check(A, "a colour folder's Labels button hides all its labels", (await page.textContent(folder)) === "Show labels" && (await page.getAttribute(row0, "aria-pressed")) === "false");
+    check(A, "a colour folder's Show labels switch hides all its labels", !(await on(folder)) && !(await on(row0)));
     await page.click(folder);
-    check(A, "and shows them again", (await page.textContent(folder)) === "✓ Show labels" && (await page.getAttribute(row0, "aria-pressed")) === "true");
+    check(A, "and shows them again", (await on(folder)) && (await on(row0)));
   });
 
   await step(A, "delete a whole part (always asks first)", async () => {

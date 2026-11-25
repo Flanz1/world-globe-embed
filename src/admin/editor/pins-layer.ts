@@ -4,7 +4,7 @@
  * in this browser. Read-only and never takes a click or drag: hovering a pin shows its name and kind; pins are
  * changed in the Pins tab.
  */
-import { h } from "../dom.ts";
+import { h, switchRow } from "../dom.ts";
 import { PIN_ICON_PATHS, inkFor } from "../../shared/pin-icons.ts";
 import { kindInfo, pinColor, type PinFeature } from "../../shared/pins.ts";
 
@@ -64,7 +64,8 @@ export function createPinsLayer(o: { pins: () => PinFeature[]; sx: (lon: number)
   const tip = h("div", { className: "ed-pin-tip", hidden: true });
   const box = h("input", { type: "checkbox", checked: on, name: "ed-pins-show" });
   const info = h("span", { className: "muted small" });
-  const row = h("label", { className: "check ed-ov-pins", title: "Show this map's pins on the editor map (change them in the Pins tab)" }, box, "Show pins", info);
+  const row = switchRow(h("span", {}, "Show pins", info), box, { className: "ed-ov-pins" });
+  row.title = "Show this map's pins on the editor map (change them in the Pins tab)";
 
   let ready = false;
   function refresh(): void {

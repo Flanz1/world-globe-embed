@@ -7,7 +7,7 @@
  *
  * The popover looks like the Pin tool's (same form classes and rules, a bottom sheet on phones). The markers are real buttons laid over the canvas.
  */
-import { h } from "../dom.ts";
+import { h, switchRow } from "../dom.ts";
 import type { MapComment } from "../github.ts";
 import { addComment, commentsFor, deleteComment, loadComments, onCommentsChange, openCountFor, setCommentStatus } from "../comments.ts";
 import { confirmBox } from "../region-dialogs.ts";
@@ -66,7 +66,8 @@ export function createCommentTool(o: CommentToolOptions): CommentTool {
   const markers = h("div", { className: "ed-cm-markers" });
   for (const t of ["pointerdown", "pointerup", "mousedown", "wheel", "dblclick", "contextmenu"] as const) popover.addEventListener(t, (e) => e.stopPropagation());
   const box = h("input", { type: "checkbox", name: "ed-comments-resolved" });
-  const row = h("label", { className: "check ed-ov-comments", title: "Also show the comments that were ticked off" }, box, "Show resolved comments");
+  const row = switchRow("Show resolved comments", box, { className: "ed-ov-comments" });
+  row.title = "Also show the comments that were ticked off";
   box.addEventListener("change", () => {
     showResolved = box.checked;
     paintMarkers(true);

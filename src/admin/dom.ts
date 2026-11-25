@@ -30,3 +30,70 @@ export function folderIcon(): SVGSVGElement {
   svg.append(path);
   return svg;
 }
+
+/** A Material You switch: the checkbox gets role=switch and the .md-switch look; `word` adds the On/Off word (standalone switches only). */
+export function switchCtl(box: HTMLInputElement, word = false): HTMLElement {
+  box.classList.add("md-switch");
+  box.setAttribute("role", "switch");
+  return h("span", { className: `sw-ctl${word ? " word" : ""}` }, box, h("span", { className: "sw-state", ariaHidden: "true" }));
+}
+
+/** A switch row: the label (and a muted help line) on the left, the switch on the right. */
+export function switchRow(text: string | Node, box: HTMLInputElement, opts: { help?: string; word?: boolean; className?: string } = {}): HTMLLabelElement {
+  return h(
+    "label",
+    { className: `sw-row${opts.className ? ` ${opts.className}` : ""}` },
+    h("span", { className: "sw-text" }, h("span", {}, text), opts.help ? h("span", { className: "sw-help", textContent: opts.help }) : null),
+    switchCtl(box, opts.word ?? false),
+  );
+}
+
+/** Opens a floating popup of switches under (or beside) a button; Esc, a click outside or the button closes it. Phones get a bottom sheet. */
+export function switchPopup(btn: HTMLElement, build: () => HTMLElement[], opts: { title?: string; sheetTitle?: string; label: string; align?: "left" | "right"; onClose?: () => void }): { close(): void } {
+  const phone = matchMedia("(max-width: 599px)").matches;
+  let closeFn = (): void => {};
+  // Phones: a bottom sheet with a handle, a title naming what it changes and a Close button; larger screens: a small titled popup.
+  const head = phone
+    ? [h("div", { className: "sw-grab", ariaHidden: "true" }), h("div", { className: "sw-sheet-head" }, h("h3", { textContent: opts.sheetTitle ?? opts.title ?? opts.label }), h("button", { type: "button", className: "ghost", textContent: "Close", onclick: () => closeFn() }))]
+    : [opts.title ? h("div", { className: "sw-menu-title", textContent: opts.title }) : null];
+  const menu = h("div", { className: "sw-menu", role: "dialog", ariaLabel: opts.label }, ...head, ...build());
+  const scrim = phone ? h("div", { className: "sw-scrim" }) : null;
+  if (phone) menu.classList.add("sheet");
+  const host = btn.closest("dialog[open]") ?? document.body;
+  host.append(...(scrim ? [scrim, menu] : [menu]));
+  if (!phone) {
+    const r = btn.getBoundingClientRect();
+    const w = menu.offsetWidth;
+    let left = opts.align === "right" ? r.right - w : r.left;
+    left = Math.max(12, Math.min(left, innerWidth - w - 12));
+    menu.style.left = `${left}px`;
+    let top = r.bottom + 6;
+    if (top + menu.offsetHeight > innerHeight - 8) top = Math.max(8, r.top - 6 - menu.offsetHeight);
+    menu.style.top = `${top}px`;
+  }
+  btn.setAttribute("aria-expanded", "true");
+  const close = () => {
+    menu.remove();
+    scrim?.remove();
+    btn.setAttribute("aria-expanded", "false");
+    document.removeEventListener("pointerdown", onDown, true);
+    document.removeEventListener("keydown", onKey, true);
+    opts.onClose?.();
+  };
+  closeFn = close;
+  const onDown = (e: Event) => {
+    const t = e.target as Node;
+    if (!menu.contains(t) && !btn.contains(t)) close();
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key !== "Escape") return;
+    e.stopPropagation();
+    e.preventDefault();
+    close();
+    btn.focus();
+  };
+  document.addEventListener("pointerdown", onDown, true);
+  document.addEventListener("keydown", onKey, true);
+  menu.querySelector<HTMLElement>("input")?.focus();
+  return { close };
+}

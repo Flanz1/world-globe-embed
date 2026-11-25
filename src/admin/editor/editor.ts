@@ -61,7 +61,7 @@ import {
 import { clampPadding } from "../../shared/params.ts";
 import { TEXTURE_WIDTHS, type MapMeta, type SlotsFile, type TextureWidth } from "../../shared/types.ts";
 import { deviceLimit, nextTier } from "../../shared/tiers.ts";
-import { h } from "../dom.ts";
+import { h, switchRow } from "../dom.ts";
 import { iconify, withIcon, type IconName } from "./icons.ts";
 import { SHEET_QUERY, sidePanel } from "./sheet.ts";
 import { mapLimit, type GitHub } from "../github.ts";
@@ -513,27 +513,22 @@ export function openEditor(o: EditorOptions): void {
     redoBtn.title = hist.canRedo ? "Redo (Ctrl+Shift+Z or Ctrl+Y)" : "Nothing to redo";
   };
   const redoBtn = iconify(btn("Redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)", () => redo(), "redo"), "redo", false);
-  const gridBtn = iconify(btn("Grid", "Show the globe's 15° grid (G)", () => toggleGrid(), "grid"), "grid", false);
+  const gridBtn = iconify(btn("Grid", "Show the globe's 15° grid (G)", () => toggleGrid(), "grid"), "grid", true);
   const snapBtn = iconify(btn(
     "Snap",
     "Snap to the vertices and lines of other parts and regions while drawing and dragging, so borders are shared exactly (S). Hold Ctrl to place a point freely.",
     () => toggleSnap(),
     "snap",
   ), "snap", true);
-  const keepOpenBtn = btn(
-    "Open line",
-    "Don't close the shape when you lift the pen. Tap the first point or press Enter to close. (K)",
-    () => toggleKeepOpen(),
-    "keep-open",
-  );
+  const keepOpenBtn = h("input", { type: "checkbox", title: "Don't close the shape when you lift the pen. Tap the first point or press Enter to close. (K)", dataset: { act: "keep-open" }, onchange: () => toggleKeepOpen() });
   /** Top left of the map while Freehand is active: its option, so the toolbar row never changes. */
-  const optBar = h("div", { className: "ed-opt-bar", hidden: true, role: "toolbar", ariaLabel: "Freehand option" }, keepOpenBtn);
+  const optBar = h("div", { className: "ed-opt-bar", hidden: true, role: "toolbar", ariaLabel: "Freehand option" }, switchRow("Open line", keepOpenBtn, { word: true }));
   const coastBtn = iconify(btn(
     "Coast",
     "Also snap to the map's coastline (shown in amber) where no part or region is in reach, and follow it between two clicks (O). Rivers, lakes and marshes count as land.",
     () => toggleCoast(),
     "coast",
-  ), "coast", false);
+  ), "coast", true);
   coastBtn.hidden = true;
   const simplifyBtn = iconify(btn("Simplify…", "Fewer vertices, same shape", () => toggleSimplify(), "simplify"), "simplify", false);
   const smoothBtn = iconify(btn("Smooth", "Round the corners (one Chaikin pass; doubles the vertices)", () => smooth(), "smooth"), "smooth", false);
@@ -571,13 +566,13 @@ export function openEditor(o: EditorOptions): void {
     h("p", { className: "muted small", textContent: "Other regions of this slot drawn under this one. Each group is one section of the embed's legend with one switch, its colours merged." }),
     lgList,
     lgNew,
-    h("label", { className: "check", title: "Cut the groups to this region's outline, so only what lies inside it shows." }, underClipIn, "Only show them inside this region"),
+    switchRow("Only show them inside this region", underClipIn, { help: "Cuts the groups to this region's outline, so only what lies inside it shows." }),
   );
   const ownBox = h(
     "fieldset",
     { className: "ed-lgroups ed-own" },
     h("legend", { textContent: "This region in the legend" }),
-    h("label", { className: "check", title: "Add a switch for this region itself to the legend, so readers can switch it off too. Off: the region is always shown." }, ownToggleIn, "Readers can switch this region off too"),
+    switchRow("Readers can switch this region off too", ownToggleIn, { help: "Adds a switch for this region itself to the legend. Off: the region is always shown." }),
     h("label", {}, "Name of this region's own switch", layerLabelIn),
   );
   const pgList = h("div", { className: "ed-groups-list", dataset: { groups: "pins" } });
@@ -646,12 +641,11 @@ export function openEditor(o: EditorOptions): void {
           h("label", {}, "Name", nameIn),
           idLine,
           h("p", { className: "muted small", textContent: `Slot: ${slotName} · map: ${slot.map}` }),
+          h("label", {}, "Description (plain text)", descIn),
           h("h4", { className: "ed-sub", textContent: "Appearance" }),
           h("label", { className: "inline grow ed-fill" }, "Fill", opacityIn, opacityOut),
-          h("label", { className: "check" }, labelIn, "Show part labels in embed"),
-          h("label", { className: "check", title: "Draw a dark border where parts of different colours share a line (parts of one colour read as one). Off: parts that touch just touch." }, borderIn, "Draw national borders"),
-          h("h4", { className: "ed-sub", textContent: "Description" }),
-          h("label", {}, "Description (plain text)", descIn),
+          switchRow("Show part labels in embed", labelIn),
+          switchRow("Draw national borders", borderIn, { help: "A dark border where parts of different colours share a line. Off: parts just touch." }),
         ],
       },
       {
@@ -1850,7 +1844,7 @@ export function openEditor(o: EditorOptions): void {
     gridBtn.setAttribute("aria-pressed", String(gridOn));
     snapBtn.setAttribute("aria-pressed", String(snapOn));
     optBar.hidden = tool !== "freehand" || lineTarget();
-    keepOpenBtn.setAttribute("aria-pressed", String(keepOpen));
+    keepOpenBtn.checked = keepOpen;
     coastBtn.setAttribute("aria-pressed", String(coastActive()));
     // The spherical area is skipped mid-drag (it costs a few ms at 2,000 vertices) and refreshed on release.
     if (!hist.dragging || lastArea < 0) lastArea = parts_ ? areaPercent(mapGeometry(toGeometry(parts()), (p) => imageToGlobe(p, frame))) : 0;
@@ -2193,7 +2187,7 @@ export function openEditor(o: EditorOptions): void {
         return groupCard(`r${gi}`, g.name, plural(g.regions.length, "region"), (v) => (update((x) => ({ ...x, name: v.slice(0, GROUP_NAME_MAX) }), "Group name"), typed()), [
           ...(rows.length ? [h("div", { className: "ed-group-rows" }, ...rows)] : [h("p", { className: "muted small", textContent: "No regions yet." })]),
           add,
-          h("label", { className: "check ed-group-on", title: "Starts shown when the embed opens" }, onIn, "Shown when the embed opens"),
+          switchRow("Shown when the embed opens", onIn, { className: "ed-group-on" }),
           fillLine,
           h("div", { className: "ed-group-foot" }, del, ...order),
         ]);
@@ -2272,7 +2266,7 @@ export function openEditor(o: EditorOptions): void {
         return groupCard(`p${gi}`, g.name, plural(g.pinMaps.length, "pin map"), (v) => (update((x) => ({ ...x, name: v.slice(0, GROUP_NAME_MAX) }), "Group name"), typed()), [
           ...(rows.length ? [h("div", { className: "ed-group-rows" }, ...rows)] : [h("p", { className: "muted small", textContent: "No pin maps yet." })]),
           add,
-          h("label", { className: "check ed-group-on", title: "Starts shown when the embed opens" }, onIn, "Shown when the embed opens"),
+          switchRow("Shown when the embed opens", onIn, { className: "ed-group-on" }),
           h("div", { className: "ed-group-foot" }, del, ...order),
         ]);
       }),
@@ -2446,6 +2440,7 @@ export function openEditor(o: EditorOptions): void {
     });
     const tiny = (text: string, title: string, act: string, onclick: (ev: MouseEvent) => void, extra = "") =>
       h("button", { type: "button", className: `ghost tiny${extra}`, textContent: text, title, dataset: { act }, onclick: (ev: MouseEvent) => (ev.stopPropagation(), onclick(ev)) });
+    const partLabelRow = switchRow("Show this part's label", h("input", { type: "checkbox", dataset: { act: "part-label" }, onchange: () => togglePartLabel(p) }), { className: "ed-switch-line" });
     const n = s.parts.length;
     const acts = h(
       "span",
@@ -2455,7 +2450,6 @@ export function openEditor(o: EditorOptions): void {
       Object.assign(tiny("Forward", `Bring part ${p + 1} forward: on top of the next part it overlaps (])`, "part-forward", () => moveLayer(p, 1)), { disabled: p >= n - 1 }),
       Object.assign(tiny("Back", `Send part ${p + 1} backward: under the next part it overlaps ([)`, "part-backward", () => moveLayer(p, -1)), { disabled: p <= 0 }),
       tiny("Contested", "", "part-occupied", () => togglePartOccupied(p)),
-      tiny("Label", "", "part-label", () => togglePartLabel(p), " ed-labelbtn"),
       tiny("Lock", "", "part-lock", () => togglePartLock(p), " ed-lock"),
       tiny("Delete", `Delete part ${p + 1} (asks first)`, "part-delete", () => void askDeletePart(p), " danger"),
     );
@@ -2485,7 +2479,7 @@ export function openEditor(o: EditorOptions): void {
       },
     });
     // Line 1 stays one short line; the colour, region and actions sit in a second line shown for the selected or opened part only.
-    const row: HTMLElement = h("div", { className: "ed-part-row", dataset: { row: String(p) } }, sw, lbl, more, h("div", { className: "ed-part-more" }, sel, ownerSel, acts));
+    const row: HTMLElement = h("div", { className: "ed-part-row", dataset: { row: String(p) } }, sw, lbl, more, h("div", { className: "ed-part-more" }, sel, ownerSel, partLabelRow, acts));
     // Shift/Ctrl+click picks parts: don't let the browser start a text selection across the rows.
     row.addEventListener("mousedown", (ev) => {
       if ((ev.shiftKey || ev.ctrlKey || ev.metaKey) && !(ev.target instanceof HTMLInputElement || ev.target instanceof HTMLSelectElement)) ev.preventDefault();
@@ -2568,14 +2562,11 @@ export function openEditor(o: EditorOptions): void {
         setMsg(`Contested area in ${entryName(k)}: draw its outline (Enter or a double-click finishes it).`);
       },
     });
-    const labelsBtn = h("button", {
-      type: "button",
-      className: "ghost tiny",
-      textContent: "Labels",
-      title: "Show or hide the labels of every part in this colour",
-      dataset: { act: "folder-labels" },
-      onclick: () => toggleFolderLabels(members),
-    });
+    const labelsBtn = switchRow(
+      "Show labels",
+      h("input", { type: "checkbox", title: "Show or hide the labels of every part in this colour", dataset: { act: "folder-labels" }, onchange: () => toggleFolderLabels(members) }),
+      { className: "ed-switch-line" },
+    );
     const menu = h("div", { className: "ed-folder-more", hidden: !moreOpen.has(k) }, labelsBtn, addOcc);
     const moreBtn = h("button", {
       type: "button",
@@ -2638,14 +2629,13 @@ export function openEditor(o: EditorOptions): void {
       else el.value = e.label;
     });
     folders.querySelectorAll<HTMLElement>(".ed-folder").forEach((fo) => {
-      const b = fo.querySelector<HTMLButtonElement>("button[data-act=folder-labels]");
+      const b = fo.querySelector<HTMLInputElement>("input[data-act=folder-labels]");
       if (!b) return;
       const members = s.parts.flatMap((_, p) => ((s.styles[p] ?? OWN_COLOUR) === Number(fo.dataset.key) ? [p] : []));
       const withText = members.filter((p) => s.labels[p]?.trim());
       const allOff = withText.length > 0 && withText.every((p) => s.labelHidden[p] === true);
       b.disabled = !withText.length;
-      b.textContent = allOff ? "Show labels" : "✓ Show labels";
-      b.setAttribute("aria-pressed", String(!allOff));
+      b.checked = !allOff;
       const tag = fo.querySelector<HTMLElement>(".ed-labels-off");
       if (tag) tag.hidden = !allOff;
     });
@@ -2677,11 +2667,10 @@ export function openEditor(o: EditorOptions): void {
       row.querySelector("button[data-act=part-select]")?.setAttribute("aria-pressed", String(p === selPart));
       const lblOff = s.labelHidden[p] === true;
       row.classList.toggle("label-off", lblOff);
-      const lblBtn = row.querySelector<HTMLButtonElement>("button[data-act=part-label]");
-      if (lblBtn) {
-        lblBtn.textContent = lblOff ? "Label off" : "Label on";
-        lblBtn.title = lblOff ? `Show part ${p + 1}'s label in the embed again` : `Hide part ${p + 1}'s label in the embed (the text is kept)`;
-        lblBtn.setAttribute("aria-pressed", String(!lblOff));
+      const lblBox = row.querySelector<HTMLInputElement>("input[data-act=part-label]");
+      if (lblBox) {
+        lblBox.checked = !lblOff;
+        lblBox.title = lblOff ? `Show part ${p + 1}'s label in the embed again` : `Hide part ${p + 1}'s label in the embed (the text is kept)`;
       }
       const locked = s.locked[p] !== false;
       row.classList.toggle("locked", locked);
@@ -3314,7 +3303,7 @@ export function openEditor(o: EditorOptions): void {
   function toggleKeepOpen(): void {
     keepOpen = !keepOpen;
     // Shown at once: the status refresh waits for the next animation frame, which lags on a busy machine.
-    keepOpenBtn.setAttribute("aria-pressed", String(keepOpen));
+    keepOpenBtn.checked = keepOpen;
     try {
       localStorage.setItem(KEEP_OPEN_PREF, keepOpen ? "on" : "off");
     } catch {

@@ -1,6 +1,6 @@
 /** The editor's inspector: one set of tabbed sections (Region, Parts, Layers). Wide screens: a card floating over the
  *  map's right side that folds to an icon strip. Phones and tablets: a bottom sheet (peek / half / full) under the map.
- *  Also the minimap: the globe preview as a disc over the map's bottom left. */
+ *  Also the minimap: the globe preview as a rounded square over the map's bottom left. */
 import { h } from "../dom.ts";
 import { icon, type IconName } from "./icons.ts";
 
@@ -93,7 +93,7 @@ export function sidePanel(opts: { frame: HTMLElement; banners: HTMLElement[]; se
   );
   const inspHead = h("div", { className: "ed-insp-head" }, h("strong", { className: "ed-insp-title", textContent: "Inspector" }), embedBtn, foldBtn);
 
-  // The minimap: the globe preview, cropped to a disc over the map's bottom left; its button makes it bigger.
+  // The minimap: the globe preview, cropped to a rounded square over the map's bottom left; its button makes it bigger.
   const grow = iconBtn("expand", "Bigger globe", "minimap-size", () => {
     const big = minimap.classList.toggle("big");
     grow.title = big ? "Smaller globe" : "Bigger globe";

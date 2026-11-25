@@ -157,9 +157,11 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .45); }
 .pv-controls output { width: 3.2em; text-align: right; color: var(--md-sys-color-on-surface); font-variant-numeric: tabular-nums; }
 .pv-travel { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
 .pv-travel legend { padding: 0; margin-bottom: 6px; }
-.pv-tr { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.pv-tr label.inline { flex: 1 1 auto; min-width: 0; }
-.pv-tr input[type=text] { flex: 1 1 0; min-width: 0; width: 100%; }
+/* Travel speeds: name on the left and the switch on the right; the km/day field sits on its own line below. */
+.pv-tr { display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-width: 0; margin-bottom: 6px; }
+.pv-tr label.sw-row { flex: 1 1 auto; min-width: 0; }
+.pv-tr input[type=text] { min-width: 0; width: 100%; max-width: 150px; }
+.pv-tr .pv-km { align-self: flex-start; }
 .pv-km { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; color: var(--md-sys-color-on-surface-variant); }
 .pv-km input { width: 8ch; padding-inline: 6px; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .pv-travel:disabled { opacity: .6; }
@@ -319,10 +321,8 @@ dialog.editor button.ed-hb.plain { border-color: transparent; color: var(--md-sy
 dialog.editor button.ed-hb.icon-only { position: relative; justify-content: center; min-width: 36px; padding: 0; }
 /* Pressed (toggled-on) editor tools: a lighter tint with an inset edge, so they never look like the filled Save button and are not colour-only. */
 dialog.editor button[aria-pressed="true"], .ed-ov-btn.active, .ed-part-row.locked .ed-lock { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: var(--md-sys-color-outline); }
-/* In the title bar a pressed toggle also gets a tick (a mask, so not part of its name). */
-.ed-hb[aria-pressed="true"]::before, .ed-ov-btn.active::before { content: ""; display: inline-block; width: 14px; height: 14px; margin: 0 -2px -2px -2px; background: currentColor; -webkit-mask: var(--app-tick) center / contain no-repeat; mask: var(--app-tick) center / contain no-repeat; }
-/* A pressed icon-only button keeps the tick, small, on the icon's corner. */
-.ed-hb.icon-only[aria-pressed="true"]::before { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; margin: 0; }
+/* In the title bar a pressed toggle is a filled primary-container pill (no tick marks anywhere). */
+dialog.editor button.ed-hb[aria-pressed="true"], dialog.editor .ed-ov-btn.active { background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); border-color: transparent; }
 /* The tool rail: icon over a short name; pressed = tonal fill. */
 .ed-rail { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 0; padding: 8px 4px; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; background: var(--md-sys-color-surface-container); }
 dialog.editor .ed-rail button { position: relative; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 58px; min-height: 50px; padding: 2px 0 4px; border: 0; border-radius: 0; background: none; color: var(--md-sys-color-on-surface-variant); }
@@ -466,10 +466,10 @@ dialog.editor button.ed-ib[aria-pressed="true"] { background-color: var(--md-sys
 .ed-sec-body > fieldset > legend { padding: 0; }
 .ed-sec-body > .ed-colours > legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .ed-sec-body > .ed-overlaps > legend, .ed-sec-body > .ed-lgroups > legend { margin-bottom: 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--md-sys-color-on-surface-variant); }
-/* The minimap: the globe preview as a disc over the map's bottom left (the embed's corner buttons fall outside it). */
+/* The minimap: the globe preview as a rounded square over the map's bottom left, so the embed's buttons stay inside it. */
 .ed-mini { position: absolute; left: 12px; bottom: 34px; z-index: 2; width: 148px; height: 148px; }
 .ed-mini.big { width: min(340px, 60vh); height: min(340px, 60vh); }
-.ed-mini-disc { position: absolute; inset: 0; overflow: hidden; border-radius: 50%; background: var(--app-map-bg); box-shadow: 0 4px 16px rgba(0, 0, 0, .4), 0 0 0 3px var(--md-sys-color-surface-container-high); }
+.ed-mini-disc { position: absolute; inset: 0; overflow: hidden; border-radius: 16px; background: var(--app-map-bg); box-shadow: 0 4px 16px rgba(0, 0, 0, .4), 0 0 0 3px var(--md-sys-color-surface-container-high); }
 .ed-globe { position: absolute; left: 50%; top: 50%; width: 400px; height: 400px; border: 0; transform: translate(-50%, -50%) scale(var(--mini-k, .4)); background: var(--app-map-bg); }
 .ed-mini { --mini-k: .4; }
 .ed-mini.big { --mini-k: .9; }
@@ -525,7 +525,8 @@ dialog.editor .ed-mini > .ed-ib { position: absolute; right: -2px; top: -2px; wi
 .combine-out p { margin: 2px 0; }
 .warn { color: var(--app-warn); }
 .ed-part-row.label-off input[type=text] { opacity: .55; text-decoration: line-through; }
-.ed-part-row .ed-labelbtn[aria-pressed=false] { opacity: .75; }
+.ed-switch-line { min-height: 36px; }
+.ed-part-row .ed-part-more label.sw-row { gap: 10px; }
 
 /* Editor: "Other regions" tool (button at the toolbar's right end, panel at the top right of the map) */
 .ed-ov-panel { position: absolute; right: 8px; top: 8px; z-index: 3; display: grid; gap: 6px; width: min(340px, calc(100% - 16px)); max-height: min(70vh, 520px); grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); border: 0; box-shadow: var(--app-shadow); }
@@ -551,8 +552,7 @@ dialog.editor .ed-mini > .ed-ib { position: absolute; right: -2px; top: -2px; wi
 .ed-layer-bar[hidden] { display: none; }
 .ed-opt-bar { position: absolute; left: 8px; top: 8px; z-index: 3; display: flex; padding: 4px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); box-shadow: var(--app-shadow); }
 .ed-opt-bar[hidden] { display: none; }
-.ed-opt-bar button { min-height: 40px; }
-.ed-opt-bar button[aria-pressed="true"]::before { content: "\2713\00a0"; }
+.ed-opt-bar label.sw-row { padding: 0 8px; gap: 12px; }
 .ed-layer-name { font-size: 12px; color: var(--md-sys-color-on-surface-variant); white-space: nowrap; }
 .ed-ov-panel .row { display: flex; flex-wrap: wrap; gap: 6px; }
 .ed-ov-panel select { flex: 1 1 90px; min-width: 0; }
@@ -728,6 +728,7 @@ button.link { background: none; border: 0; border-radius: 4px; min-height: 0; pa
 .pn-form { display: grid; gap: 8px; }
 .pn-form textarea { resize: vertical; }
 .pn-color { display: flex; align-items: center; gap: 10px; }
+.pn-color label.sw-row { flex: 1 1 auto; }
 .pn-below { margin-top: 14px; display: grid; gap: 6px; }
 .pn-list { display: grid; gap: 4px; }
 .pn-row { display: flex; align-items: center; gap: 8px; min-height: 36px; text-align: left; background-color: transparent; color: var(--md-sys-color-on-surface); border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; padding: 4px 12px 4px 8px; font-weight: 400; }
@@ -979,9 +980,8 @@ dialog.warp > .dlg-foot { display: flex; align-items: center; gap: 8px; padding:
 /* Narrower screens: Snap and Other regions become icon-only; the label stays as visually hidden text, so they keep their names. */
 @media (max-width: 1100px) {
   .ed-subtitle { display: none; }
-  .ed-view-tools [data-act="snap"] .ed-lbl, .ed-view-tools .ed-ov-btn .ed-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  dialog.editor .ed-view-tools [data-act="snap"], dialog.editor .ed-view-tools .ed-ov-btn { position: relative; justify-content: center; min-width: 36px; padding: 0; }
-  .ed-view-tools [data-act="snap"][aria-pressed="true"]::before, .ed-view-tools .ed-ov-btn.active::before { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; margin: 0; }
+  .ed-view-tools [data-act="snap"] .ed-lbl, .ed-view-tools [data-act="coast"] .ed-lbl, .ed-view-tools [data-act="grid"] .ed-lbl, .ed-view-tools .ed-ov-btn .ed-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  dialog.editor .ed-view-tools [data-act="snap"], dialog.editor .ed-view-tools [data-act="coast"], dialog.editor .ed-view-tools [data-act="grid"], dialog.editor .ed-view-tools .ed-ov-btn { position: relative; justify-content: center; min-width: 36px; padding: 0; }
 }
 /* Phones: the title bar keeps Undo, Redo, Save and Close; the view group floats over the top right of the map. */
 @media (max-width: 600px) {
@@ -992,7 +992,7 @@ dialog.warp > .dlg-foot { display: flex; align-items: center; gap: 8px; padding:
   .ed-head-row { gap: 2px; }
   .ed-view-tools.floating { position: absolute; right: 8px; top: 8px; z-index: 3; flex-direction: column; gap: 4px; padding: 4px; border-radius: 16px; background: var(--md-sys-color-surface-container-high); box-shadow: var(--app-shadow); }
   dialog.editor .ed-view-tools.floating .ed-hb { min-width: 40px; min-height: 40px; border-color: transparent; color: var(--md-sys-color-on-surface); }
-  dialog.editor .ed-view-tools.floating .ed-hb[aria-pressed="true"], dialog.editor .ed-view-tools.floating .ed-ov-btn.active { color: var(--md-sys-color-on-secondary-container); }
+  dialog.editor .ed-view-tools.floating .ed-hb[aria-pressed="true"], dialog.editor .ed-view-tools.floating .ed-ov-btn.active { background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
   .ed-map-tl { max-width: calc(100% - 72px); }
   .ed-ov-panel { right: 64px; width: calc(100% - 72px); }
 }
@@ -1168,3 +1168,46 @@ button.r-mini-name { display: flex; align-items: center; gap: 10px; flex: 1 1 au
 .user-add label:first-child { flex: 1 1 14em; }
 .user-add input { width: 100%; }
 @media (min-width: 721px) { .urow > span.muted.small { grid-column: 2 / 4; } }
+
+/* ── Switches (Material You): a real checkbox with role=switch. Switch = applies right away; a plain checkbox stays for
+   picking items for a later button (bulk select, Combine, warp list, Rename). No tick marks: on = filled colour. ── */
+.md-switch { appearance: none; -webkit-appearance: none; position: relative; flex: 0 0 auto; box-sizing: border-box; width: 52px; height: 32px; margin: 0; padding: 0; border-radius: 16px; border: 2px solid var(--md-sys-color-outline); background: var(--md-sys-color-surface-container-highest); cursor: pointer; vertical-align: middle; transition: background-color .15s, border-color .15s; }
+.md-switch::before { content: ""; position: absolute; top: 50%; left: 6px; width: 16px; height: 16px; border-radius: 50%; background: var(--md-sys-color-outline); transform: translateY(-50%); transition: left .15s, width .15s, height .15s, background-color .15s; }
+.md-switch:checked { background: var(--md-sys-color-primary); border-color: var(--md-sys-color-primary); }
+.md-switch:checked::before { left: 22px; width: 24px; height: 24px; background: var(--md-sys-color-on-primary); }
+.md-switch:hover:not(:disabled)::before { box-shadow: 0 0 0 8px color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent); }
+.md-switch:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
+.md-switch:disabled { opacity: .38; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .md-switch, .md-switch::before { transition: none; } }
+.sw-ctl { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+/* The On/Off word is drawn by CSS, only on standalone switches (the switch role announces the state). */
+.sw-state { display: none; font-size: 14px; font-weight: 600; min-width: 26px; color: var(--md-sys-color-on-surface); }
+.sw-ctl.word .sw-state { display: inline; }
+.md-switch:checked + .sw-state::before { content: "On"; }
+.md-switch:not(:checked) + .sw-state::before { content: "Off"; }
+/* A row: label (and muted help) on the left, switch on the right. */
+label.sw-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; margin: 0; font-size: 14px; color: var(--md-sys-color-on-surface); cursor: pointer; box-sizing: border-box; }
+.sw-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sw-help { font-size: 12px; line-height: 1.35; color: var(--md-sys-color-on-surface-variant); }
+.sw-list { display: flex; flex-direction: column; background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 4px 16px; margin: 8px 0; }
+.sw-list > label.sw-row + label.sw-row { border-top: 1px solid var(--md-sys-color-outline-variant); }
+label.sw-row[hidden] { display: none; }
+label.sw-row.single { max-width: 440px; }
+/* A button that opens a popup of switches, with a count chip and a chevron. */
+.sw-dd { display: inline-flex; align-items: center; gap: 8px; }
+.sw-chev { display: inline-block; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-2px) rotate(45deg); flex: none; }
+.sw-dd[aria-expanded="true"] .sw-chev { transform: translateY(2px) rotate(225deg); }
+.sw-count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); font-size: 11px; font-weight: 700; }
+.sw-menu { position: fixed; z-index: 70; min-width: 280px; max-width: min(380px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; box-sizing: border-box; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); border-radius: 12px; padding: 8px 0; box-shadow: var(--app-shadow); text-align: left; }
+.sw-menu .sw-menu-title { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--md-sys-color-on-surface-variant); padding: 6px 16px 4px; margin: 0; }
+.sw-menu label.sw-row { padding: 6px 16px; min-height: 48px; }
+.sw-menu label.sw-row:hover { background: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent); }
+.sw-scrim { position: fixed; inset: 0; z-index: 69; background: rgba(0, 0, 0, .32); }
+@media (max-width: 599px) {
+  .sw-menu.sheet { left: 0 !important; right: 0; bottom: 0; top: auto !important; max-width: none; min-width: 0; max-height: 80vh; border-radius: 28px 28px 0 0; padding: 8px 0 24px; background: var(--md-sys-color-surface-container-low); }
+  .sw-menu.sheet label.sw-row { min-height: 56px; }
+  .sw-grab { width: 32px; height: 4px; border-radius: 2px; background: var(--md-sys-color-on-surface-variant); opacity: .4; margin: 4px auto 8px; }
+  .sw-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px 8px; }
+  .sw-sheet-head h3 { margin: 0; font-size: 16px; min-width: 0; overflow-wrap: anywhere; }
+}
+@media (pointer: coarse) { label.sw-row { min-height: 48px; } }
