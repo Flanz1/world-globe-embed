@@ -845,7 +845,7 @@ function pinMapIcon(): SVGSVGElement {
 
 /** Phones and tablets: after picking a pin in the list, bring the map (centred on it) and the form under it into view. */
 function showPinOnPhone(): void {
-  if (narrow()) el.pane.scrollIntoView({ block: "start", behavior: "smooth" });
+  if (narrow()) window.scrollTo({ top: Math.max(0, el.pane.getBoundingClientRect().top + window.scrollY - 8), behavior: "smooth" });
 }
 
 function centreOn(f: PinFeature): void {

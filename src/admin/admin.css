@@ -1082,10 +1082,12 @@ button.r-mini-name { display: flex; align-items: center; gap: 10px; flex: 1 1 au
 .pn-tree .pinmap-head.picked { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
 .pn-tree .pinmap-head > .bulk-box { margin: 0 4px 0 6px; }
 .pinmap-loose { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; min-height: 40px; padding: 0 4px; color: var(--md-sys-color-on-surface-variant); font-size: 15px; }
-.pn-tree .pinmap-body { display: grid; gap: 2px; margin: 2px 0 0 20px; }
+.pn-tree .pinmap-body { display: grid; gap: 2px; margin: 2px 0 0; }
 .pn-tree .pinmap-body[hidden] { display: none; }
 .pn-tree .pinmap-body > p { margin: 4px 12px 8px; }
-.pn-tree .pn-row { min-height: 40px; border: 0; padding: 0 12px 0 12px; }
+.pn-tree .pn-row { min-height: 40px; border: 0; padding: 0 12px 0 44px; }
+.pn-tree .pn-item > .pn-row { padding-left: 12px; }
+.pn-tree .pn-item { padding-left: 4px; }
 .pn-tree .pn-row:hover { background-color: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent); }
 .pn-tree .pn-row.on { background-color: var(--md-sys-color-secondary-container); }
 .pn-tree .pn-item { display: flex; align-items: center; gap: 4px; border-radius: 12px; }
@@ -1104,5 +1106,5 @@ button.r-mini-name { display: flex; align-items: center; gap: 10px; flex: 1 1 au
   body.bulk-on .pn-side.open { display: none; }
 }
 @media (max-width: 600px) {
-  .pn-tree .pinmap-body { margin-left: 12px; }
+  .pn-tree .pn-row { padding-left: 36px; }
 }
