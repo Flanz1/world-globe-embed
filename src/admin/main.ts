@@ -9,6 +9,7 @@ import { escapeHtml } from "../shared/page.ts";
 import { GitHub, GitHubError, NotListed, type FileChange, type WorkflowRun } from "./github.ts";
 import { hasPendingSaves, initOptimistic, optimistic } from "./optimistic.ts";
 import { openPreview } from "./preview.ts";
+import { modal } from "./region-dialogs.ts";
 import { $, SITE, h } from "./dom.ts";
 import { initRegions, item, loadRegions, openRegionById, regionDisplayName, regionFeatures, renderRegions, watchEditing } from "./regions.ts";
 import { moreMenu } from "./more-menu.ts";
@@ -118,7 +119,16 @@ function mapOptions(select: HTMLSelectElement, selected?: string): void {
 
 /* ── Rendering ── */
 
+/** "Used by inara, aerthos" / "Not in a slot": which slots show this map. */
+function usedBy(id: string): string {
+  const on = Object.entries(slots.slots)
+    .filter(([, sl]) => sl.map === id)
+    .map(([slug]) => slug);
+  return on.length ? `Used by ${on.join(", ")}` : "Not in a slot";
+}
+
 function renderMaps(): void {
+  $("#maps-count").textContent = maps.length ? String(maps.length) : "";
   $("#maps").replaceChildren(
     ...(maps.length
       ? maps.map((m) =>
@@ -126,9 +136,14 @@ function renderMaps(): void {
             "div",
             { className: "map" },
             thumb(m, ""),
-            h("button", { type: "button", className: "ghost", textContent: "Preview", onclick: () => openPreview({ maps, mapId: m.id }) }),
-            h("div", {}, h("strong", { textContent: m.name }), " ", h("code", { textContent: m.id })),
+            h("div", { className: "map-name" }, h("strong", { textContent: m.name }), " ", h("code", { textContent: m.id })),
             h("div", { className: "muted", textContent: `${m.width}×${m.height} · ${m.uploadedBy} · ${new Date(m.date).toLocaleDateString()}` }),
+            h(
+              "div",
+              { className: "map-foot" },
+              h("button", { type: "button", className: "ghost", textContent: "Preview", onclick: () => openPreview({ maps, mapId: m.id }) }),
+              h("span", { className: "muted small", textContent: usedBy(m.id) }),
+            ),
           ),
         )
       : [h("p", { className: "muted", textContent: "No maps yet." })]),
@@ -208,7 +223,7 @@ function renderSlots(): void {
           undo: (prev) => {
             if (slots.slots[slug]) slots.slots[slug].map = prev;
           },
-          render: renderSlots,
+          render: () => (renderSlots(), renderMaps()),
           commit: () =>
             gh!.commit(`Show map "${target}" in slot "${slug}"`, async () => [
               await slotsChange((s) => {
@@ -236,11 +251,10 @@ function renderSlots(): void {
           h("code", { textContent: slug }),
           " ",
           h("a", { href: new URL(`v/${slug}/`, SITE).href, target: "_blank", rel: "noopener", textContent: "open" }),
-          h("div", { className: "slot-map" }, select),
+          h("div", { className: "slot-map" }, select, save),
           h(
             "div",
             { className: "actions" },
-            save,
             preview,
             copy,
             // Opt-in: only from here, never prompted when a map changes.
@@ -435,7 +449,28 @@ const blobToBase64 = (blob: Blob): Promise<string> =>
     r.readAsDataURL(blob);
   });
 
+/** The Upload map… and + Slot… dialogs: the button opens its form in a dialog (the form lives parked in #dlg-forms the
+ * rest of the time, so its handlers stay wired); Close, Cancel and Esc close it and focus goes back to the button. */
+const openForms = new Map<string, () => void>();
+function wireDialog(button: string, formSel: string, first: string): void {
+  const btn = $<HTMLButtonElement>(button);
+  const form = $<HTMLFormElement>(formSel);
+  btn.addEventListener("click", () => {
+    const m = modal(form.dataset.title ?? "", "form-dlg");
+    m.body.append(form);
+    openForms.set(formSel, m.close);
+    m.dlg.addEventListener("close", () => {
+      openForms.delete(formSel);
+      $("#dlg-forms").append(form);
+      btn.focus();
+    });
+    form.querySelector<HTMLElement>(first)?.focus();
+  });
+  for (const c of form.querySelectorAll<HTMLButtonElement>("[data-close]")) c.addEventListener("click", () => openForms.get(formSel)?.());
+}
+
 function wireUpload(): void {
+  wireDialog("#upload-btn", "#upload", "input[name=file]");
   const form = $<HTMLFormElement>("#upload");
   const fileInput = form.elements.namedItem("file") as HTMLInputElement;
   const idInput = form.elements.namedItem("id") as HTMLInputElement;
@@ -519,6 +554,7 @@ function wireUpload(): void {
 }
 
 function wireNewSlot(): void {
+  wireDialog("#new-slot-btn", "#new-slot", "input[name=slug]");
   const form = $<HTMLFormElement>("#new-slot");
   form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -529,6 +565,8 @@ function wireNewSlot(): void {
     if (!SLUG.test(slug)) return fieldError("#new-slot-error", "Slot name: lowercase letters, digits and dashes only.");
     if (slots.slots[slug]) return fieldError("#new-slot-error", `Slot "${slug}" already exists.`);
     fieldError("#new-slot-error", null);
+    // The strip shows the save; a failure shows in the banner.
+    openForms.get("#new-slot")?.();
     void act(`Adding slot ${slug}…`, async () => {
       const sha = await gh!.commit(`Add slot "${slug}" showing map "${map}"`, async () => [
         await slotsChange((s) => {

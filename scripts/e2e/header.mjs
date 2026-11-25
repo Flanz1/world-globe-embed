@@ -136,6 +136,17 @@ try {
   await d.waitForFunction(() => !document.querySelector("#strip-pop")?.matches(":popover-open"));
   check("desktop: a second click on the strip closes the popup", (await d.getAttribute("#strip", "aria-expanded")) === "false");
   await d.screenshot({ path: path.join(OUT, "desktop.png") });
+  // Maps tab: + Slot… and Upload map… are dialogs; focus goes into them and back to the button on Esc.
+  await d.goto(d.url().replace(/#.*$/, "") + "#maps");
+  await d.waitForSelector("#new-slot-btn", { state: "visible", timeout: 10000 });
+  await d.click("#new-slot-btn");
+  check("+ Slot… opens the new-slot dialog with focus in Slot name", (await d.isVisible("dialog[open] #new-slot")) && (await d.evaluate(() => document.activeElement?.getAttribute("name"))) === "slug");
+  await d.keyboard.press("Escape");
+  check("…Esc closes it and focus goes back to + Slot…", !(await d.isVisible("dialog[open] #new-slot")) && (await d.evaluate(() => document.activeElement?.id)) === "new-slot-btn");
+  await d.click("#upload-btn");
+  check("Upload map… opens the upload dialog", await d.isVisible("dialog[open] #upload input[type=file]"));
+  await d.click("dialog[open] .pv-head button");
+  check("…Close closes it and focus goes back to the button", (await d.locator("dialog[open]").count()) === 0 && (await d.evaluate(() => document.activeElement?.id)) === "upload-btn");
   check("no errors on the desktop page", desk.errors.length === 0, desk.errors.join(" | "));
   await desk.ctx.close();
 } catch (e) {

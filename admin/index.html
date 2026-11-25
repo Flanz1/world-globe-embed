@@ -79,40 +79,38 @@
     <div class="content">
     <div id="tab-maps" role="tabpanel" aria-labelledby="tab-btn-maps" class="tabpanel">
     <section class="card">
-      <h2>Slots</h2>
-      <p class="muted">Each slot is one embed. Switching a slot's map is one commit; it goes live when the deploy finishes (allow up to ~10 minutes for GitHub Pages caching).</p>
+      <div class="card-head"><h2>Slots</h2><button type="button" id="new-slot-btn" class="ghost" aria-haspopup="dialog">+ Slot…</button></div>
+      <p class="muted small">Each slot is one embed. Switching a slot's map goes live when the deploy finishes (allow up to ~10 minutes for GitHub Pages caching).</p>
       <div id="slots" class="slots"></div>
-      <details>
-        <summary>Add a slot</summary>
-        <form id="new-slot" class="row">
-          <label>Slot name <input name="slug" required pattern="[a-z0-9][a-z0-9\-]{0,63}" placeholder="e.g. inara"></label>
-          <label>Title <input name="title" placeholder="Shown as the page title"></label>
-          <label>Map <select name="map" class="map-select" required></select></label>
-          <button type="submit">Add slot</button>
-        </form>
-        <p id="new-slot-error" class="error" role="alert" hidden></p>
-      </details>
     </section>
 
-    <section class="card">
-      <h2>Upload a map</h2>
-      <p class="muted">An equirectangular map, ideally twice as wide as tall (square to 4:1 works).</p>
-      <details class="size-tips">
-        <summary>Size tips</summary>
-        <p class="muted">Pole padding fills any space above and below the map. Bigger maps stay sharp when zoomed in: 8192 px wide or more gets an extra-sharp version, and 16384 or 32768 px wide also gets close-up detail. Maps over 16384 px wide are uploaded unchanged, so save them as JPEG (quality 80–90) and keep them under 100 MB.</p>
-      </details>
-      <form id="upload" class="row">
+    <!-- The + Slot… and Upload map… forms: each opens in a dialog from its button (main.ts wireDialog). -->
+    <div id="dlg-forms" hidden>
+      <form id="new-slot" class="dlg-form" data-title="New slot">
+        <p class="muted small">A slot is one embed address (<code>/v/&lt;slot&gt;/</code>) showing one of the maps.</p>
+        <label>Slot name <input name="slug" required pattern="[a-z0-9][a-z0-9\-]{0,63}" placeholder="e.g. inara"></label>
+        <label>Title <input name="title" placeholder="Shown as the page title"></label>
+        <label>Map <select name="map" class="map-select" required></select></label>
+        <p id="new-slot-error" class="error" role="alert" hidden></p>
+        <div class="form-foot"><button type="button" class="ghost" data-close>Cancel</button><button type="submit">Add slot</button></div>
+      </form>
+      <form id="upload" class="dlg-form" data-title="Upload a map">
+        <p class="muted small">An equirectangular map, ideally twice as wide as tall (square to 4:1 works).</p>
+        <details class="size-tips">
+          <summary>Size tips</summary>
+          <p class="muted small">Pole padding fills any space above and below the map. Bigger maps stay sharp when zoomed in: 8192 px wide or more gets an extra-sharp version, and 16384 or 32768 px wide also gets close-up detail. Maps over 16384 px wide are uploaded unchanged, so save them as JPEG (quality 80–90) and keep them under 100 MB.</p>
+        </details>
         <label>Image <input name="file" type="file" accept="image/png,image/jpeg,image/webp" required></label>
         <label>Map id <input name="id" required pattern="[a-z0-9][a-z0-9\-]{0,63}" placeholder="from the file name"></label>
         <label>Also show it in <select name="slot"><option value="">(no slot)</option></select></label>
-        <button type="submit">Upload</button>
+        <progress id="upload-progress" max="1" hidden></progress>
+        <p id="upload-info" class="muted" aria-live="polite"></p>
+        <div class="form-foot"><button type="submit">Upload</button></div>
       </form>
-      <progress id="upload-progress" max="1" hidden></progress>
-      <p id="upload-info" class="muted" aria-live="polite"></p>
-    </section>
+    </div>
 
     <section class="card">
-      <h2>Maps</h2>
+      <div class="card-head"><h2>Maps <span id="maps-count" class="rcount-pill"></span></h2><button type="button" id="upload-btn" aria-haspopup="dialog">+ Upload map…</button></div>
       <div id="maps" class="maps"></div>
     </section>
     </div>
@@ -158,10 +156,10 @@
 
     <div id="tab-users" role="tabpanel" aria-labelledby="tab-btn-users" class="tabpanel" hidden>
       <section class="card">
-        <h2>People</h2>
-        <p class="muted">Everyone who may use this admin page, and what they may do. The repository owner can always do everything. Changes are saved as one commit when you press <em>Save changes</em>.</p>
+        <div class="card-head"><h2>People <span id="users-count" class="rcount-pill"></span></h2></div>
+        <p class="muted small">Everyone who may use this admin page, and what they may do. The repository owner can always do everything. Changes save as one commit with <em>Save changes</em>.</p>
         <div id="users" class="users"></div>
-        <form id="user-add" class="row">
+        <form id="user-add" class="row user-add">
           <label>GitHub username <input id="user-login" required autocomplete="off" spellcheck="false" maxlength="39" placeholder="e.g. octocat"></label>
           <label>Access <select id="user-preset"></select></label>
           <button type="submit" class="ghost">Add person</button>
@@ -174,8 +172,8 @@
         </div>
       </section>
       <section class="card">
-        <h2>Asked for access</h2>
-        <p class="muted">People who signed in but aren't on the list yet (kept for 30 days).</p>
+        <div class="card-head"><h2>Asked for access <span id="waiting-count" class="rcount-pill"></span></h2></div>
+        <p class="muted small">People who signed in but aren't on the list yet (kept for 30 days).</p>
         <div id="waiting-list" class="users"></div>
       </section>
     </div>
