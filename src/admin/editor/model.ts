@@ -8,6 +8,7 @@
  */
 import type { PinLegends } from "../../shared/pins.ts";
 import * as clip from "polygon-clipping";
+import { migrateGroups, type LayerGroup, type PinGroup } from "../../shared/groups.ts";
 import {
   MAX_VERTICES,
   chaikin,
@@ -42,7 +43,6 @@ import {
   normalizePartOccupied,
   type LegendEntry,
   type RegionFeature,
-  type UnderEntry,
 } from "../../shared/region.ts";
 export { partAnchor } from "../../shared/geo.ts";
 
@@ -73,15 +73,14 @@ export interface RegionProps {
   legend: EditorLegendEntry[];
   /** Draw national borders where parts share a line (off unless asked). */
   nationalBorders?: boolean;
-  /** Regions shown under this one in its embed (see RegionProperties.under), bottom first. */
-  under?: UnderEntry[];
-  /** Ids of the pin maps whose pins show on this region's embed (RegionProperties.pinMaps). */
-  pinMaps?: string[];
+  /** Groups of regions shown under this one in its embed (see RegionProperties.layerGroups), bottom first. */
+  layerGroups?: LayerGroup[];
+  /** Groups of pin maps whose pins show on this region's embed (RegionProperties.pinGroups). */
+  pinGroups?: PinGroup[];
   /** Per pin map: its own legend words on this region's embed (RegionProperties.pinLegends). */
   pinLegends?: PinLegends;
   /** false: the underlays aren't cut to this region's outline. */
   underClip?: boolean;
-  underTitle?: string;
   /** Give the region a toggle of its own in the embed's legend. */
   ownToggle?: boolean;
   layerLabel?: string;
@@ -156,8 +155,9 @@ export const cloneState = (s: EditorState): EditorState => cloneStateOf(s);
 const expandHex = (c: string) => (/^#[0-9a-f]{3}$/i.test(c) ? `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}` : c).toLowerCase();
 
 /** Editor state for a saved region (or the empty state for a new one). */
-export function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"): EditorState {
-  const fp = f?.properties;
+export function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b", names?: { region?: (id: string) => string; pinMap?: (id: string) => string }): EditorState {
+  // Older regions list their underlays and pin maps flat: they become groups (same sections in the embed).
+  const fp = f ? migrateGroups(f.properties, names?.region, names?.pinMap) : undefined;
   const legend = (fp?.legend ?? [])
     .slice(0, LEGEND_MAX)
     .map((e) => ({ label: String(e.label ?? "").slice(0, LEGEND_LABEL_MAX), color: REGION_COLOR.test(e.color) ? expandHex(e.color) : "#7f8c8d" }));
@@ -182,9 +182,9 @@ export function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"
       legendTitle: (fp?.legendTitle ?? "").slice(0, LEGEND_TITLE_MAX),
       legend,
       nationalBorders: fp?.nationalBorders === true,
-      ...(fp?.pinMaps?.length ? { pinMaps: [...fp.pinMaps] } : {}),
-      ...(fp?.pinLegends && fp?.pinMaps?.length ? { pinLegends: structuredClone(fp.pinLegends) } : {}),
-      ...(fp?.under?.length ? { under: fp.under.map((e) => ({ ...e })), underClip: fp.underClip !== false, underTitle: fp.underTitle ?? "", layerLabel: fp.layerLabel ?? "", ...(fp.ownToggle === true ? { ownToggle: true } : {}) } : {}),
+      ...(fp?.pinGroups?.length ? { pinGroups: structuredClone(fp.pinGroups) } : {}),
+      ...(fp?.pinLegends && fp?.pinGroups?.length ? { pinLegends: structuredClone(fp.pinLegends) } : {}),
+      ...(fp?.layerGroups?.length ? { layerGroups: structuredClone(fp.layerGroups), underClip: fp.underClip !== false, layerLabel: fp.layerLabel ?? "", ...(fp.ownToggle === true ? { ownToggle: true } : {}) } : {}),
     },
   };
 }

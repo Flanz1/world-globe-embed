@@ -214,10 +214,55 @@
           "type": "boolean",
           "description": "Draw national borders: where two parts of the region share a line exactly (drawn with snapping or tracing), the embed draws a thick dark line on a light casing between parts of different legend colours, and leaves the line off between parts of the same colour. Off unless true: parts that touch just touch. Leave it out for off."
         },
+        "layerGroups": {
+          "type": "array",
+          "maxItems": 8,
+          "description": "Hand-picked groups of regions of the same slot shown under this one in its embed (a Religion group holding several religion maps). Each group is one section of the legend with one switch, its members' colours merged, duplicate names shown once. Replaces under + underTitle (which still load: one underlay becomes a group named after the old heading). Regions that don't exist on the slot are ignored.",
+          "items": {
+            "type": "object",
+            "required": ["name", "regions"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 40, "description": "The group's heading and switch name in the legend." },
+              "regions": {
+                "type": "array",
+                "maxItems": 8,
+                "description": "Its regions, bottom first.",
+                "items": {
+                  "type": "object",
+                  "required": ["id"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+                    "label": { "type": "string", "maxLength": 60 },
+                    "fill": { "type": "number", "minimum": 0.1, "maximum": 1, "description": "Fill opacity for this region alone, overriding the group's." }
+                  }
+                }
+              },
+              "on": { "type": "boolean", "description": "Whether the group starts shown. Missing: the first group does, the others don't." },
+              "fill": { "type": "number", "minimum": 0.1, "maximum": 1, "description": "Fill opacity every region of the group is painted with, so it can look more pronounced. Leave it out to use each region's own fill." }
+            }
+          }
+        },
+        "pinGroups": {
+          "type": "array",
+          "maxItems": 8,
+          "description": "Groups of pin maps (content/pinmaps.json) of the same slot whose pins show on this region's embed: each group is one switch in the pin legend (Holy sites, Battles). A ?pins= in the embed code overrides this. Replaces pinMaps (which still loads as one group per pin map).",
+          "items": {
+            "type": "object",
+            "required": ["name", "pinMaps"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 40 },
+              "pinMaps": { "type": "array", "maxItems": 8, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" } },
+              "on": { "type": "boolean", "description": "Whether the group starts shown. Missing: yes." }
+            }
+          }
+        },
         "under": {
           "type": "array",
           "maxItems": 8,
-          "description": "Regions of the same slot shown under this one in its embed (a religion map, culture, trade goods…), bottom first. Each gets a toggle in the embed's legend. Regions that don't exist on the slot are ignored.",
+          "description": "Older form of layerGroups (still loads). Regions of the same slot shown under this one in its embed (a religion map, culture, trade goods…), bottom first. Each gets a toggle in the embed's legend. Regions that don't exist on the slot are ignored.",
           "items": {
             "type": "object",
             "required": ["id"],
@@ -234,7 +279,7 @@
           "type": "array",
           "maxItems": 8,
           "uniqueItems": true,
-          "description": "Ids of pin maps (content/pinmaps.json) of the same slot whose pins show on this region's embed (a ?pins= in the embed code overrides this). Pin maps that don't exist are ignored.",
+          "description": "Older form of pinGroups (still loads). Ids of pin maps (content/pinmaps.json) of the same slot whose pins show on this region's embed (a ?pins= in the embed code overrides this). Pin maps that don't exist are ignored.",
           "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" }
         },
         "pinLegends": {
@@ -261,9 +306,9 @@
             }
           }
         },
-        "underClip": { "type": "boolean", "description": "With under: false to show the underlays outside this region's outline too. Leave it out to cut them to the outline." },
-        "underTitle": { "type": "string", "maxLength": 40, "description": "With under: heading of the toggle list in the embed. Defaults to \"Layers\"." },
-        "ownToggle": { "type": "boolean", "description": "With under: true to give this region a toggle of its own in the legend, so readers can switch it off too. Leave it out for no toggle: the region is always shown." },
+        "underClip": { "type": "boolean", "description": "With layerGroups: false to show the underlays outside this region's outline too. Leave it out to cut them to the outline." },
+        "underTitle": { "type": "string", "maxLength": 40, "description": "Older form (still loads): heading of the toggle list; layerGroups name their groups instead." },
+        "ownToggle": { "type": "boolean", "description": "With layerGroups: true to give this region a toggle of its own in the legend, so readers can switch it off too. Leave it out for no toggle: the region is always shown." },
         "layerLabel": { "type": "string", "maxLength": 60, "description": "With ownToggle: this region's toggle name in the legend. Defaults to its name, else its id." },
         "provinceBorders": {
           "type": "array",

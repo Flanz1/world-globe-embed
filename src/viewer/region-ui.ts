@@ -4,6 +4,7 @@
  */
 import type { Position } from "../shared/geo.ts";
 import { mergeRegions, type LabelPoint, type LegendEntry, type RegionData } from "../shared/region.ts";
+import { legendRowsFor } from "../shared/region-paint.ts";
 import { leftStack } from "./stack.ts";
 
 export interface Lock {
@@ -174,14 +175,30 @@ export function makeLabel(stage: HTMLElement): { setText(t: string): void; place
 }
 
 
+/** One section of the legend's layer switches: the regions it switches (ids), its name and the colours it lists. */
+export interface LegendSection {
+  ids: string[];
+  name: string;
+  rows: readonly LegendEntry[];
+}
+
+/** Rows of a section: its colours, a name once however many of its regions use it. */
+export function mergeRows(rows: readonly LegendEntry[]): LegendEntry[] {
+  const seen = new Set<string>();
+  return rows.filter((e) => !seen.has(e.label.trim().toLowerCase()) && !!seen.add(e.label.trim().toLowerCase()));
+}
+
 /**
  * The region's legend: a colour swatch and a label per entry, top centre, folded and unfolded with its
  * header button. Labels are set with textContent; colours are validated #rgb/#rrggbb before they get here.
  */
 export function makeLegend(stage: HTMLElement): {
   set(entries: readonly LegendEntry[], title: string, contested?: boolean): void;
-  /** Stacked regions: a checkbox per region to show or hide it (set again to rebuild). */
-  layers(items: readonly { id: string; name: string }[], hidden: ReadonlySet<string>, onToggle: (id: string, show: boolean) => void, title?: string): void;
+  /**
+   * Layer sections (set again to rebuild): a switch per section to show or hide its regions, with its colour keys
+   * underneath (folded away while it is off).
+   */
+  layers(sections: readonly LegendSection[], hidden: ReadonlySet<string>, onToggle: (ids: string[], show: boolean) => void): void;
 } {
   const box = document.createElement("div");
   box.className = "rkey";
@@ -196,7 +213,7 @@ export function makeLegend(stage: HTMLElement): {
   const layerBox = document.createElement("div");
   layerBox.className = "rlayers";
   layerBox.hidden = true;
-  box.append(head, layerBox, list);
+  box.append(head, list, layerBox);
   leftStack(stage).append(box);
   let count = 0;
   // Short embeds (the 360x240 Obsidian size) start folded so the legend doesn't cover the map.
@@ -215,24 +232,44 @@ export function makeLegend(stage: HTMLElement): {
   for (const t of ["pointerdown", "wheel"] as const) box.addEventListener(t, (e) => e.stopPropagation());
   apply();
   return {
-    layers(items, hidden, onToggle, title) {
-      const boxes = items.map((it) => {
+    layers(sections, hidden, onToggle) {
+      const blocks = sections.map((sec) => {
+        const block = document.createElement("div");
+        block.className = "rgroup";
         const label = document.createElement("label");
+        label.className = "rgroup-head";
+        const t = document.createElement("span");
+        t.textContent = sec.name;
         const cb = document.createElement("input");
         cb.type = "checkbox";
-        cb.checked = !hidden.has(it.id);
-        cb.addEventListener("change", () => onToggle(it.id, cb.checked));
-        const t = document.createElement("span");
-        t.textContent = it.name;
-        label.append(cb, t);
-        return label;
+        cb.className = "rsw";
+        cb.setAttribute("role", "switch");
+        cb.checked = !sec.ids.every((id) => hidden.has(id));
+        label.append(t, cb);
+        block.append(label);
+        const keys = mergeRows(sec.rows).map((e) => {
+          const li = document.createElement("li");
+          const sw = document.createElement("i");
+          sw.style.background = e.color;
+          const k = document.createElement("span");
+          k.textContent = e.label;
+          li.append(sw, k);
+          return li;
+        });
+        if (keys.length) {
+          const ul = document.createElement("ul");
+          ul.className = "rgroup-keys";
+          ul.hidden = !cb.checked;
+          ul.append(...keys);
+          block.append(ul);
+          cb.addEventListener("change", () => (ul.hidden = !cb.checked));
+        }
+        cb.addEventListener("change", () => onToggle(sec.ids, cb.checked));
+        return block;
       });
-      const head = document.createElement("div");
-      head.className = "rlayers-head";
-      head.textContent = title?.trim() || "Layers";
-      layerBox.replaceChildren(...(boxes.length ? [head, ...boxes] : []));
+      layerBox.replaceChildren(...blocks);
       apply();
-      box.hidden = !count && !boxes.length;
+      box.hidden = !count && !blocks.length;
     },
     set(entries, title, contested = false) {
       head.textContent = title || "Legend";
@@ -378,11 +415,13 @@ export function makeLabels(stage: HTMLElement): { set(texts: string[]): void; pl
  * Stacked regions (?regions=a,b,c): which are shown. `of(r)` is the region to paint: r without the hidden
  * ones, the same object for the same state (so painters can cache on it). The last one can't be hidden.
  */
-export function makeVisibility(): { hidden: Set<string>; of(r: RegionData): RegionData } {
+export function makeVisibility(): { hidden: Set<string>; /** Ids of regions with a legend section of their own (layer groups): their colours are not in the main list. */ grouped: Set<string>; of(r: RegionData): RegionData } {
   const hidden = new Set<string>();
+  const grouped = new Set<string>();
   let last: { r: RegionData; key: string; out: RegionData } | null = null;
   return {
     hidden,
+    grouped,
     of(r) {
       if (!r.members || !hidden.size) return r;
       const key = [...hidden].sort().join(",");
@@ -396,35 +435,50 @@ export function makeVisibility(): { hidden: Set<string>; of(r: RegionData): Regi
   };
 }
 
+/** The main legend list: the colours of what is shown, minus the regions that list theirs in a layer section. */
+export function mainLegendRows(shown: RegionData, visible: { grouped: ReadonlySet<string> }): LegendEntry[] {
+  if (!visible.grouped.size) return legendRowsFor(shown);
+  if (!shown.members) return visible.grouped.has(shown.id) ? [] : legendRowsFor(shown);
+  return legendRowsFor(shown, (m) => !visible.grouped.has(m.id));
+}
+
 /**
- * Stacked regions: the show/hide checkboxes in the legend, named by the region's own settings (`layers.names`,
- * else the region's name or id) under `layers.title`. The last shown region stays on (its box snaps back).
+ * The legend's layer switches. A layer group (`layers.groups`: name + member ids) is one section with one switch and
+ * its members' colours; any other region gets a switch of its own, named by `layers.names` (else its name or id).
+ * The last shown region stays on (its switch snaps back).
  */
 export function setupLayers(
   legend: { layers: ReturnType<typeof makeLegend>["layers"] },
   r: RegionData,
   visible: ReturnType<typeof makeVisibility>,
   redraw: () => void,
-  layers?: { names: Record<string, string>; title: string; hidden: string[]; own?: boolean },
+  layers?: { names: Record<string, string>; title: string; hidden: string[]; own?: boolean; groups?: { n: string; ids: string[] }[] },
 ): void {
   const members = r.members;
+  visible.grouped.clear();
   if (!members) return legend.layers([], visible.hidden, () => {});
-  // A region over its underlays (r.clip) is always shown, with no toggle, unless it's given one of its own (layers.own).
+  // A region over its underlays (r.clip) is always shown, with no toggle, unless it is given one of its own (layers.own).
   const top = r.clip && !layers?.own ? members[members.length - 1] : undefined;
-  const items = members.filter((m) => m !== top).map((m) => ({ id: m.id, name: layers?.names[m.id]?.trim() || m.name || m.id }));
+  const byId = new Map(members.map((m) => [m.id, m]));
+  const taken = new Set<string>();
+  const sections: LegendSection[] = [];
+  for (const g of layers?.groups ?? []) {
+    const ids = g.ids.filter((id) => byId.has(id) && id !== top?.id && !taken.has(id));
+    if (!ids.length || !g.n.trim()) continue;
+    ids.forEach((id) => (taken.add(id), visible.grouped.add(id)));
+    const set = new Set(ids);
+    sections.push({ ids, name: g.n.trim(), rows: legendRowsFor(r, (m) => set.has(m.id)) });
+  }
+  // Regions outside any group: a switch each, in order.
+  for (const m of members) if (m !== top && !taken.has(m.id)) sections.push({ ids: [m.id], name: layers?.names[m.id]?.trim() || m.name || m.id, rows: [] });
   visible.hidden.clear();
   for (const id of layers?.hidden ?? []) if (id !== top?.id) visible.hidden.add(id);
   const build = (): void =>
-    legend.layers(
-      items,
-      visible.hidden,
-      (id, show) => {
-        if (show) visible.hidden.delete(id);
-        else if (top || members.length - visible.hidden.size > 1) visible.hidden.add(id);
-        else return build();
-        redraw();
-      },
-      layers?.title,
-    );
+    legend.layers(sections, visible.hidden, (ids, show) => {
+      if (show) ids.forEach((id) => visible.hidden.delete(id));
+      else if (top || members.length - new Set([...visible.hidden, ...ids]).size >= 1) ids.forEach((id) => visible.hidden.add(id));
+      else return build();
+      redraw();
+    });
   build();
 }

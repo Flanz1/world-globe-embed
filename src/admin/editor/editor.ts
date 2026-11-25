@@ -34,11 +34,9 @@ import {
   LEGEND_LABEL_MAX,
   LEGEND_MAX,
   LEGEND_TITLE_MAX,
-  UNDER_MAX,
   UNDER_FILL_MIN,
   underFill,
   DEFAULT_FILL_OPACITY,
-  UNDER_TITLE_MAX,
   OWN_COLOUR,
   REGION_ID,
   flatFit,
@@ -67,7 +65,7 @@ import { h } from "../dom.ts";
 import { iconify, withIcon, type IconName } from "./icons.ts";
 import { SHEET_QUERY, sidePanel } from "./sheet.ts";
 import { mapLimit, type GitHub } from "../github.ts";
-import { childrenOf, regionsPerCommit } from "../../shared/categories.ts";
+import { regionsPerCommit } from "../../shared/categories.ts";
 import { loadMapImage } from "../images.ts";
 import { SITE } from "../dom.ts";
 import { createOverlayFilter, type OverlayCategory, type OverlayMeta } from "./overlay-filter.ts";
@@ -124,6 +122,7 @@ import {
   type RingProblem,
   type VRef,
 } from "./model.ts";
+import { GROUPS_MAX, GROUP_NAME_MAX, GROUP_REGIONS_MAX, flatUnder, groupPinMapIds, groupRegionIds, regionGroups, type LayerGroup, type PinGroup } from "../../shared/groups.ts";
 import { pinMaps as allPinMaps } from "../pinmaps.ts";
 import { legendDialog } from "../legend-names.ts";
 import { cleanLegends } from "../../shared/pins.ts";
@@ -132,7 +131,7 @@ import { createPinsLayer } from "./pins-layer.ts";
 import { createPinTool } from "./pin-tool.ts";
 import { createCommentTool } from "./comments.ts";
 import { keepPinsSent, sendPins } from "../preview-pins.ts";
-import { REGION_PINMAPS_MAX, mapsOfSlot, treeOf, type PinMap } from "../../shared/pinmaps.ts";
+import { REGION_PINMAPS_MAX, mapsOfSlot, type PinMap } from "../../shared/pinmaps.ts";
 import { clearDraft, draftKey, loadDraft, saveDraft, type Draft } from "./draft.ts";
 import { Coast, loadCoast, thinTrace } from "./coast.ts";
 import { fillArea, type Barrier } from "./fill.ts";
@@ -395,18 +394,20 @@ export function openEditor(o: EditorOptions): void {
   const withNames = (s: EditorState): EditorState => {
     if (!link) return s;
     const next = cloneState(applyLinkedNames(s, liveSources, link.feature.properties.linkedNames));
-    const under = link.feature.properties.under;
-    if (under?.length) next.props.under = under.map((e) => ({ ...e }));
-    else delete next.props.under;
+    const groups = regionGroups(link.feature.properties, regionName);
+    if (groups.length) next.props.layerGroups = structuredClone(groups);
+    else delete next.props.layerGroups;
     delete next.props.underClip;
-    delete next.props.underTitle;
     delete next.props.ownToggle;
     delete next.props.layerLabel;
     return next;
   };
   /** The state as it splits back into the regions: a linked region's own names stay out of them. */
   const splitNow = () => splitLive(link ? revertLinkedNames(hist.state, liveSources) : hist.state, liveSources);
-  const hist = new History(live ? withNames(liveState(o.live!.sources.map((x, i) => (x.current ? { id: x.id, state: x.current, name: x.feature.properties.name } : liveSources[i])))) : stateOf(o.feature));
+  /** What a region or pin map is called, for the names of groups made from an older flat list. */
+  const regionName = (rid: string): string => neighbours.find((n) => n.id === rid)?.properties.name?.trim() || rid;
+  const pinMapName = (mid: string): string => mapsOfSlot(allPinMaps(), slotName).find((m) => m.id === mid)?.name || mid;
+  const hist = new History(live ? withNames(liveState(o.live!.sources.map((x, i) => (x.current ? { id: x.id, state: x.current, name: x.feature.properties.name } : liveSources[i])))) : stateOf(o.feature, undefined, { region: regionName, pinMap: pinMapName }));
   /** A new region's id comes from its name (slugified, made free); with no name, this random one. It is final once saved. */
   const autoId = o.feature ? "" : randomId("region", o.takenIds);
   const idFor = (name: string): string => (slugify(name) ? uniqueId(name, o.takenIds) : autoId);
@@ -557,33 +558,37 @@ export function openEditor(o: EditorOptions): void {
   const opacityOut = h("output", {});
   const labelIn = h("input", { type: "checkbox", checked: hist.state.props.label, name: "label" });
   const borderIn = h("input", { type: "checkbox", checked: hist.state.props.nationalBorders === true, name: "national-borders" });
-  /* "Show under this region": other regions of the slot drawn below this one in its embed, each with a legend toggle. */
-  const underList = h("div", { className: "ed-under-list" });
-  const underAdd = h("select", { name: "under-add", ariaLabel: "Add a region to show under this one" });
+  /* Layer groups: hand-picked sets of other regions of the slot drawn below this one, each one legend section with one switch; pin map groups likewise for the pin legend. */
+  const lgList = h("div", { className: "ed-groups-list", dataset: { groups: "region" } });
+  const lgNew = btn("+ New region group", "Make a group of regions (a religion map, culture…) that readers switch on and off together", () => addGroup(), "group-new");
   const underClipIn = h("input", { type: "checkbox", checked: true, name: "under-clip" });
-  const underTitleIn = h("input", { type: "text", maxLength: UNDER_TITLE_MAX, placeholder: "Layers", name: "under-title", ariaLabel: "Heading of the toggle list" });
   const ownToggleIn = h("input", { type: "checkbox", name: "own-toggle" });
   const layerLabelIn = h("input", { type: "text", maxLength: LEGEND_LABEL_MAX, placeholder: "This region", name: "layer-label", ariaLabel: "Name of this region's own toggle" });
   const underBox = h(
     "fieldset",
-    { className: "ed-under" },
-    h("legend", { textContent: "Show under this region" }),
-    h("p", { className: "muted small", textContent: "Other regions of this slot (religion, culture, trade goods…) drawn under this one, each with a toggle in the embed's legend." }),
-    underList,
-    h("label", {}, "Add a region", underAdd),
-    h("label", { className: "check", title: "Cut the underlays to this region's outline, so only what lies inside it shows." }, underClipIn, "Only show them inside this region"),
-    h("label", {}, "Heading of the toggle list", underTitleIn),
-    h("label", { className: "check", title: "Add a toggle for this region itself to the legend, so readers can switch it off too. Off: the region is always shown." }, ownToggleIn, "Readers can switch this region off too"),
-    h("label", {}, "Name of this region's own toggle", layerLabelIn),
+    { className: "ed-lgroups" },
+    h("legend", { textContent: "Region groups" }),
+    h("p", { className: "muted small", textContent: "Other regions of this slot drawn under this one. Each group is one section of the embed's legend with one switch, its colours merged." }),
+    lgList,
+    lgNew,
+    h("label", { className: "check", title: "Cut the groups to this region's outline, so only what lies inside it shows." }, underClipIn, "Only show them inside this region"),
   );
-  /* "Show pin maps": pin maps of this slot whose pins show on this region's embed. */
-  const pinMapList = h("div", { className: "ed-pinmaps-list" });
+  const ownBox = h(
+    "fieldset",
+    { className: "ed-lgroups ed-own" },
+    h("legend", { textContent: "This region in the legend" }),
+    h("label", { className: "check", title: "Add a switch for this region itself to the legend, so readers can switch it off too. Off: the region is always shown." }, ownToggleIn, "Readers can switch this region off too"),
+    h("label", {}, "Name of this region's own switch", layerLabelIn),
+  );
+  const pgList = h("div", { className: "ed-groups-list", dataset: { groups: "pins" } });
+  const pgNew = btn("+ New pin map group", "Make a group of pin maps (holy sites, battles…) that readers switch on and off together", () => addPinGroup(), "pin-group-new");
   const pinMapBox = h(
     "fieldset",
-    { className: "ed-pinmaps" },
-    h("legend", { textContent: "Show pin maps on this region" }),
-    h("p", { className: "muted small", textContent: "Tick the pin maps (made in the Pins tab) whose pins should show on this region's embed. A ?pins= in the embed code overrides this." }),
-    pinMapList,
+    { className: "ed-lgroups ed-pinmaps" },
+    h("legend", { textContent: "Pin map groups" }),
+    h("p", { className: "muted small", textContent: "Each group is one switch in the embed's pin legend. Pin maps are made in the Pins tab. A ?pins= in the embed code overrides this." }),
+    pgList,
+    pgNew,
   );
   const descIn = h("textarea", { maxLength: 500, rows: 3, value: hist.state.props.description, name: "description" });
   const stats = h("p", { className: "muted small ed-stats" });
@@ -682,7 +687,7 @@ export function openEditor(o: EditorOptions): void {
           stats,
         ],
       },
-      { id: "underlays", title: "Layers", icon: "layers", children: [underBox, pinMapBox] },
+      { id: "underlays", title: "Layers", icon: "layers", children: [underBox, ownBox, pinMapBox] },
     ],
     embed: () => embed(),
     start: o.isNew ? "region" : "parts",
@@ -1313,7 +1318,7 @@ export function openEditor(o: EditorOptions): void {
 
   /* ── Underlays: the regions shown under this one, cut to its outline, painted under it (its own offscreen layer, repainted only when the view or the underlays change) ── */
   const underLayerCache = new Map<string, PaintLayer>();
-  const underOn = (): UnderEntry[] => (hist.state.props.under ?? []).filter((e, i) => e.on ?? i === 0);
+  const underOn = (): UnderEntry[] => flatUnder(groupsNow()).filter((e) => e.on);
   const underPaint = (id: string): PaintLayer | null => {
     let l = underLayerCache.get(id);
     if (!l) {
@@ -1900,8 +1905,9 @@ export function openEditor(o: EditorOptions): void {
   let underSig = "";
   function underFor(force = false): RegionMessage["under"] {
     const p = hist.state.props;
-    const list = p.under ?? [];
-    const sig = JSON.stringify([list, p.underClip, p.underTitle, p.layerLabel, p.ownToggle]);
+    const groups = groupsNow().filter((g) => g.regions.length);
+    const list = flatUnder(groups);
+    const sig = JSON.stringify([groups, p.underClip, p.layerLabel, p.ownToggle]);
     if (!force && sig === underSig) return undefined;
     underSig = sig;
     const regions = list.flatMap((e) => {
@@ -1914,9 +1920,10 @@ export function openEditor(o: EditorOptions): void {
     return {
       regions,
       clip: p.underClip !== false,
-      hidden: list.filter((e, i) => !(e.on ?? i === 0)).map((e) => e.id),
-      names: { ...Object.fromEntries(list.map((e) => [e.id, e.label ?? ""])), [previewId()]: p.layerLabel ?? "" },
-      title: p.underTitle ?? "",
+      hidden: list.filter((e) => !e.on).map((e) => e.id),
+      names: { [previewId()]: p.layerLabel ?? "" },
+      title: "",
+      groups: groups.filter((g) => g.name.trim()).map((g) => ({ n: g.name.trim(), ids: g.regions.map((e) => e.id) })),
       own: p.ownToggle === true,
     };
   }
@@ -1951,13 +1958,16 @@ export function openEditor(o: EditorOptions): void {
   /** The pin maps ticked for this region, shown in the preview as the embed will show them. */
   let pinsSig = "";
   function sendPinsPreview(force = false): void {
-    const show = (hist.state.props.pinMaps ?? []).join(",");
-    const sig = `${show}|${pinEntries().length}|${JSON.stringify(hist.state.props.pinLegends ?? null)}`;
+    const show = pinShow();
+    const sig = `${show}|${pinEntries().length}|${JSON.stringify(hist.state.props.pinLegends ?? null)}|${JSON.stringify(pinGroupsNow())}`;
     if (!force && sig === pinsSig) return;
     pinsSig = sig;
-    sendPins(frameEl, slotName, show, hist.state.props.pinLegends);
+    sendPins(frameEl, slotName, show, hist.state.props.pinLegends, pinGroupsView());
   }
-  keepPinsSent(frameEl, slotName, () => (hist.state.props.pinMaps ?? []).join(","), () => hist.state.props.pinLegends);
+  /** The pin groups as the embed gets them (RegionContext pinGroups). */
+  const pinGroupsView = () => pinGroupsNow().filter((g) => g.pinMaps.length && g.name.trim()).map((g) => ({ n: g.name.trim(), ids: g.pinMaps, ...(g.on === false ? { off: true as const } : {}) }));
+  const pinShow = (): string => groupPinMapIds(pinGroupsNow()).join(",");
+  keepPinsSent(frameEl, slotName, pinShow, () => hist.state.props.pinLegends, pinGroupsView);
   frameEl.addEventListener("load", () => {
     lastSent = -1;
     sendRegion(frameEl, regionNow(), true, undefined, underFor(true));
@@ -1973,8 +1983,7 @@ export function openEditor(o: EditorOptions): void {
     opacityOut.value = `${Math.round(s.fillOpacity * 100)}%`;
     labelIn.checked = s.label;
     borderIn.checked = s.nationalBorders === true;
-    renderUnder();
-    renderPinMapBox();
+    renderGroups();
     if (document.activeElement !== descIn) descIn.value = s.description;
     if (document.activeElement !== keyTitleIn) keyTitleIn.value = s.legendTitle;
     if (document.activeElement !== colorLabelIn) colorLabelIn.value = s.colorLabel;
@@ -2004,192 +2013,258 @@ export function openEditor(o: EditorOptions): void {
   opacityIn.addEventListener("input", () => (setProp("fillOpacity", Number(opacityIn.value), "Fill opacity"), changed()));
   labelIn.addEventListener("change", () => (setProp("label", labelIn.checked, "Label"), changed()));
   const regionTitle = (rid: string) => neighbours.find((n) => n.id === rid)?.properties.name || rid;
+  const n0 = (rid: string | undefined) => neighbours.find((x) => x.id === rid);
   let underKey = "";
-  let underIds = "";
-  const setUnder = (list: UnderEntry[], label: string) => setProp("under", list.length ? list : undefined, label);
-  function renderUnder(): void {
+  let underStruct = "";
+  const groupsNow = (): LayerGroup[] => hist.state.props.layerGroups ?? [];
+  const pinGroupsNow = (): PinGroup[] => hist.state.props.pinGroups ?? [];
+  const setGroups = (list: LayerGroup[], label: string) => setProp("layerGroups", list.length ? list : undefined, label);
+  /** Words for a pin map that is in no group any more go with it. */
+  const setPinGroups = (list: PinGroup[], label: string) => {
+    const kept = new Set(groupPinMapIds(list));
+    const legends = Object.fromEntries(Object.entries(hist.state.props.pinLegends ?? {}).filter(([k]) => kept.has(k)));
+    hist.apply(label, { ...hist.state, props: { ...hist.state.props, pinGroups: list.length ? list : undefined, pinLegends: Object.keys(legends).length ? legends : undefined } }, "prop:pinGroups");
+  };
+  /** Folded state per group ("r0", "p1"…); undefined: the first of each kind starts open. */
+  const groupOpen = new Map<string, boolean>();
+  const isOpen = (key: string): boolean => groupOpen.get(key) ?? key.endsWith("0");
+  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+  const uniqueGroupName = (base: string, names: string[]): string => {
+    let n = 1;
+    let name = base;
+    while (names.includes(name)) name = `${base} ${++n}`;
+    return name;
+  };
+  function addGroup(): void {
+    const gs = groupsNow();
+    if (gs.length >= GROUPS_MAX) return setMsg(`A region can have at most ${GROUPS_MAX} groups.`, "error");
+    groupOpen.set(`r${gs.length}`, true);
+    setGroups([...gs, { name: uniqueGroupName("New group", gs.map((g) => g.name)), regions: [] }], "New region group");
+    changed();
+  }
+  function addPinGroup(): void {
+    const gs = pinGroupsNow();
+    if (gs.length >= GROUPS_MAX) return setMsg(`A region can have at most ${GROUPS_MAX} pin map groups.`, "error");
+    groupOpen.set(`p${gs.length}`, true);
+    setPinGroups([...gs, { name: uniqueGroupName("New group", gs.map((g) => g.name)), pinMaps: [] }], "New pin map group");
+    changed("panel");
+  }
+  /** One group card: fold arrow, name, count, and its body (hidden while folded). */
+  function groupCard(key: string, name: string, count: string, onName: (v: string) => void, body: HTMLElement[]): HTMLElement {
+    const open = isOpen(key);
+    const nameIn = h("input", { type: "text", maxLength: GROUP_NAME_MAX, value: name, placeholder: "Group name", name: "group-name", ariaLabel: "Group name" });
+    nameIn.addEventListener("input", () => onName(nameIn.value));
+    const fold = h("button", { type: "button", className: "ghost ed-group-fold", ariaExpanded: String(open), title: "Open or close this group", ariaLabel: "Open or close this group" }, h("span", { className: "rfolder-arrow", ariaHidden: "true", textContent: "▾" }));
+    const bodyEl = h("div", { className: "ed-group-body" }, ...body);
+    bodyEl.hidden = !open;
+    const card = h("section", { className: `ed-group${open ? "" : " closed"}`, dataset: { group: key } }, h("div", { className: "ed-group-head" }, fold, nameIn, h("span", { className: "muted small", textContent: count })), bodyEl);
+    fold.addEventListener("click", () => {
+      const now = bodyEl.hidden === true;
+      bodyEl.hidden = !now;
+      card.classList.toggle("closed", !now);
+      fold.setAttribute("aria-expanded", String(now));
+      groupOpen.set(key, now);
+    });
+    return card;
+  }
+  const arrowBtns = (i: number, len: number, titles: [string, string], move: (d: -1 | 1) => void): HTMLElement[] => [
+    Object.assign(btn("↑", titles[0], () => move(-1)), { disabled: i <= 0 }),
+    Object.assign(btn("↓", titles[1], () => move(1)), { disabled: i >= len - 1 }),
+  ];
+  function renderGroups(): void {
     const p = hist.state.props;
-    const list = p.under ?? [];
-    const key = JSON.stringify(list.map((e) => [e.id, e.label ?? "", e.on ?? null, e.fill ?? null]));
-    const idsSame = list.map((e) => e.id).join(",") === underIds;
-    // Undo/redo of a name or switch rebuilds the rows, but never while the user is typing in one.
-    if (key !== underKey && (!idsSame || !underList.contains(document.activeElement))) {
+    const lg = p.layerGroups ?? [];
+    const pg = p.pinGroups ?? [];
+    const pinFile = allPinMaps();
+    const slotMaps = mapsOfSlot(pinFile, slotName);
+    const key = JSON.stringify([lg, pg, p.pinLegends ?? null, slotMaps.map((m) => [m.id, m.name]), pinEntries().length, [...groupOpen]]);
+    const struct = JSON.stringify([lg.map((g) => g.regions.map((e) => e.id)), pg.map((g) => g.pinMaps), slotMaps.length]);
+    // Undo/redo rebuilds the cards, but never while the user is typing in one.
+    if (key !== underKey && (struct !== underStruct || !(lgList.contains(document.activeElement) || pgList.contains(document.activeElement)))) {
       underKey = key;
-      underIds = list.map((e) => e.id).join(",");
-      underList.replaceChildren(
-        ...list.map((e, i) => {
-          const nameIn = h("input", { type: "text", maxLength: LEGEND_LABEL_MAX, placeholder: regionTitle(e.id), value: e.label ?? "", ariaLabel: `Toggle name for ${e.id}` });
-          nameIn.addEventListener("input", () => {
-            const cur = hist.state.props.under ?? [];
-            setUnder(cur.map((x, j) => (j === i ? { ...x, ...(nameIn.value.trim() ? { label: nameIn.value.slice(0, LEGEND_LABEL_MAX) } : { label: undefined }) } : x)), "Toggle name");
-            typed();
-          });
-          const onIn = h("input", { type: "checkbox", checked: e.on ?? i === 0, ariaLabel: `${e.id} starts shown` });
-          onIn.addEventListener("change", () => {
-            fillIn.disabled = !onIn.checked;
-            fillIn.title = onIn.checked ? "" : "Turn On to change fill";
-            setUnder((hist.state.props.under ?? []).map((x, j) => (j === i ? { ...x, on: onIn.checked } : x)), "Toggle starts shown");
-            changed();
-          });
-          const own = neighbours.find((x) => x.id === e.id)?.properties.fillOpacity ?? DEFAULT_FILL_OPACITY;
-          const fillIn = h("input", { type: "range", min: String(UNDER_FILL_MIN), max: "1", step: "0.05", value: String(underFill(e.fill) ?? own), name: "under-fill", ariaLabel: `Fill for ${regionTitle(e.id)}`, disabled: !(e.on ?? i === 0), title: (e.on ?? i === 0) ? "" : "Turn On to change fill" });
-          const fillOut = h("output", { ariaLive: "polite", textContent: `${Math.round((underFill(e.fill) ?? own) * 100)}%` });
-          fillIn.addEventListener("input", () => {
-            const v = Number(fillIn.value);
-            fillOut.value = `${Math.round(v * 100)}%`;
-            if (!fillReset.isConnected) fillLine.append(fillReset);
-            setUnder((hist.state.props.under ?? []).map((x, j) => (j === i ? { ...x, fill: v } : x)), "Underlay fill");
-            changed();
-          });
-          const fillReset = btn("Reset", "Use the underlay region's own fill again", () => {
-            setUnder((hist.state.props.under ?? []).map((x, j) => (j === i ? { ...x, fill: undefined } : x)), "Underlay fill");
-            fillIn.value = String(own);
-            fillOut.value = `${Math.round(own * 100)}%`;
-            fillIn.focus();
-            fillReset.remove();
-            changed();
-          });
-          const move = (d: -1 | 1) => () => {
-            const cur = [...(hist.state.props.under ?? [])];
-            if (i + d < 0 || i + d >= cur.length) return;
-            [cur[i], cur[i + d]] = [cur[i + d], cur[i]];
-            setUnder(cur, "Underlay order");
-            changed();
-          };
-          const fillRow = h("label", { className: "small", title: `How strongly this underlay is filled: raise it to make it stand out${e.fill === undefined ? " (now the region's own fill)" : ""}` }, "Fill", fillIn, fillOut);
-          const fillLine = h("div", { className: "ed-under-fill" }, fillRow);
-          fillReset.classList.add("text");
-          if (e.fill !== undefined) fillLine.append(fillReset);
-          return h(
-            "div",
-            { className: "ed-under-row" },
-            h("span", { className: "small", textContent: e.id, title: "Region id" }),
-            nameIn,
-            h("label", { className: "check small", title: "Starts shown in the embed" }, onIn, "On"),
-            btn("↑", "Move down a layer (drawn lower)", move(-1)),
-            btn("↓", "Move up a layer (drawn higher)", move(1)),
-            btn("Remove", "Stop showing this region under this one", () => {
-              setUnder((hist.state.props.under ?? []).filter((_, j) => j !== i), "Remove underlay");
-              changed();
-            }),
-            fillLine,
-          );
-        }),
-      );
-      const used = new Set(list.map((e) => e.id));
-      const free = neighbours.filter((n) => n.id !== id && !used.has(n.id));
-      underAdd.replaceChildren(
-        h("option", { value: "", textContent: list.length >= UNDER_MAX ? "(most reached)" : free.length ? "Choose a region…" : "(no other regions on this slot)" }),
-        ...free.map((n) => h("option", { value: n.id, textContent: n.properties.name ? `${n.properties.name} (${n.id})` : n.id })),
-      );
-      underAdd.disabled = list.length >= UNDER_MAX || !free.length;
+      underStruct = struct;
+      renderRegionGroups(lg);
+      renderPinGroups(pg, slotMaps);
     }
     underClipIn.checked = p.underClip !== false;
-    if (document.activeElement !== underTitleIn) underTitleIn.value = p.underTitle ?? "";
     if (document.activeElement !== layerLabelIn) layerLabelIn.value = p.layerLabel ?? "";
-    // On a linked region only the list counts: the other settings belong to each region.
-    for (const el of [underClipIn, underTitleIn, ownToggleIn]) (el.closest("label") as HTMLElement).hidden = !list.length || !!link;
+    // On a linked region only the groups count: the other settings belong to each region.
+    const any = lg.some((g) => g.regions.length);
+    (underClipIn.closest("label") as HTMLElement).hidden = !any || !!link;
+    ownBox.hidden = !any || !!link;
     ownToggleIn.checked = p.ownToggle === true;
-    (layerLabelIn.closest("label") as HTMLElement).hidden = !list.length || p.ownToggle !== true || !!link;
+    (layerLabelIn.closest("label") as HTMLElement).hidden = p.ownToggle !== true;
   }
-  /** Folders of the pin-map picker the user has opened; null until first drawn (then the folders holding a ticked pin map start open). */
-  let pinOpen: Set<string> | null = null;
-  let pinMapKey = "";
-  function renderPinMapBox(): void {
-    const file = allPinMaps();
-    const maps = mapsOfSlot(file, slotName);
-    const on = hist.state.props.pinMaps ?? [];
-    const tree = treeOf(file);
-    const key = JSON.stringify([maps.map((m) => [m.id, m.name]), file.folders.map((k) => [k.id, k.name, k.parent ?? null, k.regions]), on, hist.state.props.pinLegends ?? null]);
-    if (key === pinMapKey) return;
-    pinMapKey = key;
-    const here = new Set(maps.map((m) => m.id));
-    const row = (m: PinMap): HTMLElement => {
-      const box = h("input", { type: "checkbox", checked: on.includes(m.id), ariaLabel: m.name, dataset: { pinmap: m.id } });
-      box.addEventListener("change", () => {
-        const cur = hist.state.props.pinMaps ?? [];
-        const next = box.checked ? [...cur.filter((x) => x !== m.id), m.id] : cur.filter((x) => x !== m.id);
-        if (next.length > REGION_PINMAPS_MAX) {
-          box.checked = false;
-          return setMsg(`A region can include at most ${REGION_PINMAPS_MAX} pin maps.`, "error");
-        }
-        setProp("pinMaps", next.length ? next : undefined, "Pin maps");
-        // Words for a pin map that is no longer included go with it.
-        if (hist.state.props.pinLegends?.[m.id] && !box.checked) {
-          const rest = { ...hist.state.props.pinLegends };
-          delete rest[m.id];
-          setProp("pinLegends", Object.keys(rest).length ? rest : undefined, "Pin maps");
-        }
-        changed("panel");
-        // Redraw so the folders' ticked counts update, keeping the keyboard focus on the box.
-        renderPinMapBox();
-        pinMapList.querySelector<HTMLInputElement>(`input[data-pinmap="${m.id}"]`)?.focus();
-      });
-      const label = h("label", { className: "check" }, box, m.name);
-      if (!box.checked) return label;
-      const own = hist.state.props.pinLegends?.[m.id];
-      const names = h("button", { type: "button", className: "text tiny lg-open", textContent: own ? "Legend names ✓" : "Legend names…", title: `Change what the pin legend calls the panel and each kind of pin for "${m.name}" on this region's embed`, ariaLabel: own ? `Legend names for ${m.name}, custom names set` : `Legend names for ${m.name}`, dataset: { action: "legend-names", pinmap: m.id } });
-      names.addEventListener("click", () =>
-        legendDialog(own, `For pin map "${m.name}" on this region's embed.`, (legend) => {
-          const rest = { ...(hist.state.props.pinLegends ?? {}) };
-          if (legend) rest[m.id] = legend;
-          else delete rest[m.id];
-          setProp("pinLegends", Object.keys(rest).length ? rest : undefined, "Legend names");
-          changed("panel");
-          renderPinMapBox();
-        }),
-      );
-      return h("div", { className: "ed-pinrow" }, label, names);
+  function renderRegionGroups(lg: LayerGroup[]): void {
+    const used = new Set(groupRegionIds(lg));
+    const total = used.size;
+    const free = neighbours.filter((n) => n.id !== id && !used.has(n.id));
+    const colourCount = (n: RegionFeature | undefined) => {
+      const q = n?.properties;
+      return (q?.colorLabel?.trim() ? 1 : 0) + (q?.legend ?? []).filter((e) => e.label.trim()).length;
     };
-    /** The slot's pin maps in a folder (and below it), counted for the badge. */
-    const inside = (id: string): PinMap[] => {
-      const k = file.folders.find((f) => f.id === id);
-      return [...(k?.regions.filter((r) => here.has(r)).map((r) => maps.find((m) => m.id === r)!) ?? []), ...childrenOf(tree, id).flatMap((c) => inside(c.id))];
-    };
-    if (!pinOpen) pinOpen = new Set(file.folders.filter((k) => inside(k.id).some((m) => on.includes(m.id))).map((k) => k.id));
-    const open = pinOpen;
-    const level = (parent: string | null): HTMLElement[] =>
-      childrenOf(tree, parent).flatMap((k) => {
-        const all = inside(k.id);
-        if (!all.length) return [];
-        const direct = k.regions.filter((r) => here.has(r)).map((r) => maps.find((m) => m.id === r)!);
-        const ticked = all.filter((m) => on.includes(m.id)).length;
-        const isOpen = open.has(k.id);
-        const body = h("div", { className: "ed-pinfolder-body" }, ...direct.map(row), ...level(k.id));
-        body.hidden = !isOpen;
-        const toggle = h(
-          "button",
-          { type: "button", className: "ghost ed-pinfolder-toggle", ariaExpanded: String(isOpen), title: "Open or close this folder", dataset: { pinfolder: k.id } },
-          h("span", { className: "rfolder-arrow", ariaHidden: "true", textContent: "▾" }),
-          h("strong", { textContent: k.name }),
-          h("span", { className: "badge", textContent: ticked ? `${ticked}/${all.length}` : String(all.length), title: `${ticked} of ${all.length} pin maps ticked` }),
-        );
-        const el = h("section", { className: `ed-pinfolder${isOpen ? "" : " closed"}` }, toggle, body);
-        toggle.addEventListener("click", () => {
-          const now = body.hidden;
-          body.hidden = !now;
-          el.classList.toggle("closed", !now);
-          toggle.setAttribute("aria-expanded", String(now));
-          if (now) open.add(k.id);
-          else open.delete(k.id);
+    lgList.replaceChildren(
+      ...lg.map((g, gi) => {
+        const update = (fn: (x: LayerGroup) => LayerGroup, label: string) => setGroups(groupsNow().map((x, j) => (j === gi ? fn(x) : x)), label);
+        const rows = g.regions.map((e, i) => {
+          const n = neighbours.find((x) => x.id === e.id);
+          const move = (d: -1 | 1) => {
+            const cur = [...groupsNow()[gi].regions];
+            [cur[i], cur[i + d]] = [cur[i + d], cur[i]];
+            update((x) => ({ ...x, regions: cur }), "Group order");
+            changed();
+          };
+          const swatch = h("i", { className: "ed-group-swatch", ariaHidden: "true" });
+          swatch.style.background = n?.properties.color ?? "#7f8c8d";
+          return h(
+            "div",
+            { className: "ed-group-row", dataset: { region: e.id } },
+            swatch,
+            h("span", { className: "ed-group-name", textContent: regionTitle(e.id), title: `Region ${e.id}` }),
+            h("span", { className: "muted small", textContent: plural(colourCount(n), "colour") }),
+            ...arrowBtns(i, g.regions.length, ["Move down a layer (drawn lower)", "Move up a layer (drawn higher)"], move),
+            btn("×", `Take ${regionTitle(e.id)} out of this group`, () => {
+              update((x) => ({ ...x, regions: x.regions.filter((_, j) => j !== i) }), "Remove from group");
+              changed();
+            }),
+          );
         });
-        return [el];
-      });
-    const inFolder = new Set(file.folders.flatMap((k) => k.regions));
-    pinMapList.replaceChildren(
-      ...(maps.length
-        ? [...level(null), ...maps.filter((m) => !inFolder.has(m.id)).map(row)]
-        : [h("p", { className: "muted small", textContent: "This slot has no pin maps yet. Add one in the Pins tab." })]),
+        const add = h("select", { name: "group-add", ariaLabel: `Add a region to ${g.name || "this group"}` });
+        add.append(
+          h("option", { value: "", textContent: total >= GROUP_REGIONS_MAX ? "(most reached)" : free.length ? "+ Add a region…" : "(no other regions on this slot)" }),
+          ...free.map((n) => h("option", { value: n.id, textContent: n.properties.name ? `${n.properties.name} (${n.id})` : n.id })),
+        );
+        add.disabled = total >= GROUP_REGIONS_MAX || !free.length;
+        add.addEventListener("change", () => {
+          if (!add.value) return;
+          update((x) => ({ ...x, regions: [...x.regions, { id: add.value }] }), "Add to group");
+          changed();
+        });
+        const onIn = h("input", { type: "checkbox", checked: g.on ?? gi === 0, name: "group-on", ariaLabel: `${g.name} starts shown` });
+        onIn.addEventListener("change", () => {
+          fillIn.disabled = !onIn.checked;
+          update((x) => ({ ...x, on: onIn.checked }), "Group starts shown");
+          changed();
+        });
+        const firstOwn = n0(g.regions[0]?.id)?.properties.fillOpacity ?? DEFAULT_FILL_OPACITY;
+        const own = underFill(g.fill) ?? firstOwn;
+        const fillIn = h("input", { type: "range", min: String(UNDER_FILL_MIN), max: "1", step: "0.05", value: String(own), name: "group-fill", ariaLabel: `Fill for ${g.name}` });
+        const fillOut = h("output", { ariaLive: "polite", textContent: `${Math.round(own * 100)}%` });
+        fillIn.disabled = !(g.on ?? gi === 0);
+        fillIn.addEventListener("input", () => {
+          const v = underFill(Number(fillIn.value));
+          fillOut.value = `${Math.round((v ?? 1) * 100)}%`;
+          update((x) => ({ ...x, fill: v }), "Group fill");
+          changed();
+        });
+        const fillLine = h("div", { className: "ed-under-fill" }, h("label", { className: "small", title: "How strongly the group's regions are filled: raise it to make them stand out" }, "Fill", fillIn, fillOut));
+        if (g.fill !== undefined)
+          fillLine.append(
+            btn("Reset", "Use each region's own fill again", () => {
+              update((x) => ({ ...x, fill: undefined }), "Group fill");
+              changed();
+            }),
+          );
+        const order = arrowBtns(gi, lg.length, ["Move this group down a layer (drawn lower, listed first)", "Move this group up a layer (drawn higher, listed later)"], (d) => {
+          const cur = [...groupsNow()];
+          [cur[gi], cur[gi + d]] = [cur[gi + d], cur[gi]];
+          groupOpen.clear();
+          setGroups(cur, "Group order");
+          changed();
+        });
+        const del = h("button", { type: "button", className: "ghost danger", textContent: "Delete group", title: "Delete this group (its regions are not deleted)", dataset: { act: "group-delete" } });
+        del.addEventListener("click", () => {
+          setGroups(groupsNow().filter((_, j) => j !== gi), "Delete group");
+          changed();
+        });
+        return groupCard(`r${gi}`, g.name, plural(g.regions.length, "region"), (v) => (update((x) => ({ ...x, name: v.slice(0, GROUP_NAME_MAX) }), "Group name"), typed()), [
+          ...(rows.length ? [h("div", { className: "ed-group-rows" }, ...rows)] : [h("p", { className: "muted small", textContent: "No regions yet." })]),
+          add,
+          h("label", { className: "check ed-group-on", title: "Starts shown when the embed opens" }, onIn, "Shown when the embed opens"),
+          fillLine,
+          h("div", { className: "ed-group-foot" }, del, ...order),
+        ]);
+      }),
     );
   }
-  underAdd.addEventListener("change", () => {
-    if (!underAdd.value) return;
-    setUnder([...(hist.state.props.under ?? []), { id: underAdd.value }], "Add underlay");
-    underAdd.value = "";
-    changed();
-  });
-  underClipIn.addEventListener("change", () => (setProp("underClip", underClipIn.checked, "Underlays inside only"), changed()));
-  underTitleIn.addEventListener("input", () => (setProp("underTitle", underTitleIn.value.slice(0, UNDER_TITLE_MAX), "Toggle list heading"), typed()));
+  function renderPinGroups(pg: PinGroup[], slotMaps: PinMap[]): void {
+    const used = new Set(groupPinMapIds(pg));
+    const free = slotMaps.filter((m) => !used.has(m.id));
+    const pinCount = (mid: string) => pinEntries().filter((e) => e.feature?.properties.slot === slotName && e.feature.properties.pinMap === mid).length;
+    const nameOfMap = (mid: string) => slotMaps.find((m) => m.id === mid)?.name ?? mid;
+    pgList.replaceChildren(
+      ...(!slotMaps.length ? [h("p", { className: "muted small", textContent: "This slot has no pin maps yet. Add one in the Pins tab." })] : []),
+      ...pg.map((g, gi) => {
+        const update = (fn: (x: PinGroup) => PinGroup, label: string) => setPinGroups(pinGroupsNow().map((x, j) => (j === gi ? fn(x) : x)), label);
+        const rows = g.pinMaps.map((mid, i) => {
+          const own = hist.state.props.pinLegends?.[mid];
+          const move = (d: -1 | 1) => {
+            const cur = [...pinGroupsNow()[gi].pinMaps];
+            [cur[i], cur[i + d]] = [cur[i + d], cur[i]];
+            update((x) => ({ ...x, pinMaps: cur }), "Pin map order");
+            changed("panel");
+          };
+          const names = h("button", { type: "button", className: "text tiny lg-open", textContent: own ? "Legend names ✓" : "Legend names…", title: `Change what the pin legend calls the panel and each kind of pin for "${nameOfMap(mid)}" on this region's embed`, ariaLabel: own ? `Legend names for ${nameOfMap(mid)}, custom names set` : `Legend names for ${nameOfMap(mid)}` });
+          names.addEventListener("click", () =>
+            legendDialog(own, `For pin map "${nameOfMap(mid)}" on this region's embed.`, (legend) => {
+              const rest = { ...(hist.state.props.pinLegends ?? {}) };
+              if (legend) rest[mid] = legend;
+              else delete rest[mid];
+              setProp("pinLegends", Object.keys(rest).length ? rest : undefined, "Legend names");
+              changed("panel");
+            }),
+          );
+          return h(
+            "div",
+            { className: "ed-group-row", dataset: { pinmap: mid } },
+            h("span", { className: "ed-group-name", textContent: nameOfMap(mid), title: `Pin map ${mid}` }),
+            h("span", { className: "muted small", textContent: plural(pinCount(mid), "pin") }),
+            ...arrowBtns(i, g.pinMaps.length, ["Move up the list", "Move down the list"], move),
+            btn("×", `Take ${nameOfMap(mid)} out of this group`, () => {
+              update((x) => ({ ...x, pinMaps: x.pinMaps.filter((_, j) => j !== i) }), "Remove from group");
+              changed("panel");
+            }),
+            names,
+          );
+        });
+        const add = h("select", { name: "pin-group-add", ariaLabel: `Add a pin map to ${g.name || "this group"}` });
+        add.append(
+          h("option", { value: "", textContent: used.size >= REGION_PINMAPS_MAX ? "(most reached)" : free.length ? "+ Add a pin map…" : "(no more pin maps on this slot)" }),
+          ...free.map((m) => h("option", { value: m.id, textContent: m.name })),
+        );
+        add.disabled = used.size >= REGION_PINMAPS_MAX || !free.length;
+        add.addEventListener("change", () => {
+          if (!add.value) return;
+          update((x) => ({ ...x, pinMaps: [...x.pinMaps, add.value] }), "Add to group");
+          changed("panel");
+        });
+        const onIn = h("input", { type: "checkbox", checked: g.on !== false, name: "pin-group-on", ariaLabel: `${g.name} starts shown` });
+        onIn.addEventListener("change", () => {
+          update((x) => ({ ...x, on: onIn.checked ? undefined : false }), "Group starts shown");
+          changed("panel");
+        });
+        const order = arrowBtns(gi, pg.length, ["Move this group up the list", "Move this group down the list"], (d) => {
+          const cur = [...pinGroupsNow()];
+          [cur[gi], cur[gi + d]] = [cur[gi + d], cur[gi]];
+          groupOpen.clear();
+          setPinGroups(cur, "Pin group order");
+          changed("panel");
+        });
+        const del = h("button", { type: "button", className: "ghost danger", textContent: "Delete group", title: "Delete this group (its pin maps are not deleted)", dataset: { act: "pin-group-delete" } });
+        del.addEventListener("click", () => {
+          setPinGroups(pinGroupsNow().filter((_, j) => j !== gi), "Delete group");
+          changed("panel");
+        });
+        return groupCard(`p${gi}`, g.name, plural(g.pinMaps.length, "pin map"), (v) => (update((x) => ({ ...x, name: v.slice(0, GROUP_NAME_MAX) }), "Group name"), typed()), [
+          ...(rows.length ? [h("div", { className: "ed-group-rows" }, ...rows)] : [h("p", { className: "muted small", textContent: "No pin maps yet." })]),
+          add,
+          h("label", { className: "check ed-group-on", title: "Starts shown when the embed opens" }, onIn, "Shown when the embed opens"),
+          h("div", { className: "ed-group-foot" }, del, ...order),
+        ]);
+      }),
+    );
+  }
+  underClipIn.addEventListener("change", () => (setProp("underClip", underClipIn.checked, "Groups inside only"), changed()));
   ownToggleIn.addEventListener("change", () => (setProp("ownToggle", ownToggleIn.checked, "Region's own toggle"), changed()));
   layerLabelIn.addEventListener("input", () => (setProp("layerLabel", layerLabelIn.value.slice(0, LEGEND_LABEL_MAX), "Own toggle name"), typed()));
   borderIn.addEventListener("change", () => (setProp("nationalBorders", borderIn.checked, "National borders"), changed()));
@@ -4157,6 +4232,21 @@ export function openEditor(o: EditorOptions): void {
     ];
     if (errs.length) return errs[0];
     const props = s.props;
+    // Groups with nothing in them are not saved; a nameless one is named after its first member.
+    const keptGroups = (props.layerGroups ?? [])
+      .filter((g) => g.regions.length)
+      .slice(0, GROUPS_MAX)
+      .map((g) => ({
+        name: (g.name.trim() || regionName(g.regions[0].id)).slice(0, GROUP_NAME_MAX),
+        regions: g.regions.map((e) => ({ id: e.id, ...(e.label?.trim() ? { label: e.label.trim().slice(0, LEGEND_LABEL_MAX) } : {}), ...(underFill(e.fill) !== undefined ? { fill: underFill(e.fill) } : {}) })),
+        ...(typeof g.on === "boolean" ? { on: g.on } : {}),
+        ...(underFill(g.fill) !== undefined ? { fill: underFill(g.fill) } : {}),
+      }));
+    const keptPinGroups = (props.pinGroups ?? [])
+      .filter((g) => g.pinMaps.length)
+      .slice(0, GROUPS_MAX)
+      .map((g) => ({ name: (g.name.trim() || pinMapName(g.pinMaps[0])).slice(0, GROUP_NAME_MAX), pinMaps: g.pinMaps.slice(0, REGION_PINMAPS_MAX), ...(g.on === false ? { on: false } : {}) }));
+    const pinIds = keptPinGroups.flatMap((g) => g.pinMaps);
     return {
       $schema: "../../schema/region.schema.json",
       type: "Feature",
@@ -4180,13 +4270,12 @@ export function openEditor(o: EditorOptions): void {
         ...(partLocked.some((l) => !l) ? { partLocked } : {}),
         ...(provinceLines.length ? { provinceBorders: provinceLines } : {}),
         ...(props.nationalBorders ? { nationalBorders: true } : {}),
-        ...(props.pinMaps?.length ? { pinMaps: props.pinMaps.slice(0, REGION_PINMAPS_MAX) } : {}),
-        ...(props.pinMaps?.length && cleanLegends(Object.fromEntries(Object.entries(props.pinLegends ?? {}).filter(([id]) => props.pinMaps!.includes(id)))) ? { pinLegends: cleanLegends(Object.fromEntries(Object.entries(props.pinLegends ?? {}).filter(([id]) => props.pinMaps!.includes(id)))) } : {}),
-        ...(props.under?.length
+        ...(keptPinGroups.length ? { pinGroups: keptPinGroups } : {}),
+        ...(keptPinGroups.length && cleanLegends(Object.fromEntries(Object.entries(props.pinLegends ?? {}).filter(([id]) => pinIds.includes(id)))) ? { pinLegends: cleanLegends(Object.fromEntries(Object.entries(props.pinLegends ?? {}).filter(([id]) => pinIds.includes(id)))) } : {}),
+        ...(keptGroups.length
           ? {
-              under: props.under.map((e) => ({ id: e.id, ...(e.label?.trim() ? { label: e.label.trim().slice(0, LEGEND_LABEL_MAX) } : {}), ...(typeof e.on === "boolean" ? { on: e.on } : {}), ...(underFill(e.fill) !== undefined ? { fill: underFill(e.fill) } : {}) })),
+              layerGroups: keptGroups,
               ...(props.underClip === false ? { underClip: false } : {}),
-              ...(props.underTitle?.trim() ? { underTitle: props.underTitle.trim().slice(0, UNDER_TITLE_MAX) } : {}),
               ...(props.ownToggle ? { ownToggle: true } : {}),
               ...(props.ownToggle && props.layerLabel?.trim() ? { layerLabel: props.layerLabel.trim().slice(0, LEGEND_LABEL_MAX) } : {}),
             }
@@ -4309,8 +4398,8 @@ export function openEditor(o: EditorOptions): void {
       } else {
         const lp = link.feature.properties;
         const made = link.sha && lp.createdBy ? { ...(lp.created ? { created: lp.created } : {}), createdBy: lp.createdBy } : { created: stamp(), createdBy: account() };
-        const under = hist.state.props.under;
-        const core: RegionFeature = { ...r.feature, properties: { ...(lp.name ? { name: lp.name } : {}), ...r.feature.properties, linked: live.map((x) => x.id), ...(under?.length ? { under: under.map((e) => ({ ...e })) } : {}), ...(names ? { linkedNames: names } : {}), ...made } };
+        const groups = groupsNow().filter((g) => g.regions.length);
+        const core: RegionFeature = { ...r.feature, properties: { ...(lp.name ? { name: lp.name } : {}), ...r.feature.properties, linked: live.map((x) => x.id), ...(groups.length ? { layerGroups: structuredClone(groups) } : {}), ...(names ? { linkedNames: names } : {}), ...made } };
         const strip = (f: RegionFeature) => {
           const rest = { ...f.properties };
           delete rest.updated;
@@ -4396,8 +4485,10 @@ export function openEditor(o: EditorOptions): void {
       const props = { ...link.feature.properties };
       delete props.linkedNames;
       delete props.under;
-      const under = hist.state.props.under;
-      link.feature = { ...link.feature, properties: { ...props, ...(under?.length ? { under: under.map((e) => ({ ...e })) } : {}), ...(names ? { linkedNames: names } : {}) } };
+      delete props.underTitle;
+      delete props.layerGroups;
+      const groups = groupsNow().filter((g) => g.regions.length);
+      link.feature = { ...link.feature, properties: { ...props, ...(groups.length ? { layerGroups: structuredClone(groups) } : {}), ...(names ? { linkedNames: names } : {}) } };
     }
     close();
     const ids = new Set(sources.map((x) => x.id));
@@ -4506,7 +4597,7 @@ export function openEditor(o: EditorOptions): void {
       const fresh = JSON.parse(f.text) as RegionFeature;
       sha = f.sha;
       creator = { ...(fresh.properties.created ? { created: fresh.properties.created } : {}), ...(fresh.properties.createdBy ? { createdBy: fresh.properties.createdBy } : {}) };
-      hist.apply("Reload from GitHub", stateOf(fresh, hist.state.props.color));
+      hist.apply("Reload from GitHub", stateOf(fresh, hist.state.props.color, { region: regionName, pinMap: pinMapName }));
       saved = JSON.stringify(hist.state);
       draftSync(true);
       setMsg("Reloaded the latest version from GitHub.", "ok");

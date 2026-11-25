@@ -8,12 +8,12 @@ const deepEqual = (a, b) => {
   return ka.length === Object.keys(b).length && ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && deepEqual(a[k], b[k]));
 };
 export const validateRegion = validate20;
-const schema31 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/region.schema.json","title":"Region","description":"One region (a country, province, kingdom…) drawn on a map: a GeoJSON Feature (RFC 7946) stored as content/regions/<id>.json. COORDINATES ARE [lon, lat] IN THE MAP IMAGE'S OWN FRAME: lon = x / width * 360 - 180 and lat = 90 - y / height * 180, where x/y are pixels in the image as uploaded. They are NOT adjusted for the slot's prime meridian shift or pole padding; the globe applies the same padding and shift to the region as to the texture, so the region stays on the land when those settings change. That's why the numbers can differ from the globe's grid labels on a padded or shifted globe. Longitudes are within [-180, 180] and every edge takes the shorter way round (so [179, 0] → [-179, 0] crosses the antimeridian and is 2° long). A ring may span at most 180° of longitude and may not contain a pole. Rings are closed, have at least 4 positions, outer rings are counter-clockwise and holes clockwise, and they don't cross themselves. At most 70000 vertices in total. The id is permanent (embeds point at it): each part's label is in properties.partLabels. Parts (the polygons of a MultiPolygon) are layers, drawn in order: where parts overlap, a later part covers an earlier one.","type":"object","required":["type","id","properties","geometry"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"type":{"const":"Feature"},"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Permanent id; must match the file name. Embeds use it: v/<slot>/?region=<id>."},"properties":{"type":"object","required":["slot","map","color"],"additionalProperties":false,"properties":{"name":{"type":"string","minLength":1,"maxLength":80,"description":"The region's display name (plain text, capitals kept). The id is generated from it once and is permanent; renaming changes only this. A combined map's legend uses it for the region's colour; the embed shows it as one label when there are no partLabels."},"slot":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Slot (in content/slots.json) whose globe shows this region."},"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id the region was drawn on."},"color":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$","description":"Fill and border colour, #rgb or #rrggbb: the colour of parts whose partLegend entry is -1 (the editor's \"Default colour\")."},"colorLabel":{"type":"string","maxLength":60,"description":"Legend label for `color` (plain text). The embed's legend lists the region's own colour first, once it has a label. Leave it out for none."},"fillOpacity":{"type":"number","minimum":0,"maximum":1,"default":0.35},"label":{"type":"boolean","default":true,"description":"Show the part labels (or, for a region without partLabels, its name) in the embed."},"description":{"type":"string","maxLength":500,"description":"Optional short plain-text description."},"legendTitle":{"type":"string","maxLength":40,"description":"Heading of the embed's legend (plain text). Defaults to \"Legend\"."},"legend":{"type":"array","maxItems":96,"description":"Extra colours for the region's parts, each with a plain-text label. The embed lists every colour with a non-empty label as a legend (key=0 hides it).","items":{"type":"object","required":["label","color"],"additionalProperties":false,"properties":{"label":{"type":"string","maxLength":60,"description":"Legend text (plain text)."},"color":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$","description":"#rgb or #rrggbb."}}}},"partLegend":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry (a Polygon is one part), in order: the index of the legend entry whose colour that part is drawn in, or -1 for the region's own colour. Leave it out to draw every part in the region's colour.","items":{"type":"integer","minimum":-1,"maximum":95}},"partLabels":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry, in order: the label the embed shows on that part (plain text), or \"\" for none. Must have one entry per part when present.","items":{"type":"string","maxLength":80}},"partLabelHidden":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry, in order: true to hide that part's label in the embed and the editor's preview while keeping its text in partLabels, false (or a missing entry) to show it. Leave it out when no label is hidden. Must have one entry per part when present.","items":{"type":"boolean"}},"partContested":{"type":"array","maxItems":1000,"description":"LEGACY, no longer written (see partOccupied). One entry per polygon: -1, or k to mark the part as a \"contested zone\" of part k. When a region with this field loads, a zone whose partLegend entry is -1 takes part k's colour and counts as an occupied part (partOccupied); the editor writes partOccupied instead at the next save.","items":{"type":"integer","minimum":-1,"maximum":999}},"partOccupied":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry, in order: true for a contested (occupied) area. Like any overlap of different colours it's drawn as equal stripes of every colour there, with its own border dashed in those colours, but the borders of the parts under it stay solid, as they were. Leave it out when no part is one.","items":{"type":"boolean"}},"linked":{"type":"array","minItems":1,"maxItems":23,"uniqueItems":true,"description":"A linked combined region: the ids of the regions it is made of, in order (the first one's colour leads). The site build and the admin page rebuild the region from those regions as they are now, so editing one of them changes this region too; editing this region in the admin page edits them. The geometry and the rest of the properties stored here are a snapshot from the last save, used only when none of the linked regions exist.","items":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"}},"linkedNames":{"type":"object","additionalProperties":false,"description":"Only with linked: this region's own names for its legend, so they can differ from the linked regions' (which stay as they are). legendTitle and colorLabel replace the ones taken from the linked regions (an empty text removes them); legend renames the colours: each entry names the colour and the label it has in the linked regions, and the label to show here.","properties":{"legendTitle":{"type":"string","maxLength":40},"colorLabel":{"type":"string","maxLength":60},"legend":{"type":"array","maxItems":192,"items":{"type":"object","required":["color","from","label"],"additionalProperties":false,"properties":{"color":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"},"from":{"type":"string","maxLength":60},"label":{"type":"string","maxLength":60}}}}}},"partLocked":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry, in order: true for a part locked in the admin editor, so it can't be dragged or nudged as a whole (its vertices and midpoints still edit). Editor-only; the embed ignores it. Leave it out when no part is locked.","items":{"type":"boolean"}},"nationalBorders":{"type":"boolean","description":"Draw national borders: where two parts of the region share a line exactly (drawn with snapping or tracing), the embed draws a thick dark line on a light casing between parts of different legend colours, and leaves the line off between parts of the same colour. Off unless true: parts that touch just touch. Leave it out for off."},"under":{"type":"array","maxItems":8,"description":"Regions of the same slot shown under this one in its embed (a religion map, culture, trade goods…), bottom first. Each gets a toggle in the embed's legend. Regions that don't exist on the slot are ignored.","items":{"type":"object","required":["id"],"additionalProperties":false,"properties":{"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"label":{"type":"string","maxLength":60,"description":"Name of its toggle in the legend (plain text). Defaults to the region's name, else its id."},"on":{"type":"boolean","description":"Whether it starts shown. Missing: the first underlay does, the others don't."},"fill":{"type":"number","minimum":0.1,"maximum":1,"description":"Fill opacity this underlay is painted with, overriding its own, so it can look more pronounced. Leave it out to use the underlay region's own fill."}}}},"pinMaps":{"type":"array","maxItems":8,"uniqueItems":true,"description":"Ids of pin maps (content/pinmaps.json) of the same slot whose pins show on this region's embed (a ?pins= in the embed code overrides this). Pin maps that don't exist are ignored.","items":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"}},"pinLegends":{"type":"object","maxProperties":8,"description":"Per pin map id: the words the pin legend uses on this region's embed instead of the defaults. Only labels change: kinds keep their icon, colour and id in ?pins=.","propertyNames":{"pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"additionalProperties":{"type":"object","additionalProperties":false,"properties":{"title":{"type":"string","minLength":1,"maxLength":30,"description":"The legend panel's title (default \"Pins\")."},"kinds":{"type":"object","additionalProperties":false,"description":"A label per pin kind id; kinds not listed keep their default label.","properties":{"city":{"type":"string","minLength":1,"maxLength":40},"town":{"type":"string","minLength":1,"maxLength":40},"fortress":{"type":"string","minLength":1,"maxLength":40},"port":{"type":"string","minLength":1,"maxLength":40},"temple":{"type":"string","minLength":1,"maxLength":40},"ruin":{"type":"string","minLength":1,"maxLength":40},"battle":{"type":"string","minLength":1,"maxLength":40},"landmark":{"type":"string","minLength":1,"maxLength":40},"mountain":{"type":"string","minLength":1,"maxLength":40},"other":{"type":"string","minLength":1,"maxLength":40}}}}}},"underClip":{"type":"boolean","description":"With under: false to show the underlays outside this region's outline too. Leave it out to cut them to the outline."},"underTitle":{"type":"string","maxLength":40,"description":"With under: heading of the toggle list in the embed. Defaults to \"Layers\"."},"ownToggle":{"type":"boolean","description":"With under: true to give this region a toggle of its own in the legend, so readers can switch it off too. Leave it out for no toggle: the region is always shown."},"layerLabel":{"type":"string","maxLength":60,"description":"With ownToggle: this region's toggle name in the legend. Defaults to its name, else its id."},"provinceBorders":{"type":"array","maxItems":500,"description":"Province borders drawn inside the region with the editor's Province border tool: open lines of [lon, lat] positions (at least 2 each, in the map image's frame like the geometry; each step takes the shorter way round). The embed draws them as fine dotted dark lines, only where they lie inside the region's (non-contested) parts. They don't change the parts. At most 5000 positions in all. Leave it out when there are none.","items":{"type":"array","minItems":2,"maxItems":5000,"items":{"type":"array","minItems":2,"maxItems":2,"prefixItems":[{"type":"number","minimum":-180,"maximum":180},{"type":"number","minimum":-90,"maximum":90}]}}},"updated":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},"created":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$","description":"When the region was first saved."},"createdBy":{"$ref":"#/$defs/account","description":"Who created the region: they (and anyone allowed to edit others' regions) can change it. Set by the admin page and checked by the admin API. Missing on regions from before owners existed, which belong to the repository owner."},"updatedBy":{"$ref":"#/$defs/account","description":"Who saved this version."}}},"geometry":{"type":"object","required":["type","coordinates"],"additionalProperties":false,"properties":{"type":{"enum":["Polygon","MultiPolygon"]},"coordinates":{"type":"array"}},"if":{"properties":{"type":{"const":"Polygon"}}},"then":{"properties":{"coordinates":{"$ref":"#/$defs/polygon"}}},"else":{"properties":{"coordinates":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/polygon"}}}}}},"$defs":{"polygon":{"type":"array","minItems":1,"description":"Outer ring first, then holes.","items":{"$ref":"#/$defs/ring"}},"ring":{"type":"array","minItems":4,"items":{"$ref":"#/$defs/position"}},"position":{"type":"array","minItems":2,"maxItems":2,"prefixItems":[{"type":"number","minimum":-180,"maximum":180},{"type":"number","minimum":-90,"maximum":90}],"items":false},"account":{"type":"object","required":["id","login"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1,"description":"GitHub account id (permanent, survives a rename)."},"login":{"type":"string","pattern":"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$","description":"GitHub username when saved."}}}}};
+const schema31 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/region.schema.json","title":"Region","description":"One region (a country, province, kingdom…) drawn on a map: a GeoJSON Feature (RFC 7946) stored as content/regions/<id>.json. COORDINATES ARE [lon, lat] IN THE MAP IMAGE'S OWN FRAME: lon = x / width * 360 - 180 and lat = 90 - y / height * 180, where x/y are pixels in the image as uploaded. They are NOT adjusted for the slot's prime meridian shift or pole padding; the globe applies the same padding and shift to the region as to the texture, so the region stays on the land when those settings change. That's why the numbers can differ from the globe's grid labels on a padded or shifted globe. Longitudes are within [-180, 180] and every edge takes the shorter way round (so [179, 0] → [-179, 0] crosses the antimeridian and is 2° long). A ring may span at most 180° of longitude and may not contain a pole. Rings are closed, have at least 4 positions, outer rings are counter-clockwise and holes clockwise, and they don't cross themselves. At most 70000 vertices in total. The id is permanent (embeds point at it): each part's label is in properties.partLabels. Parts (the polygons of a MultiPolygon) are layers, drawn in order: where parts overlap, a later part covers an earlier one.","type":"object","required":["type","id","properties","geometry"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"type":{"const":"Feature"},"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Permanent id; must match the file name. Embeds use it: v/<slot>/?region=<id>."},"properties":{"type":"object","required":["slot","map","color"],"additionalProperties":false,"properties":{"name":{"type":"string","minLength":1,"maxLength":80,"description":"The region's display name (plain text, capitals kept). The id is generated from it once and is permanent; renaming changes only this. A combined map's legend uses it for the region's colour; the embed shows it as one label when there are no partLabels."},"slot":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Slot (in content/slots.json) whose globe shows this region."},"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id the region was drawn on."},"color":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$","description":"Fill and border colour, #rgb or #rrggbb: the colour of parts whose partLegend entry is -1 (the editor's \"Default colour\")."},"colorLabel":{"type":"string","maxLength":60,"description":"Legend label for `color` (plain text). The embed's legend lists the region's own colour first, once it has a label. Leave it out for none."},"fillOpacity":{"type":"number","minimum":0,"maximum":1,"default":0.35},"label":{"type":"boolean","default":true,"description":"Show the part labels (or, for a region without partLabels, its name) in the embed."},"description":{"type":"string","maxLength":500,"description":"Optional short plain-text description."},"legendTitle":{"type":"string","maxLength":40,"description":"Heading of the embed's legend (plain text). Defaults to \"Legend\"."},"legend":{"type":"array","maxItems":96,"description":"Extra colours for the region's parts, each with a plain-text label. The embed lists every colour with a non-empty label as a legend (key=0 hides it).","items":{"type":"object","required":["label","color"],"additionalProperties":false,"properties":{"label":{"type":"string","maxLength":60,"description":"Legend text (plain text)."},"color":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$","description":"#rgb or #rrggbb."}}}},"partLegend":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry (a Polygon is one part), in order: the index of the legend entry whose colour that part is drawn in, or -1 for the region's own colour. Leave it out to draw every part in the region's colour.","items":{"type":"integer","minimum":-1,"maximum":95}},"partLabels":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry, in order: the label the embed shows on that part (plain text), or \"\" for none. Must have one entry per part when present.","items":{"type":"string","maxLength":80}},"partLabelHidden":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry, in order: true to hide that part's label in the embed and the editor's preview while keeping its text in partLabels, false (or a missing entry) to show it. Leave it out when no label is hidden. Must have one entry per part when present.","items":{"type":"boolean"}},"partContested":{"type":"array","maxItems":1000,"description":"LEGACY, no longer written (see partOccupied). One entry per polygon: -1, or k to mark the part as a \"contested zone\" of part k. When a region with this field loads, a zone whose partLegend entry is -1 takes part k's colour and counts as an occupied part (partOccupied); the editor writes partOccupied instead at the next save.","items":{"type":"integer","minimum":-1,"maximum":999}},"partOccupied":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry, in order: true for a contested (occupied) area. Like any overlap of different colours it's drawn as equal stripes of every colour there, with its own border dashed in those colours, but the borders of the parts under it stay solid, as they were. Leave it out when no part is one.","items":{"type":"boolean"}},"linked":{"type":"array","minItems":1,"maxItems":23,"uniqueItems":true,"description":"A linked combined region: the ids of the regions it is made of, in order (the first one's colour leads). The site build and the admin page rebuild the region from those regions as they are now, so editing one of them changes this region too; editing this region in the admin page edits them. The geometry and the rest of the properties stored here are a snapshot from the last save, used only when none of the linked regions exist.","items":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"}},"linkedNames":{"type":"object","additionalProperties":false,"description":"Only with linked: this region's own names for its legend, so they can differ from the linked regions' (which stay as they are). legendTitle and colorLabel replace the ones taken from the linked regions (an empty text removes them); legend renames the colours: each entry names the colour and the label it has in the linked regions, and the label to show here.","properties":{"legendTitle":{"type":"string","maxLength":40},"colorLabel":{"type":"string","maxLength":60},"legend":{"type":"array","maxItems":192,"items":{"type":"object","required":["color","from","label"],"additionalProperties":false,"properties":{"color":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"},"from":{"type":"string","maxLength":60},"label":{"type":"string","maxLength":60}}}}}},"partLocked":{"type":"array","maxItems":1000,"description":"One entry per polygon of the geometry, in order: true for a part locked in the admin editor, so it can't be dragged or nudged as a whole (its vertices and midpoints still edit). Editor-only; the embed ignores it. Leave it out when no part is locked.","items":{"type":"boolean"}},"nationalBorders":{"type":"boolean","description":"Draw national borders: where two parts of the region share a line exactly (drawn with snapping or tracing), the embed draws a thick dark line on a light casing between parts of different legend colours, and leaves the line off between parts of the same colour. Off unless true: parts that touch just touch. Leave it out for off."},"layerGroups":{"type":"array","maxItems":8,"description":"Hand-picked groups of regions of the same slot shown under this one in its embed (a Religion group holding several religion maps). Each group is one section of the legend with one switch, its members' colours merged, duplicate names shown once. Replaces under + underTitle (which still load: one underlay becomes a group named after the old heading). Regions that don't exist on the slot are ignored.","items":{"type":"object","required":["name","regions"],"additionalProperties":false,"properties":{"name":{"type":"string","minLength":1,"maxLength":40,"description":"The group's heading and switch name in the legend."},"regions":{"type":"array","maxItems":8,"description":"Its regions, bottom first.","items":{"type":"object","required":["id"],"additionalProperties":false,"properties":{"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"label":{"type":"string","maxLength":60},"fill":{"type":"number","minimum":0.1,"maximum":1,"description":"Fill opacity for this region alone, overriding the group's."}}}},"on":{"type":"boolean","description":"Whether the group starts shown. Missing: the first group does, the others don't."},"fill":{"type":"number","minimum":0.1,"maximum":1,"description":"Fill opacity every region of the group is painted with, so it can look more pronounced. Leave it out to use each region's own fill."}}}},"pinGroups":{"type":"array","maxItems":8,"description":"Groups of pin maps (content/pinmaps.json) of the same slot whose pins show on this region's embed: each group is one switch in the pin legend (Holy sites, Battles). A ?pins= in the embed code overrides this. Replaces pinMaps (which still loads as one group per pin map).","items":{"type":"object","required":["name","pinMaps"],"additionalProperties":false,"properties":{"name":{"type":"string","minLength":1,"maxLength":40},"pinMaps":{"type":"array","maxItems":8,"uniqueItems":true,"items":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"}},"on":{"type":"boolean","description":"Whether the group starts shown. Missing: yes."}}}},"under":{"type":"array","maxItems":8,"description":"Older form of layerGroups (still loads). Regions of the same slot shown under this one in its embed (a religion map, culture, trade goods…), bottom first. Each gets a toggle in the embed's legend. Regions that don't exist on the slot are ignored.","items":{"type":"object","required":["id"],"additionalProperties":false,"properties":{"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"label":{"type":"string","maxLength":60,"description":"Name of its toggle in the legend (plain text). Defaults to the region's name, else its id."},"on":{"type":"boolean","description":"Whether it starts shown. Missing: the first underlay does, the others don't."},"fill":{"type":"number","minimum":0.1,"maximum":1,"description":"Fill opacity this underlay is painted with, overriding its own, so it can look more pronounced. Leave it out to use the underlay region's own fill."}}}},"pinMaps":{"type":"array","maxItems":8,"uniqueItems":true,"description":"Older form of pinGroups (still loads). Ids of pin maps (content/pinmaps.json) of the same slot whose pins show on this region's embed (a ?pins= in the embed code overrides this). Pin maps that don't exist are ignored.","items":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"}},"pinLegends":{"type":"object","maxProperties":8,"description":"Per pin map id: the words the pin legend uses on this region's embed instead of the defaults. Only labels change: kinds keep their icon, colour and id in ?pins=.","propertyNames":{"pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"additionalProperties":{"type":"object","additionalProperties":false,"properties":{"title":{"type":"string","minLength":1,"maxLength":30,"description":"The legend panel's title (default \"Pins\")."},"kinds":{"type":"object","additionalProperties":false,"description":"A label per pin kind id; kinds not listed keep their default label.","properties":{"city":{"type":"string","minLength":1,"maxLength":40},"town":{"type":"string","minLength":1,"maxLength":40},"fortress":{"type":"string","minLength":1,"maxLength":40},"port":{"type":"string","minLength":1,"maxLength":40},"temple":{"type":"string","minLength":1,"maxLength":40},"ruin":{"type":"string","minLength":1,"maxLength":40},"battle":{"type":"string","minLength":1,"maxLength":40},"landmark":{"type":"string","minLength":1,"maxLength":40},"mountain":{"type":"string","minLength":1,"maxLength":40},"other":{"type":"string","minLength":1,"maxLength":40}}}}}},"underClip":{"type":"boolean","description":"With layerGroups: false to show the underlays outside this region's outline too. Leave it out to cut them to the outline."},"underTitle":{"type":"string","maxLength":40,"description":"Older form (still loads): heading of the toggle list; layerGroups name their groups instead."},"ownToggle":{"type":"boolean","description":"With layerGroups: true to give this region a toggle of its own in the legend, so readers can switch it off too. Leave it out for no toggle: the region is always shown."},"layerLabel":{"type":"string","maxLength":60,"description":"With ownToggle: this region's toggle name in the legend. Defaults to its name, else its id."},"provinceBorders":{"type":"array","maxItems":500,"description":"Province borders drawn inside the region with the editor's Province border tool: open lines of [lon, lat] positions (at least 2 each, in the map image's frame like the geometry; each step takes the shorter way round). The embed draws them as fine dotted dark lines, only where they lie inside the region's (non-contested) parts. They don't change the parts. At most 5000 positions in all. Leave it out when there are none.","items":{"type":"array","minItems":2,"maxItems":5000,"items":{"type":"array","minItems":2,"maxItems":2,"prefixItems":[{"type":"number","minimum":-180,"maximum":180},{"type":"number","minimum":-90,"maximum":90}]}}},"updated":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},"created":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$","description":"When the region was first saved."},"createdBy":{"$ref":"#/$defs/account","description":"Who created the region: they (and anyone allowed to edit others' regions) can change it. Set by the admin page and checked by the admin API. Missing on regions from before owners existed, which belong to the repository owner."},"updatedBy":{"$ref":"#/$defs/account","description":"Who saved this version."}}},"geometry":{"type":"object","required":["type","coordinates"],"additionalProperties":false,"properties":{"type":{"enum":["Polygon","MultiPolygon"]},"coordinates":{"type":"array"}},"if":{"properties":{"type":{"const":"Polygon"}}},"then":{"properties":{"coordinates":{"$ref":"#/$defs/polygon"}}},"else":{"properties":{"coordinates":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/polygon"}}}}}},"$defs":{"polygon":{"type":"array","minItems":1,"description":"Outer ring first, then holes.","items":{"$ref":"#/$defs/ring"}},"ring":{"type":"array","minItems":4,"items":{"$ref":"#/$defs/position"}},"position":{"type":"array","minItems":2,"maxItems":2,"prefixItems":[{"type":"number","minimum":-180,"maximum":180},{"type":"number","minimum":-90,"maximum":90}],"items":false},"account":{"type":"object","required":["id","login"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1,"description":"GitHub account id (permanent, survives a rename)."},"login":{"type":"string","pattern":"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$","description":"GitHub username when saved."}}}}};
 const schema32 = {"type":"object","required":["id","login"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1,"description":"GitHub account id (permanent, survives a rename)."},"login":{"type":"string","pattern":"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$","description":"GitHub username when saved."}}};
 const pattern4 = new RegExp("^[a-z0-9][a-z0-9-]{0,63}$", "u");
 const pattern7 = new RegExp("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", "u");
-const pattern14 = new RegExp("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$", "u");
-const pattern16 = new RegExp("^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$", "u");
+const pattern16 = new RegExp("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$", "u");
+const pattern18 = new RegExp("^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$", "u");
 const func1 = Object.prototype.hasOwnProperty;
 const func2 = ucs2length;
 const schema34 = {"type":"array","minItems":1,"description":"Outer ring first, then holes.","items":{"$ref":"#/$defs/ring"}};
@@ -1095,13 +1095,13 @@ else {
 var valid1 = true;
 }
 if(valid1){
-if(data3.under !== undefined){
-let data40 = data3.under;
+if(data3.layerGroups !== undefined){
+let data40 = data3.layerGroups;
 const _errs85 = errors;
 if(errors === _errs85){
 if(Array.isArray(data40)){
 if(data40.length > 8){
-validate20.errors = [{instancePath:instancePath+"/properties/under",schemaPath:"#/properties/properties/properties/under/maxItems",keyword:"maxItems",params:{limit: 8},message:"must NOT have more than 8 items"}];
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups",schemaPath:"#/properties/properties/properties/layerGroups/maxItems",keyword:"maxItems",params:{limit: 8},message:"must NOT have more than 8 items"}];
 return false;
 }
 else {
@@ -1113,32 +1113,38 @@ const _errs87 = errors;
 if(errors === _errs87){
 if(data41 && typeof data41 == "object" && !Array.isArray(data41)){
 let missing4;
-if((data41.id === undefined) && (missing4 = "id")){
-validate20.errors = [{instancePath:instancePath+"/properties/under/" + i10,schemaPath:"#/properties/properties/properties/under/items/required",keyword:"required",params:{missingProperty: missing4},message:"must have required property '"+missing4+"'"}];
+if(((data41.name === undefined) && (missing4 = "name")) || ((data41.regions === undefined) && (missing4 = "regions"))){
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10,schemaPath:"#/properties/properties/properties/layerGroups/items/required",keyword:"required",params:{missingProperty: missing4},message:"must have required property '"+missing4+"'"}];
 return false;
 }
 else {
 const _errs89 = errors;
 for(const key5 in data41){
-if(!((((key5 === "id") || (key5 === "label")) || (key5 === "on")) || (key5 === "fill"))){
-validate20.errors = [{instancePath:instancePath+"/properties/under/" + i10,schemaPath:"#/properties/properties/properties/under/items/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key5},message:"must NOT have additional properties"}];
+if(!((((key5 === "name") || (key5 === "regions")) || (key5 === "on")) || (key5 === "fill"))){
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10,schemaPath:"#/properties/properties/properties/layerGroups/items/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key5},message:"must NOT have additional properties"}];
 return false;
 break;
 }
 }
 if(_errs89 === errors){
-if(data41.id !== undefined){
-let data42 = data41.id;
+if(data41.name !== undefined){
+let data42 = data41.name;
 const _errs90 = errors;
 if(errors === _errs90){
 if(typeof data42 === "string"){
-if(!pattern4.test(data42)){
-validate20.errors = [{instancePath:instancePath+"/properties/under/" + i10+"/id",schemaPath:"#/properties/properties/properties/under/items/properties/id/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9][a-z0-9-]{0,63}$"},message:"must match pattern \""+"^[a-z0-9][a-z0-9-]{0,63}$"+"\""}];
+if(func2(data42) > 40){
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/name",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/name/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data42) < 1){
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/name",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/name/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
 return false;
 }
 }
+}
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/under/" + i10+"/id",schemaPath:"#/properties/properties/properties/under/items/properties/id/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/name",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/name/type",keyword:"type",params:{type: "string"},message:"must be string"}];
 return false;
 }
 }
@@ -1148,18 +1154,125 @@ else {
 var valid16 = true;
 }
 if(valid16){
-if(data41.label !== undefined){
-let data43 = data41.label;
+if(data41.regions !== undefined){
+let data43 = data41.regions;
 const _errs92 = errors;
 if(errors === _errs92){
-if(typeof data43 === "string"){
-if(func2(data43) > 60){
-validate20.errors = [{instancePath:instancePath+"/properties/under/" + i10+"/label",schemaPath:"#/properties/properties/properties/under/items/properties/label/maxLength",keyword:"maxLength",params:{limit: 60},message:"must NOT have more than 60 characters"}];
+if(Array.isArray(data43)){
+if(data43.length > 8){
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/regions",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/regions/maxItems",keyword:"maxItems",params:{limit: 8},message:"must NOT have more than 8 items"}];
+return false;
+}
+else {
+var valid17 = true;
+const len10 = data43.length;
+for(let i11=0; i11<len10; i11++){
+let data44 = data43[i11];
+const _errs94 = errors;
+if(errors === _errs94){
+if(data44 && typeof data44 == "object" && !Array.isArray(data44)){
+let missing5;
+if((data44.id === undefined) && (missing5 = "id")){
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/regions/" + i11,schemaPath:"#/properties/properties/properties/layerGroups/items/properties/regions/items/required",keyword:"required",params:{missingProperty: missing5},message:"must have required property '"+missing5+"'"}];
+return false;
+}
+else {
+const _errs96 = errors;
+for(const key6 in data44){
+if(!(((key6 === "id") || (key6 === "label")) || (key6 === "fill"))){
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/regions/" + i11,schemaPath:"#/properties/properties/properties/layerGroups/items/properties/regions/items/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key6},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs96 === errors){
+if(data44.id !== undefined){
+let data45 = data44.id;
+const _errs97 = errors;
+if(errors === _errs97){
+if(typeof data45 === "string"){
+if(!pattern4.test(data45)){
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/regions/" + i11+"/id",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/regions/items/properties/id/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9][a-z0-9-]{0,63}$"},message:"must match pattern \""+"^[a-z0-9][a-z0-9-]{0,63}$"+"\""}];
 return false;
 }
 }
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/under/" + i10+"/label",schemaPath:"#/properties/properties/properties/under/items/properties/label/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/regions/" + i11+"/id",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/regions/items/properties/id/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid18 = _errs97 === errors;
+}
+else {
+var valid18 = true;
+}
+if(valid18){
+if(data44.label !== undefined){
+let data46 = data44.label;
+const _errs99 = errors;
+if(errors === _errs99){
+if(typeof data46 === "string"){
+if(func2(data46) > 60){
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/regions/" + i11+"/label",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/regions/items/properties/label/maxLength",keyword:"maxLength",params:{limit: 60},message:"must NOT have more than 60 characters"}];
+return false;
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/regions/" + i11+"/label",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/regions/items/properties/label/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid18 = _errs99 === errors;
+}
+else {
+var valid18 = true;
+}
+if(valid18){
+if(data44.fill !== undefined){
+let data47 = data44.fill;
+const _errs101 = errors;
+if(errors === _errs101){
+if((typeof data47 == "number") && (isFinite(data47))){
+if(data47 > 1 || isNaN(data47)){
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/regions/" + i11+"/fill",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/regions/items/properties/fill/maximum",keyword:"maximum",params:{comparison: "<=", limit: 1},message:"must be <= 1"}];
+return false;
+}
+else {
+if(data47 < 0.1 || isNaN(data47)){
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/regions/" + i11+"/fill",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/regions/items/properties/fill/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0.1},message:"must be >= 0.1"}];
+return false;
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/regions/" + i11+"/fill",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/regions/items/properties/fill/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid18 = _errs101 === errors;
+}
+else {
+var valid18 = true;
+}
+}
+}
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/regions/" + i11,schemaPath:"#/properties/properties/properties/layerGroups/items/properties/regions/items/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+var valid17 = _errs94 === errors;
+if(!valid17){
+break;
+}
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/regions",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/regions/type",keyword:"type",params:{type: "array"},message:"must be array"}];
 return false;
 }
 }
@@ -1170,39 +1283,39 @@ var valid16 = true;
 }
 if(valid16){
 if(data41.on !== undefined){
-const _errs94 = errors;
+const _errs103 = errors;
 if(typeof data41.on !== "boolean"){
-validate20.errors = [{instancePath:instancePath+"/properties/under/" + i10+"/on",schemaPath:"#/properties/properties/properties/under/items/properties/on/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/on",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/on/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
 return false;
 }
-var valid16 = _errs94 === errors;
+var valid16 = _errs103 === errors;
 }
 else {
 var valid16 = true;
 }
 if(valid16){
 if(data41.fill !== undefined){
-let data45 = data41.fill;
-const _errs96 = errors;
-if(errors === _errs96){
-if((typeof data45 == "number") && (isFinite(data45))){
-if(data45 > 1 || isNaN(data45)){
-validate20.errors = [{instancePath:instancePath+"/properties/under/" + i10+"/fill",schemaPath:"#/properties/properties/properties/under/items/properties/fill/maximum",keyword:"maximum",params:{comparison: "<=", limit: 1},message:"must be <= 1"}];
+let data49 = data41.fill;
+const _errs105 = errors;
+if(errors === _errs105){
+if((typeof data49 == "number") && (isFinite(data49))){
+if(data49 > 1 || isNaN(data49)){
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/fill",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/fill/maximum",keyword:"maximum",params:{comparison: "<=", limit: 1},message:"must be <= 1"}];
 return false;
 }
 else {
-if(data45 < 0.1 || isNaN(data45)){
-validate20.errors = [{instancePath:instancePath+"/properties/under/" + i10+"/fill",schemaPath:"#/properties/properties/properties/under/items/properties/fill/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0.1},message:"must be >= 0.1"}];
+if(data49 < 0.1 || isNaN(data49)){
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/fill",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/fill/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0.1},message:"must be >= 0.1"}];
 return false;
 }
 }
 }
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/under/" + i10+"/fill",schemaPath:"#/properties/properties/properties/under/items/properties/fill/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10+"/fill",schemaPath:"#/properties/properties/properties/layerGroups/items/properties/fill/type",keyword:"type",params:{type: "number"},message:"must be number"}];
 return false;
 }
 }
-var valid16 = _errs96 === errors;
+var valid16 = _errs105 === errors;
 }
 else {
 var valid16 = true;
@@ -1214,7 +1327,7 @@ var valid16 = true;
 }
 }
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/under/" + i10,schemaPath:"#/properties/properties/properties/under/items/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups/" + i10,schemaPath:"#/properties/properties/properties/layerGroups/items/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 }
@@ -1226,7 +1339,7 @@ break;
 }
 }
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/under",schemaPath:"#/properties/properties/properties/under/type",keyword:"type",params:{type: "array"},message:"must be array"}];
+validate20.errors = [{instancePath:instancePath+"/properties/layerGroups",schemaPath:"#/properties/properties/properties/layerGroups/type",keyword:"type",params:{type: "array"},message:"must be array"}];
 return false;
 }
 }
@@ -1236,55 +1349,359 @@ else {
 var valid1 = true;
 }
 if(valid1){
-if(data3.pinMaps !== undefined){
-let data46 = data3.pinMaps;
-const _errs98 = errors;
-if(errors === _errs98){
-if(Array.isArray(data46)){
-if(data46.length > 8){
-validate20.errors = [{instancePath:instancePath+"/properties/pinMaps",schemaPath:"#/properties/properties/properties/pinMaps/maxItems",keyword:"maxItems",params:{limit: 8},message:"must NOT have more than 8 items"}];
+if(data3.pinGroups !== undefined){
+let data50 = data3.pinGroups;
+const _errs107 = errors;
+if(errors === _errs107){
+if(Array.isArray(data50)){
+if(data50.length > 8){
+validate20.errors = [{instancePath:instancePath+"/properties/pinGroups",schemaPath:"#/properties/properties/properties/pinGroups/maxItems",keyword:"maxItems",params:{limit: 8},message:"must NOT have more than 8 items"}];
 return false;
 }
 else {
-var valid17 = true;
-const len10 = data46.length;
-for(let i11=0; i11<len10; i11++){
-let data47 = data46[i11];
-const _errs100 = errors;
-if(errors === _errs100){
-if(typeof data47 === "string"){
-if(!pattern4.test(data47)){
-validate20.errors = [{instancePath:instancePath+"/properties/pinMaps/" + i11,schemaPath:"#/properties/properties/properties/pinMaps/items/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9][a-z0-9-]{0,63}$"},message:"must match pattern \""+"^[a-z0-9][a-z0-9-]{0,63}$"+"\""}];
+var valid19 = true;
+const len11 = data50.length;
+for(let i12=0; i12<len11; i12++){
+let data51 = data50[i12];
+const _errs109 = errors;
+if(errors === _errs109){
+if(data51 && typeof data51 == "object" && !Array.isArray(data51)){
+let missing6;
+if(((data51.name === undefined) && (missing6 = "name")) || ((data51.pinMaps === undefined) && (missing6 = "pinMaps"))){
+validate20.errors = [{instancePath:instancePath+"/properties/pinGroups/" + i12,schemaPath:"#/properties/properties/properties/pinGroups/items/required",keyword:"required",params:{missingProperty: missing6},message:"must have required property '"+missing6+"'"}];
 return false;
-}
 }
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/pinMaps/" + i11,schemaPath:"#/properties/properties/properties/pinMaps/items/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+const _errs111 = errors;
+for(const key7 in data51){
+if(!(((key7 === "name") || (key7 === "pinMaps")) || (key7 === "on"))){
+validate20.errors = [{instancePath:instancePath+"/properties/pinGroups/" + i12,schemaPath:"#/properties/properties/properties/pinGroups/items/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key7},message:"must NOT have additional properties"}];
 return false;
-}
-}
-var valid17 = _errs100 === errors;
-if(!valid17){
 break;
 }
 }
-if(valid17){
-let i12 = data46.length;
+if(_errs111 === errors){
+if(data51.name !== undefined){
+let data52 = data51.name;
+const _errs112 = errors;
+if(errors === _errs112){
+if(typeof data52 === "string"){
+if(func2(data52) > 40){
+validate20.errors = [{instancePath:instancePath+"/properties/pinGroups/" + i12+"/name",schemaPath:"#/properties/properties/properties/pinGroups/items/properties/name/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data52) < 1){
+validate20.errors = [{instancePath:instancePath+"/properties/pinGroups/" + i12+"/name",schemaPath:"#/properties/properties/properties/pinGroups/items/properties/name/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/pinGroups/" + i12+"/name",schemaPath:"#/properties/properties/properties/pinGroups/items/properties/name/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid20 = _errs112 === errors;
+}
+else {
+var valid20 = true;
+}
+if(valid20){
+if(data51.pinMaps !== undefined){
+let data53 = data51.pinMaps;
+const _errs114 = errors;
+if(errors === _errs114){
+if(Array.isArray(data53)){
+if(data53.length > 8){
+validate20.errors = [{instancePath:instancePath+"/properties/pinGroups/" + i12+"/pinMaps",schemaPath:"#/properties/properties/properties/pinGroups/items/properties/pinMaps/maxItems",keyword:"maxItems",params:{limit: 8},message:"must NOT have more than 8 items"}];
+return false;
+}
+else {
+var valid21 = true;
+const len12 = data53.length;
+for(let i13=0; i13<len12; i13++){
+let data54 = data53[i13];
+const _errs116 = errors;
+if(errors === _errs116){
+if(typeof data54 === "string"){
+if(!pattern4.test(data54)){
+validate20.errors = [{instancePath:instancePath+"/properties/pinGroups/" + i12+"/pinMaps/" + i13,schemaPath:"#/properties/properties/properties/pinGroups/items/properties/pinMaps/items/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9][a-z0-9-]{0,63}$"},message:"must match pattern \""+"^[a-z0-9][a-z0-9-]{0,63}$"+"\""}];
+return false;
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/pinGroups/" + i12+"/pinMaps/" + i13,schemaPath:"#/properties/properties/properties/pinGroups/items/properties/pinMaps/items/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid21 = _errs116 === errors;
+if(!valid21){
+break;
+}
+}
+if(valid21){
+let i14 = data53.length;
 let j1;
-if(i12 > 1){
+if(i14 > 1){
 const indices1 = {};
-for(;i12--;){
-let item1 = data46[i12];
+for(;i14--;){
+let item1 = data53[i14];
 if(typeof item1 !== "string"){
 continue;
 }
 if(typeof indices1[item1] == "number"){
 j1 = indices1[item1];
-validate20.errors = [{instancePath:instancePath+"/properties/pinMaps",schemaPath:"#/properties/properties/properties/pinMaps/uniqueItems",keyword:"uniqueItems",params:{i: i12, j: j1},message:"must NOT have duplicate items (items ## "+j1+" and "+i12+" are identical)"}];
+validate20.errors = [{instancePath:instancePath+"/properties/pinGroups/" + i12+"/pinMaps",schemaPath:"#/properties/properties/properties/pinGroups/items/properties/pinMaps/uniqueItems",keyword:"uniqueItems",params:{i: i14, j: j1},message:"must NOT have duplicate items (items ## "+j1+" and "+i14+" are identical)"}];
 return false;
 break;
 }
-indices1[item1] = i12;
+indices1[item1] = i14;
+}
+}
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/pinGroups/" + i12+"/pinMaps",schemaPath:"#/properties/properties/properties/pinGroups/items/properties/pinMaps/type",keyword:"type",params:{type: "array"},message:"must be array"}];
+return false;
+}
+}
+var valid20 = _errs114 === errors;
+}
+else {
+var valid20 = true;
+}
+if(valid20){
+if(data51.on !== undefined){
+const _errs118 = errors;
+if(typeof data51.on !== "boolean"){
+validate20.errors = [{instancePath:instancePath+"/properties/pinGroups/" + i12+"/on",schemaPath:"#/properties/properties/properties/pinGroups/items/properties/on/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
+return false;
+}
+var valid20 = _errs118 === errors;
+}
+else {
+var valid20 = true;
+}
+}
+}
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/pinGroups/" + i12,schemaPath:"#/properties/properties/properties/pinGroups/items/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+var valid19 = _errs109 === errors;
+if(!valid19){
+break;
+}
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/pinGroups",schemaPath:"#/properties/properties/properties/pinGroups/type",keyword:"type",params:{type: "array"},message:"must be array"}];
+return false;
+}
+}
+var valid1 = _errs107 === errors;
+}
+else {
+var valid1 = true;
+}
+if(valid1){
+if(data3.under !== undefined){
+let data56 = data3.under;
+const _errs120 = errors;
+if(errors === _errs120){
+if(Array.isArray(data56)){
+if(data56.length > 8){
+validate20.errors = [{instancePath:instancePath+"/properties/under",schemaPath:"#/properties/properties/properties/under/maxItems",keyword:"maxItems",params:{limit: 8},message:"must NOT have more than 8 items"}];
+return false;
+}
+else {
+var valid23 = true;
+const len13 = data56.length;
+for(let i15=0; i15<len13; i15++){
+let data57 = data56[i15];
+const _errs122 = errors;
+if(errors === _errs122){
+if(data57 && typeof data57 == "object" && !Array.isArray(data57)){
+let missing7;
+if((data57.id === undefined) && (missing7 = "id")){
+validate20.errors = [{instancePath:instancePath+"/properties/under/" + i15,schemaPath:"#/properties/properties/properties/under/items/required",keyword:"required",params:{missingProperty: missing7},message:"must have required property '"+missing7+"'"}];
+return false;
+}
+else {
+const _errs124 = errors;
+for(const key8 in data57){
+if(!((((key8 === "id") || (key8 === "label")) || (key8 === "on")) || (key8 === "fill"))){
+validate20.errors = [{instancePath:instancePath+"/properties/under/" + i15,schemaPath:"#/properties/properties/properties/under/items/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key8},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs124 === errors){
+if(data57.id !== undefined){
+let data58 = data57.id;
+const _errs125 = errors;
+if(errors === _errs125){
+if(typeof data58 === "string"){
+if(!pattern4.test(data58)){
+validate20.errors = [{instancePath:instancePath+"/properties/under/" + i15+"/id",schemaPath:"#/properties/properties/properties/under/items/properties/id/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9][a-z0-9-]{0,63}$"},message:"must match pattern \""+"^[a-z0-9][a-z0-9-]{0,63}$"+"\""}];
+return false;
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/under/" + i15+"/id",schemaPath:"#/properties/properties/properties/under/items/properties/id/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid24 = _errs125 === errors;
+}
+else {
+var valid24 = true;
+}
+if(valid24){
+if(data57.label !== undefined){
+let data59 = data57.label;
+const _errs127 = errors;
+if(errors === _errs127){
+if(typeof data59 === "string"){
+if(func2(data59) > 60){
+validate20.errors = [{instancePath:instancePath+"/properties/under/" + i15+"/label",schemaPath:"#/properties/properties/properties/under/items/properties/label/maxLength",keyword:"maxLength",params:{limit: 60},message:"must NOT have more than 60 characters"}];
+return false;
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/under/" + i15+"/label",schemaPath:"#/properties/properties/properties/under/items/properties/label/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid24 = _errs127 === errors;
+}
+else {
+var valid24 = true;
+}
+if(valid24){
+if(data57.on !== undefined){
+const _errs129 = errors;
+if(typeof data57.on !== "boolean"){
+validate20.errors = [{instancePath:instancePath+"/properties/under/" + i15+"/on",schemaPath:"#/properties/properties/properties/under/items/properties/on/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
+return false;
+}
+var valid24 = _errs129 === errors;
+}
+else {
+var valid24 = true;
+}
+if(valid24){
+if(data57.fill !== undefined){
+let data61 = data57.fill;
+const _errs131 = errors;
+if(errors === _errs131){
+if((typeof data61 == "number") && (isFinite(data61))){
+if(data61 > 1 || isNaN(data61)){
+validate20.errors = [{instancePath:instancePath+"/properties/under/" + i15+"/fill",schemaPath:"#/properties/properties/properties/under/items/properties/fill/maximum",keyword:"maximum",params:{comparison: "<=", limit: 1},message:"must be <= 1"}];
+return false;
+}
+else {
+if(data61 < 0.1 || isNaN(data61)){
+validate20.errors = [{instancePath:instancePath+"/properties/under/" + i15+"/fill",schemaPath:"#/properties/properties/properties/under/items/properties/fill/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0.1},message:"must be >= 0.1"}];
+return false;
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/under/" + i15+"/fill",schemaPath:"#/properties/properties/properties/under/items/properties/fill/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid24 = _errs131 === errors;
+}
+else {
+var valid24 = true;
+}
+}
+}
+}
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/under/" + i15,schemaPath:"#/properties/properties/properties/under/items/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+var valid23 = _errs122 === errors;
+if(!valid23){
+break;
+}
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/under",schemaPath:"#/properties/properties/properties/under/type",keyword:"type",params:{type: "array"},message:"must be array"}];
+return false;
+}
+}
+var valid1 = _errs120 === errors;
+}
+else {
+var valid1 = true;
+}
+if(valid1){
+if(data3.pinMaps !== undefined){
+let data62 = data3.pinMaps;
+const _errs133 = errors;
+if(errors === _errs133){
+if(Array.isArray(data62)){
+if(data62.length > 8){
+validate20.errors = [{instancePath:instancePath+"/properties/pinMaps",schemaPath:"#/properties/properties/properties/pinMaps/maxItems",keyword:"maxItems",params:{limit: 8},message:"must NOT have more than 8 items"}];
+return false;
+}
+else {
+var valid25 = true;
+const len14 = data62.length;
+for(let i16=0; i16<len14; i16++){
+let data63 = data62[i16];
+const _errs135 = errors;
+if(errors === _errs135){
+if(typeof data63 === "string"){
+if(!pattern4.test(data63)){
+validate20.errors = [{instancePath:instancePath+"/properties/pinMaps/" + i16,schemaPath:"#/properties/properties/properties/pinMaps/items/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9][a-z0-9-]{0,63}$"},message:"must match pattern \""+"^[a-z0-9][a-z0-9-]{0,63}$"+"\""}];
+return false;
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/pinMaps/" + i16,schemaPath:"#/properties/properties/properties/pinMaps/items/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid25 = _errs135 === errors;
+if(!valid25){
+break;
+}
+}
+if(valid25){
+let i17 = data62.length;
+let j2;
+if(i17 > 1){
+const indices2 = {};
+for(;i17--;){
+let item2 = data62[i17];
+if(typeof item2 !== "string"){
+continue;
+}
+if(typeof indices2[item2] == "number"){
+j2 = indices2[item2];
+validate20.errors = [{instancePath:instancePath+"/properties/pinMaps",schemaPath:"#/properties/properties/properties/pinMaps/uniqueItems",keyword:"uniqueItems",params:{i: i17, j: j2},message:"must NOT have duplicate items (items ## "+j2+" and "+i17+" are identical)"}];
+return false;
+break;
+}
+indices2[item2] = i17;
 }
 }
 }
@@ -1295,27 +1712,27 @@ validate20.errors = [{instancePath:instancePath+"/properties/pinMaps",schemaPath
 return false;
 }
 }
-var valid1 = _errs98 === errors;
+var valid1 = _errs133 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.pinLegends !== undefined){
-let data48 = data3.pinLegends;
-const _errs102 = errors;
-if(errors === _errs102){
-if(data48 && typeof data48 == "object" && !Array.isArray(data48)){
-if(Object.keys(data48).length > 8){
+let data64 = data3.pinLegends;
+const _errs137 = errors;
+if(errors === _errs137){
+if(data64 && typeof data64 == "object" && !Array.isArray(data64)){
+if(Object.keys(data64).length > 8){
 validate20.errors = [{instancePath:instancePath+"/properties/pinLegends",schemaPath:"#/properties/properties/properties/pinLegends/maxProperties",keyword:"maxProperties",params:{limit: 8},message:"must NOT have more than 8 properties"}];
 return false;
 }
 else {
-for(const key6 in data48){
-const _errs104 = errors;
-if(typeof key6 === "string"){
-if(!pattern4.test(key6)){
-const err0 = {instancePath:instancePath+"/properties/pinLegends",schemaPath:"#/properties/properties/properties/pinLegends/propertyNames/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9][a-z0-9-]{0,63}$"},message:"must match pattern \""+"^[a-z0-9][a-z0-9-]{0,63}$"+"\"",propertyName:key6};
+for(const key9 in data64){
+const _errs139 = errors;
+if(typeof key9 === "string"){
+if(!pattern4.test(key9)){
+const err0 = {instancePath:instancePath+"/properties/pinLegends",schemaPath:"#/properties/properties/properties/pinLegends/propertyNames/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9][a-z0-9-]{0,63}$"},message:"must match pattern \""+"^[a-z0-9][a-z0-9-]{0,63}$"+"\"",propertyName:key9};
 if(vErrors === null){
 vErrors = [err0];
 }
@@ -1325,9 +1742,9 @@ vErrors.push(err0);
 errors++;
 }
 }
-var valid19 = _errs104 === errors;
-if(!valid19){
-const err1 = {instancePath:instancePath+"/properties/pinLegends",schemaPath:"#/properties/properties/properties/pinLegends/propertyNames",keyword:"propertyNames",params:{propertyName: key6},message:"property name must be valid"};
+var valid27 = _errs139 === errors;
+if(!valid27){
+const err1 = {instancePath:instancePath+"/properties/pinLegends",schemaPath:"#/properties/properties/properties/pinLegends/propertyNames",keyword:"propertyNames",params:{propertyName: key9},message:"property name must be valid"};
 if(vErrors === null){
 vErrors = [err1];
 }
@@ -1340,362 +1757,362 @@ return false;
 break;
 }
 }
-if(valid19){
-for(const key7 in data48){
-let data49 = data48[key7];
-const _errs106 = errors;
-if(errors === _errs106){
-if(data49 && typeof data49 == "object" && !Array.isArray(data49)){
-const _errs108 = errors;
-for(const key8 in data49){
-if(!((key8 === "title") || (key8 === "kinds"))){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1"),schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key8},message:"must NOT have additional properties"}];
+if(valid27){
+for(const key10 in data64){
+let data65 = data64[key10];
+const _errs141 = errors;
+if(errors === _errs141){
+if(data65 && typeof data65 == "object" && !Array.isArray(data65)){
+const _errs143 = errors;
+for(const key11 in data65){
+if(!((key11 === "title") || (key11 === "kinds"))){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1"),schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key11},message:"must NOT have additional properties"}];
 return false;
 break;
 }
 }
-if(_errs108 === errors){
-if(data49.title !== undefined){
-let data50 = data49.title;
-const _errs109 = errors;
-if(errors === _errs109){
-if(typeof data50 === "string"){
-if(func2(data50) > 30){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/title",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/title/maxLength",keyword:"maxLength",params:{limit: 30},message:"must NOT have more than 30 characters"}];
+if(_errs143 === errors){
+if(data65.title !== undefined){
+let data66 = data65.title;
+const _errs144 = errors;
+if(errors === _errs144){
+if(typeof data66 === "string"){
+if(func2(data66) > 30){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/title",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/title/maxLength",keyword:"maxLength",params:{limit: 30},message:"must NOT have more than 30 characters"}];
 return false;
 }
 else {
-if(func2(data50) < 1){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/title",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/title/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+if(func2(data66) < 1){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/title",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/title/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
 return false;
 }
 }
 }
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/title",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/title/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/title",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/title/type",keyword:"type",params:{type: "string"},message:"must be string"}];
 return false;
 }
 }
-var valid21 = _errs109 === errors;
+var valid29 = _errs144 === errors;
 }
 else {
-var valid21 = true;
+var valid29 = true;
 }
-if(valid21){
-if(data49.kinds !== undefined){
-let data51 = data49.kinds;
-const _errs111 = errors;
-if(errors === _errs111){
-if(data51 && typeof data51 == "object" && !Array.isArray(data51)){
-const _errs113 = errors;
-for(const key9 in data51){
-if(!(func1.call(schema31.properties.properties.properties.pinLegends.additionalProperties.properties.kinds.properties, key9))){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key9},message:"must NOT have additional properties"}];
+if(valid29){
+if(data65.kinds !== undefined){
+let data67 = data65.kinds;
+const _errs146 = errors;
+if(errors === _errs146){
+if(data67 && typeof data67 == "object" && !Array.isArray(data67)){
+const _errs148 = errors;
+for(const key12 in data67){
+if(!(func1.call(schema31.properties.properties.properties.pinLegends.additionalProperties.properties.kinds.properties, key12))){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key12},message:"must NOT have additional properties"}];
 return false;
 break;
 }
 }
-if(_errs113 === errors){
-if(data51.city !== undefined){
-let data52 = data51.city;
-const _errs114 = errors;
-if(errors === _errs114){
-if(typeof data52 === "string"){
-if(func2(data52) > 40){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/city",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/city/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+if(_errs148 === errors){
+if(data67.city !== undefined){
+let data68 = data67.city;
+const _errs149 = errors;
+if(errors === _errs149){
+if(typeof data68 === "string"){
+if(func2(data68) > 40){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/city",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/city/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
 return false;
 }
 else {
-if(func2(data52) < 1){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/city",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/city/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
-return false;
-}
-}
-}
-else {
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/city",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/city/type",keyword:"type",params:{type: "string"},message:"must be string"}];
-return false;
-}
-}
-var valid22 = _errs114 === errors;
-}
-else {
-var valid22 = true;
-}
-if(valid22){
-if(data51.town !== undefined){
-let data53 = data51.town;
-const _errs116 = errors;
-if(errors === _errs116){
-if(typeof data53 === "string"){
-if(func2(data53) > 40){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/town",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/town/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
-return false;
-}
-else {
-if(func2(data53) < 1){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/town",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/town/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+if(func2(data68) < 1){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/city",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/city/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
 return false;
 }
 }
 }
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/town",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/town/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/city",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/city/type",keyword:"type",params:{type: "string"},message:"must be string"}];
 return false;
 }
 }
-var valid22 = _errs116 === errors;
+var valid30 = _errs149 === errors;
 }
 else {
-var valid22 = true;
+var valid30 = true;
 }
-if(valid22){
-if(data51.fortress !== undefined){
-let data54 = data51.fortress;
-const _errs118 = errors;
-if(errors === _errs118){
-if(typeof data54 === "string"){
-if(func2(data54) > 40){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/fortress",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/fortress/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+if(valid30){
+if(data67.town !== undefined){
+let data69 = data67.town;
+const _errs151 = errors;
+if(errors === _errs151){
+if(typeof data69 === "string"){
+if(func2(data69) > 40){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/town",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/town/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
 return false;
 }
 else {
-if(func2(data54) < 1){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/fortress",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/fortress/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
-return false;
-}
-}
-}
-else {
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/fortress",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/fortress/type",keyword:"type",params:{type: "string"},message:"must be string"}];
-return false;
-}
-}
-var valid22 = _errs118 === errors;
-}
-else {
-var valid22 = true;
-}
-if(valid22){
-if(data51.port !== undefined){
-let data55 = data51.port;
-const _errs120 = errors;
-if(errors === _errs120){
-if(typeof data55 === "string"){
-if(func2(data55) > 40){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/port",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/port/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
-return false;
-}
-else {
-if(func2(data55) < 1){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/port",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/port/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+if(func2(data69) < 1){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/town",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/town/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
 return false;
 }
 }
 }
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/port",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/port/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/town",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/town/type",keyword:"type",params:{type: "string"},message:"must be string"}];
 return false;
 }
 }
-var valid22 = _errs120 === errors;
+var valid30 = _errs151 === errors;
 }
 else {
-var valid22 = true;
+var valid30 = true;
 }
-if(valid22){
-if(data51.temple !== undefined){
-let data56 = data51.temple;
-const _errs122 = errors;
-if(errors === _errs122){
-if(typeof data56 === "string"){
-if(func2(data56) > 40){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/temple",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/temple/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+if(valid30){
+if(data67.fortress !== undefined){
+let data70 = data67.fortress;
+const _errs153 = errors;
+if(errors === _errs153){
+if(typeof data70 === "string"){
+if(func2(data70) > 40){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/fortress",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/fortress/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
 return false;
 }
 else {
-if(func2(data56) < 1){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/temple",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/temple/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
-return false;
-}
-}
-}
-else {
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/temple",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/temple/type",keyword:"type",params:{type: "string"},message:"must be string"}];
-return false;
-}
-}
-var valid22 = _errs122 === errors;
-}
-else {
-var valid22 = true;
-}
-if(valid22){
-if(data51.ruin !== undefined){
-let data57 = data51.ruin;
-const _errs124 = errors;
-if(errors === _errs124){
-if(typeof data57 === "string"){
-if(func2(data57) > 40){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/ruin",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/ruin/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
-return false;
-}
-else {
-if(func2(data57) < 1){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/ruin",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/ruin/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+if(func2(data70) < 1){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/fortress",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/fortress/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
 return false;
 }
 }
 }
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/ruin",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/ruin/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/fortress",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/fortress/type",keyword:"type",params:{type: "string"},message:"must be string"}];
 return false;
 }
 }
-var valid22 = _errs124 === errors;
+var valid30 = _errs153 === errors;
 }
 else {
-var valid22 = true;
+var valid30 = true;
 }
-if(valid22){
-if(data51.battle !== undefined){
-let data58 = data51.battle;
-const _errs126 = errors;
-if(errors === _errs126){
-if(typeof data58 === "string"){
-if(func2(data58) > 40){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/battle",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/battle/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+if(valid30){
+if(data67.port !== undefined){
+let data71 = data67.port;
+const _errs155 = errors;
+if(errors === _errs155){
+if(typeof data71 === "string"){
+if(func2(data71) > 40){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/port",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/port/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
 return false;
 }
 else {
-if(func2(data58) < 1){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/battle",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/battle/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
-return false;
-}
-}
-}
-else {
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/battle",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/battle/type",keyword:"type",params:{type: "string"},message:"must be string"}];
-return false;
-}
-}
-var valid22 = _errs126 === errors;
-}
-else {
-var valid22 = true;
-}
-if(valid22){
-if(data51.landmark !== undefined){
-let data59 = data51.landmark;
-const _errs128 = errors;
-if(errors === _errs128){
-if(typeof data59 === "string"){
-if(func2(data59) > 40){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/landmark",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/landmark/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
-return false;
-}
-else {
-if(func2(data59) < 1){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/landmark",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/landmark/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+if(func2(data71) < 1){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/port",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/port/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
 return false;
 }
 }
 }
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/landmark",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/landmark/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/port",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/port/type",keyword:"type",params:{type: "string"},message:"must be string"}];
 return false;
 }
 }
-var valid22 = _errs128 === errors;
+var valid30 = _errs155 === errors;
 }
 else {
-var valid22 = true;
+var valid30 = true;
 }
-if(valid22){
-if(data51.mountain !== undefined){
-let data60 = data51.mountain;
-const _errs130 = errors;
-if(errors === _errs130){
-if(typeof data60 === "string"){
-if(func2(data60) > 40){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/mountain",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/mountain/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+if(valid30){
+if(data67.temple !== undefined){
+let data72 = data67.temple;
+const _errs157 = errors;
+if(errors === _errs157){
+if(typeof data72 === "string"){
+if(func2(data72) > 40){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/temple",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/temple/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
 return false;
 }
 else {
-if(func2(data60) < 1){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/mountain",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/mountain/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
-return false;
-}
-}
-}
-else {
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/mountain",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/mountain/type",keyword:"type",params:{type: "string"},message:"must be string"}];
-return false;
-}
-}
-var valid22 = _errs130 === errors;
-}
-else {
-var valid22 = true;
-}
-if(valid22){
-if(data51.other !== undefined){
-let data61 = data51.other;
-const _errs132 = errors;
-if(errors === _errs132){
-if(typeof data61 === "string"){
-if(func2(data61) > 40){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/other",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/other/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
-return false;
-}
-else {
-if(func2(data61) < 1){
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/other",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/other/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+if(func2(data72) < 1){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/temple",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/temple/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
 return false;
 }
 }
 }
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/other",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/other/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/temple",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/temple/type",keyword:"type",params:{type: "string"},message:"must be string"}];
 return false;
 }
 }
-var valid22 = _errs132 === errors;
+var valid30 = _errs157 === errors;
 }
 else {
-var valid22 = true;
+var valid30 = true;
 }
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
+if(valid30){
+if(data67.ruin !== undefined){
+let data73 = data67.ruin;
+const _errs159 = errors;
+if(errors === _errs159){
+if(typeof data73 === "string"){
+if(func2(data73) > 40){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/ruin",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/ruin/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
 }
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+if(func2(data73) < 1){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/ruin",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/ruin/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
 return false;
 }
 }
-var valid21 = _errs111 === errors;
 }
 else {
-var valid21 = true;
-}
-}
-}
-}
-else {
-validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key7.replace(/~/g, "~0").replace(/\//g, "~1"),schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/ruin",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/ruin/type",keyword:"type",params:{type: "string"},message:"must be string"}];
 return false;
 }
 }
-var valid20 = _errs106 === errors;
-if(!valid20){
+var valid30 = _errs159 === errors;
+}
+else {
+var valid30 = true;
+}
+if(valid30){
+if(data67.battle !== undefined){
+let data74 = data67.battle;
+const _errs161 = errors;
+if(errors === _errs161){
+if(typeof data74 === "string"){
+if(func2(data74) > 40){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/battle",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/battle/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data74) < 1){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/battle",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/battle/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/battle",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/battle/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid30 = _errs161 === errors;
+}
+else {
+var valid30 = true;
+}
+if(valid30){
+if(data67.landmark !== undefined){
+let data75 = data67.landmark;
+const _errs163 = errors;
+if(errors === _errs163){
+if(typeof data75 === "string"){
+if(func2(data75) > 40){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/landmark",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/landmark/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data75) < 1){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/landmark",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/landmark/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/landmark",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/landmark/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid30 = _errs163 === errors;
+}
+else {
+var valid30 = true;
+}
+if(valid30){
+if(data67.mountain !== undefined){
+let data76 = data67.mountain;
+const _errs165 = errors;
+if(errors === _errs165){
+if(typeof data76 === "string"){
+if(func2(data76) > 40){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/mountain",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/mountain/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data76) < 1){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/mountain",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/mountain/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/mountain",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/mountain/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid30 = _errs165 === errors;
+}
+else {
+var valid30 = true;
+}
+if(valid30){
+if(data67.other !== undefined){
+let data77 = data67.other;
+const _errs167 = errors;
+if(errors === _errs167){
+if(typeof data77 === "string"){
+if(func2(data77) > 40){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/other",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/other/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
+return false;
+}
+else {
+if(func2(data77) < 1){
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/other",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/other/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds/other",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/properties/other/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid30 = _errs167 === errors;
+}
+else {
+var valid30 = true;
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1")+"/kinds",schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/properties/kinds/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+var valid29 = _errs146 === errors;
+}
+else {
+var valid29 = true;
+}
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/pinLegends/" + key10.replace(/~/g, "~0").replace(/\//g, "~1"),schemaPath:"#/properties/properties/properties/pinLegends/additionalProperties/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+var valid28 = _errs141 === errors;
+if(!valid28){
 break;
 }
 }
@@ -1707,30 +2124,30 @@ validate20.errors = [{instancePath:instancePath+"/properties/pinLegends",schemaP
 return false;
 }
 }
-var valid1 = _errs102 === errors;
+var valid1 = _errs137 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.underClip !== undefined){
-const _errs134 = errors;
+const _errs169 = errors;
 if(typeof data3.underClip !== "boolean"){
 validate20.errors = [{instancePath:instancePath+"/properties/underClip",schemaPath:"#/properties/properties/properties/underClip/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
 return false;
 }
-var valid1 = _errs134 === errors;
+var valid1 = _errs169 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.underTitle !== undefined){
-let data63 = data3.underTitle;
-const _errs136 = errors;
-if(errors === _errs136){
-if(typeof data63 === "string"){
-if(func2(data63) > 40){
+let data79 = data3.underTitle;
+const _errs171 = errors;
+if(errors === _errs171){
+if(typeof data79 === "string"){
+if(func2(data79) > 40){
 validate20.errors = [{instancePath:instancePath+"/properties/underTitle",schemaPath:"#/properties/properties/properties/underTitle/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
 return false;
 }
@@ -1740,30 +2157,30 @@ validate20.errors = [{instancePath:instancePath+"/properties/underTitle",schemaP
 return false;
 }
 }
-var valid1 = _errs136 === errors;
+var valid1 = _errs171 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.ownToggle !== undefined){
-const _errs138 = errors;
+const _errs173 = errors;
 if(typeof data3.ownToggle !== "boolean"){
 validate20.errors = [{instancePath:instancePath+"/properties/ownToggle",schemaPath:"#/properties/properties/properties/ownToggle/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
 return false;
 }
-var valid1 = _errs138 === errors;
+var valid1 = _errs173 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.layerLabel !== undefined){
-let data65 = data3.layerLabel;
-const _errs140 = errors;
-if(errors === _errs140){
-if(typeof data65 === "string"){
-if(func2(data65) > 60){
+let data81 = data3.layerLabel;
+const _errs175 = errors;
+if(errors === _errs175){
+if(typeof data81 === "string"){
+if(func2(data81) > 60){
 validate20.errors = [{instancePath:instancePath+"/properties/layerLabel",schemaPath:"#/properties/properties/properties/layerLabel/maxLength",keyword:"maxLength",params:{limit: 60},message:"must NOT have more than 60 characters"}];
 return false;
 }
@@ -1773,115 +2190,115 @@ validate20.errors = [{instancePath:instancePath+"/properties/layerLabel",schemaP
 return false;
 }
 }
-var valid1 = _errs140 === errors;
+var valid1 = _errs175 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.provinceBorders !== undefined){
-let data66 = data3.provinceBorders;
-const _errs142 = errors;
-if(errors === _errs142){
-if(Array.isArray(data66)){
-if(data66.length > 500){
+let data82 = data3.provinceBorders;
+const _errs177 = errors;
+if(errors === _errs177){
+if(Array.isArray(data82)){
+if(data82.length > 500){
 validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders",schemaPath:"#/properties/properties/properties/provinceBorders/maxItems",keyword:"maxItems",params:{limit: 500},message:"must NOT have more than 500 items"}];
 return false;
 }
 else {
-var valid23 = true;
-const len11 = data66.length;
-for(let i13=0; i13<len11; i13++){
-let data67 = data66[i13];
-const _errs144 = errors;
-if(errors === _errs144){
-if(Array.isArray(data67)){
-if(data67.length > 5000){
-validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i13,schemaPath:"#/properties/properties/properties/provinceBorders/items/maxItems",keyword:"maxItems",params:{limit: 5000},message:"must NOT have more than 5000 items"}];
+var valid31 = true;
+const len15 = data82.length;
+for(let i18=0; i18<len15; i18++){
+let data83 = data82[i18];
+const _errs179 = errors;
+if(errors === _errs179){
+if(Array.isArray(data83)){
+if(data83.length > 5000){
+validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i18,schemaPath:"#/properties/properties/properties/provinceBorders/items/maxItems",keyword:"maxItems",params:{limit: 5000},message:"must NOT have more than 5000 items"}];
 return false;
 }
 else {
-if(data67.length < 2){
-validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i13,schemaPath:"#/properties/properties/properties/provinceBorders/items/minItems",keyword:"minItems",params:{limit: 2},message:"must NOT have fewer than 2 items"}];
+if(data83.length < 2){
+validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i18,schemaPath:"#/properties/properties/properties/provinceBorders/items/minItems",keyword:"minItems",params:{limit: 2},message:"must NOT have fewer than 2 items"}];
 return false;
 }
 else {
-var valid24 = true;
-const len12 = data67.length;
-for(let i14=0; i14<len12; i14++){
-let data68 = data67[i14];
-const _errs146 = errors;
-if(errors === _errs146){
-if(Array.isArray(data68)){
-if(data68.length > 2){
-validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i13+"/" + i14,schemaPath:"#/properties/properties/properties/provinceBorders/items/items/maxItems",keyword:"maxItems",params:{limit: 2},message:"must NOT have more than 2 items"}];
+var valid32 = true;
+const len16 = data83.length;
+for(let i19=0; i19<len16; i19++){
+let data84 = data83[i19];
+const _errs181 = errors;
+if(errors === _errs181){
+if(Array.isArray(data84)){
+if(data84.length > 2){
+validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i18+"/" + i19,schemaPath:"#/properties/properties/properties/provinceBorders/items/items/maxItems",keyword:"maxItems",params:{limit: 2},message:"must NOT have more than 2 items"}];
 return false;
 }
 else {
-if(data68.length < 2){
-validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i13+"/" + i14,schemaPath:"#/properties/properties/properties/provinceBorders/items/items/minItems",keyword:"minItems",params:{limit: 2},message:"must NOT have fewer than 2 items"}];
+if(data84.length < 2){
+validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i18+"/" + i19,schemaPath:"#/properties/properties/properties/provinceBorders/items/items/minItems",keyword:"minItems",params:{limit: 2},message:"must NOT have fewer than 2 items"}];
 return false;
 }
 else {
-const len13 = data68.length;
-if(len13 > 0){
-let data69 = data68[0];
-const _errs148 = errors;
-if(errors === _errs148){
-if((typeof data69 == "number") && (isFinite(data69))){
-if(data69 > 180 || isNaN(data69)){
-validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i13+"/" + i14+"/0",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/0/maximum",keyword:"maximum",params:{comparison: "<=", limit: 180},message:"must be <= 180"}];
+const len17 = data84.length;
+if(len17 > 0){
+let data85 = data84[0];
+const _errs183 = errors;
+if(errors === _errs183){
+if((typeof data85 == "number") && (isFinite(data85))){
+if(data85 > 180 || isNaN(data85)){
+validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i18+"/" + i19+"/0",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/0/maximum",keyword:"maximum",params:{comparison: "<=", limit: 180},message:"must be <= 180"}];
 return false;
 }
 else {
-if(data69 < -180 || isNaN(data69)){
-validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i13+"/" + i14+"/0",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/0/minimum",keyword:"minimum",params:{comparison: ">=", limit: -180},message:"must be >= -180"}];
-return false;
-}
-}
-}
-else {
-validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i13+"/" + i14+"/0",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/0/type",keyword:"type",params:{type: "number"},message:"must be number"}];
-return false;
-}
-}
-var valid25 = _errs148 === errors;
-}
-if(valid25){
-if(len13 > 1){
-let data70 = data68[1];
-const _errs150 = errors;
-if(errors === _errs150){
-if((typeof data70 == "number") && (isFinite(data70))){
-if(data70 > 90 || isNaN(data70)){
-validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i13+"/" + i14+"/1",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/1/maximum",keyword:"maximum",params:{comparison: "<=", limit: 90},message:"must be <= 90"}];
-return false;
-}
-else {
-if(data70 < -90 || isNaN(data70)){
-validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i13+"/" + i14+"/1",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/1/minimum",keyword:"minimum",params:{comparison: ">=", limit: -90},message:"must be >= -90"}];
+if(data85 < -180 || isNaN(data85)){
+validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i18+"/" + i19+"/0",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/0/minimum",keyword:"minimum",params:{comparison: ">=", limit: -180},message:"must be >= -180"}];
 return false;
 }
 }
 }
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i13+"/" + i14+"/1",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/1/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i18+"/" + i19+"/0",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/0/type",keyword:"type",params:{type: "number"},message:"must be number"}];
 return false;
 }
 }
-var valid25 = _errs150 === errors;
+var valid33 = _errs183 === errors;
+}
+if(valid33){
+if(len17 > 1){
+let data86 = data84[1];
+const _errs185 = errors;
+if(errors === _errs185){
+if((typeof data86 == "number") && (isFinite(data86))){
+if(data86 > 90 || isNaN(data86)){
+validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i18+"/" + i19+"/1",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/1/maximum",keyword:"maximum",params:{comparison: "<=", limit: 90},message:"must be <= 90"}];
+return false;
+}
+else {
+if(data86 < -90 || isNaN(data86)){
+validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i18+"/" + i19+"/1",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/1/minimum",keyword:"minimum",params:{comparison: ">=", limit: -90},message:"must be >= -90"}];
+return false;
+}
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i18+"/" + i19+"/1",schemaPath:"#/properties/properties/properties/provinceBorders/items/items/prefixItems/1/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid33 = _errs185 === errors;
 }
 }
 }
 }
 }
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i13+"/" + i14,schemaPath:"#/properties/properties/properties/provinceBorders/items/items/type",keyword:"type",params:{type: "array"},message:"must be array"}];
+validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i18+"/" + i19,schemaPath:"#/properties/properties/properties/provinceBorders/items/items/type",keyword:"type",params:{type: "array"},message:"must be array"}];
 return false;
 }
 }
-var valid24 = _errs146 === errors;
-if(!valid24){
+var valid32 = _errs181 === errors;
+if(!valid32){
 break;
 }
 }
@@ -1889,12 +2306,12 @@ break;
 }
 }
 else {
-validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i13,schemaPath:"#/properties/properties/properties/provinceBorders/items/type",keyword:"type",params:{type: "array"},message:"must be array"}];
+validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders/" + i18,schemaPath:"#/properties/properties/properties/provinceBorders/items/type",keyword:"type",params:{type: "array"},message:"must be array"}];
 return false;
 }
 }
-var valid23 = _errs144 === errors;
-if(!valid23){
+var valid31 = _errs179 === errors;
+if(!valid31){
 break;
 }
 }
@@ -1905,23 +2322,23 @@ validate20.errors = [{instancePath:instancePath+"/properties/provinceBorders",sc
 return false;
 }
 }
-var valid1 = _errs142 === errors;
+var valid1 = _errs177 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.updated !== undefined){
-let data71 = data3.updated;
-const _errs152 = errors;
-if(errors === _errs152){
-if(typeof data71 === "string"){
-if(func2(data71) > 40){
+let data87 = data3.updated;
+const _errs187 = errors;
+if(errors === _errs187){
+if(typeof data87 === "string"){
+if(func2(data87) > 40){
 validate20.errors = [{instancePath:instancePath+"/properties/updated",schemaPath:"#/properties/properties/properties/updated/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
 return false;
 }
 else {
-if(!pattern14.test(data71)){
+if(!pattern16.test(data87)){
 validate20.errors = [{instancePath:instancePath+"/properties/updated",schemaPath:"#/properties/properties/properties/updated/pattern",keyword:"pattern",params:{pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},message:"must match pattern \""+"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"+"\""}];
 return false;
 }
@@ -1932,23 +2349,23 @@ validate20.errors = [{instancePath:instancePath+"/properties/updated",schemaPath
 return false;
 }
 }
-var valid1 = _errs152 === errors;
+var valid1 = _errs187 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.created !== undefined){
-let data72 = data3.created;
-const _errs154 = errors;
-if(errors === _errs154){
-if(typeof data72 === "string"){
-if(func2(data72) > 40){
+let data88 = data3.created;
+const _errs189 = errors;
+if(errors === _errs189){
+if(typeof data88 === "string"){
+if(func2(data88) > 40){
 validate20.errors = [{instancePath:instancePath+"/properties/created",schemaPath:"#/properties/properties/properties/created/maxLength",keyword:"maxLength",params:{limit: 40},message:"must NOT have more than 40 characters"}];
 return false;
 }
 else {
-if(!pattern14.test(data72)){
+if(!pattern16.test(data88)){
 validate20.errors = [{instancePath:instancePath+"/properties/created",schemaPath:"#/properties/properties/properties/created/pattern",keyword:"pattern",params:{pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},message:"must match pattern \""+"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"+"\""}];
 return false;
 }
@@ -1959,60 +2376,60 @@ validate20.errors = [{instancePath:instancePath+"/properties/created",schemaPath
 return false;
 }
 }
-var valid1 = _errs154 === errors;
+var valid1 = _errs189 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.createdBy !== undefined){
-let data73 = data3.createdBy;
-const _errs156 = errors;
-const _errs157 = errors;
-if(errors === _errs157){
-if(data73 && typeof data73 == "object" && !Array.isArray(data73)){
-let missing5;
-if(((data73.id === undefined) && (missing5 = "id")) || ((data73.login === undefined) && (missing5 = "login"))){
-validate20.errors = [{instancePath:instancePath+"/properties/createdBy",schemaPath:"#/$defs/account/required",keyword:"required",params:{missingProperty: missing5},message:"must have required property '"+missing5+"'"}];
+let data89 = data3.createdBy;
+const _errs191 = errors;
+const _errs192 = errors;
+if(errors === _errs192){
+if(data89 && typeof data89 == "object" && !Array.isArray(data89)){
+let missing8;
+if(((data89.id === undefined) && (missing8 = "id")) || ((data89.login === undefined) && (missing8 = "login"))){
+validate20.errors = [{instancePath:instancePath+"/properties/createdBy",schemaPath:"#/$defs/account/required",keyword:"required",params:{missingProperty: missing8},message:"must have required property '"+missing8+"'"}];
 return false;
 }
 else {
-const _errs159 = errors;
-for(const key10 in data73){
-if(!((key10 === "id") || (key10 === "login"))){
-validate20.errors = [{instancePath:instancePath+"/properties/createdBy",schemaPath:"#/$defs/account/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key10},message:"must NOT have additional properties"}];
+const _errs194 = errors;
+for(const key13 in data89){
+if(!((key13 === "id") || (key13 === "login"))){
+validate20.errors = [{instancePath:instancePath+"/properties/createdBy",schemaPath:"#/$defs/account/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key13},message:"must NOT have additional properties"}];
 return false;
 break;
 }
 }
-if(_errs159 === errors){
-if(data73.id !== undefined){
-let data74 = data73.id;
-const _errs160 = errors;
-if(!(((typeof data74 == "number") && (!(data74 % 1) && !isNaN(data74))) && (isFinite(data74)))){
+if(_errs194 === errors){
+if(data89.id !== undefined){
+let data90 = data89.id;
+const _errs195 = errors;
+if(!(((typeof data90 == "number") && (!(data90 % 1) && !isNaN(data90))) && (isFinite(data90)))){
 validate20.errors = [{instancePath:instancePath+"/properties/createdBy/id",schemaPath:"#/$defs/account/properties/id/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
 return false;
 }
-if(errors === _errs160){
-if((typeof data74 == "number") && (isFinite(data74))){
-if(data74 < 1 || isNaN(data74)){
+if(errors === _errs195){
+if((typeof data90 == "number") && (isFinite(data90))){
+if(data90 < 1 || isNaN(data90)){
 validate20.errors = [{instancePath:instancePath+"/properties/createdBy/id",schemaPath:"#/$defs/account/properties/id/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
 return false;
 }
 }
 }
-var valid27 = _errs160 === errors;
+var valid35 = _errs195 === errors;
 }
 else {
-var valid27 = true;
+var valid35 = true;
 }
-if(valid27){
-if(data73.login !== undefined){
-let data75 = data73.login;
-const _errs162 = errors;
-if(errors === _errs162){
-if(typeof data75 === "string"){
-if(!pattern16.test(data75)){
+if(valid35){
+if(data89.login !== undefined){
+let data91 = data89.login;
+const _errs197 = errors;
+if(errors === _errs197){
+if(typeof data91 === "string"){
+if(!pattern18.test(data91)){
 validate20.errors = [{instancePath:instancePath+"/properties/createdBy/login",schemaPath:"#/$defs/account/properties/login/pattern",keyword:"pattern",params:{pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"},message:"must match pattern \""+"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"+"\""}];
 return false;
 }
@@ -2022,10 +2439,10 @@ validate20.errors = [{instancePath:instancePath+"/properties/createdBy/login",sc
 return false;
 }
 }
-var valid27 = _errs162 === errors;
+var valid35 = _errs197 === errors;
 }
 else {
-var valid27 = true;
+var valid35 = true;
 }
 }
 }
@@ -2036,60 +2453,60 @@ validate20.errors = [{instancePath:instancePath+"/properties/createdBy",schemaPa
 return false;
 }
 }
-var valid1 = _errs156 === errors;
+var valid1 = _errs191 === errors;
 }
 else {
 var valid1 = true;
 }
 if(valid1){
 if(data3.updatedBy !== undefined){
-let data76 = data3.updatedBy;
-const _errs164 = errors;
-const _errs165 = errors;
-if(errors === _errs165){
-if(data76 && typeof data76 == "object" && !Array.isArray(data76)){
-let missing6;
-if(((data76.id === undefined) && (missing6 = "id")) || ((data76.login === undefined) && (missing6 = "login"))){
-validate20.errors = [{instancePath:instancePath+"/properties/updatedBy",schemaPath:"#/$defs/account/required",keyword:"required",params:{missingProperty: missing6},message:"must have required property '"+missing6+"'"}];
+let data92 = data3.updatedBy;
+const _errs199 = errors;
+const _errs200 = errors;
+if(errors === _errs200){
+if(data92 && typeof data92 == "object" && !Array.isArray(data92)){
+let missing9;
+if(((data92.id === undefined) && (missing9 = "id")) || ((data92.login === undefined) && (missing9 = "login"))){
+validate20.errors = [{instancePath:instancePath+"/properties/updatedBy",schemaPath:"#/$defs/account/required",keyword:"required",params:{missingProperty: missing9},message:"must have required property '"+missing9+"'"}];
 return false;
 }
 else {
-const _errs167 = errors;
-for(const key11 in data76){
-if(!((key11 === "id") || (key11 === "login"))){
-validate20.errors = [{instancePath:instancePath+"/properties/updatedBy",schemaPath:"#/$defs/account/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key11},message:"must NOT have additional properties"}];
+const _errs202 = errors;
+for(const key14 in data92){
+if(!((key14 === "id") || (key14 === "login"))){
+validate20.errors = [{instancePath:instancePath+"/properties/updatedBy",schemaPath:"#/$defs/account/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key14},message:"must NOT have additional properties"}];
 return false;
 break;
 }
 }
-if(_errs167 === errors){
-if(data76.id !== undefined){
-let data77 = data76.id;
-const _errs168 = errors;
-if(!(((typeof data77 == "number") && (!(data77 % 1) && !isNaN(data77))) && (isFinite(data77)))){
+if(_errs202 === errors){
+if(data92.id !== undefined){
+let data93 = data92.id;
+const _errs203 = errors;
+if(!(((typeof data93 == "number") && (!(data93 % 1) && !isNaN(data93))) && (isFinite(data93)))){
 validate20.errors = [{instancePath:instancePath+"/properties/updatedBy/id",schemaPath:"#/$defs/account/properties/id/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
 return false;
 }
-if(errors === _errs168){
-if((typeof data77 == "number") && (isFinite(data77))){
-if(data77 < 1 || isNaN(data77)){
+if(errors === _errs203){
+if((typeof data93 == "number") && (isFinite(data93))){
+if(data93 < 1 || isNaN(data93)){
 validate20.errors = [{instancePath:instancePath+"/properties/updatedBy/id",schemaPath:"#/$defs/account/properties/id/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
 return false;
 }
 }
 }
-var valid29 = _errs168 === errors;
+var valid37 = _errs203 === errors;
 }
 else {
-var valid29 = true;
+var valid37 = true;
 }
-if(valid29){
-if(data76.login !== undefined){
-let data78 = data76.login;
-const _errs170 = errors;
-if(errors === _errs170){
-if(typeof data78 === "string"){
-if(!pattern16.test(data78)){
+if(valid37){
+if(data92.login !== undefined){
+let data94 = data92.login;
+const _errs205 = errors;
+if(errors === _errs205){
+if(typeof data94 === "string"){
+if(!pattern18.test(data94)){
 validate20.errors = [{instancePath:instancePath+"/properties/updatedBy/login",schemaPath:"#/$defs/account/properties/login/pattern",keyword:"pattern",params:{pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"},message:"must match pattern \""+"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"+"\""}];
 return false;
 }
@@ -2099,10 +2516,10 @@ validate20.errors = [{instancePath:instancePath+"/properties/updatedBy/login",sc
 return false;
 }
 }
-var valid29 = _errs170 === errors;
+var valid37 = _errs205 === errors;
 }
 else {
-var valid29 = true;
+var valid37 = true;
 }
 }
 }
@@ -2113,10 +2530,12 @@ validate20.errors = [{instancePath:instancePath+"/properties/updatedBy",schemaPa
 return false;
 }
 }
-var valid1 = _errs164 === errors;
+var valid1 = _errs199 === errors;
 }
 else {
 var valid1 = true;
+}
+}
 }
 }
 }
@@ -2163,14 +2582,14 @@ var valid0 = true;
 }
 if(valid0){
 if(data.geometry !== undefined){
-let data79 = data.geometry;
-const _errs172 = errors;
-const _errs174 = errors;
-let valid30 = true;
-const _errs175 = errors;
-if(data79 && typeof data79 == "object" && !Array.isArray(data79)){
-if(data79.type !== undefined){
-if("Polygon" !== data79.type){
+let data95 = data.geometry;
+const _errs207 = errors;
+const _errs209 = errors;
+let valid38 = true;
+const _errs210 = errors;
+if(data95 && typeof data95 == "object" && !Array.isArray(data95)){
+if(data95.type !== undefined){
+if("Polygon" !== data95.type){
 const err2 = {};
 if(vErrors === null){
 vErrors = [err2];
@@ -2182,11 +2601,11 @@ errors++;
 }
 }
 }
-var _valid0 = _errs175 === errors;
-errors = _errs174;
+var _valid0 = _errs210 === errors;
+errors = _errs209;
 if(vErrors !== null){
-if(_errs174){
-vErrors.length = _errs174;
+if(_errs209){
+vErrors.length = _errs209;
 }
 else {
 vErrors = null;
@@ -2194,18 +2613,18 @@ vErrors = null;
 }
 let ifClause0;
 if(_valid0){
-const _errs177 = errors;
-if(data79 && typeof data79 == "object" && !Array.isArray(data79)){
-if(data79.coordinates !== undefined){
-if(!(validate21(data79.coordinates, {instancePath:instancePath+"/geometry/coordinates",parentData:data79,parentDataProperty:"coordinates",rootData,dynamicAnchors}))){
+const _errs212 = errors;
+if(data95 && typeof data95 == "object" && !Array.isArray(data95)){
+if(data95.coordinates !== undefined){
+if(!(validate21(data95.coordinates, {instancePath:instancePath+"/geometry/coordinates",parentData:data95,parentDataProperty:"coordinates",rootData,dynamicAnchors}))){
 vErrors = vErrors === null ? validate21.errors : vErrors.concat(validate21.errors);
 errors = vErrors.length;
 }
 }
 }
-var _valid0 = _errs177 === errors;
-valid30 = _valid0;
-if(valid30){
+var _valid0 = _errs212 === errors;
+valid38 = _valid0;
+if(valid38){
 var props0 = {};
 props0.coordinates = true;
 props0.type = true;
@@ -2213,28 +2632,28 @@ props0.type = true;
 ifClause0 = "then";
 }
 else {
-const _errs179 = errors;
-if(data79 && typeof data79 == "object" && !Array.isArray(data79)){
-if(data79.coordinates !== undefined){
-let data82 = data79.coordinates;
-const _errs180 = errors;
-if(errors === _errs180){
-if(Array.isArray(data82)){
-if(data82.length < 1){
+const _errs214 = errors;
+if(data95 && typeof data95 == "object" && !Array.isArray(data95)){
+if(data95.coordinates !== undefined){
+let data98 = data95.coordinates;
+const _errs215 = errors;
+if(errors === _errs215){
+if(Array.isArray(data98)){
+if(data98.length < 1){
 validate20.errors = [{instancePath:instancePath+"/geometry/coordinates",schemaPath:"#/properties/geometry/else/properties/coordinates/minItems",keyword:"minItems",params:{limit: 1},message:"must NOT have fewer than 1 items"}];
 return false;
 }
 else {
-var valid34 = true;
-const len14 = data82.length;
-for(let i15=0; i15<len14; i15++){
-const _errs182 = errors;
-if(!(validate21(data82[i15], {instancePath:instancePath+"/geometry/coordinates/" + i15,parentData:data82,parentDataProperty:i15,rootData,dynamicAnchors}))){
+var valid42 = true;
+const len18 = data98.length;
+for(let i20=0; i20<len18; i20++){
+const _errs217 = errors;
+if(!(validate21(data98[i20], {instancePath:instancePath+"/geometry/coordinates/" + i20,parentData:data98,parentDataProperty:i20,rootData,dynamicAnchors}))){
 vErrors = vErrors === null ? validate21.errors : vErrors.concat(validate21.errors);
 errors = vErrors.length;
 }
-var valid34 = _errs182 === errors;
-if(!valid34){
+var valid42 = _errs217 === errors;
+if(!valid42){
 break;
 }
 }
@@ -2247,9 +2666,9 @@ return false;
 }
 }
 }
-var _valid0 = _errs179 === errors;
-valid30 = _valid0;
-if(valid30){
+var _valid0 = _errs214 === errors;
+valid38 = _valid0;
+if(valid38){
 if(props0 !== true){
 props0 = props0 || {};
 props0.coordinates = true;
@@ -2257,7 +2676,7 @@ props0.coordinates = true;
 }
 ifClause0 = "else";
 }
-if(!valid30){
+if(!valid38){
 const err3 = {instancePath:instancePath+"/geometry",schemaPath:"#/properties/geometry/if",keyword:"if",params:{failingKeyword: ifClause0},message:"must match \""+ifClause0+"\" schema"};
 if(vErrors === null){
 vErrors = [err3];
@@ -2269,46 +2688,46 @@ errors++;
 validate20.errors = vErrors;
 return false;
 }
-if(errors === _errs172){
-if(data79 && typeof data79 == "object" && !Array.isArray(data79)){
-let missing7;
-if(((data79.type === undefined) && (missing7 = "type")) || ((data79.coordinates === undefined) && (missing7 = "coordinates"))){
-validate20.errors = [{instancePath:instancePath+"/geometry",schemaPath:"#/properties/geometry/required",keyword:"required",params:{missingProperty: missing7},message:"must have required property '"+missing7+"'"}];
+if(errors === _errs207){
+if(data95 && typeof data95 == "object" && !Array.isArray(data95)){
+let missing10;
+if(((data95.type === undefined) && (missing10 = "type")) || ((data95.coordinates === undefined) && (missing10 = "coordinates"))){
+validate20.errors = [{instancePath:instancePath+"/geometry",schemaPath:"#/properties/geometry/required",keyword:"required",params:{missingProperty: missing10},message:"must have required property '"+missing10+"'"}];
 return false;
 }
 else {
-const _errs183 = errors;
-for(const key12 in data79){
-if(!((key12 === "type") || (key12 === "coordinates"))){
-validate20.errors = [{instancePath:instancePath+"/geometry",schemaPath:"#/properties/geometry/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key12},message:"must NOT have additional properties"}];
+const _errs218 = errors;
+for(const key15 in data95){
+if(!((key15 === "type") || (key15 === "coordinates"))){
+validate20.errors = [{instancePath:instancePath+"/geometry",schemaPath:"#/properties/geometry/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key15},message:"must NOT have additional properties"}];
 return false;
 break;
 }
 }
-if(_errs183 === errors){
-if(data79.type !== undefined){
-let data84 = data79.type;
-const _errs184 = errors;
-if(!((data84 === "Polygon") || (data84 === "MultiPolygon"))){
+if(_errs218 === errors){
+if(data95.type !== undefined){
+let data100 = data95.type;
+const _errs219 = errors;
+if(!((data100 === "Polygon") || (data100 === "MultiPolygon"))){
 validate20.errors = [{instancePath:instancePath+"/geometry/type",schemaPath:"#/properties/geometry/properties/type/enum",keyword:"enum",params:{allowedValues: schema31.properties.geometry.properties.type.enum},message:"must be equal to one of the allowed values"}];
 return false;
 }
-var valid35 = _errs184 === errors;
+var valid43 = _errs219 === errors;
 }
 else {
-var valid35 = true;
+var valid43 = true;
 }
-if(valid35){
-if(data79.coordinates !== undefined){
-const _errs185 = errors;
-if(!(Array.isArray(data79.coordinates))){
+if(valid43){
+if(data95.coordinates !== undefined){
+const _errs220 = errors;
+if(!(Array.isArray(data95.coordinates))){
 validate20.errors = [{instancePath:instancePath+"/geometry/coordinates",schemaPath:"#/properties/geometry/properties/coordinates/type",keyword:"type",params:{type: "array"},message:"must be array"}];
 return false;
 }
-var valid35 = _errs185 === errors;
+var valid43 = _errs220 === errors;
 }
 else {
-var valid35 = true;
+var valid43 = true;
 }
 }
 }
@@ -2319,7 +2738,7 @@ validate20.errors = [{instancePath:instancePath+"/geometry",schemaPath:"#/proper
 return false;
 }
 }
-var valid0 = _errs172 === errors;
+var valid0 = _errs207 === errors;
 }
 else {
 var valid0 = true;
@@ -2443,7 +2862,7 @@ let data4 = data2.login;
 const _errs11 = errors;
 if(errors === _errs11){
 if(typeof data4 === "string"){
-if(!pattern16.test(data4)){
+if(!pattern18.test(data4)){
 validate26.errors = [{instancePath:instancePath+"/users/" + i0+"/login",schemaPath:"#/properties/users/items/properties/login/pattern",keyword:"pattern",params:{pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"},message:"must match pattern \""+"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"+"\""}];
 return false;
 }
@@ -2516,7 +2935,7 @@ validate26.errors = [{instancePath:instancePath+"/users/" + i0+"/added",schemaPa
 return false;
 }
 else {
-if(!pattern14.test(data7)){
+if(!pattern16.test(data7)){
 validate26.errors = [{instancePath:instancePath+"/users/" + i0+"/added",schemaPath:"#/properties/users/items/properties/added/pattern",keyword:"pattern",params:{pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},message:"must match pattern \""+"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"+"\""}];
 return false;
 }
@@ -2826,7 +3245,7 @@ validate27.errors = [{instancePath:instancePath+"/categories/" + i0+"/created",s
 return false;
 }
 else {
-if(!pattern14.test(data9)){
+if(!pattern16.test(data9)){
 validate27.errors = [{instancePath:instancePath+"/categories/" + i0+"/created",schemaPath:"#/properties/categories/items/properties/created/pattern",keyword:"pattern",params:{pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},message:"must match pattern \""+"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"+"\""}];
 return false;
 }
@@ -3020,8 +3439,8 @@ validate27.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 export const validateSlots = validate28;
 const schema39 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/slots.schema.json","title":"Globe embed slots","description":"Which map each embed (slot) shows, plus its view defaults.","type":"object","required":["slots"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"slots":{"type":"object","propertyNames":{"pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"additionalProperties":{"$ref":"#/$defs/slot"}}},"$defs":{"slot":{"type":"object","required":["map"],"additionalProperties":false,"properties":{"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id (file stem in content/maps/)."},"title":{"type":"string","maxLength":120},"view":{"enum":["globe","flat"],"description":"Which view the embed opens in (default globe). ?view= overrides it."},"grid":{"type":"boolean"},"rotate":{"type":"boolean"},"legend":{"type":"boolean"},"controls":{"type":"boolean"},"bg":{"type":"string","pattern":"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},"lat":{"type":"number","minimum":-90,"maximum":90},"lon":{"type":"number","minimum":-180,"maximum":180},"zoom":{"type":"number","minimum":0.4,"maximum":2.2},"north":{"type":"number","minimum":0,"maximum":49,"description":"Percent of the globe's height left unmapped at the north pole."},"south":{"type":"number","minimum":0,"maximum":49,"description":"Percent left unmapped at the south pole."},"pole":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$","description":"Fill colour for the padded polar areas."},"shift":{"type":"number","minimum":-180,"maximum":180,"description":"Prime meridian: moves the map east (+) or west (-) by this many degrees so its prime meridian lines up with the grid's."},"radius":{"type":"number","minimum":100,"maximum":1000000,"description":"The world's radius in km. When set, every embed of the slot gets a ruler (distance and area in real units)."},"travel":{"type":"array","maxItems":6,"description":"Travel speeds for the ruler (needs a radius): readers pick one and see how long the measured distance takes.","items":{"type":"object","additionalProperties":false,"required":["label","kmPerDay"],"properties":{"label":{"type":"string","minLength":1,"maxLength":24},"kmPerDay":{"type":"number","minimum":0.1,"maximum":100000}}}}}}}};
 const schema40 = {"type":"object","required":["map"],"additionalProperties":false,"properties":{"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id (file stem in content/maps/)."},"title":{"type":"string","maxLength":120},"view":{"enum":["globe","flat"],"description":"Which view the embed opens in (default globe). ?view= overrides it."},"grid":{"type":"boolean"},"rotate":{"type":"boolean"},"legend":{"type":"boolean"},"controls":{"type":"boolean"},"bg":{"type":"string","pattern":"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},"lat":{"type":"number","minimum":-90,"maximum":90},"lon":{"type":"number","minimum":-180,"maximum":180},"zoom":{"type":"number","minimum":0.4,"maximum":2.2},"north":{"type":"number","minimum":0,"maximum":49,"description":"Percent of the globe's height left unmapped at the north pole."},"south":{"type":"number","minimum":0,"maximum":49,"description":"Percent left unmapped at the south pole."},"pole":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$","description":"Fill colour for the padded polar areas."},"shift":{"type":"number","minimum":-180,"maximum":180,"description":"Prime meridian: moves the map east (+) or west (-) by this many degrees so its prime meridian lines up with the grid's."},"radius":{"type":"number","minimum":100,"maximum":1000000,"description":"The world's radius in km. When set, every embed of the slot gets a ruler (distance and area in real units)."},"travel":{"type":"array","maxItems":6,"description":"Travel speeds for the ruler (needs a radius): readers pick one and see how long the measured distance takes.","items":{"type":"object","additionalProperties":false,"required":["label","kmPerDay"],"properties":{"label":{"type":"string","minLength":1,"maxLength":24},"kmPerDay":{"type":"number","minimum":0.1,"maximum":100000}}}}}};
-const pattern27 = new RegExp("^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$", "u");
-const pattern28 = new RegExp("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$", "u");
+const pattern29 = new RegExp("^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$", "u");
+const pattern30 = new RegExp("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$", "u");
 
 function validate28(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="https://flanz1.github.io/world-globe-embed/schema/slots.schema.json" */;
@@ -3227,7 +3646,7 @@ let data10 = data2.bg;
 const _errs25 = errors;
 if(errors === _errs25){
 if(typeof data10 === "string"){
-if(!pattern27.test(data10)){
+if(!pattern29.test(data10)){
 validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/bg",schemaPath:"#/$defs/slot/properties/bg/pattern",keyword:"pattern",params:{pattern: "^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"},message:"must match pattern \""+"^(transparent|#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))$"+"\""}];
 return false;
 }
@@ -3383,7 +3802,7 @@ let data16 = data2.pole;
 const _errs37 = errors;
 if(errors === _errs37){
 if(typeof data16 === "string"){
-if(!pattern28.test(data16)){
+if(!pattern30.test(data16)){
 validate28.errors = [{instancePath:instancePath+"/slots/" + key2.replace(/~/g, "~0").replace(/\//g, "~1")+"/pole",schemaPath:"#/$defs/slot/properties/pole/pattern",keyword:"pattern",params:{pattern: "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"},message:"must match pattern \""+"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"+"\""}];
 return false;
 }
@@ -3623,11 +4042,11 @@ export const validateMap = validate29;
 const schema41 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/map.schema.json","title":"Processed map metadata","description":"Written by process-maps.yml. Edit only 'name' by hand.","type":"object","required":["id","name","uploadedBy","date","aspect","width","height","hash","sizes","lqip"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$"},"name":{"type":"string","minLength":1,"maxLength":120},"uploadedBy":{"type":"string"},"date":{"type":"string","format":"date-time"},"aspect":{"type":"number","minimum":1,"maximum":4},"width":{"type":"integer","minimum":1024},"height":{"type":"integer","minimum":256},"hash":{"type":"string","pattern":"^[0-9a-f]{12}$"},"sizes":{"type":"object","required":["1024"],"additionalProperties":false,"properties":{"1024":{"$ref":"#/$defs/path"},"2048":{"$ref":"#/$defs/path"},"4096":{"$ref":"#/$defs/path"},"8192":{"$ref":"#/$defs/path"}}},"tiles":{"type":"object","additionalProperties":false,"properties":{"16384":{"$ref":"#/$defs/tiles"},"32768":{"$ref":"#/$defs/tiles"}}},"coast":{"type":"string","pattern":"^maps/[a-z0-9-]+/[0-9a-f]{12}-coast\\.bin$"},"lqip":{"type":"string","pattern":"^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$","maxLength":2800}},"$defs":{"path":{"type":"string","pattern":"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"},"tiles":{"type":"object","required":["w","h","size","cols","rows","url"],"additionalProperties":false,"properties":{"w":{"enum":[16384,32768]},"h":{"type":"integer","minimum":1},"size":{"const":2048},"cols":{"type":"integer","minimum":1,"maximum":16},"rows":{"type":"integer","minimum":1,"maximum":16},"url":{"type":"string","pattern":"^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"}}}}};
 const schema42 = {"type":"string","pattern":"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"};
 const schema46 = {"type":"object","required":["w","h","size","cols","rows","url"],"additionalProperties":false,"properties":{"w":{"enum":[16384,32768]},"h":{"type":"integer","minimum":1},"size":{"const":2048},"cols":{"type":"integer","minimum":1,"maximum":16},"rows":{"type":"integer","minimum":1,"maximum":16},"url":{"type":"string","pattern":"^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"}}};
-const pattern30 = new RegExp("^[0-9a-f]{12}$", "u");
-const pattern31 = new RegExp("^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$", "u");
-const pattern35 = new RegExp("^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$", "u");
-const pattern37 = new RegExp("^maps/[a-z0-9-]+/[0-9a-f]{12}-coast\\.bin$", "u");
-const pattern38 = new RegExp("^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$", "u");
+const pattern32 = new RegExp("^[0-9a-f]{12}$", "u");
+const pattern33 = new RegExp("^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$", "u");
+const pattern37 = new RegExp("^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$", "u");
+const pattern39 = new RegExp("^maps/[a-z0-9-]+/[0-9a-f]{12}-coast\\.bin$", "u");
+const pattern40 = new RegExp("^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$", "u");
 
 function validate29(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="https://flanz1.github.io/world-globe-embed/schema/map.schema.json" */;
@@ -3819,7 +4238,7 @@ let data8 = data.hash;
 const _errs18 = errors;
 if(errors === _errs18){
 if(typeof data8 === "string"){
-if(!pattern30.test(data8)){
+if(!pattern32.test(data8)){
 validate29.errors = [{instancePath:instancePath+"/hash",schemaPath:"#/properties/hash/pattern",keyword:"pattern",params:{pattern: "^[0-9a-f]{12}$"},message:"must match pattern \""+"^[0-9a-f]{12}$"+"\""}];
 return false;
 }
@@ -3861,7 +4280,7 @@ const _errs23 = errors;
 const _errs24 = errors;
 if(errors === _errs24){
 if(typeof data10 === "string"){
-if(!pattern31.test(data10)){
+if(!pattern33.test(data10)){
 validate29.errors = [{instancePath:instancePath+"/sizes/1024",schemaPath:"#/$defs/path/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"+"\""}];
 return false;
 }
@@ -3883,7 +4302,7 @@ const _errs26 = errors;
 const _errs27 = errors;
 if(errors === _errs27){
 if(typeof data11 === "string"){
-if(!pattern31.test(data11)){
+if(!pattern33.test(data11)){
 validate29.errors = [{instancePath:instancePath+"/sizes/2048",schemaPath:"#/$defs/path/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"+"\""}];
 return false;
 }
@@ -3905,7 +4324,7 @@ const _errs29 = errors;
 const _errs30 = errors;
 if(errors === _errs30){
 if(typeof data12 === "string"){
-if(!pattern31.test(data12)){
+if(!pattern33.test(data12)){
 validate29.errors = [{instancePath:instancePath+"/sizes/4096",schemaPath:"#/$defs/path/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"+"\""}];
 return false;
 }
@@ -3927,7 +4346,7 @@ const _errs32 = errors;
 const _errs33 = errors;
 if(errors === _errs33){
 if(typeof data13 === "string"){
-if(!pattern31.test(data13)){
+if(!pattern33.test(data13)){
 validate29.errors = [{instancePath:instancePath+"/sizes/8192",schemaPath:"#/$defs/path/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(1024|2048|4096|8192)\\.webp$"+"\""}];
 return false;
 }
@@ -4099,7 +4518,7 @@ let data21 = data15.url;
 const _errs50 = errors;
 if(errors === _errs50){
 if(typeof data21 === "string"){
-if(!pattern35.test(data21)){
+if(!pattern37.test(data21)){
 validate29.errors = [{instancePath:instancePath+"/tiles/16384/url",schemaPath:"#/$defs/tiles/properties/url/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"+"\""}];
 return false;
 }
@@ -4259,7 +4678,7 @@ let data28 = data22.url;
 const _errs64 = errors;
 if(errors === _errs64){
 if(typeof data28 === "string"){
-if(!pattern35.test(data28)){
+if(!pattern37.test(data28)){
 validate29.errors = [{instancePath:instancePath+"/tiles/32768/url",schemaPath:"#/$defs/tiles/properties/url/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-(16384|32768)$"+"\""}];
 return false;
 }
@@ -4311,7 +4730,7 @@ let data29 = data.coast;
 const _errs66 = errors;
 if(errors === _errs66){
 if(typeof data29 === "string"){
-if(!pattern37.test(data29)){
+if(!pattern39.test(data29)){
 validate29.errors = [{instancePath:instancePath+"/coast",schemaPath:"#/properties/coast/pattern",keyword:"pattern",params:{pattern: "^maps/[a-z0-9-]+/[0-9a-f]{12}-coast\\.bin$"},message:"must match pattern \""+"^maps/[a-z0-9-]+/[0-9a-f]{12}-coast\\.bin$"+"\""}];
 return false;
 }
@@ -4337,7 +4756,7 @@ validate29.errors = [{instancePath:instancePath+"/lqip",schemaPath:"#/properties
 return false;
 }
 else {
-if(!pattern38.test(data30)){
+if(!pattern40.test(data30)){
 validate29.errors = [{instancePath:instancePath+"/lqip",schemaPath:"#/properties/lqip/pattern",keyword:"pattern",params:{pattern: "^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$"},message:"must match pattern \""+"^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$"+"\""}];
 return false;
 }
@@ -4381,7 +4800,7 @@ validate29.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 export const validatePin = validate30;
 const schema48 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/pin.schema.json","title":"Map pin","description":"One place (a city, ruin, battle site…) marked on a map: a GeoJSON Point Feature (RFC 7946) stored as content/pins/<id>.json. COORDINATES ARE [lon, lat] IN THE MAP IMAGE'S OWN FRAME, exactly like regions (lon = x / width * 360 - 180, lat = 90 - y / height * 180), so a pin stays on the same spot of the land when the slot's pole padding or prime meridian shift change. The id is permanent (embeds can point at it). Embeds draw pins on top of regions when asked with ?pins=1 (all pins of the slot) or ?pins=holy-sites (only that pin map's pins).","type":"object","required":["type","id","properties","geometry"],"additionalProperties":false,"properties":{"$schema":{"type":"string"},"type":{"const":"Feature"},"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Permanent id; must match the file name."},"properties":{"type":"object","required":["slot","map","name","kind"],"additionalProperties":false,"properties":{"slot":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Slot (in content/slots.json) whose embeds show this pin."},"map":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Map id the pin was placed on."},"name":{"type":"string","minLength":1,"maxLength":80,"description":"Display name (plain text)."},"kind":{"enum":["city","town","fortress","port","temple","ruin","battle","landmark","mountain","other"],"description":"What sort of place it is; decides the icon."},"pinMap":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,63}$","description":"Optional id of the pin map (content/pinmaps.json) this pin belongs to. Embeds can show one pin map with ?pins=<id>."},"color":{"type":"string","pattern":"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$","description":"Optional marker colour, #rgb or #rrggbb. Leave it out for the kind's own colour."},"description":{"type":"string","maxLength":300,"description":"Optional short plain-text description, shown when the marker is opened."},"link":{"type":"string","maxLength":400,"pattern":"^https://[^\\s\"'<>]+$","description":"Optional https link, normally the place's note in the Obsidian vault. Opens in a new tab."},"createdBy":{"$ref":"#/$defs/account","description":"Who placed the pin: they (and anyone allowed to edit others' regions) can change it."},"created":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},"updatedBy":{"$ref":"#/$defs/account","description":"Who saved this version."},"updated":{"type":"string","maxLength":40,"pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"}}},"geometry":{"type":"object","required":["type","coordinates"],"additionalProperties":false,"properties":{"type":{"const":"Point"},"coordinates":{"type":"array","minItems":2,"maxItems":2,"prefixItems":[{"type":"number","minimum":-180,"maximum":180},{"type":"number","minimum":-90,"maximum":90}],"description":"[lon, lat] in the map image's frame."}}}},"$defs":{"account":{"type":"object","required":["id","login"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1,"description":"GitHub account id (permanent, survives a rename)."},"login":{"type":"string","pattern":"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$","description":"GitHub username when saved."}}}}};
 const schema49 = {"type":"object","required":["id","login"],"additionalProperties":false,"properties":{"id":{"type":"integer","minimum":1,"description":"GitHub account id (permanent, survives a rename)."},"login":{"type":"string","pattern":"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$","description":"GitHub username when saved."}}};
-const pattern44 = new RegExp("^https://[^\\s\"'<>]+$", "u");
+const pattern46 = new RegExp("^https://[^\\s\"'<>]+$", "u");
 
 function validate30(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="https://flanz1.github.io/world-globe-embed/schema/pin.schema.json" */;
@@ -4631,7 +5050,7 @@ validate30.errors = [{instancePath:instancePath+"/properties/link",schemaPath:"#
 return false;
 }
 else {
-if(!pattern44.test(data11)){
+if(!pattern46.test(data11)){
 validate30.errors = [{instancePath:instancePath+"/properties/link",schemaPath:"#/properties/properties/properties/link/pattern",keyword:"pattern",params:{pattern: "^https://[^\\s\"'<>]+$"},message:"must match pattern \""+"^https://[^\\s\"'<>]+$"+"\""}];
 return false;
 }
@@ -4695,7 +5114,7 @@ let data14 = data12.login;
 const _errs31 = errors;
 if(errors === _errs31){
 if(typeof data14 === "string"){
-if(!pattern16.test(data14)){
+if(!pattern18.test(data14)){
 validate30.errors = [{instancePath:instancePath+"/properties/createdBy/login",schemaPath:"#/$defs/account/properties/login/pattern",keyword:"pattern",params:{pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"},message:"must match pattern \""+"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"+"\""}];
 return false;
 }
@@ -4735,7 +5154,7 @@ validate30.errors = [{instancePath:instancePath+"/properties/created",schemaPath
 return false;
 }
 else {
-if(!pattern14.test(data15)){
+if(!pattern16.test(data15)){
 validate30.errors = [{instancePath:instancePath+"/properties/created",schemaPath:"#/properties/properties/properties/created/pattern",keyword:"pattern",params:{pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},message:"must match pattern \""+"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"+"\""}];
 return false;
 }
@@ -4799,7 +5218,7 @@ let data18 = data16.login;
 const _errs41 = errors;
 if(errors === _errs41){
 if(typeof data18 === "string"){
-if(!pattern16.test(data18)){
+if(!pattern18.test(data18)){
 validate30.errors = [{instancePath:instancePath+"/properties/updatedBy/login",schemaPath:"#/$defs/account/properties/login/pattern",keyword:"pattern",params:{pattern: "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"},message:"must match pattern \""+"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"+"\""}];
 return false;
 }
@@ -4839,7 +5258,7 @@ validate30.errors = [{instancePath:instancePath+"/properties/updated",schemaPath
 return false;
 }
 else {
-if(!pattern14.test(data19)){
+if(!pattern16.test(data19)){
 validate30.errors = [{instancePath:instancePath+"/properties/updated",schemaPath:"#/properties/properties/properties/updated/pattern",keyword:"pattern",params:{pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},message:"must match pattern \""+"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"+"\""}];
 return false;
 }
@@ -5252,7 +5671,7 @@ validate31.errors = [{instancePath:instancePath+"/folders/" + i0+"/created",sche
 return false;
 }
 else {
-if(!pattern14.test(data9)){
+if(!pattern16.test(data9)){
 validate31.errors = [{instancePath:instancePath+"/folders/" + i0+"/created",schemaPath:"#/properties/folders/items/properties/created/pattern",keyword:"pattern",params:{pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},message:"must match pattern \""+"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"+"\""}];
 return false;
 }
@@ -5508,7 +5927,7 @@ validate31.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 export const validatePrefs = validate32;
 const schema53 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://flanz1.github.io/world-globe-embed/schema/prefs.schema.json","title":"Admin page preferences","description":"One account's colour theme for the admin page: the accent colour's seed and light, dark or the system's setting. Kept by the admin API, not in the repository.","type":"object","required":["seed","mode"],"additionalProperties":false,"properties":{"seed":{"type":"string","pattern":"^#[0-9a-f]{6}$"},"mode":{"enum":["light","dark","system"]}}};
-const pattern55 = new RegExp("^#[0-9a-f]{6}$", "u");
+const pattern57 = new RegExp("^#[0-9a-f]{6}$", "u");
 
 function validate32(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="https://flanz1.github.io/world-globe-embed/schema/prefs.schema.json" */;
@@ -5543,7 +5962,7 @@ let data0 = data.seed;
 const _errs2 = errors;
 if(errors === _errs2){
 if(typeof data0 === "string"){
-if(!pattern55.test(data0)){
+if(!pattern57.test(data0)){
 validate32.errors = [{instancePath:instancePath+"/seed",schemaPath:"#/properties/seed/pattern",keyword:"pattern",params:{pattern: "^#[0-9a-f]{6}$"},message:"must match pattern \""+"^#[0-9a-f]{6}$"+"\""}];
 return false;
 }

@@ -10,13 +10,13 @@ import { clamp, clampPadding } from "../shared/params.ts";
 import { geometryBounds, globeToImage, imageToGlobe, polygonsOf } from "../shared/geo.ts";
 import { FLAT_K_MAX, flatFit, flatMinK, regionLabelPoints, type FlatView, type LabelPoint, type RegionData } from "../shared/region.ts";
 import { paintLayerStack, type PaintLayer } from "../shared/raster.ts";
-import { hasContestedLayers, legendRowsFor, regionPaintLayers } from "../shared/region-paint.ts";
+import { hasContestedLayers, regionPaintLayers } from "../shared/region-paint.ts";
 import { deviceLimit, nextTier } from "../shared/tiers.ts";
 import { TILE_BUDGET, TileCache, levelFor, tileRect, tilesAt, tileUrl } from "../shared/tiles.ts";
 import type { FlatStartContext, PreviewMessage } from "./contract.ts";
 import { setupRegionCard } from "./region-card.ts";
 import { setupRuler } from "./ruler.ts";
-import { RELOCK_MS, labelOnScreen, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
+import { RELOCK_MS, labelOnScreen, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, mainLegendRows, type Lock } from "./region-ui.ts";
 import { setupPins, watchPreviewPins, type PinLayer } from "./pins.ts";
 
 type Img = ImageBitmap | HTMLImageElement;
@@ -449,7 +449,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     schedule();
     return true;
   };
-  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins, zoomToPins, cfg.pinLegends).then((l) => {
+  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins, zoomToPins, cfg.pinLegends, cfg.pinGroups).then((l) => {
     pinLayer = l;
     schedule();
   });
@@ -476,7 +476,7 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       const r = visible.of(whole);
       reg = r;
       spec = regionPaintLayers(r);
-      regionKey?.set(R.key ? legendRowsFor(r) : [], r.legendTitle, R.key && hasContestedLayers(spec));
+      regionKey?.set(R.key ? mainLegendRows(r, visible) : [], r.legendTitle, R.key && hasContestedLayers(spec));
       const pts = (R.label ?? r.label) ? regionLabelPoints(r, R.label === true) : [];
       labelAt = pts;
       labels?.set(pts.map((p) => p.text));

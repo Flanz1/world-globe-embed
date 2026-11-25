@@ -42,13 +42,13 @@ import { BASE_DISTANCE, FOV_DEG, MAX_DISTANCE, MIN_DISTANCE, clamp, clampPadding
 import { globeToImage, imageToGlobe, polygonsOf, type Position } from "../shared/geo.ts";
 import { regionFit, regionLabelPoints, type LabelPoint, type RegionData } from "../shared/region.ts";
 import { paintLayerStack, type PaintLayer } from "../shared/raster.ts";
-import { hasContestedLayers, legendRowsFor, regionPaintLayers } from "../shared/region-paint.ts";
+import { hasContestedLayers, regionPaintLayers } from "../shared/region-paint.ts";
 import { deviceLimit, deviceMemory, nextTier } from "../shared/tiers.ts";
 import { createGlobeTiles } from "./globe-tiles.ts";
 import type { PreviewMessage, StartContext } from "./contract.ts";
 import { setupRegionCard } from "./region-card.ts";
 import { setupRuler } from "./ruler.ts";
-import { RELOCK_MS, labelOnScreen, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, type Lock } from "./region-ui.ts";
+import { RELOCK_MS, labelOnScreen, makeLabels, makeLegend, makeVisibility, regionNote, setupLayers, setupLock, mainLegendRows, type Lock } from "./region-ui.ts";
 import { setupPins, watchPreviewPins, type PinLayer } from "./pins.ts";
 
 const DEG = Math.PI / 180;
@@ -344,7 +344,7 @@ export async function start(ctx: StartContext): Promise<void> {
     const pts = (R?.label ?? vis.label) ? regionLabelPoints(vis, R?.label === true) : [];
     labelAt = pts;
     labels?.set(pts.map((p) => p.text));
-    regionKey?.set(R?.key ? legendRowsFor(vis) : [], vis.legendTitle, !!R?.key && hasContestedLayers(spec!));
+    regionKey?.set(R?.key ? mainLegendRows(vis, visible) : [], vis.legendTitle, !!R?.key && hasContestedLayers(spec!));
   }
   /*
    * Live repaints (the admin editor streams every edit, undo and redo here) wait until the GPU has finished the
@@ -494,7 +494,7 @@ export async function start(ctx: StartContext): Promise<void> {
     invalidate();
     return true;
   };
-  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins, zoomToPins, cfg.pinLegends).then((l) => {
+  void setupPins(stage, canvas, cfg.slug, location.search, cfg.pins, zoomToPins, cfg.pinLegends, cfg.pinGroups).then((l) => {
     pinLayer = l;
     invalidate();
   });

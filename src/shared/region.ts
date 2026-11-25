@@ -1,5 +1,6 @@
 /** Region types and helpers shared by the build, the viewer and the admin page. */
 import type { PinLegends } from "./pins.ts";
+import type { LayerGroup, LegendGroup, PinGroup } from "./groups.ts";
 import { BASE_DISTANCE, FOV_DEG, ZOOM_MAX, ZOOM_MIN, clamp } from "./params.ts";
 import { largestPart, partPlacements, type LabelPlacement } from "./label-place.ts";
 import {
@@ -125,7 +126,14 @@ export interface RegionProperties {
    * this region's outline unless underClip is false, with a toggle in the embed's legend. Bottom first.
    */
   under?: UnderEntry[];
-  /** Ids of pin maps (content/pinmaps.json) of this slot whose pins show on this region's embed. */
+  /**
+   * Hand-picked groups of regions shown under this one (a "Religion" group of several religion maps): one legend
+   * section and one switch per group. Replaces `under` + `underTitle`, which still load as groups.
+   */
+  layerGroups?: LayerGroup[];
+  /** Groups of pin maps ("Holy sites", "Battles"): one switch each in the embed's pin legend. Replaces `pinMaps`, which still loads as one group per pin map. */
+  pinGroups?: PinGroup[];
+  /** Ids of pin maps (content/pinmaps.json) of this slot whose pins show on this region's embed. Older form of pinGroups. */
   pinMaps?: string[];
   /** Per pin map (ids in pinMaps): the words its pins' legend uses on this region's embed instead of the defaults (title and a label per kind). Set in the editor's Underlays section. */
   pinLegends?: PinLegends;
@@ -226,6 +234,10 @@ export interface RegionIndexEntry {
   pm?: string[];
   /** RegionProperties.pinLegends, only for the pin maps in pm. */
   pl?: PinLegends;
+  /** The legend's sections: the layer groups (n = name, ids = member regions, all in u). */
+  lg?: LegendGroup[];
+  /** The pin groups (ids in pm); `off` ones start hidden. */
+  pg?: (LegendGroup & { off?: true })[];
   /** underClip, when false. */
   uc?: false;
   /** underTitle and layerLabel, when set. */

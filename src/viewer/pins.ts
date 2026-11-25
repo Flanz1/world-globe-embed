@@ -56,6 +56,8 @@ const CSS = `
 .wpl-head::after{content:"▾";margin-left:6px;opacity:.7}.wpl-head[aria-expanded=false]::after{content:"▸"}
 .wpl-chips{display:flex;flex-direction:column;gap:3px;padding:0 6px 6px;overflow:auto;max-height:calc(6 * 31px)}
 .wpl-chips[hidden]{display:none}
+.wpl-group{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:28px;padding:0 4px 0 6px;cursor:pointer}
+.wpl-group span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wpl-chip{all:unset;box-sizing:border-box;display:flex;align-items:center;min-height:28px;cursor:pointer}
 .wpl-pill{flex:1;min-width:0;display:flex;align-items:center;gap:6px;min-height:28px;padding:0 8px;border-radius:14px;border:1px solid rgba(243,234,216,.45);background:rgba(243,234,216,.16);white-space:nowrap}
 .wpl-pill i{flex:none;display:grid;place-items:center;width:18px;height:18px;border-radius:50%}
@@ -67,12 +69,24 @@ const CSS = `
 .wpl-chip[aria-pressed=false] .wpl-pill span:not(.n){text-decoration:line-through;opacity:.8}
 .wpl-chip:focus-visible .wpl-pill,.wpl-head:focus-visible{outline:2px solid #f3ead8;outline-offset:1px}
 .wpl-head:focus-visible{outline-offset:-2px}
-@media (pointer:coarse){.wpl-chips{max-height:none;gap:0}.wpl-chip{min-height:44px}}
+@media (pointer:coarse){.wpl-chips{max-height:none;gap:0}.wpl-chip,.wpl-group{min-height:44px}}
 `.replace(/\n/g, "");
+
+/** The region's pin groups as the embed gets them: name, pin map ids, `off` when the group starts hidden. */
+export type PinGroupsView = { n: string; ids: string[]; off?: true }[];
+
+/** Pin groups from an untrusted message: names and ids only. */
+function cleanGroups(v: unknown): PinGroupsView | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out: PinGroupsView = v.slice(0, 8).flatMap((g: { n?: unknown; ids?: unknown; off?: unknown }) =>
+    typeof g?.n === "string" && g.n.trim() && Array.isArray(g.ids) ? [{ n: g.n.trim().slice(0, 40), ids: g.ids.filter((x: unknown): x is string => typeof x === "string" && PIN_ID.test(x)).slice(0, 8), ...(g.off === true ? { off: true as const } : {}) }] : [],
+  );
+  return out.length ? out : undefined;
+}
 
 /** Fetches and draws this slot's pins if the page asked for them (?pins=…); null when it didn't or there is nothing to show. */
 /** `fallback` is what a region embed asks for by itself (the region's pin maps) when the URL has no ?pins=. */
-export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: string, search = location.search, fallback?: string, zoomTo?: ZoomTo, legends?: PinLegends): Promise<PinLayer | null> {
+export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: string, search = location.search, fallback?: string, zoomTo?: ZoomTo, legends?: PinLegends, groups?: PinGroupsView): Promise<PinLayer | null> {
   const sel = parsePinsParam(new URLSearchParams(search).get("pins") ?? fallback);
   // The admin preview page has no pins file of its own: it gets them from the admin page (watchPreviewPins).
   if (!sel || !PIN_ID.test(slug)) return null;
@@ -84,7 +98,7 @@ export async function setupPins(stage: HTMLElement, canvas: HTMLElement, slug: s
     file = null;
   }
   // The legend words belong to the region's pin maps, so they only apply when the embed shows those (not an own ?pins=).
-  return buildPins(stage, canvas, file, sel, zoomTo, new URLSearchParams(search).has("pins") ? undefined : legends, fallback?.split(",") ?? []);
+  return buildPins(stage, canvas, file, sel, zoomTo, new URLSearchParams(search).has("pins") ? undefined : legends, fallback?.split(",") ?? [], new URLSearchParams(search).has("pins") ? undefined : groups);
 }
 
 /**
@@ -97,14 +111,14 @@ export function watchPreviewPins(stage: HTMLElement, canvas: HTMLElement, set: (
     if (e.origin !== location.origin || e.source !== window.parent || e.data?.type !== "wge-pins") return;
     layer?.destroy();
     const sel = parsePinsParam(typeof e.data.show === "string" ? e.data.show : null);
-    layer = sel ? buildPins(stage, canvas, parsePinsFile(e.data.file), sel, zoomTo, cleanLegends(e.data.legends), typeof e.data.show === "string" ? e.data.show.split(",") : []) : null;
+    layer = sel ? buildPins(stage, canvas, parsePinsFile(e.data.file), sel, zoomTo, cleanLegends(e.data.legends), typeof e.data.show === "string" ? e.data.show.split(",") : [], cleanGroups(e.data.groups)) : null;
     set(layer);
   });
   // The viewer starts after the page has loaded, so the admin page can't know when it's listening: ask for the pins.
   if (window.parent !== window) window.parent.postMessage({ type: "wge-pins-wanted" }, location.origin);
 }
 
-function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typeof parsePinsFile>, sel: NonNullable<ReturnType<typeof parsePinsParam>>, zoomTo?: ZoomTo, legends?: PinLegends, order: string[] = []): PinLayer | null {
+function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typeof parsePinsFile>, sel: NonNullable<ReturnType<typeof parsePinsParam>>, zoomTo?: ZoomTo, legends?: PinLegends, order: string[] = [], groups?: PinGroupsView): PinLayer | null {
   const mapName = new Map((file?.maps ?? []).map((m) => [m.id, m.name]));
   const labelOf = (p: PinData) => (p.pinMap && mapName.get(p.pinMap)) || "";
   const pins = (file?.pins ?? []).filter((p) => pinShown(sel, p));
@@ -214,7 +228,12 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
   for (const p of pins) counts.set(p.kind, (counts.get(p.kind) ?? 0) + 1);
   let lastProject: ((at: [number, number]) => PinPoint) | null = null;
   let panel: HTMLElement | null = null;
-  if (counts.size >= 2) {
+  // Pin groups: one switch each (a lone group needs none unless it starts hidden). Their pin maps' pins go with the switch.
+  const offMaps = new Set<string>();
+  const switches = (groups ?? []).filter((g) => g.ids.some((id) => pins.some((p) => p.pinMap === id)));
+  for (const g of switches) if (g.off) g.ids.forEach((id) => offMaps.add(id));
+  const showSwitches = switches.length >= 2 || switches.some((g) => g.off);
+  if (counts.size >= 2 || showSwitches) {
     panel = document.createElement("div");
     panel.className = "wpl";
     const head = document.createElement("button");
@@ -232,7 +251,37 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
     };
     fold(stage.clientWidth >= 420);
     head.addEventListener("click", () => fold(head.getAttribute("aria-expanded") !== "true"));
-    for (const k of PIN_KINDS) {
+    const refresh = () => {
+      closeList();
+      const o = open && markers.find((m) => m.b === open);
+      if (o && (off.has(o.p.kind) || (o.p.pinMap && offMaps.has(o.p.pinMap)))) close();
+      if (lastProject) cluster(lastProject);
+    };
+    const groupRows: HTMLElement[] = [];
+    if (showSwitches)
+      for (const g of switches) {
+        const n = pins.filter((p) => p.pinMap && g.ids.includes(p.pinMap)).length;
+        const row = document.createElement("label");
+        row.className = "wpl-group";
+        const t = document.createElement("span");
+        t.textContent = `${g.n} (${n})`;
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.className = "rsw";
+        cb.setAttribute("role", "switch");
+        cb.checked = !g.off;
+        cb.addEventListener("change", () => {
+          for (const id of g.ids) {
+            if (cb.checked) offMaps.delete(id);
+            else offMaps.add(id);
+          }
+          refresh();
+        });
+        row.append(t, cb);
+        groupRows.push(row);
+      }
+    chips.append(...groupRows);
+    for (const k of counts.size >= 2 ? PIN_KINDS : []) {
       const n = counts.get(k.id);
       if (!n) continue;
       const chip = document.createElement("button");
@@ -341,7 +390,7 @@ function buildPins(stage: HTMLElement, canvas: HTMLElement, file: ReturnType<typ
     const keyOf = (cx: number, cy: number) => `${cx},${cy}`;
     for (const m of markers) {
       const pt = project(m.p.at);
-      m.on = pt.visible && Number.isFinite(pt.x) && Number.isFinite(pt.y) && !off.has(m.p.kind);
+      m.on = pt.visible && Number.isFinite(pt.x) && Number.isFinite(pt.y) && !off.has(m.p.kind) && !(m.p.pinMap && offMaps.has(m.p.pinMap));
       m.x = pt.x;
       m.y = pt.y;
       if (!m.on) continue;

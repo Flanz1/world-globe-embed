@@ -7,6 +7,7 @@ import type { MapMeta, PreviewMap, Slot, ViewerConfig } from "./types.ts";
 import type { RegionIndexEntry } from "./region.ts";
 import { REGION_ID, underFill } from "./region.ts";
 import { cleanLegends } from "./pins.ts";
+import { cleanName } from "./groups.ts";
 import { DEFAULT_VIEW, TEXTURE_WIDTHS } from "./types.ts";
 import { TILE_LEVELS } from "./tiles.ts";
 
@@ -89,6 +90,8 @@ background-image:var(--lqip);background-size:var(--fw) var(--fh);background-posi
 @media (max-width:480px){.rstack{top:8px;left:8px;transform:none;max-height:min(35%,calc(100% - 52px))}.rkey{font-size:14px}.rkey ul{grid-template-columns:1fr}}
 .rkey[hidden],.rkey ul[hidden],.rlayers[hidden]{display:none}
 .rlayers{display:grid;gap:3px;padding:2px 8px 6px}.rlayers label{display:flex;align-items:center;gap:6px;cursor:pointer;min-width:0}.rlayers-head{font-weight:600;opacity:.85}.rlayers input{margin:0;flex:none}.rlayers span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rgroup{padding:2px 14px 6px}.rgroup+.rgroup{border-top:1px solid rgba(243,234,216,.18);padding-top:6px}.rgroup-head,.wpl-group{cursor:pointer}.rgroup-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:28px;font-weight:600;min-width:0}.rgroup-head span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rgroup-keys{padding:2px 0 6px!important}@media (pointer:coarse){.rgroup-head{min-height:44px}}
+.rsw{appearance:none;-webkit-appearance:none;flex:none;box-sizing:border-box;position:relative;width:40px;height:24px;margin:0;border-radius:12px;border:2px solid rgba(243,234,216,.6);background:transparent;cursor:pointer;transition:background .15s,border-color .15s}.rsw::before{content:"";position:absolute;left:3px;top:50%;width:10px;height:10px;margin-top:-5px;border-radius:50%;background:rgba(243,234,216,.75);transition:transform .15s,width .15s,height .15s,margin .15s,background .15s}.rsw:checked{background:#c9a94e;border-color:#c9a94e}.rsw:checked::before{width:16px;height:16px;margin-top:-8px;transform:translateX(14px);background:#1b1812}.rsw:focus-visible{outline:2px solid #f3ead8;outline-offset:2px}@media (prefers-reduced-motion:reduce){.rsw,.rsw::before{transition:none}}
 .rnote{position:fixed;left:8px;top:8px;margin:0;padding:3px 8px;border-radius:6px;background:rgba(20,18,14,.6);color:#e8dcc8;font-size:11px;pointer-events:none}
 @media (prefers-reduced-motion:reduce){#poster,#globe{transition:none}}
 `.replace(/\n/g, "");
@@ -165,6 +168,9 @@ function checkIndex(regions: Record<string, RegionIndexEntry>): Record<string, R
     const u = (e.u ?? []).filter((x) => REGION_ID.test(x.id)).map((x) => ({ id: x.id, ...(typeof x.label === "string" ? { label: x.label } : {}), ...(typeof x.on === "boolean" ? { on: x.on } : {}), ...(underFill(x.fill) !== undefined ? { fill: underFill(x.fill) } : {}) }));
     const pm = (e.pm ?? []).filter((x) => typeof x === "string" && REGION_ID.test(x));
     const pl = pm.length ? cleanLegends(Object.fromEntries(Object.entries(e.pl ?? {}).filter(([k]) => pm.includes(k)))) : undefined;
+    const uids = new Set(u.map((x) => x.id));
+    const lg = (e.lg ?? []).map((g) => ({ n: cleanName(g.n), ids: (g.ids ?? []).filter((x) => uids.has(x)) })).filter((g) => g.n && g.ids.length);
+    const pg = (e.pg ?? []).map((g) => ({ n: cleanName(g.n), ids: (g.ids ?? []).filter((x) => pm.includes(x)), ...(g.off === true ? { off: true as const } : {}) })).filter((g) => g.n && g.ids.length);
     out[id] = {
       c: [e.c[0], e.c[1]],
       z: e.z,
@@ -172,6 +178,8 @@ function checkIndex(regions: Record<string, RegionIndexEntry>): Record<string, R
       ...(u.length ? { u } : {}),
       ...(pm.length ? { pm } : {}),
       ...(pl ? { pl } : {}),
+      ...(lg.length && u.length ? { lg } : {}),
+      ...(pg.length ? { pg } : {}),
       ...(u.length && e.uc === false ? { uc: false as const } : {}),
       ...(u.length && typeof e.ut === "string" ? { ut: e.ut } : {}),
       ...(u.length && typeof e.ul === "string" ? { ul: e.ul } : {}),

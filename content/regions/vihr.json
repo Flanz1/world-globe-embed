@@ -320,15 +320,6 @@
         [-15.9721, 34.9995]
       ]
     ],
-    "under": [
-      {
-        "id": "gethricism",
-        "label": "Religion",
-        "on": true,
-        "fill": 0.7
-      }
-    ],
-    "underTitle": "Religion",
     "updated": "2026-11-17T12:19:52Z",
     "created": "2026-11-12T21:39:43Z",
     "createdBy": {
@@ -338,7 +329,19 @@
     "updatedBy": {
       "id": 45669787,
       "login": "Flanz1"
-    }
+    },
+    "layerGroups": [
+      {
+        "name": "Religion",
+        "regions": [
+          {
+            "id": "gethricism"
+          }
+        ],
+        "on": true,
+        "fill": 0.7
+      }
+    ]
   },
   "geometry": {
     "type": "MultiPolygon",

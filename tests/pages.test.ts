@@ -174,9 +174,29 @@ describe("regions in the build", () => {
   });
 
   it("keeps each underlay's fill in the inlined index (clamped), so embeds paint it", () => {
-    const host = { ...region, id: "host", properties: { ...region.properties, name: "h", under: [{ id: "evil", label: "Faith", on: true, fill: 0.7 }, { id: "evil", fill: 0.01 }] } };
-    const c: Content = { ...content, regions: new Map([["evil", region], ["host", host]] as [string, RegionFeature][]) };
-    expect(dataOf(generateSlotPages(c, "", "g.js")[0].html).regions!.host.u).toEqual([{ id: "evil", label: "Faith", on: true, fill: 0.7 }, { id: "evil", fill: 0.1 }]);
+    const other = { ...region, id: "other" };
+    const host = { ...region, id: "host", properties: { ...region.properties, name: "h", under: [{ id: "evil", label: "Faith", on: true, fill: 0.7 }, { id: "other", fill: 0.01 }] } };
+    const c: Content = { ...content, regions: new Map([["evil", region], ["other", other], ["host", host]] as [string, RegionFeature][]) };
+    const e = dataOf(generateSlotPages(c, "", "g.js")[0].html).regions!.host;
+    // Older flat lists show up as one group each, so every toggle stays.
+    expect(e.u).toEqual([{ id: "evil", on: true, fill: 0.7 }, { id: "other", on: false, fill: 0.1 }]);
+    expect(e.lg).toEqual([{ n: "Faith", ids: ["evil"] }, { n: "other", ids: ["other"] }]);
+  });
+
+  it("indexes layer groups and pin groups: a section per group, the group's fill and start state for its members", () => {
+    const other = { ...region, id: "other" };
+    const host = {
+      ...region,
+      id: "host",
+      properties: { ...region.properties, name: "h", layerGroups: [{ name: "Religion", regions: [{ id: "evil" }, { id: "other", fill: 0.5 }], on: true, fill: 0.7 }, { name: "Gone", regions: [{ id: "missing" }] }], pinGroups: [{ name: "Holy sites", pinMaps: ["a-map"] }, { name: "Battles", pinMaps: ["b-map"], on: false }] },
+    };
+    const maps = { maps: [{ id: "a-map", name: "A", slot: "inara" }, { id: "b-map", name: "B", slot: "inara" }], folders: [] };
+    const c: Content = { ...content, pinMaps: maps as Content["pinMaps"], regions: new Map([["evil", region], ["other", other], ["host", host]] as [string, RegionFeature][]) };
+    const e = dataOf(generateSlotPages(c, "", "g.js")[0].html).regions!.host;
+    expect(e.u).toEqual([{ id: "evil", on: true, fill: 0.7 }, { id: "other", on: true, fill: 0.5 }]);
+    expect(e.lg).toEqual([{ n: "Religion", ids: ["evil", "other"] }]);
+    expect(e.pm).toEqual(["a-map", "b-map"]);
+    expect(e.pg).toEqual([{ n: "Holy sites", ids: ["a-map"] }, { n: "Battles", ids: ["b-map"], off: true }]);
   });
 
   it("writes regions/<id>.json minified, with the name as plain JSON text", () => {
