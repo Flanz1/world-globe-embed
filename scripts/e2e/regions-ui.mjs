@@ -74,3 +74,23 @@ async function openPinFoldersAround(page, selector) {
     }
   }, selector);
 }
+
+/** Opens part `row`'s second line (colour, region, actions) in the Parts list if it is closed. */
+export async function openPartRow(page, row) {
+  const r = page.locator(`dialog.editor .ed-part-row[data-row="${row}"]`);
+  if (await r.locator(".ed-part-more").isVisible()) return;
+  await r.locator('[data-act="part-more"]').click();
+}
+
+/** Clicks part `row`'s action button `act` (opens its second line first). */
+export async function partAct(page, row, act) {
+  await openPartRow(page, row);
+  await page.click(`dialog.editor .ed-part-row[data-row="${row}"] [data-act="${act}"]`);
+}
+
+/** Opens colour folder `key`'s ⋯ line (labels, contested, order, remove) if it is closed. */
+export async function openFolderMore(page, key) {
+  const f = `dialog.editor .ed-folder[data-key="${key}"]`;
+  if (await page.locator(`${f} .ed-folder-more`).isVisible()) return;
+  await page.click(`${f} [data-act="folder-more"]`);
+}
