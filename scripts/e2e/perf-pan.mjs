@@ -20,9 +20,6 @@ import { pickRegion } from "./regions-ui.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 const VERTS = Number(process.env.VERTS ?? 30000);
-const BUDGET_DRAG = Number(process.env.BUDGET_DRAG ?? 0);
-const BUDGET_TYPE = Number(process.env.BUDGET_TYPE ?? 0);
-const PACE = process.env.PACE ?? "timer";
 const BRANCH = "test/perf";
 
 const ring = [];
