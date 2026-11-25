@@ -1,6 +1,6 @@
 // e2e-suite: roots=ADMIN weight=1
 /**
- * Browser checks for changing a region's id (More… → Rename… on the Regions tab), in headless Chromium.
+ * Browser checks for changing a region's id (More… → Change id… on the Regions tab), in headless Chromium.
  *
  *   npm run e2e -- rename
  *
@@ -89,8 +89,43 @@ try {
   const { page } = owner;
   const card = (id) => page.locator(`#regions .rcard[data-region="${id}"]`);
   await pickRegion(page, ID);
+  // Rename… changes only the display name: one commit, same id and file.
+  {
+    const n = mock.log.length;
+    await page.click(`#regions .rcard[data-region="${ID}"] [data-action="more"]`);
+    await page.locator(`.rmenu[data-region="${ID}"] button:has-text("Rename")`).click();
+    const nd = page.locator("dialog.name-dlg[open]");
+    await nd.waitFor();
+    check("Rename… opens a name dialog with Save off until the name changes", await nd.locator('[data-action="name-save"]').isDisabled());
+    await nd.locator('input[name="display-name"]').fill("The Big Ring Union");
+    await nd.locator('[data-action="name-save"]').click();
+    await waitCommit(page, n);
+    const f = onBranch(FILE);
+    check("the name is saved with its capitals, the id and file are unchanged", f?.id === ID && f.properties.name === "The Big Ring Union" && mock.log.length === n + 1, JSON.stringify(f?.properties.name));
+    check("the list shows the new name", (await page.locator(`#regions .rrow[data-region="${ID}"] .rrow-name`).textContent()) === "The Big Ring Union");
+    await pickRegion(page, ID);
+  }
+  // Maps: Rename… changes only the map's name.
+  {
+    await page.goto(`${SITE}/admin/#maps`);
+    await page.waitForSelector('#maps [data-action="rename-map"]', { timeout: 15000 });
+    const btn = page.locator('#maps [data-action="rename-map"]').first();
+    const mapId = await btn.getAttribute("data-map");
+    const n = mock.log.length;
+    await btn.click();
+    const nd = page.locator("dialog.name-dlg[open]");
+    await nd.waitFor();
+    await nd.locator('input[name="display-name"]').fill("Inara, Second Age");
+    await nd.locator('[data-action="name-save"]').click();
+    await waitCommit(page, n);
+    const f = onBranch(`content/maps/${mapId}.json`);
+    check("a map's name changes, its id and sizes stay", f?.id === mapId && f.name === "Inara, Second Age" && !!f.sizes, JSON.stringify(f?.name));
+    await page.goto(`${SITE}/admin/#regions`);
+    await page.waitForSelector("#regions .rrow", { timeout: 15000 });
+    await pickRegion(page, ID);
+  }
   await page.click(`#regions .rcard[data-region="${ID}"] [data-action="more"]`);
-  await page.locator(`.rmenu[data-region="${ID}"] button:has-text("Rename")`).click();
+  await page.locator(`.rmenu[data-region="${ID}"] button:has-text("Change id")`).click();
   const dlg = page.locator("dialog.rename-dlg[open]");
   await dlg.waitFor();
   const go = dlg.locator('[data-action="rename-go"]');

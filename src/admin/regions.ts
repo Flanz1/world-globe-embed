@@ -8,7 +8,7 @@ import { stringifyCompact } from "../shared/json.ts";
 import { LINKED_MAX, baseKey, combineRegions, combinedName, regionBases, resolveLinked, type RegionBase } from "../shared/combine.ts";
 import { checkGeometry, geometryBounds, polygonsOf, vertexCount } from "../shared/geo.ts";
 import { paintSpec } from "../shared/raster.ts";
-import { NAME_MAX, REGION_COLOR, REGION_ID, copyId, randomId, slugify, uniqueId, flatFit, migrateZoneColours, normalizePartLegend, regionData, type RegionFeature } from "../shared/region.ts";
+import { NAME_MAX, nameFromId, REGION_COLOR, REGION_ID, copyId, randomId, slugify, uniqueId, flatFit, migrateZoneColours, normalizePartLegend, regionData, type RegionFeature } from "../shared/region.ts";
 import { childrenOf, moveTargets, pathName, pinFirst, placements, withDescendants, type Category } from "../shared/categories.ts";
 import { paintSpecOf, regionClashes } from "../shared/region-paint.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
@@ -28,7 +28,7 @@ import { openTrash, restoredFile } from "./trash.ts";
 import { showSnackbar } from "./snackbar.ts";
 import { Selection, blockedList, cardBox, groupBox, refreshBoxes, selectionBar } from "./bulk.ts";
 import { TRASH_DAYS } from "../shared/trash.ts";
-import { alertBox, confirmBox, modal, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
+import { alertBox, confirmBox, modal, nameDialog, openDelete, openEmbedDialog, openRegionPreview } from "./region-dialogs.ts";
 import { initComments, loadComments, onCommentsChange, openCountFor } from "./comments.ts";
 import { declineSuggestion, initSuggestions, loadSuggestions, markAccepted, pendingFor } from "./suggestions.ts";
 import type { SuggestionSummary } from "./github.ts";
@@ -309,7 +309,8 @@ function regionMore(e: RegionEntry, f: RegionFeature, map: MapMeta | undefined, 
   return moreMenu(`More actions for ${e.id}`, [
     // Editors who can edit it themselves can still send a suggestion for somebody else to accept (same name as everywhere).
     canEdit(f) && can("regions") && !linked ? item("Suggest changes", () => suggest(e), "", "Draw changes and send them for somebody else to accept or decline") : null,
-    item("Rename…", () => changeId(e), linkedNoRename(e, f), "Change the id that embed links use"),
+    item("Rename…", () => renameRegion(e), canEdit(f) ? "" : noEdit, "Change the name shown for this region. The id and embed links stay the same"),
+    item("Change id…", () => changeId(e), linkedNoRename(e, f), "Change the id that embed links use"),
     item("Duplicate", () => duplicate(e), noCreate),
     item("History", () => openHistory({ gh: deps.gh(), id: e.id, path: e.path, feature: f, map, noRestore: noEdit, act: deps.act }), linked ? "A linked region has no history of its own: open the regions it combines." : ""),
     canTransfer() ? item("Transfer", () => transfer(e, f), "") : null,
@@ -1509,6 +1510,48 @@ const withColour = (f: RegionFeature, color: string): RegionFeature => {
   if (!properties.createdBy && currentUser()?.owner) properties.createdBy = account();
   return { ...f, properties };
 };
+
+/** The region with a new display name (or none): the id and everything else stay. The name goes first, as the editor writes it. */
+const withName = (f: RegionFeature, name: string): RegionFeature => {
+  const rest = { ...f.properties };
+  delete rest.name;
+  const properties = { ...(name ? { name } : {}), ...rest, updatedBy: account(), updated: stamp() } as RegionFeature["properties"];
+  if (!properties.createdBy && currentUser()?.owner) properties.createdBy = account();
+  return { ...f, properties };
+};
+
+/** More… → Rename…: only the display name changes (one small save, no editor); the id and every embed link stay as they are. */
+function renameRegion(e: RegionEntry): void {
+  const f = e.feature;
+  if (!f) return;
+  nameDialog({
+    title: "Rename region",
+    label: "Name",
+    initial: f.properties.name?.trim() ?? "",
+    placeholder: nameFromId(e.id),
+    max: NAME_MAX,
+    allowEmpty: true,
+    note: `Only the name changes. The id (${e.id}) and the embed links stay the same. Leave it empty to show the id as a name.`,
+    then: (name) => void saveName(e, name),
+  });
+}
+
+async function saveName(e: RegionEntry, name: string): Promise<void> {
+  const message = name ? `Rename region ${e.id} to "${name}"` : `Clear the name of region ${e.id}`;
+  await optimistic({
+    label: message,
+    check: () => refusal({ path: e.path, before: serialize(e.feature!), after: serialize(withName(e.feature!, name)) }),
+    apply: () => {
+      const before = entries;
+      entries = entries.map((x) => (x === e ? { ...x, feature: withName(x.feature!, name) } : x));
+      return before;
+    },
+    undo: (before) => void (entries = before),
+    render: renderRegions,
+    commit: () =>
+      deps.gh().commit(message, async () => [{ path: e.path, content: serialize(withName(JSON.parse((await deps.gh().readFile(e.path)).text) as RegionFeature, name)) }]),
+  });
+}
 
 const bulkWhy = {
   move: () => (!can("regions") ? "You don't have permission to create regions." : categories().categories.length ? "" : "There are no folders yet: add one with + Folder first."),

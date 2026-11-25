@@ -28,6 +28,34 @@ export function modal(title: string, cls = ""): { dlg: HTMLDialogElement; body: 
   return { dlg, body, foot, close };
 }
 
+/** Asks for a display name: Save is only offered for a changed, non-empty-or-allowed value. `then` gets the trimmed name. */
+export function nameDialog(o: { title: string; label: string; initial: string; placeholder?: string; max: number; note: string; ok?: string; allowEmpty?: boolean; then: (name: string) => void }): void {
+  const m = modal(o.title, "name-dlg");
+  const input = h("input", { type: "text", value: o.initial, maxLength: o.max, autocomplete: "off", placeholder: o.placeholder ?? "", name: "display-name", dataset: { role: "display-name" } });
+  const go = h("button", { type: "submit", textContent: o.ok ?? "Save name", disabled: true, dataset: { action: "name-save" } });
+  const check = (): void => {
+    const v = input.value.trim();
+    go.disabled = v === o.initial.trim() || (!v && !o.allowEmpty);
+  };
+  const form = h("form", { className: "dlg-body" }, h("label", {}, o.label, input), h("p", { className: "muted small", textContent: o.note }));
+  input.addEventListener("input", check);
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    check();
+    if (go.disabled) return;
+    m.close();
+    o.then(input.value.trim());
+  });
+  go.addEventListener("click", (e) => {
+    e.preventDefault();
+    form.requestSubmit();
+  });
+  m.body.append(form);
+  m.foot.append(h("button", { type: "button", className: "ghost", textContent: "Cancel", onclick: m.close }), go);
+  input.focus();
+  input.select();
+}
+
 export function alertBox(title: string, text: string): void {
   const m = modal(title);
   m.body.append(h("p", { textContent: text }));
@@ -99,7 +127,7 @@ export function openEmbedDialog(t: EmbedTarget): void {
     ),
     h("div", { className: "sw-list" }, check("label", "Show label"), check("dim", "Dim outside the region"), check("lock", "Start locked"), ...(t.region.hasLegend ? [check("key", "Show legend")] : []), check("pins", "Show map pins")),
     code,
-    h("p", { className: "muted small", textContent: "Paste this into an Obsidian note. Changing the region's id (More… → Rename…) or deleting the region breaks this embed." }),
+    h("p", { className: "muted small", textContent: "Paste this into an Obsidian note. Changing the region's id (More… → Change id…) or deleting the region breaks this embed." }),
   );
   m.foot.append(
     copied,
