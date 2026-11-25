@@ -670,6 +670,18 @@ function regionInspector(id: string): HTMLElement | null {
     const members = entries.filter((x) => placements(categories()).get(x.id) === k.id);
     pinnable(c, e, k, pinFirst(k, members));
   }
+  // Actions first, right under the title: the thumbnail and the long details come after them. The pin/move buttons
+  // stay on the thumbnail's corner.
+  const thumb = c.querySelector<HTMLElement>(":scope > .rthumb");
+  if (thumb) {
+    const wrap = h("div", { className: "r-insp-thumb" });
+    thumb.replaceWith(wrap);
+    wrap.append(thumb);
+    const bar = c.querySelector(":scope > .rpin-bar");
+    if (bar) wrap.append(bar);
+  }
+  const acts = c.querySelector(":scope > .actions");
+  if (acts) c.prepend(acts);
   const sw = h("span", { className: "swatch", ariaHidden: "true" });
   sw.style.backgroundColor = e.feature ? safeColor(e.feature.properties.color) : "transparent";
   return h("div", { className: "r-insp-body", dataset: { inspRegion: id } }, inspHead(sw, e.id, null), h("p", { className: "muted small r-insp-sub", textContent: `${k ? `${pathName(categories(), k.id)} · ` : ""}${partsText(e)}` }), c);

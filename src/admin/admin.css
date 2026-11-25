@@ -1021,4 +1021,5 @@ button.r-mini-name { display: flex; align-items: center; gap: 10px; flex: 1 1 au
 /* The inspector already names the region in its heading: the card's own name line keeps only the creator badge. */
 .r-inspector .rcard .rname, .r-inspector .rcard .rinfo > div:first-child > .swatch { display: none; }
 .r-inspector .rcard .rinfo > div:first-child > .rcreator { margin-left: 0; }
-.r-inspector .rcard > .rthumb { max-width: 336px; }
+.r-insp-thumb { position: relative; max-width: 336px; }
+.r-insp-thumb > .rthumb { display: block; }
