@@ -441,10 +441,10 @@ dialog.editor button.ed-ib[aria-pressed="true"] { background-color: var(--md-sys
 .ed-sec-body > fieldset > legend { padding: 0; }
 .ed-sec-body > .ed-colours > legend, .ed-sec-body > .ed-under > legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .ed-sec-body > .ed-overlaps > legend, .ed-sec-body > .ed-pinmaps > legend { margin-bottom: 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--md-sys-color-on-surface-variant); }
-/* The minimap: the globe preview as a disc over the map's bottom left (the embed's corner buttons fall outside it). */
+/* The minimap: the globe preview as a rounded square over the map's bottom left, so the embed's buttons stay inside it. */
 .ed-mini { position: absolute; left: 12px; bottom: 34px; z-index: 2; width: 148px; height: 148px; }
 .ed-mini.big { width: min(340px, 60vh); height: min(340px, 60vh); }
-.ed-mini-disc { position: absolute; inset: 0; overflow: hidden; border-radius: 50%; background: var(--app-map-bg); box-shadow: 0 4px 16px rgba(0, 0, 0, .4), 0 0 0 3px var(--md-sys-color-surface-container-high); }
+.ed-mini-disc { position: absolute; inset: 0; overflow: hidden; border-radius: 16px; background: var(--app-map-bg); box-shadow: 0 4px 16px rgba(0, 0, 0, .4), 0 0 0 3px var(--md-sys-color-surface-container-high); }
 .ed-globe { position: absolute; left: 50%; top: 50%; width: 400px; height: 400px; border: 0; transform: translate(-50%, -50%) scale(var(--mini-k, .4)); background: var(--app-map-bg); }
 .ed-mini { --mini-k: .4; }
 .ed-mini.big { --mini-k: .9; }
