@@ -4,7 +4,8 @@ export const SNAPS: SnapName[] = ["peek", "half", "full"];
 
 /** The pixel heights the sheet snaps to, for a body `total` px tall. */
 export function snapHeights(total: number): Record<SnapName, number> {
-  const peek = Math.min(112, Math.round(total * 0.4));
+  // Peek shows the handle, the tool strip and the tabs.
+  const peek = Math.min(136, Math.round(total * 0.45));
   const half = Math.max(peek, Math.round(total * 0.5));
   const full = Math.max(half, total - 64);
   return { peek, half, full };
