@@ -15,6 +15,7 @@ import { SLOT, MAP, makeFixture } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 import { port } from "./ports.mjs";
+import { pickRegion } from "./regions-ui.mjs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
@@ -65,7 +66,8 @@ page.on("crash", () => console.log("PAGE CRASHED"));
 page.on("pageerror", (e) => console.log("pageerror", String(e).slice(0, 200)));
 const tOpen = Date.now();
 await page.goto(`http://localhost:${port(4173)}/admin/#regions`);
-await page.waitForSelector(`#regions .rcard[data-region="${RID}"]`, { timeout: 20000 });
+await page.waitForSelector(`#regions .rrow[data-region="${RID}"]`, { timeout: 20000 });
+await pickRegion(page, `${RID}`);
 await page.locator(`[data-region="${RID}"] [data-action="edit"]`).click({ timeout: 120000 });
 await page.waitForSelector("dialog.editor[open]", { state: "attached", timeout: 240000 });
 await page.waitForFunction(() => !!document.querySelector("dialog.editor")?.wgeEditor, null, { timeout: 240000 });

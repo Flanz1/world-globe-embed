@@ -27,6 +27,7 @@ import { useAdminApi } from "./admin-api.mjs";
 import { checkGeometry, pointInRing, polygonsOf } from "../../src/shared/geo.ts";
 
 import { port } from "./ports.mjs";
+import { pickRegion } from "./regions-ui.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
@@ -145,7 +146,8 @@ async function clicks(pts) {
 async function openRegion(id, cx, cy) {
   await page.goto(`${SITE}/admin/#regions`);
   await page.waitForTimeout(300);
-  await page.waitForSelector(`#regions .rcard[data-region="${id}"]`, { timeout: 15000 });
+  await page.waitForSelector(`#regions .rrow[data-region="${id}"]`, { timeout: 15000 });
+  await pickRegion(page, `${id}`);
   await page.locator(`[data-region="${id}"] [data-action="edit"]`).click();
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(600);

@@ -126,7 +126,7 @@ try {
     return { left: Math.round(n.left), right: Math.round(n.right), h: Math.round(n.height), w: Math.round(n.width), main: Math.round(m.left) };
   });
   check("desktop: the sections are a rail on the left, beside the content", rail.left === 0 && rail.h > rail.w && rail.main >= rail.right, JSON.stringify(rail));
-  check("desktop: no sidebars any more", (await d.locator("aside").count()) === 0);
+  check("desktop: no sidebars any more", (await d.locator("aside:not(#r-inspector)").count()) === 0 && (await d.locator("#activity-card, #status-card").count()) === 0);
   await d.click("#strip");
   await d.waitForSelector("#strip-pop:popover-open", { timeout: 3000 });
   await d.click("#pop-btn-deploys");

@@ -21,6 +21,7 @@ import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 
 import { port } from "./ports.mjs";
+import { pickRegion } from "./regions-ui.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
@@ -86,7 +87,8 @@ const pixel = (lon, lat) =>
 
 await step(A, "open the editor on the country", async () => {
   await page.goto(`${SITE}/admin/#regions`);
-  await page.waitForSelector('#regions .rcard[data-region="country"]', { timeout: 15000 });
+  await page.waitForSelector('#regions .rrow[data-region="country"]', { timeout: 15000 });
+  await pickRegion(page, "country");
   await page.locator('[data-region="country"] [data-action="edit"]').click();
   await page.waitForSelector(`${D}[open]`);
   await page.waitForTimeout(600);

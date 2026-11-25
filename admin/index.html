@@ -118,15 +118,16 @@
     </div>
 
     <div id="tab-regions" role="tabpanel" aria-labelledby="tab-btn-regions" class="tabpanel" hidden>
-      <section class="card">
-        <h2>Regions</h2>
+      <section class="card r-card">
+        <h2 class="r-h2">Regions</h2>
         <div class="row r-new-row">
           <label>New region on slot <select id="r-new-slot"></select></label>
           <button type="button" class="r-new">New region</button>
           <button type="button" id="r-new-category" class="ghost" title="Add a folder to sort regions into">+ Folder</button>
-          <button type="button" id="r-select" class="ghost" aria-pressed="false" title="Tick several regions to move, recolour or delete them together" hidden>Select regions</button>
-          <button type="button" id="r-combine" class="ghost" title="Copy several regions into one new region">Combine regions…</button>
-          <button type="button" id="r-trash" class="ghost text r-trash" title="Regions and pins deleted in the last 3 days, with a Restore button">Recently deleted…</button>
+          <button type="button" id="r-select" class="ghost r-wide" aria-pressed="false" title="Tick several regions to move, recolour or delete them together" hidden>Select regions</button>
+          <button type="button" id="r-combine" class="ghost r-wide" title="Copy several regions into one new region">Combine regions…</button>
+          <button type="button" id="r-trash" class="ghost text r-trash r-wide" title="Regions and pins deleted in the last 3 days, with a Restore button">Recently deleted…</button>
+          <span id="r-more" class="r-narrow"></span>
         </div>
         <div id="regions-search" class="r-search" hidden>
           <label><span class="r-search-l">Search</span> <input id="r-search" type="search" placeholder="Name, id or creator" autocomplete="off"></label>
@@ -141,7 +142,13 @@
           <button type="button" class="r-new">New region</button>
         </div>
         <div id="suggestions" class="suggestions" hidden></div>
-        <div id="regions" class="regions"></div>
+        <div id="regions" class="regions">
+          <div class="r-listhead"><p id="r-summary" class="muted small" aria-live="polite"></p><button id="r-collapse" type="button" class="text" hidden>Collapse all</button></div>
+          <div id="r-split" class="r-split" hidden>
+            <div id="r-tree" class="r-tree" role="group" aria-label="Regions and folders"></div>
+            <aside id="r-inspector" class="r-inspector" aria-label="Details"></aside>
+          </div>
+        </div>
       </section>
     </div>
 

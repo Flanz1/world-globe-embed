@@ -18,6 +18,7 @@ import { MockGitHub } from "./mock-github.mjs";
 import { ADMIN_API, useAdminApi } from "./admin-api.mjs";
 import { port } from "./ports.mjs";
 import { contrast, schemeFromSeed } from "../../src/shared/hct.ts";
+import { pickRegion } from "./regions-ui.mjs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
@@ -187,7 +188,8 @@ await step(T, "editor has the switch too", async () => {
   await page.goto(ADMIN);
   await signedIn(page);
   await page.click("#tab-btn-regions");
-  await page.waitForSelector("#regions .rcard", { state: "visible", timeout: 15000 });
+  await page.waitForSelector("#regions .rrow", { state: "visible", timeout: 15000 });
+  await pickRegion(page, "landmark-disc");
   await page.click('#regions [data-region="landmark-disc"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor .theme-mode", { timeout: 15000 });
   const before = await page.getAttribute("dialog.editor .theme-mode", "aria-pressed");

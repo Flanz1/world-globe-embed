@@ -19,6 +19,7 @@ import { makeFixture } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { ADMIN_API, useAdminApi } from "./admin-api.mjs";
 import { port } from "./ports.mjs";
+import { pickRegion } from "./regions-ui.mjs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
@@ -100,7 +101,7 @@ await step(G, "a contributor comments on someone else's region", async () => {
   const ann = await open("carto-ann");
   ann.page.on("request", (r) => /\/comments/.test(r.url()) && apiCalls.push(`${r.method()} ${new URL(r.url()).pathname}`));
   await ann.page.goto(ADMIN);
-  await ann.page.waitForSelector(card(REGION), { timeout: 15000 });
+  await pickRegion(ann.page, REGION);
   check(G, "no comment link on a card without comments", (await ann.page.locator(`${card(REGION)} [data-action="comments"]`).count()) === 0);
   await ann.page.waitForLoadState("networkidle"); // the cards are drawn again once the comment list has arrived
   await ann.page.click(`${card(REGION)} [data-action="suggest-changes"]`);
@@ -142,7 +143,7 @@ await step(G, "the owner sees it on the card, opens it and resolves it", async (
   owner.page.on("request", (r) => /\/comments/.test(r.url()) && apiCalls.push(`${r.method()} ${new URL(r.url()).pathname}`));
   await owner.page.goto(`${ADMIN}#regions`);
   await owner.page.click("#tab-btn-regions").catch(() => {});
-  await owner.page.waitForSelector(card(REGION), { timeout: 15000 });
+  await pickRegion(owner.page, REGION);
   const link = owner.page.locator(`${card(REGION)} [data-action="comments"]`);
   await link.waitFor({ timeout: 10000 });
   check(G, "the region card shows '1 comment'", ((await link.textContent()) ?? "") === "1 comment");
@@ -171,7 +172,7 @@ await step(G, "it works as a phone bottom sheet and on a tablet", async () => {
     const o = await open("Flanz1", viewport);
     await o.page.goto(`${ADMIN}#regions`);
     await o.page.click("#tab-btn-regions").catch(() => {});
-    await o.page.waitForSelector(card(REGION), { timeout: 15000 });
+    await pickRegion(o.page, REGION);
     await o.page.waitForLoadState("networkidle");
     await o.page.click(`${card(REGION)} [data-action="edit"]`);
     await o.page.waitForSelector("dialog.editor", { timeout: 15000 });

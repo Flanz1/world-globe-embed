@@ -21,6 +21,7 @@ import { makeFixture } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 import { port } from "./ports.mjs";
+import { pickRegion } from "./regions-ui.mjs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
@@ -79,7 +80,7 @@ async function adminPage(as) {
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && !/^Failed to load resource/.test(m.text()) && errors.push(m.text()));
   await page.goto(`${SITE}/admin/#regions`);
-  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await page.waitForSelector("#regions .rrow", { timeout: 15000 });
   return { ctx, page, errors };
 }
 
@@ -87,6 +88,7 @@ try {
   const owner = await adminPage("Flanz1");
   const { page } = owner;
   const card = (id) => page.locator(`#regions .rcard[data-region="${id}"]`);
+  await pickRegion(page, ID);
   await page.click(`#regions .rcard[data-region="${ID}"] [data-action="more"]`);
   await page.locator(`.rmenu[data-region="${ID}"] button:has-text("Rename")`).click();
   const dlg = page.locator("dialog.rename-dlg[open]");
@@ -113,9 +115,10 @@ try {
   check("the region is saved under the new id, the old file is gone", moved?.id === "small-ring" && !onBranch(FILE) && moved.properties.updatedBy.login === "Flanz1" && moved.geometry.coordinates[0].length > 1000);
   check("a region that showed it now shows the new id", onBranch("content/regions/shows-ring.json")?.properties.under?.[0]?.id === "small-ring");
   check("the folder lists the new id", JSON.stringify(onBranch("content/categories.json")?.categories?.[0]?.regions) === '["small-ring"]');
-  await page.waitForSelector('#regions .rcard[data-region="small-ring"]', { timeout: 15000 });
+  await page.waitForSelector('#regions .rrow[data-region="small-ring"]', { timeout: 15000 });
   check("the card shows under the new id with a note about the old embeds", (await card(ID).count()) === 0 && /Renamed from big-ring/.test(await card("small-ring").locator("[data-renamed]").textContent()));
   const ann = await adminPage("carto-ann");
+  await pickRegion(ann.page, "small-ring");
   await ann.page.click(`#regions .rcard[data-region="small-ring"] [data-action="more"]`);
   check("a contributor can't change someone else's region", await ann.page.locator(`.rmenu[data-region="small-ring"] button:has-text("Rename")`).isDisabled());
   await ann.ctx.close();

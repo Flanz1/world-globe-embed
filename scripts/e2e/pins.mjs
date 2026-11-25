@@ -24,6 +24,7 @@ import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 
 import { port } from "./ports.mjs";
+import { pickRegion } from "./regions-ui.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
@@ -323,7 +324,9 @@ const onBranch = (p) => (mock.read(BRANCH, p) ? JSON.parse(mock.read(BRANCH, p).
 await step(A, "the region editor lists pin maps in collapsible folders", async () => {
   const { ctx, page, errors } = await adminPage("Flanz1");
   await page.goto(`${SITE}/admin/#regions`);
+  await pickRegion(page, "landmark-disc");
   await page.waitForSelector('[data-region="landmark-disc"] [data-action="edit"]', { timeout: 15000 });
+  await pickRegion(page, "landmark-disc");
   await page.click('[data-region="landmark-disc"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
   const picker = page.locator("dialog.editor .ed-pinmaps-list");
@@ -345,7 +348,9 @@ await step(A, "the region editor lists pin maps in collapsible folders", async (
 await step(A, "the region editor can show the slot's pins over the map", async () => {
   const { ctx, page, errors } = await adminPage("Flanz1");
   await page.goto(`${SITE}/admin/#regions`);
+  await pickRegion(page, "landmark-disc");
   await page.waitForSelector('[data-region="landmark-disc"] [data-action="edit"]', { timeout: 15000 });
+  await pickRegion(page, "landmark-disc");
   await page.click('[data-region="landmark-disc"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
   check(A, "pins are hidden in the editor until switched on", !(await page.locator("dialog.editor .ed-pin-tip").isVisible()));
@@ -385,7 +390,9 @@ await step(A, "the region editor can show the slot's pins over the map", async (
 await step(A, "the region editor's Pin tool places, moves, edits and deletes pins", async () => {
   const { ctx, page, errors } = await adminPage("Flanz1");
   await page.goto(`${SITE}/admin/#regions`);
+  await pickRegion(page, "landmark-disc");
   await page.waitForSelector('[data-region="landmark-disc"] [data-action="edit"]', { timeout: 15000 });
+  await pickRegion(page, "landmark-disc");
   await page.click('[data-region="landmark-disc"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
   const tool = page.locator('dialog.editor [data-act="pin-tool"]');
@@ -744,7 +751,9 @@ await step(A, "a contributor", async () => {
 await step(A, "the region preview shows the pins of its pin maps", async () => {
   const { ctx, page, errors } = await adminPage("Flanz1");
   await page.goto(`${SITE}/admin/#regions`);
+  await pickRegion(page, "landmark-disc");
   await page.waitForSelector('[data-region="landmark-disc"] [data-action="preview"]', { timeout: 15000 });
+  await pickRegion(page, "landmark-disc");
   await page.click('[data-region="landmark-disc"] [data-action="preview"]');
   const frame = page.frameLocator("dialog[open] iframe.rp-frame");
   // The region includes the "Cities" pin map: its one pin shows, though the pins aren't part of the preview page.
@@ -757,7 +766,9 @@ await step(A, "the region preview shows the pins of its pin maps", async () => {
 await step(A, "legend names: set per pin map in the region editor's Underlays section and saved on the region", async () => {
   const { ctx, page, errors } = await adminPage("Flanz1");
   await page.goto(`${SITE}/admin/#regions`);
+  await pickRegion(page, "landmark-disc");
   await page.waitForSelector('[data-region="landmark-disc"] [data-action="edit"]', { timeout: 15000 });
+  await pickRegion(page, "landmark-disc");
   await page.click('[data-region="landmark-disc"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
   check(A, "no Legend names button in the Pins tab any more", true);

@@ -20,6 +20,7 @@ import { makeFixture } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 import { port } from "./ports.mjs";
+import { pickRegion } from "./regions-ui.mjs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
@@ -71,15 +72,16 @@ async function adminPage(as) {
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && !/^Failed to load resource/.test(m.text()) && errors.push(m.text()));
   await page.goto(`${SITE}/admin/#regions`);
-  await page.waitForSelector("#regions .rcard", { timeout: 15000 });
+  await page.waitForSelector("#regions .rrow", { timeout: 15000 });
   return { ctx, page, errors };
 }
 
 try {
   const owner = await adminPage("Flanz1");
   const { page } = owner;
-  check("the region is in the list before it is deleted", (await page.locator(`#regions .rcard[data-region="${ID}"]`).count()) === 1);
+  check("the region is in the list before it is deleted", (await page.locator(`#regions .rrow[data-region="${ID}"]`).count()) === 1);
   const n0 = mock.log.length;
+  await pickRegion(page, ID);
   await page.click(`#regions .rcard[data-region="${ID}"] [data-action="more"]`);
   await page.locator(`.rmenu[data-region="${ID}"] button:has-text("Delete")`).click();
   await page.fill('dialog input[aria-label="Type the region id to confirm"]', ID);
@@ -114,7 +116,7 @@ try {
   const f = onBranch(FILE);
   check("restoring puts the file back in one commit", !!f && mock.log.length === n2 + 1 && mock.log.at(-1).branch === BRANCH, mock.log.slice(n2).map((c) => c.message).join(","));
   check("…as it was, saved by the person restoring", f?.id === ID && f.geometry.coordinates[0].length > 1000 && f.properties.updatedBy.login === "Flanz1" && f.properties.createdBy.login === "Flanz1", JSON.stringify(f?.properties));
-  await page.waitForSelector(`#regions .rcard[data-region="${ID}"]`, { timeout: 15000 });
+  await page.waitForSelector(`#regions .rrow[data-region="${ID}"]`, { timeout: 15000 });
   check("the region is back in the list of regions", true);
 
   // It was saved again, so it is no longer in the trash.

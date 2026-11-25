@@ -27,6 +27,7 @@ import { useAdminApi } from "./admin-api.mjs";
 import { checkGeometry, polygonsOf } from "../../src/shared/geo.ts";
 
 import { port } from "./ports.mjs";
+import { pickRegion } from "./regions-ui.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
@@ -132,7 +133,7 @@ const before = Object.fromEntries(["live-a", "live-b", "live-c"].map((id) => [id
 
 await step(E, "open together", async () => {
   await page.goto(`${SITE}/admin/#regions`);
-  await page.waitForSelector('#regions .rcard[data-region="live-a"]', { timeout: 15000 });
+  await page.waitForSelector('#regions .rrow[data-region="live-a"]', { timeout: 15000 });
   await page.click("#r-combine");
   await page.waitForSelector("dialog.combine-dlg[open]");
   const go = page.locator('dialog.combine-dlg [data-action="edit-together"]');
@@ -231,7 +232,7 @@ await step(E, "linked combined region", async () => {
   await page.click("dialog.editor .pv-head button.ghost");
   await page.waitForTimeout(300);
   await page.goto(`${SITE}/admin/#regions`);
-  await page.waitForSelector('#regions .rcard[data-region="live-a"]', { timeout: 15000 });
+  await page.waitForSelector('#regions .rrow[data-region="live-a"]', { timeout: 15000 });
   await page.click("#r-combine");
   await page.waitForSelector("dialog.combine-dlg[open]");
   await page.check('dialog.combine-dlg input[value="live-a"]');
@@ -246,10 +247,11 @@ await step(E, "linked combined region", async () => {
   const link = read("live-link");
   check(E, "saving creates just the linked region's file, listing its regions", c.length === 1 && JSON.stringify(changedPaths(c)) === JSON.stringify(["content/regions/live-link.json"]) && JSON.stringify(link?.properties.linked) === JSON.stringify(["live-a", "live-c"]) && parts(link.geometry) === parts(read("live-a").geometry) + parts(read("live-c").geometry), JSON.stringify(c) + (await ed.msg()));
   await page.click("dialog.editor .pv-head button.ghost");
-  await page.waitForSelector('#regions .rcard[data-region="live-link"] .rlinked', { timeout: 15000 });
+  await pickRegion(page, "live-link");
   check(E, "its card says what it links", /live-a, live-c/.test(await page.textContent('#regions .rcard[data-region="live-link"] .rlinked')));
 
   // Editing a linked region edits the regions it links.
+  await pickRegion(page, "live-link");
   await page.click('[data-region="live-link"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(600);
@@ -263,6 +265,7 @@ await step(E, "linked combined region", async () => {
   await page.click("dialog.editor .pv-head button.ghost");
 
   // The linked region names its legend itself: only its own file changes, the regions keep their names.
+  await pickRegion(page, "live-link");
   await page.click('[data-region="live-link"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(600);
@@ -274,6 +277,7 @@ await step(E, "linked combined region", async () => {
   check(E, "the linked region has its own heading and colour name", named.legendTitle === "Combined peoples" && named.legend?.some((e) => e.label === "Highlands") && named.linkedNames?.legendTitle === "Combined peoples", JSON.stringify(named));
   check(E, "its regions keep their legend names", read("live-a").properties.legend?.[0]?.label === "Hills" && !read("live-a").properties.legendTitle, JSON.stringify(read("live-a").properties));
   await page.click("dialog.editor .pv-head button.ghost");
+  await pickRegion(page, "live-link");
   await page.click('[data-region="live-link"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(600);
@@ -287,7 +291,8 @@ await step(E, "linked combined region", async () => {
   await page.click("dialog.editor .pv-head button.ghost");
 
   // Editing one of its regions on its own changes the linked region.
-  await page.waitForSelector('#regions .rcard[data-region="live-a"]');
+  await page.waitForSelector('#regions .rrow[data-region="live-a"]');
+  await pickRegion(page, "live-a");
   await page.click('[data-region="live-a"] [data-action="edit"]');
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(600);
@@ -295,6 +300,7 @@ await step(E, "linked combined region", async () => {
   c = await saveAndWait();
   check(E, "saving a linked region's region on its own writes just that region", c.length === 1 && JSON.stringify(changedPaths(c)) === JSON.stringify(["content/regions/live-a.json"]), JSON.stringify(c));
   await page.click("dialog.editor .pv-head button.ghost");
+  await pickRegion(page, "live-link");
   await page.waitForFunction(() => /A from source/.test(document.querySelector('#regions .rcard[data-region="live-link"] .rlabels')?.textContent ?? ""), null, { timeout: 15000 }).catch(() => {});
   check(E, "the linked region's card shows the change", /A from source/.test((await page.textContent('#regions .rcard[data-region="live-link"] .rlabels')) ?? ""));
 });
