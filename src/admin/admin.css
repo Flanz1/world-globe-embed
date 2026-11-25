@@ -582,7 +582,7 @@ button.account-btn { font-weight: 700; font-size: 15px; background-color: var(--
 /* Phones: the rail becomes a bottom bar (the bulk selection bar takes its place while it's up), the popup a bottom sheet. */
 @media (max-width: 720px) {
   .shell, .shell:has(> .nav-rail:not([hidden])) { display: block; min-height: 0; background: none; }
-  body:has(#tabs:not([hidden])) { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+  body:has(#tabs:not([hidden])) { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
   .nav-rail { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; top: auto; flex-direction: row; justify-content: space-around; gap: 0; width: auto; max-height: none; overflow: visible; padding: 6px 0 calc(6px + env(safe-area-inset-bottom)); background: var(--md-sys-color-surface-container); border-top: 1px solid var(--md-sys-color-outline-variant); }
   .nav-rail button { flex: 1 1 0; width: auto; min-width: 0; min-height: 64px; }
   body.bulk-on .nav-rail { display: none; }

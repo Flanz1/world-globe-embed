@@ -41,7 +41,7 @@ export function renderHealth(checked = false): void {
   const count = problems && notices ? `${plural(problems, "problem", "problems")}, ${plural(notices, "notice", "notices")}` : problems ? plural(problems, "problem", "problems") : plural(notices, "notice", "notices");
   btn.setAttribute("aria-label", issues.length ? `Health, ${count}` : "Health");
 
-  const summary = !loaded ? "Loading…" : !issues.length ? "✓ All clear" : [problems ? `✕ ${plural(problems, "problem", "problems")}` : "", notices ? `! ${plural(notices, "notice", "notices")}` : ""].filter(Boolean).join(" · ");
+  const summary = !loaded ? "Loading…" : !issues.length ? "✓ All clear · nothing to fix" : [problems ? `✕ ${plural(problems, "problem", "problems")}` : "", notices ? `! ${plural(notices, "notice", "notices")}` : ""].filter(Boolean).join(" · ");
 
   // Groups holding a problem first (open), then notice-only groups (closed).
   const groups = groupIssues(issues);
@@ -67,7 +67,6 @@ export function renderHealth(checked = false): void {
         h("strong", { id: "hl-summary", textContent: summary }),
         h("span", { className: "muted small", ariaLive: "polite", textContent: checked ? "Checked just now" : "" }),
       ),
-      loaded && !issues.length ? h("div", { className: "empty" }, h("p", { textContent: "Nothing to fix. Everything checked out." })) : "",
       ...ordered.map((g) =>
         h(
           "details",

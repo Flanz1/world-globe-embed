@@ -126,7 +126,7 @@ await step(T, "all clear once the problem is gone", async () => {
   const { ctx, page } = await open("Flanz1", { mockOf: clean });
   await page.goto(ADMIN + "#health");
   await loaded(page);
-  check(T, "says all clear and shows the empty state", (await page.textContent("#hl-summary")).includes("All clear") && (await page.textContent("#tab-health")).includes("Nothing to fix"));
+  check(T, "says all clear, once", (await page.textContent("#hl-summary")).includes("All clear") && (await page.textContent("#hl-summary")).includes("nothing to fix"));
   check(T, "no count on the tab", (await page.getAttribute("#tab-btn-health", "aria-label")) === "Health");
   await page.click("#tab-health button:has-text('Check again')");
   check(T, "Check again says so", (await page.textContent("#tab-health")).includes("Checked just now"));
