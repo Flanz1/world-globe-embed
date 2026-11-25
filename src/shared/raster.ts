@@ -334,6 +334,7 @@ export function paintSpec(
   };
   // Fills: each part where no part of another colour overlaps it (and, within one colour, only once).
   if (!s.noFill) spec.parts.forEach((p, i) => {
+    if (p.occupied) return; // hatched below
     const out = (spec.overlaps[i] ?? []).filter((j) => j > i || spec.parts[j]?.color !== p.color);
     ctx.save();
     clipOutside(ctx, spec, out, x, y, offsets, area);
@@ -342,6 +343,23 @@ export function paintSpec(
     ctx.globalAlpha = fo;
     ctx.fillStyle = p.color;
     ctx.fill("evenodd");
+    ctx.restore();
+  });
+  // An occupied area is hatched in its colour (stripes with gaps) wherever no part of another colour overlaps it;
+  // where one does, the contested stripes below take over.
+  if (!s.noFill) spec.parts.forEach((p, i) => {
+    if (!p.occupied) return;
+    const pat = stripePattern(ctx, [p.color, ""], Math.max(2, Math.round(lw * STRIPE_W)));
+    if (!pat) return;
+    const out = (spec.overlaps[i] ?? []).filter((j) => spec.parts[j]?.color !== p.color);
+    ctx.save();
+    clipOutside(ctx, spec, out, x, y, offsets, area);
+    ctx.beginPath();
+    tracePoly(ctx, p.rings, x, y, offsets);
+    ctx.clip("evenodd");
+    ctx.globalAlpha = Math.max(fo, STRIPE_ALPHA);
+    ctx.fillStyle = pat;
+    ctx.fillRect(-area.w, -area.h, area.w * 3, area.h * 3);
     ctx.restore();
   });
   // Contested land: equal stripes of every colour there.
