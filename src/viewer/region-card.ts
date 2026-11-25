@@ -26,8 +26,9 @@ export interface RegionCardHost {
 const CSS = `
 .wfact{position:absolute;left:8px;bottom:8px;z-index:3;box-sizing:border-box;width:min(300px,calc(100% - 16px));max-height:60%;overflow:auto;padding:10px 12px;border-radius:8px;background:rgba(20,18,14,.9);color:#f3ead8;font:13px/1.4 system-ui,sans-serif;pointer-events:auto}
 .wfact[hidden]{display:none}
-@media (max-width:420px){.wfact{bottom:44px}}
-@media (max-width:420px) and (pointer:coarse){.wfact{bottom:60px}}
+/* On phones the corner buttons are a tall column at the right: the card takes the width left of it. */
+@media (max-width:420px){.wfact{width:calc(100% - 68px)}}
+@media (max-width:420px) and (pointer:coarse){.wfact{width:calc(100% - 84px)}}
 .wfact h3{margin:0 34px 2px 0;font:700 14px/1.3 system-ui,sans-serif;overflow-wrap:anywhere}
 .wfact .sub,.wfact .muted{margin:0 0 6px;font-size:12px;color:#c9bfab}
 .wfact dl{margin:6px 0 0;display:grid;gap:6px;border-top:1px solid #c9a94e;padding-top:6px}
@@ -39,7 +40,7 @@ const CSS = `
 .wfact li small{color:#c9bfab}
 .wfact .x{all:unset;position:absolute;right:4px;top:4px;width:32px;height:32px;display:grid;place-items:center;border-radius:6px;cursor:pointer;font-size:20px;line-height:1}\n@media (pointer:coarse){.wfact .x{width:44px;height:44px;right:0;top:0}}\n.wfact-hl{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .wfact .x:hover{background:rgba(255,255,255,.15)}
-.wfact .x:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.wfact .x:focus-visible{outline:2px solid #fff;outline-offset:-2px}
 `.replace(/\n/g, "");
 
 const NEIGHBOURS_SHOWN = 8;

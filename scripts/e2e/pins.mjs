@@ -19,7 +19,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "no
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { makeFixture, SLOT, DISC } from "./fixture.mjs";
+import { makeFixture, SLOT, DISC, edTab } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 
@@ -328,6 +328,8 @@ await step(A, "the region editor lists pin maps in collapsible folders", async (
   await page.waitForSelector('[data-region="landmark-disc"] [data-action="edit"]', { timeout: 15000 });
   await pickRegion(page, "landmark-disc");
   await page.click('[data-region="landmark-disc"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open]");
+  await edTab(page, "underlays");
   await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
   const picker = page.locator("dialog.editor .ed-pinmaps-list");
   check(A, "pin maps sit in the folders of the Pins tab, nested", (await picker.locator('.ed-pinfolder input[data-pinmap="holy-sites"]').count()) === 1 && (await picker.locator('.ed-pinfolder .ed-pinfolder input[data-pinmap="battles"]').count()) === 1);
@@ -352,6 +354,8 @@ await step(A, "the region editor can show the slot's pins over the map", async (
   await page.waitForSelector('[data-region="landmark-disc"] [data-action="edit"]', { timeout: 15000 });
   await pickRegion(page, "landmark-disc");
   await page.click('[data-region="landmark-disc"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open]");
+  await edTab(page, "underlays");
   await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
   check(A, "pins are hidden in the editor until switched on", !(await page.locator("dialog.editor .ed-pin-tip").isVisible()));
   await page.click('dialog.editor [data-act="overlays"]');
@@ -394,6 +398,8 @@ await step(A, "the region editor's Pin tool places, moves, edits and deletes pin
   await page.waitForSelector('[data-region="landmark-disc"] [data-action="edit"]', { timeout: 15000 });
   await pickRegion(page, "landmark-disc");
   await page.click('[data-region="landmark-disc"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open]");
+  await edTab(page, "underlays");
   await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
   const tool = page.locator('dialog.editor [data-act="pin-tool"]');
   check(A, "the toolbar has a Pin toggle, off at first", (await tool.getAttribute("aria-pressed")) === "false");
@@ -770,6 +776,8 @@ await step(A, "legend names: set per pin map in the region editor's Underlays se
   await page.waitForSelector('[data-region="landmark-disc"] [data-action="edit"]', { timeout: 15000 });
   await pickRegion(page, "landmark-disc");
   await page.click('[data-region="landmark-disc"] [data-action="edit"]');
+  await page.waitForSelector("dialog.editor[open]");
+  await edTab(page, "underlays");
   await page.waitForSelector("dialog.editor[open] .ed-pinmaps");
   check(A, "no Legend names button in the Pins tab any more", true);
   const btn = page.locator('dialog.editor .ed-pinmaps [data-action="legend-names"][data-pinmap="cities"]');

@@ -62,8 +62,8 @@ import { clampPadding } from "../../shared/params.ts";
 import { TEXTURE_WIDTHS, type MapMeta, type SlotsFile, type TextureWidth } from "../../shared/types.ts";
 import { deviceLimit, nextTier } from "../../shared/tiers.ts";
 import { h } from "../dom.ts";
-import { iconify, withIcon } from "./icons.ts";
-import { sidePanel } from "./sheet.ts";
+import { iconify, withIcon, type IconName } from "./icons.ts";
+import { SHEET_QUERY, sidePanel } from "./sheet.ts";
 import { mapLimit, type GitHub } from "../github.ts";
 import { childrenOf, regionsPerCommit } from "../../shared/categories.ts";
 import { loadMapImage } from "../images.ts";
@@ -501,12 +501,12 @@ export function openEditor(o: EditorOptions): void {
     for (const t of ["pointerdown", "mousedown", "wheel"] as const) el.addEventListener(t, (e) => e.stopPropagation());
     return { el, label, fwd, back };
   })();
-  const undoBtn = iconify(btn("Undo", "Undo (Ctrl+Z)", () => undo(), "undo"), "undo", true);
+  const undoBtn = iconify(btn("Undo", "Undo (Ctrl+Z)", () => undo(), "undo"), "undo", false);
   const histTitles = (): void => {
     undoBtn.title = hist.canUndo ? "Undo (Ctrl+Z)" : "Nothing to undo";
     redoBtn.title = hist.canRedo ? "Redo (Ctrl+Shift+Z or Ctrl+Y)" : "Nothing to redo";
   };
-  const redoBtn = iconify(btn("Redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)", () => redo(), "redo"), "redo", true);
+  const redoBtn = iconify(btn("Redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)", () => redo(), "redo"), "redo", false);
   const gridBtn = iconify(btn("Grid", "Show the globe's 15° grid (G)", () => toggleGrid(), "grid"), "grid", false);
   const snapBtn = iconify(btn(
     "Snap",
@@ -625,6 +625,7 @@ export function openEditor(o: EditorOptions): void {
       {
         id: "region",
         title: "Region",
+        icon: "region",
         children: [
           h("div", { className: "row" }, btn("Centre on region", "Turn the globe preview to face the region", () => sendPreview(true), "centre"), btn("Embed code…", "Copy the iframe code for this region", () => embed(), "embed")),
           h("label", {}, "Id (permanent; embeds use it)", idIn),
@@ -640,6 +641,7 @@ export function openEditor(o: EditorOptions): void {
       {
         id: "parts",
         title: "Parts",
+        icon: "parts",
         children: [
         h(
           "fieldset",
@@ -669,10 +671,22 @@ export function openEditor(o: EditorOptions): void {
           stats,
         ],
       },
-      { id: "underlays", title: "Underlays", children: [underBox, pinMapBox] },
+      { id: "underlays", title: "Layers", icon: "layers", children: [underBox, pinMapBox] },
     ],
+    embed: () => embed(),
+    start: o.isNew ? "region" : "parts",
+    // Folding the inspector (or crossing into the bottom sheet) changes the visible map: re-centre in it.
+    onLayout: () => {
+      measure();
+      draw();
+    },
   });
   const title = h("h2", {});
+  /** "Edit region: rogyn": the words before the colon go in their own span, which phones hide visually so the name fits. */
+  const setTitle = (text: string): void => {
+    const i = text.indexOf(": ");
+    title.replaceChildren(...(i < 0 ? [text] : [h("span", { className: "ed-title-verb", textContent: text.slice(0, i + 2) }), text.slice(i + 2)]));
+  };
   // The Pin tool: place, edit and move pins on this map (they save on their own, apart from the region).
   const pinTool = createPinTool({
     canvas,
@@ -734,52 +748,106 @@ export function openEditor(o: EditorOptions): void {
     },
   });
   layerRows.append(commentTool.row);
+  /** A tool on the left rail: icon over a short name (the full name stays the accessible name and the tooltip). */
+  const onRail = <T extends HTMLButtonElement>(b: T, name: IconName, short?: string): T => {
+    if (!b.dataset.icon) iconify(b, name, !short);
+    b.classList.remove("ghost", "icon-only");
+    b.classList.add("ed-rb");
+    if (short) {
+      let lbl = b.querySelector(".ed-lbl");
+      if (!lbl) b.append((lbl = h("span", { className: "ed-lbl" })));
+      lbl.textContent = short;
+    }
+    return b;
+  };
+  /** A button in the title bar: outlined (view toggles) or plain (Undo, Redo, Help). Not .ghost: Close is the title bar's one .ghost button. */
+  const onHead = <T extends HTMLButtonElement>(b: T, plain = false): T => {
+    b.classList.remove("ghost");
+    b.classList.add("ed-hb");
+    if (plain) b.classList.add("plain");
+    return b;
+  };
+  const sep = () => h("span", { className: "sep", ariaHidden: "true" });
+  /** The left tool rail: draw, edit, clean up, then the pin and comment tools. On phones and tablets it runs across. */
+  const rail = h(
+    "div",
+    { className: "ed-rail", role: "toolbar", ariaLabel: "Tools" },
+    onRail(iconify(toolBtn("select", "Select", "V", ": click a part to select it, drag inside it to move it, Ctrl+drag to move the whole region, Alt+click for the next part where parts overlap"), "select", true), "select"),
+    onRail(iconify(toolBtn("polygon", "Polygon", "P", ": click points to draw a part; double-click or click the first point to close it"), "polygon", true), "polygon"),
+    onRail(iconify(toolBtn("freehand", "Freehand", "F", ": drag to draw a part freehand"), "freehand", true), "freehand"),
+    onRail(iconify(toolBtn("fill", "Fill", "B", ": click inside an area (an island, a province between borders) to trace it out to the coast and to the borders of other parts and regions"), "fill", true), "fill"),
+    sep(),
+    onRail(btn("Add part", "Draw another polygon (an island or exclave), in the default colour; a colour's + Part draws one in that colour", () => ((newPartStyle = OWN_COLOUR), (newPartOccupied = false), startDraw("part")), "add-part"), "add-part", "Part"),
+    onRail(btn("Cut", "Draw a shape to cut away: inside a part it makes a hole, across a part's edge it bites it, right across it splits it into separate parts", () => startDraw("cut"), "cut-hole"), "cut", "Cut"),
+    onRail(btn("Split", "Draw a line right across a part to split it into separate parts", () => startDraw("split"), "split"), "split", "Split"),
+    onRail(btn("Combine…", "Combine the parts you picked (click one, Shift+click the others) into one part, filling small gaps (C)", () => openCombine(), "combine"), "combine", "Combine"),
+    onRail(btn("Extend", "Draw a shape that touches the selected part to add it to that part (E)", () => startExtend(), "extend"), "extend", "Extend"),
+    onRail(btn(
+      "Province border",
+      "Draw a province border inside the region: a dashed line in the embed, shown only inside the parts. It doesn't change the parts. Click a border to select it; Delete removes it.",
+      () => startDraw("border"),
+      "province-border",
+    ), "province-border", "Border"),
+    sep(),
+    onRail(simplifyBtn, "simplify", "Simplify"),
+    onRail(smoothBtn, "smooth", "Smooth"),
+    sep(),
+    onRail(iconify(pinTool.button, "pin", true), "pin"),
+    onRail(withIcon(commentTool.button, "comment"), "comment"),
+  );
+  rail.setAttribute("aria-orientation", "vertical");
+  /** The title bar's view group: Snap, Coast, Grid, Other regions and Help. On phones it floats over the map's top right. */
+  const viewTools = h(
+    "div",
+    { className: "ed-view-tools", role: "group", ariaLabel: "View" },
+    onHead(snapBtn),
+    onHead(coastBtn),
+    onHead(gridBtn),
+    onHead(overlays.button),
+    onHead(iconify(btn("Help", "Keyboard shortcuts and what each tool does", () => showHelp(), "help"), "help", false), true),
+  );
+  const themeBtn = modeButton();
+  const subtitle = h("span", { className: "ed-subtitle", textContent: `${slotName} · ${slot.map}` });
+  const headRow = h(
+    "div",
+    { className: "row ed-head-row" },
+    onHead(undoBtn, true),
+    onHead(redoBtn, true),
+    h("span", { className: "head-sep ed-head-sep", ariaHidden: "true" }),
+    viewTools,
+    h("span", { className: "head-sep ed-head-sep", ariaHidden: "true" }),
+    themeBtn,
+    saveBtn,
+    declineBtn,
+    closeBtn,
+  );
+  const canvasWrap = h("div", { className: "ed-canvas-wrap" }, canvas, pinsLayer.tip, commentTool.markers, pinTool.popover, commentTool.popover, overlays.panel, h("div", { className: "ed-map-tl" }, layerBar.el, optBar, simpPanel, combPanel), ctxMenu, tip, side.minimap, status);
   const dlg = h(
     "dialog",
     { className: "editor", ariaLabel: "Region editor" },
-    h("div", { className: "pv-head" }, title, h("div", { className: "row" }, modeButton(), h("span", { className: "head-sep", ariaHidden: "true" }), saveBtn, declineBtn, closeBtn)),
-    h(
-      "div",
-      { className: "ed-toolbar", role: "toolbar" },
-      iconify(toolBtn("select", "Select", "V", ": click a part to select it, drag inside it to move it, Ctrl+drag to move the whole region, Alt+click for the next part where parts overlap"), "select", true),
-      iconify(toolBtn("polygon", "Polygon", "P", ": click points to draw a part; double-click or click the first point to close it"), "polygon", true),
-      iconify(toolBtn("freehand", "Freehand", "F", ": drag to draw a part freehand"), "freehand", true),
-      iconify(toolBtn("fill", "Fill", "B", ": click inside an area (an island, a province between borders) to trace it out to the coast and to the borders of other parts and regions"), "fill", true),
-      h("span", { className: "sep" }),
-      iconify(pinTool.button, "pin", true),
-      withIcon(commentTool.button, "comment"),
-      h("span", { className: "sep" }),
-      iconify(btn("Add part", "Draw another polygon (an island or exclave), in the default colour; a colour's + Part draws one in that colour", () => ((newPartStyle = OWN_COLOUR), (newPartOccupied = false), startDraw("part")), "add-part"), "add-part", false),
-      iconify(btn("Cut", "Draw a shape to cut away: inside a part it makes a hole, across a part's edge it bites it, right across it splits it into separate parts", () => startDraw("cut"), "cut-hole"), "cut", false),
-      iconify(btn("Split", "Draw a line right across a part to split it into separate parts", () => startDraw("split"), "split"), "split", false),
-      iconify(btn("Combine…", "Combine the parts you picked (click one, Shift+click the others) into one part, filling small gaps (C)", () => openCombine(), "combine"), "combine", false),
-      iconify(btn("Extend", "Draw a shape that touches the selected part to add it to that part (E)", () => startExtend(), "extend"), "extend", false),
-      iconify(btn(
-        "Province border",
-        "Draw a province border inside the region: a dashed line in the embed, shown only inside the parts. It doesn't change the parts. Click a border to select it; Delete removes it.",
-        () => startDraw("border"),
-        "province-border",
-      ), "province-border", false),
-      h("span", { className: "sep" }),
-      undoBtn,
-      redoBtn,
-      h("span", { className: "sep" }),
-      simplifyBtn,
-      smoothBtn,
-      h("span", { className: "sep" }),
-      snapBtn,
-      coastBtn,
-      gridBtn,
-      btn("?", "Keyboard shortcuts", () => showHelp(), "help"),
-      h("span", { className: "ed-toolbar-end" }, overlays.button),
-    ),
-    h(
-      "div",
-      { className: "ed-body" },
-      h("div", { className: "ed-canvas-wrap" }, canvas, pinsLayer.tip, commentTool.markers, pinTool.popover, commentTool.popover, overlays.panel, layerBar.el, optBar, ctxMenu, tip, simpPanel, combPanel, status),
-      side.el,
-    ),
+    h("div", { className: "pv-head" }, h("div", { className: "ed-title" }, title, subtitle), headRow),
+    h("div", { className: "ed-body" }, rail, canvasWrap, side.el),
   );
+  // Phones: the view group floats over the top right of the map, so the title bar keeps to Undo, Redo, Save and Close.
+  const phoneQuery = matchMedia("(max-width: 600px)");
+  const placeViewTools = (): void => {
+    // (the sun/moon switch isn't a map control: phones change it on the admin page, so the region's name has room)
+    if (phoneQuery.matches) canvasWrap.append(viewTools);
+    else headRow.querySelector(".ed-head-sep")!.after(viewTools);
+    themeBtn.hidden = phoneQuery.matches;
+    viewTools.classList.toggle("floating", phoneQuery.matches);
+  };
+  placeViewTools();
+  phoneQuery.addEventListener("change", placeViewTools);
+  // Phones and tablets: the tools run across the top of the bottom sheet, above its tabs; wide screens: the rail on the left.
+  const sheetQuery = matchMedia(SHEET_QUERY);
+  const placeRail = (): void => {
+    if (sheetQuery.matches) side.el.querySelector(".ed-handle")!.after(rail);
+    else canvasWrap.before(rail);
+    rail.setAttribute("aria-orientation", sheetQuery.matches ? "horizontal" : "vertical");
+  };
+  placeRail();
+  sheetQuery.addEventListener("change", placeRail);
   document.body.append(dlg);
   if (live) {
     // Editing together: settings that belong to one region stay as each region has them, so they're not shown.
@@ -815,14 +883,19 @@ export function openEditor(o: EditorOptions): void {
   let touched = false;
   // The canvas's CSS size, cached: reading clientWidth in sx()/sy() forced a layout per vertex
   // (seconds per frame at 2,000 vertices). Refreshed by the ResizeObserver below and when opened.
-  let cssSize = { w: 1, h: 1 };
-  const measure = () => (cssSize = { w: Math.max(1, canvas.clientWidth), h: Math.max(1, canvas.clientHeight) });
+  // vw: the width left visible beside the floating inspector (wide screens); the view centres in that.
+  let cssSize = { w: 1, h: 1, vw: 1 };
+  const measure = () => {
+    const w = Math.max(1, canvas.clientWidth);
+    const cover = side.el.dataset.mode === "panel" && side.el.dataset.folded !== "true" ? Math.min(w / 2, side.el.offsetWidth + 24) : 0;
+    cssSize = { w, h: Math.max(1, canvas.clientHeight), vw: Math.max(1, w - cover) };
+  };
   const size = () => cssSize;
-  const sx = (lon: number) => (lon - view.cx) * view.k + size().w / 2;
+  const sx = (lon: number) => (lon - view.cx) * view.k + size().vw / 2;
   const sy = (lat: number) => (view.cy - lat) * view.k * ky + size().h / 2;
   pinPos.sx = sx;
   pinPos.sy = sy;
-  const wx = (x: number) => view.cx + (x - size().w / 2) / view.k;
+  const wx = (x: number) => view.cx + (x - size().vw / 2) / view.k;
   const wy = (y: number) => view.cy - (y - size().h / 2) / (view.k * ky);
   const nearest = (lon: number, near: number) => lon + 360 * Math.round((near - lon) / 360);
   const kLimits = () => {
@@ -830,9 +903,9 @@ export function openEditor(o: EditorOptions): void {
     return [flatMinK(aspect, w, hh) * 0.5, 400] as const;
   };
   function fitView(): void {
-    const { w, h: hh } = size();
+    const { vw, h: hh } = size();
     const b: [number, number, number, number] = hist.state.parts.length ? geometryBounds(toGeometry(hist.state.parts)) : [-180, -90, 180, 90];
-    const v = flatFit(b, aspect, w, hh);
+    const v = flatFit(b, aspect, vw, hh);
     view = { cx: v.cx, cy: v.cy, k: v.k };
   }
   function zoomAt(f: number, x: number, y: number): void {
@@ -840,7 +913,7 @@ export function openEditor(o: EditorOptions): void {
     const lat = wy(y);
     const [lo, hi] = kLimits();
     view.k = Math.min(hi, Math.max(lo, view.k * f));
-    view.cx = lon - (x - size().w / 2) / view.k;
+    view.cx = lon - (x - size().vw / 2) / view.k;
     view.cy = lat + (y - size().h / 2) / (view.k * ky);
     view.cy = Math.max(-90, Math.min(90, view.cy));
     touched = true;
@@ -1084,7 +1157,10 @@ export function openEditor(o: EditorOptions): void {
     draw();
   }
   function selectPart(p: number, hint = ""): void {
+    const was = selPart;
     selPart = p >= 0 && p < parts().length ? p : -1;
+    // Picking a part shows it in the inspector's Parts tab.
+    if (selPart >= 0 && selPart !== was) side.show("parts");
     pickHint = selPart >= 0 ? hint : "";
     folders.querySelectorAll<HTMLElement>(".ed-part-row").forEach((row) => {
       const on = Number(row.dataset.row) === selPart;
@@ -1751,6 +1827,9 @@ export function openEditor(o: EditorOptions): void {
     redoBtn.disabled = !hist.canRedo;
     histTitles();
     for (const b of dlg.querySelectorAll<HTMLButtonElement>("button.tool")) b.setAttribute("aria-pressed", String(b.dataset.tool === tool && !pinTool.active() && !commentTool.active()));
+    // When the rail runs across (phones, tablets) and scrolls, keep the active tool in view.
+    const railEl = canvas.closest("dialog")?.querySelector<HTMLElement>(".ed-rail");
+    if (railEl && railEl.scrollWidth > railEl.clientWidth) railEl.querySelector<HTMLElement>('button[aria-pressed="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
     gridBtn.setAttribute("aria-pressed", String(gridOn));
     snapBtn.setAttribute("aria-pressed", String(snapOn));
     optBar.hidden = tool !== "freehand" || lineTarget();
@@ -1762,6 +1841,7 @@ export function openEditor(o: EditorOptions): void {
     const real = validRadius(slot.radius) ? ` (about ${formatArea((area / 100) * sphereAreaKm2(slot.radius), "km")} · ${formatArea((area / 100) * sphereAreaKm2(slot.radius), "mi")})` : "";
     stats.textContent = `${n.toLocaleString()} vertices in ${parts_} part${parts_ === 1 ? "" : "s"} · about ${area < 0.01 ? area.toFixed(4) : area.toFixed(2)}% of the globe's surface${real}`;
     stats.classList.toggle("error", !live && n >= WARN_VERTICES);
+    side.badge("parts", parts_ > 1 ? String(parts_) : "");
     if (!live && n >= WARN_VERTICES) stats.textContent += ` · close to the ${MAX_VERTICES.toLocaleString()}-vertex limit`;
   }
 
@@ -1888,16 +1968,16 @@ export function openEditor(o: EditorOptions): void {
     if (document.activeElement !== colorLabelIn) colorLabelIn.value = s.colorLabel;
     syncColours();
     idIn.disabled = !isNew;
-    title.textContent = live
+    setTitle(live
       ? link
         ? `${link.sha ? "Edit" : "New"} linked region ${link.id}: ${live.map((x) => x.id).join(", ")}`
-        : `Edit together: ${live.map((x) => x.id).join(", ")}` : review ? `Suggestion from ${review.by} for ${id}` : propose ? `Suggest changes to ${id}` : `${isNew ? "New region" : "Edit region"}: ${id || "(no id yet)"}`;
+        : `Edit together: ${live.map((x) => x.id).join(", ")}` : review ? `Suggestion from ${review.by} for ${id}` : propose ? `Suggest changes to ${id}` : `${isNew ? "New region" : "Edit region"}: ${id || "(no id yet)"}`);
   }
   const setProp = <K extends keyof EditorState["props"]>(k: K, v: EditorState["props"][K], label: string) =>
     hist.apply(label, { ...hist.state, props: { ...hist.state.props, [k]: v } }, `prop:${k}`);
   idIn.addEventListener("input", () => {
     id = idIn.value.trim();
-    title.textContent = `New region: ${id || "(no id yet)"}`;
+    setTitle(`New region: ${id || "(no id yet)"}`);
   });
   idIn.addEventListener("change", () => {
     id = slugify(idIn.value) || id;
@@ -2195,8 +2275,8 @@ export function openEditor(o: EditorOptions): void {
   function centrePart(p: number): void {
     const rings = parts()[p];
     if (!rings) return;
-    const { w, h: hh } = size();
-    const v = flatFit(geometryBounds(toGeometry([rings])), aspect, w, hh);
+    const { vw, h: hh } = size();
+    const v = flatFit(geometryBounds(toGeometry([rings])), aspect, vw, hh);
     view = { cx: v.cx, cy: v.cy, k: v.k };
     touched = true;
     setTool("select");
@@ -3963,7 +4043,7 @@ export function openEditor(o: EditorOptions): void {
   function showHelp(): void {
     const m = modal("Keyboard shortcuts", "help-dlg");
     // The toolbar's icons, named (touch screens have no tooltips): icon, name, shortcut and what it does.
-    const named = [...dlg.querySelectorAll<HTMLButtonElement>(".ed-toolbar button[data-icon]")].filter((b) => !b.hidden);
+    const named = [...dlg.querySelectorAll<HTMLButtonElement>(".ed-rail button[data-icon], .pv-head button[data-icon]")].filter((b) => !b.hidden);
     if (named.length)
       m.body.append(
         h(

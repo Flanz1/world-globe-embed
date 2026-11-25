@@ -1,10 +1,11 @@
 /**
- * The editor's "Other regions" tool: a button at the right end of the toolbar that opens a panel (top right of the map) to choose
+ * The editor's "Other regions" tool: a button in the title bar's view group that opens a panel (top right of the map) to choose
  * which other regions are drawn as outlines (and used as snap targets). All are hidden until the user
  * turns them on. The panel searches, filters by category and creator, and sorts like the Regions tab
  * (the logic lives in ../region-filter.ts). Which regions are on is remembered in this browser.
  */
 import { h } from "../dom.ts";
+import { icon } from "./icons.ts";
 import { compareBy, creatorChoices, creatorId, matchesQuery, type Filterable } from "../region-filter.ts";
 
 export interface OverlayItem extends Filterable {
@@ -65,8 +66,10 @@ export function createOverlayFilter(o: { items: OverlayItem[]; categories: Overl
   const on = (i: OverlayItem) => enabled.has(i.id);
   const count = () => o.items.filter(on).length;
 
-  const button = h("button", { type: "button", className: "ghost ed-ov-btn", title: "Choose which other regions are shown on the map (all hidden until you turn them on)", ariaExpanded: "false" });
+  const buttonLbl = h("span", { className: "ed-lbl" });
+  const button = h("button", { type: "button", className: "ghost ed-ov-btn", title: "Choose which other regions are shown on the map (all hidden until you turn them on)", ariaExpanded: "false" }, icon("layers"), buttonLbl);
   button.dataset.act = "overlays";
+  button.dataset.icon = "layers";
   const search = h("input", { type: "search", placeholder: "Search id, label or creator", ariaLabel: "Search other regions", name: "ov-search" });
   const cat = h("select", { ariaLabel: "Folder", name: "ov-category" });
   const who = h("select", { ariaLabel: "Creator", name: "ov-creator" });
@@ -115,7 +118,7 @@ export function createOverlayFilter(o: { items: OverlayItem[]; categories: Overl
 
   function renderButton(): void {
     const n = count();
-    button.textContent = n ? `Other regions (${n})` : "Other regions";
+    buttonLbl.textContent = n ? `Other regions (${n})` : "Other regions";
     button.classList.toggle("active", n > 0);
   }
 

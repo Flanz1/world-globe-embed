@@ -457,7 +457,7 @@ const partBox = (s, p) => {
 const moved = (a, b) => a.map((v, i) => +(b[i] - v).toFixed(4));
 /** Unselects by clicking empty map, so the selection outline doesn't cover the borders. */
 const unselect = async () => {
-  const [x, y] = await ed.xy(134, -58); // empty map, clear of the layer bar at the top right
+  const [x, y] = await ed.xy(134, -58); // empty map, clear of the layer bar at the top left
   await page.mouse.click(x, y);
   await page.waitForTimeout(80);
 };
@@ -492,13 +492,14 @@ if (want("editor")) {
     const imgs = await page.evaluate(() => document.querySelectorAll("dialog.editor img").length);
     check(A, "another region overlapping a part isn't listed as an overlap", list.length === 1 && list[0] === "No overlaps." && imgs === 0 && dialogs.length === 0, JSON.stringify(list));
     check(A, "no 'Contested of' or 'Add contested zone' left", (await page.locator('dialog.editor [data-contested-of], dialog.editor [data-act="add-contested"], dialog.editor input[name="zones-follow"]').count()) === 0);
-    // "Other regions" sits at the right end of the toolbar.
+    // "Other regions" sits in the title bar's view group, between Grid and Help; the tools are on a rail left of the map.
     const pos = await page.evaluate(() => {
       const b = document.querySelector("dialog.editor .ed-ov-btn");
-      const bar = document.querySelector("dialog.editor .ed-toolbar");
-      return { inBar: bar.contains(b), b: b.getBoundingClientRect().toJSON(), bar: bar.getBoundingClientRect().toJSON(), help: document.querySelector('dialog.editor [data-act="help"]').getBoundingClientRect().toJSON() };
+      const r = (q) => document.querySelector(q).getBoundingClientRect().toJSON();
+      return { inHead: document.querySelector("dialog.editor .pv-head").contains(b), b: b.getBoundingClientRect().toJSON(), grid: r('dialog.editor [data-act="grid"]'), help: r('dialog.editor [data-act="help"]'), rail: r("dialog.editor .ed-rail"), wrap: r("dialog.editor .ed-canvas-wrap"), select: document.querySelector("dialog.editor .ed-rail").contains(document.querySelector('dialog.editor [data-tool="select"]')) };
     });
-    check(A, "'Other regions' is in the toolbar, at its right end", pos.inBar && pos.bar.right - pos.b.right < 20 && pos.b.left > pos.help.right, JSON.stringify([pos.b.left, pos.b.right, pos.bar.right, pos.help.right]));
+    check(A, "'Other regions' is in the title bar, between Grid and Help", pos.inHead && pos.b.left > pos.grid.right && pos.b.right <= pos.help.left, JSON.stringify([pos.grid.right, pos.b.left, pos.b.right, pos.help.left]));
+    check(A, "the tools are on a rail left of the map", pos.select && pos.rail.right <= pos.wrap.left + 1 && pos.rail.height > pos.rail.width, JSON.stringify([pos.rail, pos.wrap.left]));
     await page.click("dialog.editor .ed-ov-btn");
     const panel = await page.evaluate(() => {
       const p = document.querySelector("dialog.editor .ed-ov-panel");
@@ -597,17 +598,17 @@ if (want("editor")) {
     await page.keyboard.press("[");
     await page.keyboard.press("]");
     check(A, "[ then ] ends where it started", JSON.stringify((await ed.state()).styles) === "[-1,0]");
-    // The layer bar in the top right of the map, while a part is selected.
+    // The layer bar in the top left of the map, while a part is selected.
     // (The bar updates on the next frame.)
     const bar = () => page.evaluate(async () => {
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const b = document.querySelector("dialog.editor .ed-layer-bar");
       const r = b.getBoundingClientRect();
       const w = document.querySelector("dialog.editor .ed-canvas-wrap").getBoundingClientRect();
-      return { shown: !b.hidden, text: b.querySelector(".ed-layer-name").textContent, fwd: b.querySelector('[data-act="layer-forward"]').disabled, back: b.querySelector('[data-act="layer-backward"]').disabled, topRight: Math.abs(r.right - w.right) < 20 && Math.abs(r.top - w.top) < 20 };
+      return { shown: !b.hidden, text: b.querySelector(".ed-layer-name").textContent, fwd: b.querySelector('[data-act="layer-forward"]').disabled, back: b.querySelector('[data-act="layer-backward"]').disabled, topLeft: Math.abs(r.left - w.left) < 20 && Math.abs(r.top - w.top) < 20 };
     });
     let lb = await bar();
-    check(A, "a selected part shows the layer bar in the map's top right", lb.shown && lb.topRight && lb.text === "Part 2 of 2" && lb.fwd && !lb.back, JSON.stringify(lb));
+    check(A, "a selected part shows the layer bar in the map's top left", lb.shown && lb.topLeft && lb.text === "Part 2 of 2" && lb.fwd && !lb.back, JSON.stringify(lb));
     await page.click('dialog.editor .ed-layer-bar [data-act="layer-backward"]');
     lb = await bar();
     check(A, "its Back sends the part under the other", JSON.stringify((await ed.state()).styles) === "[0,-1]" && (await ed.sel()) === 0 && lb.text === "Part 1 of 2" && !lb.fwd && lb.back, JSON.stringify(lb));

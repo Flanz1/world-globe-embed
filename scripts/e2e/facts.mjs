@@ -248,7 +248,7 @@ await step(P, "375px", async () => {
   await card(page).waitFor({ state: "visible" });
   await page.waitForSelector(".wfact dl");
   const [c, ui] = await Promise.all([card(page).boundingBox(), page.locator("#ui").boundingBox()]);
-  check(P, "the card sits above the corner buttons", c.y + c.height <= ui.y, `card bottom ${c.y + c.height}, buttons top ${ui.y}`);
+  check(P, "the card does not cover the corner buttons (they are a column at the right)", c.x + c.width <= ui.x || c.y + c.height <= ui.y, `card ${Math.round(c.x)}..${Math.round(c.x + c.width)} x ${Math.round(c.y)}..${Math.round(c.y + c.height)}, buttons ${Math.round(ui.x)},${Math.round(ui.y)}`);
   check(P, "…inside the viewport", c.x >= 0 && c.x + c.width <= 375);
   check(P, "touch moves focus to ×", await page.evaluate(() => document.activeElement?.classList.contains("x")));
   await page.screenshot({ path: path.join(OUT, "embed-375-card.png") });

@@ -21,7 +21,7 @@ import { existsSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { SLOT, MAP, makeFixture } from "./fixture.mjs";
+import { SLOT, MAP, makeFixture, edTab } from "./fixture.mjs";
 import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 import { checkGeometry, polygonsOf } from "../../src/shared/geo.ts";
@@ -158,6 +158,7 @@ await step(E, "edit and save", async () => {
   // Part 2 (live-a's Hills part) moves to live-b; live-b's label changes; a new part goes to live-a.
   await page.selectOption('dialog.editor select[data-part-owner="1"]', "live-b");
   await page.fill('dialog.editor input[data-part-label="2"]', "B renamed");
+  await edTab(page, "region");
   await page.selectOption('dialog.editor select[name="new-owner"]', "live-a");
   await page.click('dialog.editor [data-act="add-part"]');
   await page.keyboard.press("p");
@@ -184,7 +185,9 @@ await step(E, "edit and save", async () => {
 });
 
 await step(E, "add and remove regions", async () => {
+  await edTab(page, "parts");
   await page.fill('dialog.editor input[data-part-label="0"]', "A edited");
+  await edTab(page, "region");
   await page.click('dialog.editor [data-act="live-regions"]');
   await page.waitForSelector("dialog.combine-dlg[open]");
   check(E, "the list marks the region with unsaved changes", (await page.locator('dialog.combine-dlg label:has(input[value="live-a"]) .badge').count()) === 1);
@@ -198,6 +201,7 @@ await step(E, "add and remove regions", async () => {
   let s = await ed.state();
   check(E, "live-c added; live-a's unsaved label kept", JSON.stringify(s.owners) === JSON.stringify(["live-a", "live-a", "live-b", "live-b", "live-c"]) && s.labels[0] === "A edited", JSON.stringify([s.owners, s.labels]));
   // Now take live-a out (discarding its edit) and save live-c's label.
+  await edTab(page, "region");
   await page.click('dialog.editor [data-act="live-regions"]');
   await page.waitForSelector("dialog.combine-dlg[open]");
   await page.uncheck('dialog.combine-dlg input[value="live-a"]');
@@ -284,6 +288,7 @@ await step(E, "linked combined region", async () => {
   check(E, "reopening shows the names", (await page.inputValue('dialog.editor input[name="legend-title"]')) === "Combined peoples" && (await page.inputValue('dialog.editor .ed-folder[data-key="0"] .ed-folder-head input[type="text"]')) === "Highlands");
   check(E, "nothing to save after reopening", (await saveAndWait()).length === 0, await ed.msg());
   // The linked region has its own "show under": saved on it only (its regions get it when the site is built).
+  await edTab(page, "underlays");
   check(E, "the linked region's editor has the show-under controls", await page.isVisible("dialog.editor .ed-under"));
   await page.selectOption('dialog.editor select[name="under-add"]', "live-b");
   c = await saveAndWait();
