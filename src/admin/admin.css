@@ -171,7 +171,7 @@ dialog#preview::backdrop { background: rgba(0, 0, 0, .45); }
 @media (max-width: 720px) {
   dialog#preview[open] { height: auto; max-height: calc(100vh - 32px); }
   .pv-body { display: block; overflow-y: auto; }
-  #pv-frame { height: 35vh; min-height: 200px; }
+  #pv-frame { height: auto; aspect-ratio: 1 / 1; }
   .pv-controls { overflow: visible; padding: 8px 16px 0; }
   .pv-foot { margin: 4px -16px 0; padding: 12px 16px 16px; }
 }
