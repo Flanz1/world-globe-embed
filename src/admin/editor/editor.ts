@@ -2364,7 +2364,24 @@ export function openEditor(o: EditorOptions): void {
         )
       : null;
     ownerSel?.addEventListener("change", () => setPartOwner(p, ownerSel.value));
-    const row = h("div", { className: "ed-part-row", dataset: { row: String(p) } }, sw, lbl, sel, ownerSel, acts);
+    const more = h("button", {
+      type: "button",
+      className: "ghost tiny ed-more",
+      textContent: "⋯",
+      title: `Colour, region and actions of part ${p + 1}`,
+      ariaLabel: `More for part ${p + 1}`,
+      ariaExpanded: "false",
+      dataset: { act: "part-more" },
+      onclick: (ev: MouseEvent) => {
+        ev.stopPropagation();
+        const on = !row.classList.contains("open");
+        for (const o of folders.querySelectorAll(".ed-part-row.open")) o.classList.remove("open");
+        row.classList.toggle("open", on);
+        syncColours();
+      },
+    });
+    // Line 1 stays one short line; the colour, region and actions sit in a second line shown for the selected or opened part only.
+    const row: HTMLElement = h("div", { className: "ed-part-row", dataset: { row: String(p) } }, sw, lbl, more, h("div", { className: "ed-part-more" }, sel, ownerSel, acts));
     // Shift/Ctrl+click picks parts: don't let the browser start a text selection across the rows.
     row.addEventListener("mousedown", (ev) => {
       if ((ev.shiftKey || ev.ctrlKey || ev.metaKey) && !(ev.target instanceof HTMLInputElement || ev.target instanceof HTMLSelectElement)) ev.preventDefault();
@@ -2378,6 +2395,7 @@ export function openEditor(o: EditorOptions): void {
     return row;
   }
   /** One colour folder: a header (fold, colour, label, part count, + Part, and for added colours ↑ ↓ ×) and its parts. */
+  const moreOpen = new Set<number>(); // folders whose ⋯ line (labels, contested, order, remove) is open
   function folder(k: number, members: number[]): HTMLElement {
     const s = hist.state;
     const own = k === OWN_COLOUR;
@@ -2417,11 +2435,12 @@ export function openEditor(o: EditorOptions): void {
         syncColours();
       },
     });
-    const count = h("span", { className: "muted small ed-count", textContent: `${members.length} part${members.length === 1 ? "" : "s"}`, title: "Parts drawn in this colour" });
+    const count = h("span", { className: "muted small ed-count", textContent: String(members.length), title: `${members.length} part${members.length === 1 ? "" : "s"} in this colour` });
     const add = h("button", {
       type: "button",
-      className: "ghost tiny",
-      textContent: "+ Part",
+      className: "ghost tiny ed-plus",
+      textContent: "+",
+      ariaLabel: "Add part",
       title: "Draw a new part in this colour",
       dataset: { act: "folder-add-part" },
       onclick: () => {
@@ -2453,21 +2472,38 @@ export function openEditor(o: EditorOptions): void {
       dataset: { act: "folder-labels" },
       onclick: () => toggleFolderLabels(members),
     });
-    const head = h("div", { className: "ed-folder-head" }, fold, colour, name, count, labelsBtn, add, addOcc);
+    const menu = h("div", { className: "ed-folder-more", hidden: !moreOpen.has(k) }, labelsBtn, addOcc);
+    const moreBtn = h("button", {
+      type: "button",
+      className: "ghost tiny ed-more",
+      textContent: "⋯",
+      ariaLabel: "More for this colour",
+      title: "More: labels, contested area, order, remove",
+      ariaExpanded: String(moreOpen.has(k)),
+      dataset: { act: "folder-more" },
+      onclick: () => {
+        if (moreOpen.has(k)) moreOpen.delete(k);
+        else moreOpen.add(k);
+        menu.hidden = !moreOpen.has(k);
+        moreBtn.setAttribute("aria-expanded", String(moreOpen.has(k)));
+      },
+    });
+    const labelsOff = h("span", { className: "muted small ed-labels-off", textContent: "labels off", title: "The labels of this colour's parts are hidden in the embed", hidden: true });
+    const head = h("div", { className: "ed-folder-head" }, fold, colour, name, count, labelsOff, add, moreBtn);
     if (live) {
       const e = own ? null : s.props.legend[k];
       const from = own ? live[0].id : e?.src;
-      head.append(h("span", { className: "badge ed-src", textContent: from ?? "new", title: from ? (own || e?.own ? `${from}'s own colour` : `A colour of ${from}`) : "Added here: saved into the legend of each region whose parts use it" }));
+      menu.append(h("span", { className: "badge ed-src", textContent: from ?? "new", title: from ? (own || e?.own ? `${from}'s own colour` : `A colour of ${from}`) : "Added here: saved into the legend of each region whose parts use it" }));
     }
     if (!own)
-      head.append(
+      menu.append(
         Object.assign(btn("↑", "Move this colour up", () => moveFolder(k, -1), "key-up"), { disabled: k === 0 }),
         Object.assign(btn("↓", "Move this colour down", () => moveFolder(k, 1), "key-down"), { disabled: k === s.props.legend.length - 1 }),
         btn("×", `Remove this colour (its parts go to ${entryName(OWN_COLOUR)})`, () => removeFolder(k), "key-remove"),
       );
     body.append(...members.map((p) => partRow(p)));
-    if (!members.length) body.append(h("p", { className: "muted small ed-empty", textContent: "No parts in this colour." }));
-    return h("section", { className: `ed-folder${open ? "" : " folded"}`, dataset: { key: String(k) } }, head, body);
+    if (!members.length) body.append(h("p", { className: "muted small ed-empty", textContent: "No parts yet · + to draw one" }));
+    return h("section", { className: `ed-folder${open ? "" : " folded"}`, dataset: { key: String(k) } }, head, menu, body);
   }
   /** Collapse all folders, or expand them all when every one is already collapsed. */
   foldAllBtn.addEventListener("click", () => {
@@ -2504,8 +2540,10 @@ export function openEditor(o: EditorOptions): void {
       const withText = members.filter((p) => s.labels[p]?.trim());
       const allOff = withText.length > 0 && withText.every((p) => s.labelHidden[p] === true);
       b.disabled = !withText.length;
-      b.textContent = allOff ? "Labels off" : "Labels on";
+      b.textContent = allOff ? "Show labels" : "✓ Show labels";
       b.setAttribute("aria-pressed", String(!allOff));
+      const tag = fo.querySelector<HTMLElement>(".ed-labels-off");
+      if (tag) tag.hidden = !allOff;
     });
     const picks = pickedNow();
     folders.querySelectorAll<HTMLDivElement>(".ed-part-row").forEach((row) => {
@@ -2524,6 +2562,13 @@ export function openEditor(o: EditorOptions): void {
       badge.style.borderColor = partColour(p);
       row.classList.toggle("hot", p === hoverPart);
       row.classList.toggle("sel", p === selPart);
+      if (p === selPart && !row.classList.contains("sel-seen")) {
+        // Selecting a part (on the map or here) opens its row alone and brings it into view in the inspector.
+        for (const o of folders.querySelectorAll(".ed-part-row.open")) o.classList.remove("open");
+        row.scrollIntoView?.({ block: "nearest" });
+      }
+      row.classList.toggle("sel-seen", p === selPart);
+      row.querySelector("button[data-act=part-more]")?.setAttribute("aria-expanded", String(p === selPart || row.classList.contains("open")));
       row.classList.toggle("pick", picks.includes(p));
       row.querySelector("button[data-act=part-select]")?.setAttribute("aria-pressed", String(p === selPart));
       const lblOff = s.labelHidden[p] === true;

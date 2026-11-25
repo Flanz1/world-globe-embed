@@ -24,7 +24,7 @@ import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 
 import { port } from "./ports.mjs";
-import { pickRegion } from "./regions-ui.mjs";
+import { pickRegion, partAct } from "./regions-ui.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
@@ -168,7 +168,7 @@ await step(A, "vertices and midpoints of a locked part still edit", async () => 
 });
 
 await step(A, "toggle the lock", async () => {
-  await ed.lockBtn(1).click();
+  await partAct(page, 1, "part-lock");
   let s = await ed.state();
   check(A, "the Lock button locks a part", same(s.locked, [true, true]) && /Locked/.test((await ed.lockBtn(1).textContent()) ?? ""), JSON.stringify(s.locked));
   const before = s.parts;
@@ -194,10 +194,10 @@ await step(A, "toggle the lock", async () => {
 });
 
 await step(A, "deleting a part keeps the other parts' locks", async () => {
-  await ed.lockBtn(0).click();
+  await partAct(page, 0, "part-lock");
   let s = await ed.state();
   check(A, "unlock part 1 from its row", same(s.locked, [false, true]), JSON.stringify(s.locked));
-  await page.click('dialog.editor .ed-part-row[data-row="0"] [data-act="part-delete"]');
+  await partAct(page, 0, "part-delete");
   await page.click('dialog.small-dlg.danger[open] button:has-text("Delete part")');
   await page.waitForTimeout(150);
   s = await ed.state();
@@ -210,7 +210,7 @@ await step(A, "deleting a part keeps the other parts' locks", async () => {
 
 await step(A, "save", async () => {
   // Both parts are locked now; unlock part 2 so the saved file has something to say.
-  await ed.lockBtn(1).click();
+  await partAct(page, 1, "part-lock");
   check(A, "unlocking part 2 from its row", same((await ed.state()).locked, [true, false]), JSON.stringify((await ed.state()).locked));
   const n0 = mock.log.length;
   await page.click("dialog.editor .ed-save");

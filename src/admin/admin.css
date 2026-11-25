@@ -376,17 +376,27 @@ dialog.editor input:not([type=checkbox], [type=radio], [type=range], [type=color
 .ed-folders input[type=text] { user-select: text; -webkit-user-select: text; }
 .ed-folder { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 4px; background: var(--md-sys-color-surface-container-high); border-radius: 12px; padding: 4px 6px; }
 .ed-folder.folded { padding-bottom: 4px; }
-.ed-folder-head { display: flex; gap: 4px; align-items: center; min-width: 0; overflow-x: auto; }
+/* One fixed line, never scrolls sideways: fold, colour, name (flexes), + and ⋯. Labels, contested, order and remove sit in the ⋯ line. */
+.ed-folder-head { display: flex; gap: 4px; align-items: center; min-width: 0; }
 .ed-folder-head > * { flex: 0 0 auto; }
-.ed-folder-head input[type=text] { flex: 1 0 auto; min-width: 8em; width: 0; font-weight: 600; }
-.ed-folder-head .ed-count { white-space: nowrap; }
+.ed-folder-head input[type=text] { flex: 1 1 0; min-width: 120px; width: 0; font-weight: 600; }
+.ed-folder-head .ed-count, .ed-folder-head .ed-labels-off { white-space: nowrap; }
+.ed-folder:not(.folded) .ed-count { display: none; }
+.ed-folder-head .ed-labels-off[hidden] { display: none; }
 dialog.editor .ed-folder-head button { padding: 0 8px; }
+dialog.editor .ed-folder-head button.ed-plus, dialog.editor .ed-folder-head button.ed-more, .ed-part-row button.ed-more { width: 32px; min-width: 32px; padding: 0; font-size: 16px; line-height: 1; }
+.ed-folder-more { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 0 0 0 14px; min-width: 0; }
+.ed-folder-more[hidden] { display: none; }
 .ed-fold { width: 28px; padding: 0 !important; }
 .ed-folder-body { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 4px; padding-left: 14px; border-left: 2px solid var(--md-sys-color-outline-variant); margin-left: 12px; }
 .ed-folder-body[hidden] { display: none; }
 .ed-empty { margin: 2px 0; }
-.ed-part-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 40%); gap: 4px 8px; align-items: center; padding: 4px 6px; border-radius: 8px; cursor: pointer; }
-.ed-part-row .ed-part-acts { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 4px; }
+.ed-part-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 8px; align-items: center; padding: 2px 6px; border-radius: 8px; cursor: pointer; }
+.ed-part-row .ed-part-more { display: none; grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr); gap: 4px; padding-bottom: 4px; min-width: 0; }
+.ed-part-row.sel .ed-part-more, .ed-part-row.open .ed-part-more { display: grid; }
+.ed-part-row .ed-part-acts { display: flex; flex-wrap: wrap; gap: 4px; }
+.ed-part-row.locked .ed-badge { position: relative; }
+.ed-part-row.locked .ed-badge::after { content: "🔒"; position: absolute; right: -9px; bottom: -8px; font-size: 9px; line-height: 1; font-style: normal; }
 /* Picked and selected rows: secondary container plus an outline, so not colour alone. */
 .ed-part-row.pick { background: color-mix(in srgb, var(--md-sys-color-secondary-container) 55%, transparent); box-shadow: inset 0 0 0 1px var(--md-sys-color-outline-variant); }
 .ed-part-row.sel { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); box-shadow: inset 0 0 0 1px var(--md-sys-color-outline); }
@@ -606,8 +616,7 @@ button.account-btn { font-weight: 700; font-size: 15px; background-color: var(--
 }
 
 /* Editor: several regions edited together */
-.ed-part-row select[data-part-owner] { grid-column: 2 / 4; }
-.ed-folder-head .ed-src { font-size: 11px; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-folder-more .ed-src { font-size: 11px; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-live-note { margin: 0; }
 .rcard .rlinked { margin: 2px 0; }
 .ed-draft { display: grid; gap: 6px; padding: 10px 12px; border: 0; border-radius: 12px; font-size: 13px; background: var(--md-sys-color-surface-container-high); }
