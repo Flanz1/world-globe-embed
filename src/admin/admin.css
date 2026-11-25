@@ -362,7 +362,7 @@ dialog.editor input:not([type=checkbox], [type=radio], [type=range], [type=color
 .ed-colours > button { justify-self: start; }
 /* Layer groups: one card per group (region groups and pin map groups), sections separated by a line. */
 .ed-lgroups { display: grid; gap: 8px; }
-.ed-sec-body > .ed-lgroups + .ed-lgroups { padding-top: 12px; border-top: 1px solid var(--md-sys-color-outline-variant); }
+.ed-sec-body > .ed-lgroups + .ed-lgroups { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--md-sys-color-outline-variant); }
 .ed-groups-list { display: grid; gap: 8px; }
 .ed-group { display: grid; gap: 8px; padding: 8px; border-radius: 12px; background: var(--md-sys-color-surface-container-low); min-width: 0; }
 .ed-group-head { display: flex; align-items: center; gap: 6px; min-width: 0; }

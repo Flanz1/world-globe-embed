@@ -2047,7 +2047,7 @@ export function openEditor(o: EditorOptions): void {
     if (gs.length >= GROUPS_MAX) return setMsg(`A region can have at most ${GROUPS_MAX} pin map groups.`, "error");
     groupOpen.set(`p${gs.length}`, true);
     setPinGroups([...gs, { name: uniqueGroupName("New group", gs.map((g) => g.name)), pinMaps: [] }], "New pin map group");
-    changed("panel");
+    changed();
   }
   /** One group card: fold arrow, name, count, and its body (hidden while folded). */
   function groupCard(key: string, name: string, count: string, onName: (v: string) => void, body: HTMLElement[]): HTMLElement {
@@ -2079,8 +2079,10 @@ export function openEditor(o: EditorOptions): void {
     const slotMaps = mapsOfSlot(pinFile, slotName);
     const key = JSON.stringify([lg, pg, p.pinLegends ?? null, slotMaps.map((m) => [m.id, m.name]), pinEntries().length, [...groupOpen]]);
     const struct = JSON.stringify([lg.map((g) => g.regions.map((e) => e.id)), pg.map((g) => g.pinMaps), slotMaps.length]);
-    // Undo/redo rebuilds the cards, but never while the user is typing in one.
-    if (key !== underKey && (struct !== underStruct || !(lgList.contains(document.activeElement) || pgList.contains(document.activeElement)))) {
+    // Undo/redo rebuilds the cards, but never while the user is typing in a name.
+    const active = document.activeElement;
+    const typing = active instanceof HTMLInputElement && active.type === "text" && (lgList.contains(active) || pgList.contains(active));
+    if (key !== underKey && (struct !== underStruct || !typing)) {
       underKey = key;
       underStruct = struct;
       renderRegionGroups(lg);
@@ -2121,7 +2123,7 @@ export function openEditor(o: EditorOptions): void {
             { className: "ed-group-row", dataset: { region: e.id } },
             swatch,
             h("span", { className: "ed-group-name", textContent: regionTitle(e.id), title: `Region ${e.id}` }),
-            h("span", { className: "muted small", textContent: plural(colourCount(n), "colour") }),
+            h("span", { className: "muted small", textContent: colourCount(n) ? plural(colourCount(n), "colour") : "no legend", title: "Colours this region lists in its legend" }),
             ...arrowBtns(i, g.regions.length, ["Move down a layer (drawn lower)", "Move up a layer (drawn higher)"], move),
             btn("×", `Take ${regionTitle(e.id)} out of this group`, () => {
               update((x) => ({ ...x, regions: x.regions.filter((_, j) => j !== i) }), "Remove from group");
@@ -2202,7 +2204,7 @@ export function openEditor(o: EditorOptions): void {
             const cur = [...pinGroupsNow()[gi].pinMaps];
             [cur[i], cur[i + d]] = [cur[i + d], cur[i]];
             update((x) => ({ ...x, pinMaps: cur }), "Pin map order");
-            changed("panel");
+            changed();
           };
           const names = h("button", { type: "button", className: "text tiny lg-open", textContent: own ? "Legend names ✓" : "Legend names…", dataset: { action: "legend-names", pinmap: mid }, title: `Change what the pin legend calls the panel and each kind of pin for "${nameOfMap(mid)}" on this region's embed`, ariaLabel: own ? `Legend names for ${nameOfMap(mid)}, custom names set` : `Legend names for ${nameOfMap(mid)}` });
           names.addEventListener("click", () =>
@@ -2211,7 +2213,7 @@ export function openEditor(o: EditorOptions): void {
               if (legend) rest[mid] = legend;
               else delete rest[mid];
               setProp("pinLegends", Object.keys(rest).length ? rest : undefined, "Legend names");
-              changed("panel");
+              changed();
             }),
           );
           return h(
@@ -2222,7 +2224,7 @@ export function openEditor(o: EditorOptions): void {
             ...arrowBtns(i, g.pinMaps.length, ["Move up the list", "Move down the list"], move),
             btn("×", `Take ${nameOfMap(mid)} out of this group`, () => {
               update((x) => ({ ...x, pinMaps: x.pinMaps.filter((_, j) => j !== i) }), "Remove from group");
-              changed("panel");
+              changed();
             }),
             names,
           );
@@ -2236,24 +2238,24 @@ export function openEditor(o: EditorOptions): void {
         add.addEventListener("change", () => {
           if (!add.value) return;
           update((x) => ({ ...x, pinMaps: [...x.pinMaps, add.value] }), "Add to group");
-          changed("panel");
+          changed();
         });
         const onIn = h("input", { type: "checkbox", checked: g.on !== false, name: "pin-group-on", ariaLabel: `${g.name} starts shown` });
         onIn.addEventListener("change", () => {
           update((x) => ({ ...x, on: onIn.checked ? undefined : false }), "Group starts shown");
-          changed("panel");
+          changed();
         });
         const order = arrowBtns(gi, pg.length, ["Move this group up the list", "Move this group down the list"], (d) => {
           const cur = [...pinGroupsNow()];
           [cur[gi], cur[gi + d]] = [cur[gi + d], cur[gi]];
           groupOpen.clear();
           setPinGroups(cur, "Pin group order");
-          changed("panel");
+          changed();
         });
         const del = h("button", { type: "button", className: "ghost danger", textContent: "Delete group", title: "Delete this group (its pin maps are not deleted)", dataset: { act: "pin-group-delete" } });
         del.addEventListener("click", () => {
           setPinGroups(pinGroupsNow().filter((_, j) => j !== gi), "Delete group");
-          changed("panel");
+          changed();
         });
         return groupCard(`p${gi}`, g.name, plural(g.pinMaps.length, "pin map"), (v) => (update((x) => ({ ...x, name: v.slice(0, GROUP_NAME_MAX) }), "Group name"), typed()), [
           ...(rows.length ? [h("div", { className: "ed-group-rows" }, ...rows)] : [h("p", { className: "muted small", textContent: "No pin maps yet." })]),

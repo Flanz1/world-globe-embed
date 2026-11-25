@@ -175,7 +175,7 @@ await step(A, "save", async () => {
   check(A, "save is one commit to content/regions/country.json", c.length === 1 && c[0].branch === BRANCH, JSON.stringify(c));
   const f = JSON.parse(mock.read(BRANCH, "content/regions/country.json"));
   const lg = f.properties.layerGroups ?? [];
-  check(A, "saved as layerGroups with each group's name, members, start state and fill", lg.length === 2 && lg[0].name === "Culture" && lg[0].regions[0].id === "culture" && lg[0].on === true && lg[1].name === "Faiths" && lg[1].regions[0].id === "faith" && lg[1].fill === 0.8, JSON.stringify(lg));
+  check(A, "saved as layerGroups with each group's name, members, start state and fill", lg.length === 2 && lg[0].name === "Faiths" && lg[0].regions[0].id === "faith" && lg[0].fill === 0.8 && lg[1].name === "Culture" && lg[1].regions[0].id === "culture" && lg[1].on === true, JSON.stringify(lg));
   check(A, "…and none of the older fields", f.properties.under === undefined && f.properties.underTitle === undefined);
   check(A, "…with the region's own switch", f.properties.ownToggle === true && f.properties.layerLabel === "Borders");
 });

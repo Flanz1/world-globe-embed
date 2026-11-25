@@ -196,7 +196,7 @@ if (regionId !== null) {
                 ? { ...Object.fromEntries(under.map((e) => [e.id, e.label ?? ""])), [regionId]: entry?.ul ?? "" }
                 : {},
               title: "",
-              ...(entry?.lg?.length ? { groups: entry.lg } : {}),
+              ...(under.length && entry?.lg?.length ? { groups: entry.lg } : {}),
               own: entry?.ot === true,
               hidden: under.length ? under.filter((e, i) => (e.on === undefined ? i > 0 : !e.on)).map((e) => e.id) : [],
             },
