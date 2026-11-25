@@ -11,6 +11,7 @@ import {
   type RegionFeature,
   type RegionIndexEntry,
 } from "../../src/shared/region.ts";
+import { flatUnder, groupPinMapIds, pinGroups, regionGroups } from "../../src/shared/groups.ts";
 import { cleanLegends, pinsJson, type PinFeature } from "../../src/shared/pins.ts";
 import type { Content } from "./content.ts";
 
@@ -30,19 +31,30 @@ export interface ViewerModules {
 const modules = (m: string | ViewerModules, preloads: string[] = []): ViewerModules =>
   typeof m === "string" ? { globe: m, globePreloads: preloads } : m;
 
-/** The underlay settings of a region for the inline index: only regions that exist on its slot (and aren't itself). */
-function underIndex(r: RegionFeature, all: ReadonlyMap<string, RegionFeature> | undefined, pinMaps?: ReadonlyMap<string, { slot: string }>): Pick<RegionIndexEntry, "u" | "uc" | "ut" | "ul" | "pm" | "pl" | "ot"> {
+/** The layer and pin groups of a region for the inline index: only regions and pin maps that exist on its slot (and aren't itself). */
+function underIndex(r: RegionFeature, all: ReadonlyMap<string, RegionFeature> | undefined, pinMaps?: ReadonlyMap<string, { slot: string; name?: string }>): Pick<RegionIndexEntry, "u" | "uc" | "ut" | "ul" | "pm" | "pl" | "pg" | "lg" | "ot"> {
   const p = r.properties;
-  const pm = (p.pinMaps ?? []).filter((id) => pinMaps?.get(id)?.slot === p.slot);
+  const regionName = (id: string) => all?.get(id)?.properties.name?.trim() || id;
+  const groups = regionGroups(p, regionName)
+    .map((g) => ({ ...g, regions: g.regions.filter((e) => e.id !== r.id && all?.get(e.id)?.properties.slot === p.slot) }))
+    .filter((g) => g.regions.length);
+  const pg = pinGroups(p, (id) => pinMaps?.get(id)?.name || id)
+    .map((g) => ({ ...g, pinMaps: g.pinMaps.filter((id) => pinMaps?.get(id)?.slot === p.slot) }))
+    .filter((g) => g.pinMaps.length);
+  const pm = groupPinMapIds(pg);
   const pl = cleanLegends(Object.fromEntries(Object.entries(p.pinLegends ?? {}).filter(([id]) => pm.includes(id))));
-  const u = (p.under ?? []).filter((e) => e.id !== r.id && all?.get(e.id)?.properties.slot === p.slot);
-  if (!u.length) return pm.length ? { pm, ...(pl ? { pl } : {}) } : {};
-  return {
+  const pins = {
     ...(pm.length ? { pm } : {}),
     ...(pl ? { pl } : {}),
-    u: u.map((e) => ({ id: e.id, ...(e.label?.trim() ? { label: e.label.trim() } : {}), ...(typeof e.on === "boolean" ? { on: e.on } : {}), ...(typeof e.fill === "number" ? { fill: e.fill } : {}) })),
+    ...(pg.length ? { pg: pg.map((g) => ({ n: g.name, ids: g.pinMaps, ...(g.on === false ? { off: true as const } : {}) })) } : {}),
+  };
+  const u = flatUnder(groups);
+  if (!u.length) return pins;
+  return {
+    ...pins,
+    u,
+    lg: groups.map((g) => ({ n: g.name, ids: g.regions.map((e) => e.id) })),
     ...(p.underClip === false ? { uc: false as const } : {}),
-    ...(p.underTitle?.trim() ? { ut: p.underTitle.trim() } : {}),
     ...(p.ownToggle === true ? { ot: true as const } : {}),
     ...(p.layerLabel?.trim() ? { ul: p.layerLabel.trim() } : {}),
   };

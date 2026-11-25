@@ -56,6 +56,8 @@ export interface RegionMessage {
     /** Toggle names by region id (the edited region's own included); missing or empty: the id. */
     names: Record<string, string>;
     title: string;
+    /** The layer groups: name and member region ids, one legend section each. */
+    groups?: { n: string; ids: string[] }[];
   };
 }
 
@@ -76,7 +78,7 @@ export interface RegionContext {
   /** Stacked regions (?regions=): show the legend's show/hide boxes (toggle=0 hides them). */
   toggle: boolean;
   /** Several regions stacked: the legend's toggle names and heading, and the ones that start hidden. */
-  layers?: { names: Record<string, string>; title: string; hidden: string[]; /** The region over its underlays has a toggle of its own. */ own?: boolean; /** Preview only: counts the underlay settings received, so the viewer rebuilds the toggles when they change. */ rev?: number };
+  layers?: { names: Record<string, string>; title: string; hidden: string[]; /** The region over its underlays has a toggle of its own. */ own?: boolean; /** Layer groups: one legend section (name + switch + colours) each. */ groups?: { n: string; ids: string[] }[]; /** Preview only: counts the underlay settings received, so the viewer rebuilds the toggles when they change. */ rev?: number };
   /** Start locked on the selected position (lock=0 starts unlocked). */
   lock: boolean;
   /** lat/lon/zoom given explicitly in the URL; they override auto-fit. */

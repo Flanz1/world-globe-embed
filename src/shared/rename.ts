@@ -11,12 +11,19 @@ export function renameInRegion(f: RegionFeature, oldId: string, newId: string): 
   const p = f.properties;
   const linked = p.linked?.includes(oldId);
   const under = p.under?.some((u) => u.id === oldId);
-  if (!linked && !under) return null;
+  const grouped = p.layerGroups?.some((g) => g.regions.some((e) => e.id === oldId));
+  if (!linked && !under && !grouped) return null;
   const out = structuredClone(f);
   if (linked) out.properties.linked = [...new Set(p.linked!.map((x) => (x === oldId ? newId : x)))];
   if (under) {
     const seen = new Set<string>();
     out.properties.under = p.under!.map((u) => (u.id === oldId ? { ...u, id: newId } : u)).filter((u) => (seen.has(u.id) ? false : (seen.add(u.id), true)));
+  }
+  if (grouped) {
+    const seen = new Set<string>();
+    out.properties.layerGroups = p.layerGroups!
+      .map((g) => ({ ...g, regions: g.regions.map((e) => (e.id === oldId ? { ...e, id: newId } : e)).filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true))) }))
+      .filter((g) => g.regions.length);
   }
   return out;
 }

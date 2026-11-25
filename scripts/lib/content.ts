@@ -10,6 +10,7 @@ import { MAX_PINS_PER_SLOT, checkPin, type PinFeature } from "../../src/shared/p
 import { checkAccess } from "../../src/shared/access.ts";
 import { checkCategories, type CategoriesFile } from "../../src/shared/categories.ts";
 import { checkPinMaps, type PinMapsFile } from "../../src/shared/pinmaps.ts";
+import { groupPinMapIds, pinGroups, regionGroups } from "../../src/shared/groups.ts";
 import { inheritLinkedUnder, resolveLinked } from "../../src/shared/combine.ts";
 import { ROOT, contentPaths, type ContentPaths } from "./paths.ts";
 
@@ -203,7 +204,7 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
 
   // Underlays are looked up by id when the embed loads; one that's gone just isn't shown.
   for (const [id, region] of regions) {
-    for (const e of region.properties.under ?? []) {
+    for (const e of regionGroups(region.properties).flatMap((g) => g.regions)) {
       const other = regions.get(e.id);
       if (e.id === id || !other || other.properties.slot !== region.properties.slot)
         warnings.push(`content/regions/${id}.json: the region shown under it ("${e.id}") doesn't exist on slot "${region.properties.slot}", so it isn't shown.`);
@@ -278,7 +279,7 @@ export function loadContent(paths: ContentPaths = contentPaths()): ValidationRes
     else if (m.slot !== pin.properties.slot) warnings.push(`content/pins/${pin.id}.json: the pin is on slot "${pin.properties.slot}" but its pin map "${id}" is on slot "${m.slot}".`);
   }
   for (const [id, region] of regions)
-    for (const pm of region.properties.pinMaps ?? [])
+    for (const pm of groupPinMapIds(pinGroups(region.properties)))
       if (mapsById.get(pm)?.slot !== region.properties.slot) warnings.push(`content/regions/${id}.json: the pin map "${pm}" doesn't exist on slot "${region.properties.slot}", so its pins aren't shown.`);
 
   // Who may use the admin page (optional: without it only the repository owner can sign in).

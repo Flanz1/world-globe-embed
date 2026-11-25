@@ -8,9 +8,6 @@
     "color": "#ff1e05",
     "fillOpacity": 0.35,
     "label": false,
-    "pinMaps": [
-      "zuhurist-holy-sites"
-    ],
     "updated": "2026-11-18T21:19:13Z",
     "created": "2026-11-13T19:54:59Z",
     "createdBy": {
@@ -20,7 +17,15 @@
     "updatedBy": {
       "id": 45669787,
       "login": "Flanz1"
-    }
+    },
+    "pinGroups": [
+      {
+        "name": "Zuhurist holy sites",
+        "pinMaps": [
+          "zuhurist-holy-sites"
+        ]
+      }
+    ]
   },
   "geometry": {
     "type": "MultiPolygon",

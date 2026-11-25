@@ -111,6 +111,8 @@ export interface ViewerConfig extends ViewDefaults {
   pins?: string;
   /** The legend words of those pin maps (RegionProperties.pinLegends), when the region sets any. */
   pinLegends?: PinLegends;
+  /** The region's pin groups (name + pin map ids): one switch each in the pin legend; `off` ones start hidden. */
+  pinGroups?: { n: string; ids: string[]; off?: true }[];
   slug: string;
   title: string;
   /** Available textures, URLs relative to the slot page, smallest first. */

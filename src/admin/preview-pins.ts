@@ -9,17 +9,17 @@ import { pinMaps } from "./pinmaps.ts";
  * `show` is what ?pins= would say: pin map ids, comma separated ("" shows none).
  * The pins are the ones in the admin page's memory, saved or still being saved.
  */
-export function sendPins(frame: HTMLIFrameElement, slot: string, show: string, legends?: PinLegends): void {
+export function sendPins(frame: HTMLIFrameElement, slot: string, show: string, legends?: PinLegends, groups?: { n: string; ids: string[]; off?: true }[]): void {
   const pins = pinEntries()
     .map((e) => e.feature)
     .filter((f): f is PinFeature => !!f && f.properties.slot === slot);
   const file = JSON.parse(pinsJson(pins, mapsOfSlot(pinMaps(), slot)));
-  frame.contentWindow?.postMessage({ type: "wge-pins", file, show, ...(legends ? { legends } : {}) }, SITE.origin);
+  frame.contentWindow?.postMessage({ type: "wge-pins", file, show, ...(legends ? { legends } : {}), ...(groups?.length ? { groups } : {}) }, SITE.origin);
 }
 
 /** Sends the pins again whenever the preview says its viewer has started listening (it does, once it's up). */
-export function keepPinsSent(frame: HTMLIFrameElement, slot: string, show: () => string, legends?: () => PinLegends | undefined): void {
+export function keepPinsSent(frame: HTMLIFrameElement, slot: string, show: () => string, legends?: () => PinLegends | undefined, groups?: () => { n: string; ids: string[]; off?: true }[]): void {
   window.addEventListener("message", (e: MessageEvent) => {
-    if (e.origin === location.origin && e.source === frame.contentWindow && e.data?.type === "wge-pins-wanted") sendPins(frame, slot, show(), legends?.());
+    if (e.origin === location.origin && e.source === frame.contentWindow && e.data?.type === "wge-pins-wanted") sendPins(frame, slot, show(), legends?.(), groups?.());
   });
 }

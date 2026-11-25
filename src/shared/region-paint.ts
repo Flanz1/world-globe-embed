@@ -114,7 +114,7 @@ export const hasContestedLayers = (layers: readonly PaintLayer[]): boolean => la
  * The legend rows to show. Stacked regions list every region's rows; a region shown under layers lists, for
  * each layer, only the colours some part of which lies inside the region (the others aren't seen).
  */
-export function legendRowsFor(r: RegionData): LegendEntry[] {
+export function legendRowsFor(r: RegionData, pick?: (m: RegionData) => boolean): LegendEntry[] {
   const members = r.members;
   if (members?.some((m) => m.underOf)) {
     // Stacked regions with underlays of their own: an underlay lists only the colours that lie inside its host.
@@ -123,6 +123,7 @@ export function legendRowsFor(r: RegionData): LegendEntry[] {
     const seenRows = new Set<string>();
     return members
       .flatMap((m) => {
+        if (pick && !pick(m)) return [];
         const h = host(m);
         if (!h) return legendRows(m);
         if (!hostPrepared.has(h.id)) hostPrepared.set(h.id, polygonsOf(h.geometry).map((p) => prepare(p)));
@@ -130,12 +131,12 @@ export function legendRowsFor(r: RegionData): LegendEntry[] {
       })
       .filter((e) => !seenRows.has(`${e.color}\u0000${e.label}`) && !!seenRows.add(`${e.color}\u0000${e.label}`));
   }
-  if (!members || !r.clip) return legendRows(r);
+  if (!members || !r.clip) return members && pick ? members.filter(pick).flatMap(legendRows) : legendRows(r);
   const top = members[members.length - 1];
   const topPrepared = polygonsOf(top.geometry).map((p) => prepare(p));
   const seen = new Set<string>();
   return members
-    .flatMap((m, i) => (i === members.length - 1 ? legendRows(m) : presentRows(m, topPrepared)))
+    .flatMap((m, i) => (pick && !pick(m) ? [] : i === members.length - 1 ? legendRows(m) : presentRows(m, topPrepared)))
     .filter((e) => !seen.has(`${e.color}\u0000${e.label}`) && !!seen.add(`${e.color}\u0000${e.label}`));
 }
 

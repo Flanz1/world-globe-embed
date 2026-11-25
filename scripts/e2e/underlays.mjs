@@ -1,12 +1,12 @@
 // e2e-suite: roots=EDITOR,VIEWER weight=4
 /**
- * Browser checks for "Show under this region" in the region editor, in headless Chromium.
+ * Browser checks for "layer groups" in the region editor, in headless Chromium.
  *
  *   npm run e2e:underlays
  *
  * Picking a region adds its row at once; the editor map and the globe preview show it under the region
  * (cut to the region's outline); naming it, switching it off and the heading reach the preview's toggles;
- * saving writes under/underTitle/layerLabel in one commit.
+ * saving writes layerGroups/layerLabel in one commit.
  *
  * Screenshots and report.json go to .e2e/underlays/. Exits non-zero if any check fails.
  */
@@ -98,54 +98,85 @@ await step(A, "open the editor on the country", async () => {
 
 let plain = [];
 let outsideBefore = [];
-await step(A, "adding an underlay", async () => {
+const G = `${D} .ed-group`;
+await step(A, "adding a group of regions", async () => {
   plain = await pixel(104, -46);
   outsideBefore = await pixel(95, -46);
   await edTab(page, "underlays");
-  check(A, "no layer list before anything is added", (await page.locator(`${D} .ed-under-row`).count()) === 0);
-  await page.selectOption(`${D} select[name="under-add"]`, "faith");
-  // No wait: the row must be there straight away.
-  check(A, "the row shows at once", (await page.locator(`${D} .ed-under-row`).count()) === 1);
-  await page.selectOption(`${D} select[name="under-add"]`, "culture");
-  check(A, "…and a second one", (await page.locator(`${D} .ed-under-row`).count()) === 2);
+  check(A, "no groups before one is made", (await page.locator(G).count()) === 0);
+  await page.click(`${D} [data-act="group-new"]`);
+  // No wait: the card must be there straight away.
+  check(A, "the group card shows at once", (await page.locator(G).count()) === 1);
+  await page.fill(`${G}[data-group="r0"] input[name="group-name"]`, "Religion");
+  await page.selectOption(`${G}[data-group="r0"] select[name="group-add"]`, "faith");
+  check(A, "a region added to the group shows as a row", (await page.locator(`${G}[data-group="r0"] .ed-group-row`).count()) === 1);
+  await page.click(`${D} [data-act="group-new"]`);
+  await page.fill(`${G}[data-group="r1"] input[name="group-name"]`, "Culture");
+  await page.selectOption(`${G}[data-group="r1"] select[name="group-add"]`, "culture");
+  check(A, "…and a second group", (await page.locator(G).count()) === 2 && (await page.locator(`${G}[data-group="r1"] .ed-group-row`).count()) === 1);
   await page.waitForTimeout(500);
   const now = await pixel(104, -46);
-  check(A, "the editor map paints the underlay under the region", JSON.stringify(now) !== JSON.stringify(plain), `${plain} → ${now}`);
+  check(A, "the editor map paints the group's region under the region", JSON.stringify(now) !== JSON.stringify(plain), `${plain} → ${now}`);
   const outside = await pixel(95, -46); // in the faith region, outside the country
   check(A, "…cut to the region's outline (outside it nothing is added)", JSON.stringify(outside) === JSON.stringify(outsideBefore), `${outsideBefore} → ${outside}`);
-  await page.screenshot({ path: path.join(OUT, "editor-underlays.png") });
+  await page.screenshot({ path: path.join(OUT, "editor-groups.png") });
 });
 
 await step(A, "preview", async () => {
-  await page.waitForFunction(() => [...document.querySelectorAll("iframe")].some((f) => f.contentDocument?.querySelectorAll(".rlayers label").length === 2), null, { timeout: 15000 }).catch(() => {});
-  const labels = await pv().locator(".rlayers label span").allTextContents();
-  check(A, "the globe preview lists a toggle per underlay (not the region)", labels.length === 2, labels.join(" | "));
-  await page.fill(`${D} .ed-under-row:nth-of-type(1) input[type="text"]`, "Religion");
-  await page.fill(`${D} input[name="under-title"]`, "Map layers");
+  await page.waitForFunction(() => [...document.querySelectorAll("iframe")].some((f) => f.contentDocument?.querySelectorAll(".rgroup").length === 2), null, { timeout: 15000 }).catch(() => {});
+  const labels = await pv().locator(".rgroup-head span").allTextContents();
+  check(A, "the globe preview has a section per group (not the region)", labels.length === 2 && labels[0] === "Religion" && labels[1] === "Culture", labels.join(" | "));
+  const on = await pv().locator(".rgroup input").evaluateAll((e) => e.map((x) => x.checked));
+  check(A, "first group on, the second off, as the defaults say", JSON.stringify(on) === JSON.stringify([true, false]), JSON.stringify(on));
+  await page.fill(`${G}[data-group="r0"] input[name="group-name"]`, "Faiths");
   await page.waitForTimeout(900);
-  const l2 = await pv().locator(".rlayers label span").allTextContents();
-  check(A, "a name set in the editor reaches the preview", l2[0] === "Religion", l2.join(" | "));
-  check(A, "…and the heading", (await pv().locator(".rlayers-head").textContent()) === "Map layers");
-  const on = await pv().locator(".rlayers input").evaluateAll((e) => e.map((x) => x.checked));
-  check(A, "first underlay on, the second off, as the defaults say", JSON.stringify(on) === JSON.stringify([true, false]), JSON.stringify(on));
-  await page.locator(`${D} .ed-under-row`).nth(1).locator('input[type="checkbox"]').check();
+  const l2 = await pv().locator(".rgroup-head span").allTextContents();
+  check(A, "a name set in the editor reaches the preview", l2[0] === "Faiths", l2.join(" | "));
+  await page.locator(`${G}[data-group="r1"] input[name="group-on"]`).check();
   await page.waitForTimeout(700);
-  const on2 = await pv().locator(".rlayers input").evaluateAll((e) => e.map((x) => x.checked));
-  check(A, "switching 'On' in the editor shows it in the preview", on2[1] === true, JSON.stringify(on2));
+  const on2 = await pv().locator(".rgroup input").evaluateAll((e) => e.map((x) => x.checked));
+  check(A, "switching 'Shown when the embed opens' in the editor shows it in the preview", on2[1] === true, JSON.stringify(on2));
   await page.check(`${D} input[name="own-toggle"]`);
   await page.fill(`${D} input[name="layer-label"]`, "Borders");
   await page.waitForTimeout(900);
-  const l3 = await pv().locator(".rlayers label span").allTextContents();
-  check(A, "'Readers can switch this region off too' adds the region's own toggle", l3.length === 3 && l3.includes("Borders"), l3.join(" | "));
+  const l3 = await pv().locator(".rgroup-head span").allTextContents();
+  check(A, "'Readers can switch this region off too' adds the region's own switch", l3.length === 3 && l3.includes("Borders"), l3.join(" | "));
   await page.screenshot({ path: path.join(OUT, "editor-preview.png") });
 });
 
-await step(A, "underlay fill", async () => {
-  const slider = page.locator(`${D} .ed-under-row`).first().locator('input[name="under-fill"]');
-  check(A, "each underlay has a Fill slider with its own accessible name", /^Fill for /.test((await slider.getAttribute("aria-label")) ?? ""), await slider.getAttribute("aria-label"));
+await step(A, "group fill", async () => {
+  const slider = page.locator(`${G}[data-group="r0"] input[name="group-fill"]`);
+  check(A, "each group has a Fill slider with its own accessible name", /^Fill for /.test((await slider.getAttribute("aria-label")) ?? ""), await slider.getAttribute("aria-label"));
   await slider.fill("0.8");
   await page.waitForTimeout(900);
-  check(A, "the output reads 80%", (await page.locator(`${D} .ed-under-row`).first().locator("output").textContent()) === "80%");
+  check(A, "the output reads 80%", (await page.locator(`${G}[data-group="r0"] output`).textContent()) === "80%");
+});
+
+await step(A, "screenshots", async () => {
+  await page.locator(`${G}[data-group="r0"] .ed-group-row .ed-more`).first().click();
+  for (const [w, hgt] of [[1440, 900], [375, 800]]) {
+    await page.setViewportSize({ width: w, height: hgt });
+    await page.waitForTimeout(300);
+    const tab = page.locator(`${D} .ed-tab[data-sec="underlays"]`);
+    if (await tab.isVisible()) await tab.click();
+    await page.locator(`${G}[data-group="r0"]`).scrollIntoViewIfNeeded().catch(() => {});
+    await page.screenshot({ path: path.join(OUT, `layers-menu-${w}.png`) });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.locator(`${G}[data-group="r0"] .ed-group-row .ed-more`).first().click();
+});
+
+await step(A, "order and delete", async () => {
+  await page.locator(`${G}[data-group="r1"] .ed-group-foot button`, { hasText: "↑" }).click();
+  await page.waitForTimeout(300);
+  const names = await page.locator(`${G} input[name="group-name"]`).evaluateAll((e) => e.map((x) => x.value));
+  check(A, "a group moves up the list", names.join(",") === "Culture,Faiths", names.join(","));
+  await page.locator(`${G}[data-group="r0"] .ed-group-foot button`, { hasText: "↓" }).click();
+  await page.waitForTimeout(300);
+  await page.click(`${D} [data-act="group-new"]`);
+  check(A, "a new group card starts empty and open", (await page.locator(`${G}[data-group="r2"] .ed-group-row`).count()) === 0 && (await page.locator(`${G}[data-group="r2"] .ed-group-body`).isVisible()));
+  await page.locator(`${G}[data-group="r2"] [data-act="group-delete"]`).click();
+  check(A, "Delete group removes it", (await page.locator(G).count()) === 2);
 });
 
 await step(A, "save", async () => {
@@ -157,8 +188,10 @@ await step(A, "save", async () => {
   const c = mock.log.slice(n0);
   check(A, "save is one commit to content/regions/country.json", c.length === 1 && c[0].branch === BRANCH, JSON.stringify(c));
   const f = JSON.parse(mock.read(BRANCH, "content/regions/country.json"));
-  check(A, "saved with the underlay's fill", f.properties.under?.[0]?.fill === 0.8 && f.properties.under?.[1]?.fill === undefined, JSON.stringify(f.properties.under));
-  check(A, "saved with under, its names and the heading", f.properties.under?.length === 2 && f.properties.under[0].label === "Religion" && f.properties.underTitle === "Map layers", JSON.stringify(f.properties.under));
+  const lg = f.properties.layerGroups ?? [];
+  check(A, "saved as layerGroups with each group's name, members, start state and fill", lg.length === 2 && lg[0].name === "Faiths" && lg[0].regions[0].id === "faith" && lg[0].fill === 0.8 && lg[1].name === "Culture" && lg[1].regions[0].id === "culture" && lg[1].on === true, JSON.stringify(lg));
+  check(A, "…and none of the older fields", f.properties.under === undefined && f.properties.underTitle === undefined);
+  check(A, "…with the region's own switch", f.properties.ownToggle === true && f.properties.layerLabel === "Borders");
 });
 
 check(A, "no errors in the admin page", errors.length === 0, errors.join(" | ") || "none");

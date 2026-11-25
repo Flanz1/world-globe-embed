@@ -77,6 +77,7 @@ if (regionId !== null) {
   if (!stacked && !preview && entry?.pm?.length && !q.has("pins")) {
     cfg.pins = entry.pm.join(",");
     if (entry.pl) cfg.pinLegends = entry.pl;
+    if (entry.pg) cfg.pinGroups = entry.pg;
   }
   const ids = stacked ? stacked.filter(inIndex) : [...under.map((e) => e.id), regionId];
   // Stacked regions bring their own underlays (under=0 leaves them out): each goes just below its region, cut to it. Their ids are `<id>@<region>`, as one underlay can serve several regions.
@@ -84,7 +85,9 @@ if (regionId !== null) {
     ? ids.flatMap((id) => {
         const e = inIndex(id);
         const us = q.get("under") !== "0" && e?.u ? e.u.filter((u) => u.id !== id && inIndex(u.id)) : [];
-        return [...us.map((u, i) => ({ id: u.id, host: id, label: u.label, on: u.on ?? i === 0, clip: e?.uc !== false, fill: underFill(u.fill) })), { id }];
+        // A group of one is named after the group; a bigger one has no single name here, so its regions are named by themselves.
+        const single = new Map((e?.lg ?? []).flatMap((g) => (g.ids.length === 1 ? [[g.ids[0], g.n] as const] : [])));
+        return [...us.map((u, i) => ({ id: u.id, host: id, label: u.label ?? single.get(u.id), on: u.on ?? i === 0, clip: e?.uc !== false, fill: underFill(u.fill) })), { id }];
       })
     : [];
   const stackUnder = stackPlan.filter((s) => s.host);
@@ -117,7 +120,10 @@ if (regionId !== null) {
           if (u.names && typeof u.names === "object") for (const [k, v] of Object.entries(u.names)) if (typeof v === "string") names[k] = v.slice(0, 60);
           previewLayers.names = names;
           previewLayers.own = u.own === true;
-          previewLayers.title = typeof u.title === "string" ? u.title.slice(0, 40) : "";
+          previewLayers.title = "";
+          previewLayers.groups = Array.isArray(u.groups)
+            ? u.groups.slice(0, 8).flatMap((g: { n?: unknown; ids?: unknown }) => (typeof g?.n === "string" && Array.isArray(g.ids) ? [{ n: g.n.slice(0, 40), ids: g.ids.filter((x: unknown): x is string => typeof x === "string").slice(0, 8) }] : []))
+            : [];
           previewLayers.rev = (previewLayers.rev ?? 0) + 1;
           previewLayers.hidden = Array.isArray(u.hidden) ? u.hidden.filter((x: unknown): x is string => typeof x === "string") : [];
         }
@@ -189,7 +195,8 @@ if (regionId !== null) {
               names: under.length
                 ? { ...Object.fromEntries(under.map((e) => [e.id, e.label ?? ""])), [regionId]: entry?.ul ?? "" }
                 : {},
-              title: entry?.ut ?? "",
+              title: "",
+              ...(under.length && entry?.lg?.length ? { groups: entry.lg } : {}),
               own: entry?.ot === true,
               hidden: under.length ? under.filter((e, i) => (e.on === undefined ? i > 0 : !e.on)).map((e) => e.id) : [],
             },

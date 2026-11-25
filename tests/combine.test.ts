@@ -1,3 +1,4 @@
+import { groupRegionIds, regionGroups } from "../src/shared/groups.ts";
 import { readFileSync } from "node:fs";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
@@ -235,10 +236,26 @@ describe("underlays of a linked region", () => {
   it("are shown under every linked region too", () => {
     const m = new Map([["a", a], ["b", b], ["ab", link]]);
     inheritLinkedUnder(m);
-    expect(m.get("a")!.properties.under!.map((e) => e.id)).toEqual(["x", "faith", "b"]);
-    expect(m.get("b")!.properties.under!.map((e) => e.id)).toEqual(["x", "faith"]);
+    expect(groupRegionIds(regionGroups(m.get("a")!.properties))).toEqual(["x", "faith", "b"]);
+    expect(groupRegionIds(regionGroups(m.get("b")!.properties))).toEqual(["x", "faith"]);
     expect(m.get("ab")).toBe(link);
     expect(a.properties.under).toEqual([{ id: "x" }]);
+  });
+});
+
+describe("layer groups of a linked region", () => {
+  const a = region("a", { layerGroups: [{ name: "Religion", regions: [{ id: "x" }] }] }, [square(0, 0)]);
+  const b = region("b", {}, [square(10, 0)]);
+  const link = region("ab", { linked: ["a", "b"], layerGroups: [{ name: "Religion", regions: [{ id: "x" }, { id: "faith" }] }, { name: "Culture", regions: [{ id: "elves" }], on: false }] }, [square(50, 50)]);
+  it("are merged by name into every linked region", () => {
+    const m = new Map([["a", a], ["b", b], ["ab", link]]);
+    inheritLinkedUnder(m);
+    expect(m.get("a")!.properties.layerGroups).toEqual([
+      { name: "Religion", regions: [{ id: "x" }, { id: "faith" }] },
+      { name: "Culture", regions: [{ id: "elves" }], on: false },
+    ]);
+    expect(m.get("b")!.properties.layerGroups!.map((g) => g.name)).toEqual(["Religion", "Culture"]);
+    expect(a.properties.layerGroups![0].regions).toEqual([{ id: "x" }]);
   });
 });
 

@@ -163,7 +163,7 @@ export function sendRegion(frame: HTMLIFrameElement, region: RegionData, centre 
   frame.contentWindow?.postMessage(msg, SITE.origin);
 }
 
-export function openRegionPreview(region: RegionData, slot: Slot, slotTitle: string, pinMaps: string[] = [], pinLegends?: PinLegends): void {
+export function openRegionPreview(region: RegionData, slot: Slot, slotTitle: string, pinMaps: string[] = [], pinLegends?: PinLegends, pinGroups?: { n: string; ids: string[]; off?: true }[]): void {
   const m = modal(`Preview: ${region.id}`, "rpreview");
   const frame = h("iframe", { title: "Region embed preview", className: "rp-frame" });
   const state = { view: "globe" as "globe" | "flat", label: region.label, dim: false };
@@ -180,7 +180,7 @@ export function openRegionPreview(region: RegionData, slot: Slot, slotTitle: str
     sendRegion(frame, region);
   });
   // The pin maps the region includes, as its embed shows them.
-  if (pinMaps.length) keepPinsSent(frame, region.slot, () => pinMaps.join(","), () => pinLegends);
+  if (pinMaps.length) keepPinsSent(frame, region.slot, () => pinMaps.join(","), () => pinLegends, () => pinGroups ?? []);
   const seg = (v: "globe" | "flat", text: string) =>
     h("button", {
       type: "button",

@@ -2,6 +2,7 @@
  * Combining several saved regions into one new region. Pure data: the admin page shows the result in
  * the editor as a new, unsaved region, so the originals are never touched.
  */
+import { GROUPS_MAX, groupRegionIds, regionGroups } from "./groups.ts";
 import { MAX_VERTICES, polygonsOf, vertexCount, type Position, type RegionGeometry } from "./geo.ts";
 import {
   DEFAULT_FILL_OPACITY,
@@ -229,8 +230,9 @@ export function resolveLinked(f: RegionFeature, lookup: (id: string) => RegionFe
     ...(names ? { linkedNames: names } : {}),
     // The linked region's own layers settings (regions shown under it) are its own, not its sources'.
     ...(p.under?.length ? { under: p.under } : {}),
-    ...(p.underClip === false ? { underClip: false } : {}),
+    ...(p.layerGroups?.length ? { layerGroups: p.layerGroups } : {}),
     ...(p.underTitle ? { underTitle: p.underTitle } : {}),
+    ...(p.underClip === false ? { underClip: false } : {}),
     ...(p.ownToggle ? { ownToggle: true } : {}),
     ...(p.layerLabel ? { layerLabel: p.layerLabel } : {}),
     ...(p.created ? { created: p.created } : {}),
@@ -249,14 +251,32 @@ export function resolveLinked(f: RegionFeature, lookup: (id: string) => RegionFe
  */
 export function inheritLinkedUnder(regions: Map<string, RegionFeature>): void {
   for (const region of [...regions.values()]) {
-    const under = region.properties.linked && region.properties.under;
-    if (!under?.length) continue;
+    const groups = region.properties.linked && regionGroups(region.properties);
+    if (!groups?.length) continue;
     for (const cid of region.properties.linked!) {
       const child = regions.get(cid);
       if (!child || child.properties.linked || child.properties.slot !== region.properties.slot) continue;
-      const have = child.properties.under ?? [];
-      const extra = under.filter((e) => e.id !== cid && !have.some((h) => h.id === e.id));
-      if (extra.length) regions.set(cid, { ...child, properties: { ...child.properties, under: [...have, ...extra].slice(0, UNDER_MAX) } });
+      const have = regionGroups(child.properties);
+      const taken = new Set(groupRegionIds(have));
+      let room = UNDER_MAX - taken.size;
+      // Same-named groups merge, so a Religion group on the link and on a child stay one section.
+      const merged = have.map((g) => ({ ...g, regions: [...g.regions] }));
+      let changed = false;
+      for (const g of groups) {
+        const extra = g.regions.filter((e) => e.id !== cid && !taken.has(e.id)).slice(0, Math.max(0, room));
+        if (!extra.length) continue;
+        room -= extra.length;
+        extra.forEach((e) => taken.add(e.id));
+        changed = true;
+        const same = merged.find((m) => m.name === g.name);
+        if (same) same.regions.push(...extra);
+        else merged.push({ ...g, regions: extra });
+      }
+      if (!changed) continue;
+      const rest = { ...child.properties };
+      delete rest.under;
+      delete rest.underTitle;
+      regions.set(cid, { ...child, properties: { ...rest, layerGroups: merged.slice(0, GROUPS_MAX) } });
     }
   }
 }
