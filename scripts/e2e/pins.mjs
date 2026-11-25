@@ -413,7 +413,10 @@ await step(A, "the region editor's Pin tool places, moves, edits and deletes pin
   const pop = page.locator("dialog.editor .ed-pin-pop");
   await pop.waitFor({ state: "visible", timeout: 5000 });
   check(A, "clicking the map opens the new-pin popover with Name focused", (await pop.locator("strong").textContent()) === "New pin" && (await page.evaluate(() => document.activeElement?.getAttribute("name"))) === "pin-name");
-  check(A, "while Pin is on, no drawing tool shows as pressed", (await page.locator('dialog.editor button.tool[aria-pressed="true"]').count()) === 0);
+  // The tool buttons' pressed state is redrawn on the editor's next frame, which can lag on a loaded CI runner.
+  await page.waitForFunction(() => !document.querySelector('dialog.editor button.tool[aria-pressed="true"]'), null, { timeout: 3000 }).catch(() => {});
+  const pressed = await page.$$eval('dialog.editor button.tool[aria-pressed="true"]', (bs) => bs.map((b) => b.dataset.tool));
+  check(A, "while Pin is on, no drawing tool shows as pressed", pressed.length === 0, pressed.join(", "));
   const pr = await pop.boundingBox();
   check(A, "the popover is beside the new pin, not over it", pr.x > cv.x + 40 + 10 || pr.x + pr.width < cv.x + 40 - 10, JSON.stringify(pr));
   await page.focus('dialog.editor [data-kind="city"]');
