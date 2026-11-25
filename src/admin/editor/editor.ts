@@ -1980,7 +1980,7 @@ export function openEditor(o: EditorOptions): void {
     if (document.activeElement !== colorLabelIn) colorLabelIn.value = s.colorLabel;
     syncColours();
     if (document.activeElement !== nameIn) nameIn.value = s.name ?? "";
-    if (isNew && !live && !link) id = idFor(s.name ?? "");
+    if (isNew && !o.feature && !live && !link) id = idFor(s.name ?? "");
     renderId();
     setTitle(live
       ? link
@@ -1992,7 +1992,7 @@ export function openEditor(o: EditorOptions): void {
   // The name is free text (capitals kept). Only a new region's id follows it, and only until the first save.
   nameIn.addEventListener("input", () => {
     setProp("name", nameIn.value.slice(0, NAME_MAX), "Name");
-    if (isNew && !live && !link) {
+    if (isNew && !o.feature && !live && !link) {
       id = idFor(nameIn.value);
       renderId();
       setTitle(`New region: ${nameIn.value.trim() || id}`);
@@ -4159,7 +4159,7 @@ export function openEditor(o: EditorOptions): void {
     if (isNew) {
       if (o.takenIds.has(id)) {
         // Someone saved a region with this id since the editor opened: take the next free one.
-        id = idFor(hist.state.props.name ?? "");
+        id = o.feature ? uniqueId(id, o.takenIds) : idFor(hist.state.props.name ?? "");
         renderId();
         if (o.takenIds.has(id)) return setMsg("Couldn't find a free id. Change the name a little.", "error"), nameIn.focus();
       }
@@ -4441,7 +4441,7 @@ export function openEditor(o: EditorOptions): void {
   async function conflict(gone: boolean): Promise<void> {
     if (isNew) {
       o.takenIds.add(id);
-      id = idFor(hist.state.props.name ?? "");
+      id = o.feature ? uniqueId(id, o.takenIds) : idFor(hist.state.props.name ?? "");
       renderId();
       setMsg(`Someone saved a region with that id while you were drawing. This one will be saved as "${id}": press Save again.`, "error");
       return nameIn.focus();
