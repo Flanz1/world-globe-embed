@@ -57,6 +57,13 @@ export function displayName(r: RegionFeature): string {
   return p.name?.trim() || p.partLabels?.find((l) => l?.trim())?.trim() || r.id;
 }
 
+/** What a tile shows as its title: the region's name, else its first part label, else its id made readable ("niridya-religions" becomes "Niridya Religions"). */
+export function tileTitle(r: RegionFeature): string {
+  const p = r.properties;
+  const own = p.name?.trim() || p.partLabels?.find((l) => l?.trim())?.trim();
+  return own || r.id.split("-").filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(" ") || r.id;
+}
+
 interface Group {
   name: string;
   ids: string[];
@@ -156,9 +163,9 @@ export function generateAtlasPages(content: Content, cats?: CategoriesFile): Gen
             const src = regionEmbedCode(SITE_TOKEN, slug, title, { id, name: displayName(r) }, o).match(/src="([^"]+)"/)![1].replace(/&amp;/g, "&").replace(SITE_TOKEN, "../../../");
             const col = /^#[0-9a-fA-F]{3,8}$/.test(r.properties.color) ? r.properties.color : "#888";
             const op = typeof r.properties.fillOpacity === "number" ? Math.min(1, Math.max(0.15, r.properties.fillOpacity + 0.2)) : 0.55;
-            return `<li class="tile" data-src="${escapeHtml(src)}" data-title="${escapeHtml(`Live view of ${displayName(r)}`)}">
-<div class="view"><svg viewBox="0 0 ${VIEW_W} ${VIEW_H}" role="img" aria-label="Outline of ${escapeHtml(displayName(r))}"><path d="${outlinePath(r)}" fill="${col}" fill-opacity="${op}" stroke="${col}" stroke-width="1.2" fill-rule="evenodd" stroke-linejoin="round"/></svg></div>
-<div class="name">${escapeHtml(displayName(r))}</div>${displayName(r) !== id ? `<code>${escapeHtml(id)}</code>` : ""}
+            return `<li class="tile" data-src="${escapeHtml(src)}" data-title="${escapeHtml(`Live view of ${tileTitle(r)}`)}">
+<div class="view"><svg viewBox="0 0 ${VIEW_W} ${VIEW_H}" role="img" aria-label="Outline of ${escapeHtml(tileTitle(r))}"><path d="${outlinePath(r)}" fill="${col}" fill-opacity="${op}" stroke="${col}" stroke-width="1.2" fill-rule="evenodd" stroke-linejoin="round"/></svg></div>
+<div class="name">${escapeHtml(tileTitle(r))}</div>${tileTitle(r) !== id ? `<code>${escapeHtml(id)}</code>` : ""}
 <div class="row"><button type="button" class="tonal" data-live>Load live view</button><button type="button" class="tonal" data-unload hidden>Show preview</button><button type="button" data-copy data-code="${escapeHtml(code)}" aria-live="polite">Copy embed code</button></div></li>`;
           })
           .join("\n");

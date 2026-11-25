@@ -259,6 +259,10 @@ await step(E, "edits other people's regions, can't delete them", async () => {
   const r = regionOn("landmark-disc");
   check(E, "saved: creator unchanged, saver is the editor", r.properties.createdBy?.login === "carto-ann" && r.properties.updatedBy?.login === "drafter-bo", `${r.properties.createdBy?.login} / ${r.properties.updatedBy?.login}`);
   await page.click("dialog.editor .pv-head button.ghost");
+  // Recent activity is in the strip's popup now: open it (Activity is its first pane).
+  await page.click("#strip");
+  await page.waitForSelector("#strip-pop:popover-open", { timeout: 5000 });
+  await page.click("#pop-btn-activity");
   await page.waitForSelector('#activity-list [data-open="landmark-disc"]', { timeout: 10000 });
   const row = (await page.locator("#activity-list .act-row").first().innerText()).replace(/\s+/g, " ");
   check(E, "Activity tab lists the save, newest first, with a link to the region", /saved landmark-disc/.test(row), row);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ago, parseMessage } from "../src/shared/activity.ts";
+import { ago, dayGroup, parseMessage } from "../src/shared/activity.ts";
 
 describe("activity feed", () => {
   it("reads the admin page's commit messages", () => {
@@ -43,4 +43,15 @@ describe("activity filters and pages", () => {
     expect(pageOf([], 1, 10)).toMatchObject({ pages: 1, page: 1, items: [] });
   });
   it("lists people by activity", () => expect(people(all)).toEqual(["ann", "Bo"]));
+});
+
+describe("activity day groups (the strip popup)", () => {
+  const now = new Date(2026, 10, 24, 21, 0);
+  it("splits saves into Today, Yesterday and Earlier by local calendar day", () => {
+    expect(dayGroup(new Date(2026, 10, 24, 0, 5).toISOString(), now)).toBe("Today");
+    expect(dayGroup(new Date(2026, 10, 23, 23, 59).toISOString(), now)).toBe("Yesterday");
+    expect(dayGroup(new Date(2026, 10, 23, 0, 0).toISOString(), now)).toBe("Yesterday");
+    expect(dayGroup(new Date(2026, 10, 22, 23, 59).toISOString(), now)).toBe("Earlier");
+    expect(dayGroup("not a date", now)).toBe("Earlier");
+  });
 });

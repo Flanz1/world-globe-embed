@@ -25,6 +25,16 @@ export function ago(iso: string, now = Date.now()): string {
   return new Date(t).toLocaleDateString();
 }
 
+/** "Today", "Yesterday" or "Earlier", for the popup's day headings. */
+export function dayGroup(iso: string, now = new Date()): "Today" | "Yesterday" | "Earlier" {
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return "Earlier";
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  if (t.getTime() >= start) return "Today";
+  if (t.getTime() >= start - 86_400_000) return "Yesterday";
+  return "Earlier";
+}
+
 /** Reads a commit message the admin page wrote. Anything else is shown as it is. */
 export function parseMessage(msg: string): Pick<Change, "verb" | "regions" | "tail" | "raw"> {
   const line = msg.split("\n")[0].trim();

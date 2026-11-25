@@ -76,7 +76,7 @@ One line per source file: what it is for. The first comment in each file says mo
 | `src/admin/region-history.ts` | Version history of one region: the saves that changed its file (who, when), a preview of an old outline dashed over the current one, and a one-click restore. |
 | `src/admin/regions.ts` | The Regions tab: every saved region as a card with a thumbnail, and the actions on it (edit, rename, duplicate, delete, preview, copy embed code), and combining several regions into a new one. |
 | `src/admin/session.ts` | Who is signed in to the admin page and what they may do. |
-| `src/admin/status.ts` | The admin sidebar's "Checks" list: will this commit and deploy cleanly? |
+| `src/admin/status.ts` | The strip under the admin header (saved / saving / deploying / failed, branch tag) and its Activity · Deploys · Checks popup |
 | `src/admin/suggestions.ts` | Suggested changes, on the Regions tab. |
 | `src/admin/theme.ts` | The account's colour theme: an accent colour (a seed the whole palette is made from, src/shared/hct.ts) and light / dark / follow the system. |
 | `src/admin/trash.ts` | "Recently deleted": regions and map pins deleted in the last few days, with a Restore button. |

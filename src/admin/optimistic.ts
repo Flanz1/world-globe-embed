@@ -5,7 +5,7 @@
  * reason is shown. Saves run one after another, so quick successive changes don't race each other.
  */
 
-/** One line for the status sidebar's Checks list (null removes it). Shape matches status.ts's Check. */
+/** One line for the strip popup's Checks list (null removes it). Shape matches status.ts's Check. */
 export interface SaveCheck {
   id: string;
   label: string;
@@ -14,7 +14,7 @@ export interface SaveCheck {
 }
 
 export interface OptimisticHooks {
-  /** Shows how the latest change fared in the sidebar's Checks list. */
+  /** Shows how the latest change fared in the strip popup's Checks list. */
   setCheck: (c: SaveCheck | null) => void;
   setStatus: (text: string, kind?: "muted" | "error" | "ok") => void;
   /** After a save: status, run polling and (when `reload`) a reload from the server. */
