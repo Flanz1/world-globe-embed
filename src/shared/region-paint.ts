@@ -71,7 +71,7 @@ export function paintSpecOf(r: PaintInput, clashes: Clashes): PaintSpec {
   const hidden = borders.hide.some((poly) => poly.some((h) => h.size));
   const shared = hidden || borders.national.length > 0 || provincial.length > 0;
   const occupied = polys.map((_, i) => r.occupied?.[i] === true);
-  const plain = !clashes.internal.length && !shared;
+  const plain = !clashes.internal.length && !shared && !occupied.some(Boolean);
   const colours = partColours(r, polys.length);
   const front: number[][] = polys.map(() => []);
   const overlaps: number[][] = polys.map(() => []);
@@ -105,7 +105,7 @@ export function regionPaintSpec(r: PaintInput): PaintSpec {
 }
 
 /** Whether the legend gets its "Contested" row: some parts of different colours overlap (occupied areas included). */
-export const hasContestedMarks = (spec: PaintSpec): boolean => spec.cells.length > 0;
+export const hasContestedMarks = (spec: PaintSpec): boolean => spec.cells.length > 0 || spec.parts.some((p) => p.occupied);
 
 /** hasContestedMarks for stacked layers. */
 export const hasContestedLayers = (layers: readonly PaintLayer[]): boolean => layers.some((l) => hasContestedMarks(l.spec));

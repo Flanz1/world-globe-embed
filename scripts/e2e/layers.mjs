@@ -344,13 +344,13 @@ for (const view of want("embed") ? ["flat", "globe"] : []) {
     check(G, "regions/legacy-zone.json marks it occupied (and has no old fields)", JSON.stringify(data.occupied) === "[false,true]" && data.contested === undefined && data.clash === undefined, JSON.stringify(data.occupied));
     const e = await openEmbed(q("legacy-zone"));
     const rows = await e.frame.evaluate(() => [...document.querySelectorAll(".rkey li")].map((li) => li.textContent));
-    check(G, "no legend rows (one colour: nothing contested)", rows.length === 0, JSON.stringify(rows));
+    check(G, "the legend has its Contested row (an occupied area is striped even over nothing)", rows.length === 1 && rows[0] === "Contested", JSON.stringify(rows));
     if (view === "flat") {
       const shot = await canvasShot(e);
       await writeFile(path.join(OUT, "embed-flat-legacy.png"), shot);
       const img = await raw(shot);
       const at = flatMap();
-      // The zone is drawn in its parent's colour, solid where it covers no other colour.
+      // The zone is drawn in its parent's colour, hatched inside with a solid border where it covers no other colour.
       const zEast = lineProfile(img, at(46, -9.5), at(46, -14.5), "#ff3b30", 120);
       check(G, "the former zone is drawn in its parent's colour", isSolid(zEast), fmt(zEast));
     }
