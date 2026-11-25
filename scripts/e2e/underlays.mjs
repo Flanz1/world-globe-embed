@@ -152,6 +152,20 @@ await step(A, "group fill", async () => {
   check(A, "the output reads 80%", (await page.locator(`${G}[data-group="r0"] output`).textContent()) === "80%");
 });
 
+await step(A, "screenshots", async () => {
+  await page.locator(`${G}[data-group="r0"] .ed-group-row .ed-more`).first().click();
+  for (const [w, hgt] of [[1440, 900], [375, 800]]) {
+    await page.setViewportSize({ width: w, height: hgt });
+    await page.waitForTimeout(300);
+    const tab = page.locator(`${D} .ed-tab[data-sec="underlays"]`);
+    if (await tab.isVisible()) await tab.click();
+    await page.locator(`${G}[data-group="r0"]`).scrollIntoViewIfNeeded().catch(() => {});
+    await page.screenshot({ path: path.join(OUT, `layers-menu-${w}.png`) });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.locator(`${G}[data-group="r0"] .ed-group-row .ed-more`).first().click();
+});
+
 await step(A, "order and delete", async () => {
   await page.locator(`${G}[data-group="r1"] .ed-group-foot button`, { hasText: "↑" }).click();
   await page.waitForTimeout(300);

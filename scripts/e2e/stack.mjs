@@ -97,6 +97,10 @@ try {
   await page.waitForSelector(".rgroup", { timeout: 15000 });
   check("a group of two regions is one section with one switch", (await page.locator(".rgroup").count()) === 1 && (await names(page)).join("|") === "Overlays" && (await checked(page)).join() === "true");
   const keysOn = await page.locator(".rgroup-keys li").allTextContents();
+  await page.setViewportSize({ width: 375, height: 700 });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(OUT, "embed-groups-375.png") });
+  await page.setViewportSize({ width: 900, height: 520 });
   await page.locator(".rgroup input").uncheck();
   check("switching the group off folds its colour keys", await page.locator(".rgroup-keys").evaluate((e) => !e || e.hidden).catch(() => true), keysOn.join("|"));
   await page.locator(".rgroup input").check();
