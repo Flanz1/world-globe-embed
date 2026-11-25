@@ -52,6 +52,8 @@ import {
   PART_LABEL_MAX,
   PROVINCE_BORDER_MAX,
   regionData,
+  NAME_MAX,
+  randomId,
   slugify,
   uniqueId,
   type RegionData,
@@ -405,7 +407,10 @@ export function openEditor(o: EditorOptions): void {
   /** The state as it splits back into the regions: a linked region's own names stay out of them. */
   const splitNow = () => splitLive(link ? revertLinkedNames(hist.state, liveSources) : hist.state, liveSources);
   const hist = new History(live ? withNames(liveState(o.live!.sources.map((x, i) => (x.current ? { id: x.id, state: x.current, name: x.feature.properties.name } : liveSources[i])))) : stateOf(o.feature));
-  let id = o.feature?.id ?? uniqueId("region", o.takenIds);
+  /** A new region's id comes from its name (slugified, made free); with no name, this random one. It is final once saved. */
+  const autoId = o.feature ? "" : randomId("region", o.takenIds);
+  const idFor = (name: string): string => (slugify(name) ? uniqueId(name, o.takenIds) : autoId);
+  let id = o.feature?.id ?? idFor(hist.state.props.name ?? "");
   let sha = o.sha;
   let isNew = o.isNew;
   let saved = isNew ? "" : JSON.stringify(live ? withNames(liveState(liveSources)) : hist.state);
@@ -455,7 +460,7 @@ export function openEditor(o: EditorOptions): void {
         hist.apply("Restore unsaved work", d.state as EditorState);
         if (isNew && d.id && REGION_ID.test(d.id)) {
           id = d.id;
-          idIn.value = id;
+          renderId();
         }
         changed();
         setMsg("Restored your unsaved work. Undo (Ctrl+Z) goes back to the saved version.", "ok");
@@ -532,7 +537,12 @@ export function openEditor(o: EditorOptions): void {
   const simplifyBtn = iconify(btn("Simplify…", "Fewer vertices, same shape", () => toggleSimplify(), "simplify"), "simplify", false);
   const smoothBtn = iconify(btn("Smooth", "Round the corners (one Chaikin pass; doubles the vertices)", () => smooth(), "smooth"), "smooth", false);
 
-  const idIn = h("input", { type: "text", maxLength: 64, spellcheck: false, value: id, name: "id", pattern: "[a-z0-9][a-z0-9\\-]{0,63}" });
+  const nameIn = h("input", { type: "text", maxLength: NAME_MAX, autocomplete: "off", value: hist.state.props.name ?? "", name: "name", placeholder: "e.g. Kingdom of Aerthos" });
+  const idLine = h("p", { className: "muted small ed-id", dataset: { role: "region-id" } });
+  const renderId = (): void => {
+    idLine.textContent = `Id: ${id} · ${isNew ? "set when you save, then permanent" : "permanent, used in embed addresses"}`;
+  };
+  renderId();
   const colorIn = h("input", { type: "color", value: hist.state.props.color, name: "color", ariaLabel: "Colour of the Default colour folder" });
   const colorLabelIn = h("input", {
     type: "text",
@@ -628,7 +638,8 @@ export function openEditor(o: EditorOptions): void {
         icon: "region",
         children: [
           h("div", { className: "row" }, btn("Centre on region", "Turn the globe preview to face the region", () => sendPreview(true), "centre"), btn("Embed code…", "Copy the iframe code for this region", () => embed(), "embed")),
-          h("label", {}, "Id (permanent; embeds use it)", idIn),
+          h("label", {}, "Name", nameIn),
+          idLine,
           h("p", { className: "muted small", textContent: `Slot: ${slotName} · map: ${slot.map}` }),
           h("h4", { className: "ed-sub", textContent: "Appearance" }),
           h("label", { className: "inline grow ed-fill" }, "Fill", opacityIn, opacityOut),
@@ -851,7 +862,8 @@ export function openEditor(o: EditorOptions): void {
   document.body.append(dlg);
   if (live) {
     // Editing together: settings that belong to one region stay as each region has them, so they're not shown.
-    for (const el of link ? [idIn, opacityIn, labelIn, borderIn, descIn] : [idIn, opacityIn, labelIn, borderIn, descIn, keyTitleIn]) (el.closest("label") as HTMLElement).hidden = true;
+    idLine.hidden = true;
+    for (const el of link ? [nameIn, opacityIn, labelIn, borderIn, descIn] : [nameIn, opacityIn, labelIn, borderIn, descIn, keyTitleIn]) (el.closest("label") as HTMLElement).hidden = true;
     // A linked region has underlays of its own (shown under each of its regions); anything else stays with each region.
     underBox.hidden = !link;
     if (link) {
@@ -867,7 +879,7 @@ export function openEditor(o: EditorOptions): void {
       ...live.map((x) => h("option", { value: x.id, textContent: x.id })),
     );
     ownerIn.addEventListener("change", () => (newOwner = ownerIn.value));
-    idIn.closest("label")!.after(
+    idLine.after(
       h(
         "p",
         { className: "muted small ed-live-note" },
@@ -1967,21 +1979,24 @@ export function openEditor(o: EditorOptions): void {
     if (document.activeElement !== keyTitleIn) keyTitleIn.value = s.legendTitle;
     if (document.activeElement !== colorLabelIn) colorLabelIn.value = s.colorLabel;
     syncColours();
-    idIn.disabled = !isNew;
+    if (document.activeElement !== nameIn) nameIn.value = s.name ?? "";
+    if (isNew && !o.feature && !live && !link) id = idFor(s.name ?? "");
+    renderId();
     setTitle(live
       ? link
         ? `${link.sha ? "Edit" : "New"} linked region ${link.id}: ${live.map((x) => x.id).join(", ")}`
-        : `Edit together: ${live.map((x) => x.id).join(", ")}` : review ? `Suggestion from ${review.by} for ${id}` : propose ? `Suggest changes to ${id}` : `${isNew ? "New region" : "Edit region"}: ${id || "(no id yet)"}`);
+        : `Edit together: ${live.map((x) => x.id).join(", ")}` : review ? `Suggestion from ${review.by} for ${id}` : propose ? `Suggest changes to ${id}` : `${isNew ? "New region" : "Edit region"}: ${s.name?.trim() || id || "(no id yet)"}`);
   }
   const setProp = <K extends keyof EditorState["props"]>(k: K, v: EditorState["props"][K], label: string) =>
     hist.apply(label, { ...hist.state, props: { ...hist.state.props, [k]: v } }, `prop:${k}`);
-  idIn.addEventListener("input", () => {
-    id = idIn.value.trim();
-    setTitle(`New region: ${id || "(no id yet)"}`);
-  });
-  idIn.addEventListener("change", () => {
-    id = slugify(idIn.value) || id;
-    idIn.value = id;
+  // The name is free text (capitals kept). Only a new region's id follows it, and only until the first save.
+  nameIn.addEventListener("input", () => {
+    setProp("name", nameIn.value.slice(0, NAME_MAX), "Name");
+    if (isNew && !o.feature && !live && !link) {
+      id = idFor(nameIn.value);
+      renderId();
+      setTitle(`New region: ${nameIn.value.trim() || id}`);
+    }
     changed();
   });
   colorIn.addEventListener("input", () => (setProp("color", colorIn.value.toLowerCase(), "Default colour"), changed()));
@@ -4117,7 +4132,7 @@ export function openEditor(o: EditorOptions): void {
 
   function embed(): void {
     if (isNew) return alertBox("Save first", "Save the region before copying its embed code: the embed loads the saved region by its id.");
-    openEmbedDialog({ region: { id, name: id, label: hist.state.props.label, hasLegend: hist.state.props.legend.length > 0 }, slot: slotName, slotTitle: slot.title ?? map?.name ?? slotName });
+    openEmbedDialog({ region: { id, name: hist.state.props.name?.trim() || id, label: hist.state.props.label, hasLegend: hist.state.props.legend.length > 0 }, slot: slotName, slotTitle: slot.title ?? map?.name ?? slotName });
   }
 
   /* ── Save ── */
@@ -4147,6 +4162,7 @@ export function openEditor(o: EditorOptions): void {
       type: "Feature",
       id: fid,
       properties: {
+        ...(props.name?.trim() ? { name: props.name.trim().slice(0, NAME_MAX) } : {}),
         slot: slotName,
         map: slot.map,
         color: props.color,
@@ -4186,8 +4202,12 @@ export function openEditor(o: EditorOptions): void {
     if (live) return saveLive();
     const s = hist.state;
     if (isNew) {
-      if (!REGION_ID.test(id)) return setMsg("The id must be lowercase letters, digits and dashes.", "error"), idIn.focus();
-      if (o.takenIds.has(id)) return setMsg(`The id "${id}" is taken. Choose another one.`, "error"), idIn.focus();
+      if (o.takenIds.has(id)) {
+        // Someone saved a region with this id since the editor opened: take the next free one.
+        id = o.feature ? uniqueId(id, o.takenIds) : idFor(hist.state.props.name ?? "");
+        renderId();
+        if (o.takenIds.has(id)) return setMsg("Couldn't find a free id. Change the name a little.", "error"), nameIn.focus();
+      }
     }
     if (!s.parts.length) return setMsg("Draw the region first.", "error");
     const built = featureOf(s, id);
@@ -4290,7 +4310,7 @@ export function openEditor(o: EditorOptions): void {
         const lp = link.feature.properties;
         const made = link.sha && lp.createdBy ? { ...(lp.created ? { created: lp.created } : {}), createdBy: lp.createdBy } : { created: stamp(), createdBy: account() };
         const under = hist.state.props.under;
-        const core: RegionFeature = { ...r.feature, properties: { ...r.feature.properties, linked: live.map((x) => x.id), ...(under?.length ? { under: under.map((e) => ({ ...e })) } : {}), ...(names ? { linkedNames: names } : {}), ...made } };
+        const core: RegionFeature = { ...r.feature, properties: { ...(lp.name ? { name: lp.name } : {}), ...r.feature.properties, linked: live.map((x) => x.id), ...(under?.length ? { under: under.map((e) => ({ ...e })) } : {}), ...(names ? { linkedNames: names } : {}), ...made } };
         const strip = (f: RegionFeature) => {
           const rest = { ...f.properties };
           delete rest.updated;
@@ -4465,8 +4485,11 @@ export function openEditor(o: EditorOptions): void {
 
   async function conflict(gone: boolean): Promise<void> {
     if (isNew) {
-      setMsg(`A region with the id "${id}" already exists on ${o.gh.branch}. Choose another id.`, "error");
-      return idIn.focus();
+      o.takenIds.add(id);
+      id = o.feature ? uniqueId(id, o.takenIds) : idFor(hist.state.props.name ?? "");
+      renderId();
+      setMsg(`Someone saved a region with that id while you were drawing. This one will be saved as "${id}": press Save again.`, "error");
+      return nameIn.focus();
     }
     const reload = await confirmBox(
       "Changed on GitHub",

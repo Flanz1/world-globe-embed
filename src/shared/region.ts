@@ -74,7 +74,10 @@ export const UNDER_MAX = 8;
 export const UNDER_TITLE_MAX = 40;
 
 export interface RegionProperties {
-  /** Legacy display name: shown as one label at the middle of the region when there are no partLabels. */
+  /**
+   * The region's display name as typed (capitals kept). The id is made from it once and never changes, so renaming only changes this.
+   * Combined maps use it for the legend; the embed shows it as one label on the region when there are no partLabels.
+   */
   name?: string;
   slot: string;
   map: string;
@@ -643,6 +646,35 @@ export function uniqueId(base: string, taken: Set<string>): string {
     const id = b.slice(0, 64 - suffix.length).replace(/-+$/, "") + suffix;
     if (!taken.has(id)) return id;
   }
+}
+
+/** "kindly-lords" → "Kindly lords": the name shown for a region that has no name of its own. */
+export const nameFromId = (id: string): string => {
+  const t = id.replace(/-+/g, " ").trim();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
+
+/** What a region is called: its name as typed (capitals kept), else its id made readable. */
+export const displayName = (p: { name?: string } | undefined, id: string): string => (typeof p?.name === "string" && p.name.trim()) || nameFromId(id);
+
+const RANDOM_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
+
+/** `region-k3x9q2`: an id for a region nobody named, free among `taken`. `rand` is Math.random unless a test passes its own. */
+export function randomId(prefix: string, taken: Set<string>, rand: () => number = Math.random): string {
+  for (;;) {
+    let t = "";
+    for (let i = 0; i < 6; i++) t += RANDOM_ALPHABET[Math.floor(rand() * RANDOM_ALPHABET.length)];
+    const id = `${prefix}-${t}`;
+    if (!taken.has(id)) return id;
+  }
+}
+
+/**
+ * The permanent id for a new item called `name`: the name slugified ("Kindly Lords" → "kindly-lords") and made free
+ * with -2, -3, … ; a random one (`region-k3x9q2`) when the name has nothing usable in it.
+ */
+export function idFromName(name: string, taken: Set<string>, prefix = "region", rand?: () => number): string {
+  return slugify(name) ? uniqueId(name, taken) : randomId(prefix, taken, rand);
 }
 
 /** `<id>-copy`, `<id>-copy-2`, … */

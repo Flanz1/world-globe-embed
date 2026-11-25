@@ -418,7 +418,7 @@ await step(A, "sign in and Regions tab", async () => {
   const evil = await page.locator('[data-region="evil-name"] .rlabels').textContent();
   check(A, "hostile name shown as plain text", evil === '"><script>alert(1)</script>' && dialogs.length === 0);
   await pickRegion(page, "evil-name");
-  check(A, "cards are titled by id, with no Rename button", (await page.locator('[data-region="evil-name"] .rname').textContent()) === "evil-name" && (await page.locator('.rcard [data-action="rename"]').count()) === 0);
+  check(A, "cards are titled by name (plain text), with no Rename button", (await page.locator('[data-region="evil-name"] .rname').textContent()) === '"><script>alert(1)</script>' && (await page.locator('[data-region="evil-name"] .rname').getAttribute("title")) === "evil-name" && (await page.locator('.rcard [data-action="rename"]').count()) === 0);
   await page.fill("#r-search", "dateline");
   check(A, "search filters by id/labels", (await page.locator("#regions .rrow").count()) === 1);
   await page.fill("#r-search", "");
@@ -445,10 +445,13 @@ await step(A, "editor: draw and edit", async () => {
   await page.locator(".r-new-row .r-new").click();
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(500);
-  check(A, "no Name field; a new region gets a free id to start with", (await page.locator('dialog.editor input[name="name"]').count()) === 0 && (await ed.id()) === "region");
-  await page.fill('dialog.editor input[name="id"]', "Test Kingdom");
-  await page.locator('dialog.editor input[name="id"]').dispatchEvent("change");
-  check(A, "the id field turns what's typed into a valid id", (await ed.id()) === "test-kingdom", await ed.id());
+  check(A, "a new region has a Name field and a random id to start with", (await page.locator('dialog.editor input[name="name"]').count()) === 1 && /^region-[a-z0-9]{6}$/.test(await ed.id()), await ed.id());
+  check(A, "the id is read-only text, not a field", (await page.locator('dialog.editor input[name="id"]').count()) === 0);
+  await page.fill('dialog.editor input[name="name"]', "Test Kingdom");
+  check(A, "typing a name makes the id from it, name keeps its capitals", (await ed.id()) === "test-kingdom" && (await page.inputValue('dialog.editor input[name="name"]')) === "Test Kingdom", await ed.id());
+  await page.getByRole("tab", { name: "Region", exact: true }).click().catch(() => {});
+  await page.screenshot({ path: path.join(OUT, "editor-name-and-id.png") });
+  await page.getByRole("tab", { name: "Parts", exact: true }).click().catch(() => {});
   await page.click("dialog.editor canvas.ed-canvas", { position: { x: 5, y: 5 }, button: "middle" });
   await ed.setView(180, 0, 22);
   const startTool = await page.getAttribute("dialog.editor button.tool[aria-pressed=true]", "data-tool").catch(() => null);
@@ -626,8 +629,9 @@ await step(A, "combine", async () => {
   check(A, "combine selector keeps ticks after search/sort", (await page.isChecked('dialog.combine-dlg input[value="test-kingdom"]')) && (await rows().count()) === all);
   // A copy (unlinked): linked combined regions are checked in live.mjs.
   await page.uncheck('dialog.combine-dlg input[name="keep-linked"]');
-  const id = await page.inputValue("dialog.combine-dlg input[type=text]");
-  check(A, "combine suggests a free id", id === "test-kingdom-test-kingdom-copy", id);
+  const nm = await page.inputValue('dialog.combine-dlg input[name="combine-name"]');
+  const id = ((await page.textContent('dialog.combine-dlg [data-role="combine-id"]')) ?? "").replace(/^Id: /, "").split(" · ")[0];
+  check(A, "combine suggests a name from the sources and a free id from it", nm === "Test Kingdom + Test Kingdom (copy)" && id === "test-kingdom-test-kingdom-copy", `${nm} / ${id}`);
   await go.click();
   await page.waitForSelector("dialog.editor[open]");
   check(A, "combine opens the editor on the new region", (await ed.id()) === id, await ed.id());
@@ -720,8 +724,7 @@ await step(A, "conflict detection", async () => {
   check(A, "save refuses to overwrite a file changed on GitHub, offers reload", title === "Changed on GitHub" && mock.log.length === n);
   await page.click('dialog.small-dlg button:has-text("Reload from GitHub")');
   await page.waitForTimeout(400);
-  const s = await ed.state();
-  check(A, "reload brings in the newer version (an older region's name becomes part 1's label)", s.labels[0] === "Changed elsewhere", JSON.stringify(s.labels));
+  check(A, "reload brings in the newer version (the name changed elsewhere shows in the Name field)", (await page.inputValue('dialog.editor input[name="name"]')) === "Changed elsewhere", await page.inputValue('dialog.editor input[name="name"]'));
   await edTab(page, "region");
   await page.click('dialog.editor [data-act="centre"]');
   await page.click("dialog.editor .pv-head button.ghost");
@@ -786,7 +789,7 @@ await step(A, "editor: colours and legend", async () => {
   check(
     A,
     "saved file has the legend and one colour per part",
-    mock.log.length === n + 1 && f.properties.legendTitle === "Provinces" && JSON.stringify(f.properties.legend.map((e) => e.label)) === JSON.stringify(["<img src=x onerror=alert(3)>", "Capital"]) && JSON.stringify(f.properties.partLegend) === "[1,-1,0]" && JSON.stringify(f.properties.partLabels) === JSON.stringify(["Red Reach", "Green March <i>", "Blue Coast"]) && !("name" in f.properties),
+    mock.log.length === n + 1 && f.properties.legendTitle === "Provinces" && JSON.stringify(f.properties.legend.map((e) => e.label)) === JSON.stringify(["<img src=x onerror=alert(3)>", "Capital"]) && JSON.stringify(f.properties.partLegend) === "[1,-1,0]" && JSON.stringify(f.properties.partLabels) === JSON.stringify(["Red Reach", "Green March <i>", "Blue Coast"]) && f.properties.name === "Three Provinces",
     JSON.stringify({ legend: f.properties.legend, partLegend: f.properties.partLegend, partLabels: f.properties.partLabels }),
   );
   await page.click("dialog.editor .pv-head button.ghost");
@@ -882,7 +885,7 @@ await step(A, "preview and embed code", async () => {
   await pickRegion(page, "evil-name");
   await page.click('[data-region="evil-name"] [data-action="embed"]');
   const code = await page.inputValue("dialog.embed-dlg textarea");
-  check(A, "embed snippet is titled by id and has nothing unescaped", code.includes('title="evil-name (Alignment test)"') && !code.includes("<script"), code);
+  check(A, "embed snippet is titled by name and has nothing unescaped", code.includes("title=\"&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt; (Alignment test)\"") && !code.includes("<script"), code);
   await page.click('dialog.embed-dlg input[data-opt="lock"]');
   await page.click('dialog.embed-dlg input[value="flat"]');
   const code2 = await page.inputValue("dialog.embed-dlg textarea");

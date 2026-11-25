@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
-import { combineRegions, combinedId, inheritLinkedUnder, regionBases, resolveLinked } from "../src/shared/combine.ts";
+import { combineRegions, combinedName, inheritLinkedUnder, regionBases, resolveLinked } from "../src/shared/combine.ts";
 import { MAX_VERTICES, checkGeometry, polygonsOf } from "../src/shared/geo.ts";
 import { LEGEND_MAX, checkLegend, checkParts, regionData, type RegionFeature } from "../src/shared/region.ts";
 
@@ -75,7 +75,7 @@ describe("combineRegions", () => {
     // keth's own colour becomes a legend entry named after it.
     expect(f.properties.legend).toEqual([
       { label: "Vassal", color: "#2980b9" },
-      { label: "keth", color: "#5881ad" },
+      { label: "Keth", color: "#5881ad" },
     ]);
     expect(f.properties.partLegend).toEqual([-1, 0, -1, 1, 1]);
     expect(f.properties.partContested).toBeUndefined();
@@ -152,13 +152,12 @@ describe("combineRegions", () => {
   });
 });
 
-describe("combinedId", () => {
-  it("joins the ids and avoids taken ones", () => {
-    const a = region("vael", {}, [square(0, 0)]);
-    const b = region("keth", {}, [square(5, 0)]);
-    expect(combinedId([a, b], new Set())).toBe("vael-keth");
-    expect(combinedId([a, b], new Set(["vael-keth"]))).toBe("vael-keth-2");
-    expect(combinedId([a, b, a, b], new Set())).toBe("vael-combined");
+describe("combinedName", () => {
+  it("joins the names (or readable ids)", () => {
+    const a = region("vael", { name: "Vael Marches" }, [square(0, 0)]);
+    const b = region("kindly-lords", {}, [square(5, 0)]);
+    expect(combinedName([a, b])).toBe("Vael Marches + Kindly lords");
+    expect(combinedName([a, b, a, b])).toBe("Vael Marches combined");
   });
 });
 
@@ -249,5 +248,19 @@ describe("partLegend schema", () => {
     const f = { type: "Feature", properties: { name: "x", color: "#c0392b", legend, partLegend: [0, 15, 16, 191 % LEGEND_MAX, LEGEND_MAX - 1] }, geometry: { type: "MultiPolygon", coordinates: [] } };
     validate(f);
     expect((validate.errors ?? []).filter((e) => e.instancePath.startsWith("/properties/partLegend"))).toEqual([]);
+  });
+});
+
+describe("legend names in a combined region", () => {
+  it("labels each region's own colour with its name (capitals kept), else its id made readable", () => {
+    const a = region("albesan", { name: "The Albesan Union", color: "#aa0000", partLabels: ["A"] }, [square(0, 0)]);
+    const b = region("kindly-lords", { color: "#00aa00", partLabels: ["B"] }, [square(5, 0)]);
+    const c = region("third", { name: "Third Realm", colorLabel: "Thirds", color: "#0000aa", partLabels: ["C"] }, [square(10, 0)]);
+    const r = combineRegions([a, b, c], { id: "abc", base: { slot: "s", map: "m" } });
+    expect(r.feature!.properties.colorLabel).toBe("The Albesan Union");
+    expect(r.feature!.properties.legend).toEqual([
+      { label: "Kindly lords", color: "#00aa00" },
+      { label: "Thirds", color: "#0000aa" },
+    ]);
   });
 });
