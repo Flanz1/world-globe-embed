@@ -31,6 +31,7 @@ import {
   LEGEND_LABEL_MAX,
   LEGEND_MAX,
   LEGEND_TITLE_MAX,
+  NAME_MAX,
   OWN_COLOUR,
   REGION_COLOR,
   migrateZoneColours,
@@ -60,6 +61,8 @@ export interface EditorLegendEntry extends LegendEntry {
 }
 
 export interface RegionProps {
+  /** The display name as typed (capitals kept); "" for none. The id never follows it. */
+  name?: string;
   color: string;
   /** Legend label of the region's own colour ("" until it's given one: then it isn't in the legend). */
   colorLabel: string;
@@ -159,19 +162,18 @@ export function stateOf(f: RegionFeature | undefined, fallbackColour = "#c0392b"
     .slice(0, LEGEND_MAX)
     .map((e) => ({ label: String(e.label ?? "").slice(0, LEGEND_LABEL_MAX), color: REGION_COLOR.test(e.color) ? expandHex(e.color) : "#7f8c8d" }));
   const parts = f ? partsFromGeometry(f.geometry) : [];
-  // Older regions have one name instead of part labels: it becomes the first part's label.
-  const legacy = !fp?.partLabels && fp?.name && (fp.label ?? true) ? [fp.name] : undefined;
   return {
     parts,
     // Contested zones (older regions) are plain parts now: a zone without its own colour keeps its parent's.
     styles: migrateZoneColours(normalizePartLegend(fp?.partLegend, parts.length, legend.length), fp?.partContested),
-    labels: normalizePartLabels(fp?.partLabels ?? legacy, parts.length),
+    labels: normalizePartLabels(fp?.partLabels, parts.length),
     labelHidden: normalizePartLabelHidden(fp?.partLabelHidden, parts.length),
     // Contested zones (older regions) count as occupied areas.
     contested: normalizePartOccupied(fp?.partOccupied, fp?.partContested, parts.length).map((o) => (o ? OCCUPIED : -1)),
     locked: normalizePartLocked(fp?.partLocked, parts.length),
     lines: (fp?.provinceBorders ?? []).filter((l) => l.length >= 2).map((l) => unwrapRing(l.map(([x, y]) => [x, y] as Position))),
     props: {
+      name: String(fp?.name ?? "").slice(0, NAME_MAX),
       color: fp && REGION_COLOR.test(fp.color) ? expandHex(fp.color) : fallbackColour,
       colorLabel: String(fp?.colorLabel ?? "").slice(0, LEGEND_LABEL_MAX),
       fillOpacity: fp?.fillOpacity ?? DEFAULT_FILL_OPACITY,

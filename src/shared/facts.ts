@@ -20,7 +20,7 @@ import {
   type Ring,
 } from "./geo.ts";
 import { PIN_ID, PIN_NAME_MAX, isPinKind, type PinKind } from "./pins.ts";
-import { REGION_ID } from "./region.ts";
+import { REGION_ID, nameFromId } from "./region.ts";
 
 export const FACTS_VERSION = 1;
 /** Most neighbours and pins kept per part (the card shows fewer; the rest is a count). */
@@ -47,11 +47,7 @@ export interface FactsFile {
   i: { name: string; kind: PinKind; map?: string }[];
 }
 
-/** "kindly-lords" → "Kindly lords": the name shown for a region that has none. */
-export const nameFromId = (id: string): string => {
-  const s = id.replace(/-+/g, " ").trim();
-  return s.charAt(0).toUpperCase() + s.slice(1);
-};
+export { nameFromId };
 
 /** A region as facts need it. */
 export interface FactsRegion {

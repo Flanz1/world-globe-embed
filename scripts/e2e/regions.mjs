@@ -445,10 +445,10 @@ await step(A, "editor: draw and edit", async () => {
   await page.locator(".r-new-row .r-new").click();
   await page.waitForSelector("dialog.editor[open]");
   await page.waitForTimeout(500);
-  check(A, "no Name field; a new region gets a free id to start with", (await page.locator('dialog.editor input[name="name"]').count()) === 0 && (await ed.id()) === "region");
-  await page.fill('dialog.editor input[name="id"]', "Test Kingdom");
-  await page.locator('dialog.editor input[name="id"]').dispatchEvent("change");
-  check(A, "the id field turns what's typed into a valid id", (await ed.id()) === "test-kingdom", await ed.id());
+  check(A, "a new region has a Name field and a random id to start with", (await page.locator('dialog.editor input[name="name"]').count()) === 1 && /^region-[a-z0-9]{6}$/.test(await ed.id()), await ed.id());
+  check(A, "the id is read-only text, not a field", (await page.locator('dialog.editor input[name="id"]').count()) === 0);
+  await page.fill('dialog.editor input[name="name"]', "Test Kingdom");
+  check(A, "typing a name makes the id from it, name keeps its capitals", (await ed.id()) === "test-kingdom" && (await page.inputValue('dialog.editor input[name="name"]')) === "Test Kingdom", await ed.id());
   await page.click("dialog.editor canvas.ed-canvas", { position: { x: 5, y: 5 }, button: "middle" });
   await ed.setView(180, 0, 22);
   const startTool = await page.getAttribute("dialog.editor button.tool[aria-pressed=true]", "data-tool").catch(() => null);
@@ -626,8 +626,9 @@ await step(A, "combine", async () => {
   check(A, "combine selector keeps ticks after search/sort", (await page.isChecked('dialog.combine-dlg input[value="test-kingdom"]')) && (await rows().count()) === all);
   // A copy (unlinked): linked combined regions are checked in live.mjs.
   await page.uncheck('dialog.combine-dlg input[name="keep-linked"]');
-  const id = await page.inputValue("dialog.combine-dlg input[type=text]");
-  check(A, "combine suggests a free id", id === "test-kingdom-test-kingdom-copy", id);
+  const nm = await page.inputValue('dialog.combine-dlg input[name="combine-name"]');
+  const id = ((await page.textContent('dialog.combine-dlg [data-role="combine-id"]')) ?? "").replace(/^Id: /, "").split(" · ")[0];
+  check(A, "combine suggests a name from the sources and a free id from it", nm === "Test Kingdom + Test Kingdom (copy)" && id === "test-kingdom-test-kingdom-copy", `${nm} / ${id}`);
   await go.click();
   await page.waitForSelector("dialog.editor[open]");
   check(A, "combine opens the editor on the new region", (await ed.id()) === id, await ed.id());

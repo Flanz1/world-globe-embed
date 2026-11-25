@@ -4,10 +4,10 @@
  * action that writes is one commit.
  */
 import { stringifyCompact } from "../shared/json.ts";
-import { LINKED_MAX, baseKey, combineRegions, combinedId, regionBases, resolveLinked, type RegionBase } from "../shared/combine.ts";
+import { LINKED_MAX, baseKey, combineRegions, combinedName, regionBases, resolveLinked, type RegionBase } from "../shared/combine.ts";
 import { checkGeometry, geometryBounds, polygonsOf, vertexCount } from "../shared/geo.ts";
 import { paintSpec } from "../shared/raster.ts";
-import { REGION_COLOR, REGION_ID, copyId, flatFit, migrateZoneColours, normalizePartLegend, regionData, type RegionFeature } from "../shared/region.ts";
+import { NAME_MAX, REGION_COLOR, REGION_ID, copyId, randomId, slugify, uniqueId, flatFit, migrateZoneColours, normalizePartLegend, regionData, type RegionFeature } from "../shared/region.ts";
 import { childrenOf, moveTargets, pathName, pinFirst, placements, withDescendants, type Category } from "../shared/categories.ts";
 import { paintSpecOf, regionClashes } from "../shared/region-paint.ts";
 import type { MapMeta, SlotsFile } from "../shared/types.ts";
@@ -239,7 +239,7 @@ function card(e: RegionEntry): HTMLElement {
     h(
       "div",
       { className: "rinfo" },
-      h("div", {}, swatch, h("strong", { className: "rname", textContent: e.id }), " ", h("span", { className: "badge rcreator", textContent: creatorName(e), title: "Created by" })),
+      h("div", {}, swatch, h("strong", { className: "rname", textContent: regionTitle(e), title: e.id }), " ", h("span", { className: "badge rcreator", textContent: creatorName(e), title: "Created by" })),
       linked
         ? h(
             "div",
@@ -274,7 +274,7 @@ function card(e: RegionEntry): HTMLElement {
       !canEdit(f) || !openCountFor(e.id) || linked ? null : h("button", { type: "button", className: "text small", textContent: `${openCountFor(e.id)} comment${openCountFor(e.id) > 1 ? "s" : ""}`, title: "Open the editor on the comments", dataset: { action: "comments", region: e.id }, onclick: () => edit(e, true) }),
       !canEdit(f) || !pendingFor(e.id) ? null : h("span", { className: "badge warn", textContent: `${pendingFor(e.id)} suggestion${pendingFor(e.id) > 1 ? "s" : ""}`, title: "Waiting in the list above the regions" }),
       btn("Preview", () => slot && openRegionPreview(regionData(f), slot, slot.title ?? map?.name ?? p.slot, p.pinMaps, p.pinLegends)),
-      h("button", { type: "button", className: "ghost", textContent: "Embed code…", title: "Choose what to show and copy the embed code", dataset: { action: "embed" }, onclick: () => openEmbedDialog({ region: { id: e.id, name: e.id, label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot }) }),
+      h("button", { type: "button", className: "ghost", textContent: "Embed code…", title: "Choose what to show and copy the embed code", dataset: { action: "embed" }, onclick: () => openEmbedDialog({ region: { id: e.id, name: regionTitle(e), label: p.label, hasLegend: !!p.legend?.length }, slot: p.slot, slotTitle: slot?.title ?? map?.name ?? p.slot }) }),
       regionMore(e, f, map, noEdit, noDelete),
     ),
   );
@@ -534,7 +534,7 @@ function row(e: RegionEntry, k: Category | null): HTMLElement {
       "button",
       { type: "button", className: "rrow-pick", ariaPressed: String(on), dataset: { pick: e.id }, title: sel.on ? "Tick or untick this region" : "Show this region's details and actions" },
       swatch,
-      h("span", { className: "rrow-name", textContent: e.id }),
+      h("span", { className: "rrow-name", textContent: regionTitle(e), title: regionTitle(e) === e.id ? "" : `${regionTitle(e)} (${e.id})` }),
       pinnedHere ? h("span", { className: "badge rrow-pin", title: "Pinned to the top of this folder", textContent: "pinned" }) : null,
       e.problem || !e.feature ? h("span", { className: "badge error", textContent: e.feature ? "invalid shape" : "can't be read" }) : null,
       rowSlotBadge(e),
@@ -622,7 +622,7 @@ function folderInspector(id: string): HTMLElement | null {
     return h(
       "div",
       { className: "r-mini", dataset: { mini: e.id } },
-      h("button", { type: "button", className: "r-mini-name", title: "Show this region's details", onclick: () => pick({ kind: "region", id: e.id }, true) }, sw, h("span", { textContent: e.id })),
+      h("button", { type: "button", className: "r-mini-name", title: "Show this region's details", onclick: () => pick({ kind: "region", id: e.id }, true) }, sw, h("span", { textContent: regionTitle(e) })),
       ...(e.feature && why ? [...editButtons(e, e.feature, why.noEdit, regionBtn), regionMore(e, e.feature, map, why.noEdit, why.noDelete)] : [h("span", { className: "badge error", textContent: "can't be read" })]),
     );
   });
@@ -673,7 +673,7 @@ function regionInspector(id: string): HTMLElement | null {
   if (acts) c.prepend(acts);
   const sw = h("span", { className: "swatch", ariaHidden: "true" });
   sw.style.backgroundColor = e.feature ? safeColor(e.feature.properties.color) : "transparent";
-  return h("div", { className: "r-insp-body", dataset: { inspRegion: id } }, inspHead(sw, e.id, null), h("p", { className: "muted small r-insp-sub", textContent: `${k ? `${pathName(categories(), k.id)} · ` : ""}${partsText(e)}` }), c);
+  return h("div", { className: "r-insp-body", dataset: { inspRegion: id } }, inspHead(sw, regionTitle(e), null), h("p", { className: "muted small r-insp-sub", textContent: `Id: ${e.id} · ${k ? `${pathName(categories(), k.id)} · ` : ""}${partsText(e)}` }), c);
 }
 
 function renderInspector(): void {
@@ -857,7 +857,7 @@ export function filterable(e: RegionEntry): Filterable {
   const p = e.feature?.properties;
   return {
     id: e.id,
-    labels: labelsText(p),
+    labels: [p?.name, labelsText(p)].filter(Boolean).join(" · "),
     creator: creatorName(e),
     creatorId: e.feature ? ownerOf(e.feature) : OWNER_ID,
     updated: e.commit?.date || p?.updated || "",
@@ -902,8 +902,11 @@ export function openRegionById(id: string): boolean {
 /** A region's display name, or null when there is no such region (any more). */
 export function regionDisplayName(id: string): string | null {
   const e = entries.find((x) => x.id === id);
-  return e ? (e.feature?.properties.name || id) : null;
+  return e ? regionTitle(e) : null;
 }
+
+/** What a region is called in lists: its name as typed, else its id (an older region without a name looks as it always did). */
+const regionTitle = (e: RegionEntry): string => e.feature?.properties.name?.trim() || e.id;
 
 function edit(e: RegionEntry, comments = false): void {
   if (!e.feature || !canEdit(e.feature)) return;
@@ -1120,7 +1123,8 @@ function duplicate(e: RegionEntry): void {
   if (!e.feature || !can("regions")) return;
   const taken = new Set(entries.map((x) => x.id));
   const id = copyId(e.id, taken);
-  const feature: RegionFeature = { ...e.feature, id };
+  const name = e.feature.properties.name?.trim();
+  const feature: RegionFeature = { ...e.feature, id, ...(name ? { properties: { ...e.feature.properties, name: `${name} (copy)`.slice(0, NAME_MAX) } } : {}) };
   openEditor({ gh: deps.gh(), maps: deps.maps(), slots: deps.slots(), feature, sha: null, isNew: true, neighbours: others(), neighbourMeta: overlayMeta(), takenIds: taken, afterCommit: deps.afterCommit });
 }
 
@@ -1139,10 +1143,12 @@ export function openCombine(): void {
   /** Ticked regions in the order they were ticked: the first one's colour and settings lead. */
   const picked: RegionEntry[] = [];
   const taken = new Set(entries.map((x) => x.id));
-  let idTouched = false;
+  let nameTouched = false;
   let base: RegionBase | null = null;
-  const idIn = h("input", { type: "text", maxLength: 64, autocomplete: "off", spellcheck: false, ariaLabel: "Id of the new region" });
-  idIn.addEventListener("input", () => ((idTouched = true), update()));
+  const nameIn = h("input", { type: "text", maxLength: NAME_MAX, autocomplete: "off", ariaLabel: "Name of the new region", name: "combine-name" });
+  nameIn.addEventListener("input", () => ((nameTouched = true), update()));
+  const idNote = h("p", { className: "muted small", dataset: { role: "combine-id" } });
+  const autoId = randomId("region", taken);
   const baseBox = h("fieldset", { className: "combine-base", hidden: true });
   const out = h("div", { className: "combine-out", role: "status", ariaLive: "polite" });
   const go = h("button", { type: "button", textContent: "Combine", disabled: true, dataset: { action: "combine" } });
@@ -1251,12 +1257,11 @@ export function openCombine(): void {
         ),
       ),
     );
-    if (!idTouched) idIn.value = sources.length ? combinedId(sources, taken) : "";
-    const id = idIn.value.trim();
+    if (!nameTouched) nameIn.value = sources.length ? combinedName(sources) : "";
+    const id = slugify(nameIn.value) ? uniqueId(nameIn.value, taken) : autoId;
+    idNote.textContent = sources.length ? `Id: ${id} · set when you save, then permanent` : "";
     const problems: string[] = [];
     if (sources.length < 2) problems.push("Tick at least two regions.");
-    else if (!REGION_ID.test(id)) problems.push("The id may only use lowercase letters, digits and dashes (up to 64), starting with a letter or digit.");
-    else if (taken.has(id)) problems.push(`The id "${id}" is taken. Choose another one.`);
     if (base && sources.length >= 2 && !deps.slots().slots[base.slot]) problems.push(`The slot "${base.slot}" doesn't exist any more.`);
     const r = sources.length >= 2 && base ? combineRegions(sources, { id: REGION_ID.test(id) ? id : "combined", base }) : null;
     if (r) problems.push(...r.errors);
@@ -1279,10 +1284,11 @@ export function openCombine(): void {
 
   go.addEventListener("click", () => {
     const sources = picked.map((e) => e.feature!);
-    const id = idIn.value.trim();
+    const id = slugify(nameIn.value) ? uniqueId(nameIn.value, taken) : autoId;
     if (!base || go.disabled) return;
     const r = combineRegions(sources, { id, base });
     if (!r.feature) return;
+    if (nameIn.value.trim()) r.feature.properties = { name: nameIn.value.trim().slice(0, NAME_MAX), ...r.feature.properties };
     r.feature.properties.map = deps.slots().slots[base.slot]?.map ?? base.map;
     m.close();
     if (keepLinked.checked) {
@@ -1306,7 +1312,8 @@ export function openCombine(): void {
     }),
     filterRow,
     list,
-    h("label", {}, "New region id ", idIn),
+    h("label", {}, "New region name ", nameIn),
+    idNote,
     h(
       "label",
       { className: "check", title: "The new region is made of the ticked regions as they are now: editing it edits them, and editing them changes it. Untick for a separate copy." },

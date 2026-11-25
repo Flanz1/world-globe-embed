@@ -94,7 +94,7 @@ describe("splitLive", () => {
     const s = liveState(sources);
     s.owners![0] = "beta";
     const out = split(s, sources);
-    expect(out.beta.state.props.legend).toEqual([{ label: "alpha", color: "#ff0000" }]);
+    expect(out.beta.state.props.legend).toEqual([{ label: "Alpha", color: "#ff0000" }]);
     // gamma has the same own colour as alpha: no entry needed
     const s2 = liveState(src(a, c));
     s2.owners![0] = "gamma";

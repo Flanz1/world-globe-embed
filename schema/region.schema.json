@@ -36,7 +36,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 80,
-          "description": "Optional legacy display name (plain text). The admin editor no longer sets it; part labels (partLabels) replace it."
+          "description": "The region's display name (plain text, capitals kept). The id is generated from it once and is permanent; renaming changes only this. A combined map's legend uses it for the region's colour; the embed shows it as one label when there are no partLabels."
         },
         "slot": {
           "type": "string",

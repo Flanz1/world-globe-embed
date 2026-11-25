@@ -25,6 +25,9 @@ export interface LiveSource {
   name?: string;
 }
 
+/** What a source's own colour is called in the live legend when it has no colour label: the region's name, else its id made readable. */
+const srcLabel = (src: LiveSource): string => ownLabel({ colorLabel: src.state.props.colorLabel, name: src.name ?? src.state.props.name }, src.id);
+
 /** The regions' parts in one state: the sources in order, each one's parts in its own order. */
 export function liveState(sources: readonly LiveSource[]): EditorState {
   if (!sources.length) throw new Error("Nothing to edit.");
@@ -49,7 +52,7 @@ export function liveState(sources: readonly LiveSource[]): EditorState {
     let own = OWN_COLOUR;
     if (si > 0) {
       own = legend.length;
-      legend.push({ label: s.props.colorLabel || src.id, color: s.props.color, src: src.id, own: true });
+      legend.push({ label: srcLabel(src), color: s.props.color, src: src.id, own: true });
     }
     s.parts.forEach((rings, p) => {
       const k = s.styles[p] ?? OWN_COLOUR;
@@ -90,7 +93,7 @@ const hex6 = (c: string) => (c.length === 4 ? `#${c[1]}${c[1]}${c[2]}${c[2]}${c[
 
 /** The label a live legend entry has in an unrenamed live state (liveState). */
 function liveLabel(e: EditorLegendEntry, src: LiveSource): string | null {
-  if (e.own) return src.state.props.colorLabel || src.id;
+  if (e.own) return srcLabel(src);
   return e.srcIdx !== undefined ? (src.state.props.legend[e.srcIdx]?.label ?? null) : null;
 }
 
@@ -103,7 +106,7 @@ function origin(e: EditorLegendEntry, sources: readonly LiveSource[]): { from: s
   const src = sources.find((x) => x.id === e.src);
   const plain = src ? liveLabel(e, src) : null;
   if (!src || plain === null) return null;
-  return { from: (e.own ? ownLabel({ colorLabel: src.state.props.colorLabel, name: src.name }, src.id) : plain).slice(0, LEGEND_LABEL_MAX), plain };
+  return { from: (e.own ? srcLabel(src) : plain).slice(0, LEGEND_LABEL_MAX), plain };
 }
 
 /** The heading the linked regions give the combined legend (the first one with a heading). */
@@ -177,8 +180,8 @@ export function splitLive(s: EditorState, sources: readonly LiveSource[]): LiveS
       const own = s.props.legend[ownEntry(s, src.id)];
       if (own) {
         props.color = own.color;
-        // The entry's label falls back to the region id when the colour had none: keep it unlabelled then.
-        props.colorLabel = own.label === src.id && !orig.props.colorLabel ? "" : own.label;
+        // The entry's label falls back to the region's name (or id) when the colour had none: keep it unlabelled then.
+        props.colorLabel = own.label === srcLabel(src) && !orig.props.colorLabel ? "" : own.label;
       }
     }
     // Its legend: its own entries still in the live legend (in the live order, with any edits), then colours its parts borrowed.
@@ -200,7 +203,7 @@ export function splitLive(s: EditorState, sources: readonly LiveSource[]): LiveS
     const styleOf = (k: number): number => {
       if (k === OWN_COLOUR) {
         if (si === 0 || s.props.color === props.color) return OWN_COLOUR;
-        return borrow({ label: s.props.colorLabel || firstId, color: s.props.color });
+        return borrow({ label: s.props.colorLabel || (sources[0] ? srcLabel(sources[0]) : firstId), color: s.props.color });
       }
       const e = s.props.legend[k];
       if (!e) return OWN_COLOUR;

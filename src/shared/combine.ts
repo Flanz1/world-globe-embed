@@ -13,7 +13,8 @@ import {
   normalizePartOccupied,
   normalizePartLabels,
   normalizePartLegend,
-  uniqueId,
+  displayName,
+  NAME_MAX,
   type LegendEntry,
   type LinkedNames,
   UNDER_MAX,
@@ -43,10 +44,11 @@ export function regionBases(sources: readonly RegionFeature[]): (RegionBase & { 
   return [...out.values()];
 }
 
-/** A default id for the combined region: the source ids joined, made free among `taken`. */
-export function combinedId(sources: readonly RegionFeature[], taken: Set<string>): string {
-  const joined = sources.length > 3 ? `${sources[0].id}-combined` : sources.map((f) => f.id).join("-");
-  return uniqueId(joined.length > 64 ? `${sources[0].id}-combined` : joined, taken);
+/** A default name for the combined region: the source names joined ("Albesan + Bassira"), or the first one's and "combined" when that is too long. */
+export function combinedName(sources: readonly RegionFeature[]): string {
+  const names = sources.map((f) => displayName(f.properties, f.id));
+  const joined = names.length > 3 ? `${names[0]} combined` : names.join(" + ");
+  return (joined.length > NAME_MAX ? `${names[0]} combined` : joined).slice(0, NAME_MAX);
 }
 
 export interface CombineResult {
@@ -61,9 +63,9 @@ export interface CombineResult {
 const hex6 = (c: string) => (c.length === 4 ? `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}` : c).toLowerCase();
 const safeColour = (c: unknown, fallback: string) => (typeof c === "string" && REGION_COLOR.test(c) ? hex6(c) : fallback);
 
-/** The label a source region's own colour gets in a combined legend (its colour label, else its name, else its id). */
+/** The label a source region's own colour gets in a combined legend (its colour label, else its name, else its id made readable). */
 export function ownLabel(p: { colorLabel?: string; name?: string }, id: string): string {
-  return (typeof p.colorLabel === "string" && p.colorLabel.trim()) || (typeof p.name === "string" && p.name.trim()) || id;
+  return (typeof p.colorLabel === "string" && p.colorLabel.trim()) || displayName(p, id);
 }
 
 /** `label` as a linked region's own names rename it (colour and label as in the linked regions), else unchanged. */
@@ -109,6 +111,7 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
     return legend.length - 1;
   };
 
+  let baseUsesOwn = false;
   const polygons: Position[][][] = [];
   const labels: string[] = [];
   const hidden: boolean[] = [];
@@ -123,6 +126,7 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
     const partLegend = migrateZoneColours(normalizePartLegend(Array.isArray(p.partLegend) ? p.partLegend : undefined, n, srcLegend.length), Array.isArray(p.partContested) ? p.partContested : undefined);
     // Legend entries this source's parts use, mapped into the combined legend. Unused entries are kept too.
     const map = srcLegend.map((e) => entryFor(String(e?.label ?? ""), safeColour(e?.color, "#7f8c8d"), f.id));
+    if (si === 0) baseUsesOwn = partLegend.some((k) => k === OWN_COLOUR);
     const own = safeColour(p.color, colour);
     let ownIndex = OWN_COLOUR;
     if (si > 0 && own !== colour && partLegend.some((k) => k === OWN_COLOUR)) {
@@ -162,7 +166,9 @@ export function combineRegions(sources: readonly RegionFeature[], target: { id: 
 
   const desc = sources.map((f) => f.properties.description?.trim()).find((d) => d);
   const legendTitle = (names?.legendTitle !== undefined ? names.legendTitle.trim() : sources.map((f) => f.properties.legendTitle?.trim()).find((t) => t)) ?? "";
-  const colorLabel = names?.colorLabel !== undefined ? names.colorLabel.trim().slice(0, LEGEND_LABEL_MAX) : typeof first.colorLabel === "string" ? first.colorLabel.trim().slice(0, LEGEND_LABEL_MAX) : "";
+  // The first region's own colour is labelled with its colour label, else its name (when some of its parts use that colour).
+  const baseLabel = (typeof first.colorLabel === "string" && first.colorLabel.trim()) || (baseUsesOwn && typeof first.name === "string" ? first.name.trim() : "");
+  const colorLabel = names?.colorLabel !== undefined ? names.colorLabel.trim().slice(0, LEGEND_LABEL_MAX) : baseLabel.slice(0, LEGEND_LABEL_MAX);
   const feature: RegionFeature = {
     $schema: "../../schema/region.schema.json",
     type: "Feature",
@@ -226,6 +232,7 @@ export function resolveLinked(f: RegionFeature, lookup: (id: string) => RegionFe
     ...(p.underTitle ? { underTitle: p.underTitle } : {}),
     ...(p.ownToggle ? { ownToggle: true } : {}),
     ...(p.layerLabel ? { layerLabel: p.layerLabel } : {}),
+    ...(p.name ? { name: p.name } : {}),
     ...(p.created ? { created: p.created } : {}),
     ...(p.createdBy ? { createdBy: p.createdBy } : {}),
     ...(p.updated ? { updated: p.updated } : {}),
