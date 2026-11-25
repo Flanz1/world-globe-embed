@@ -611,7 +611,10 @@ button.link { background: none; border: 0; border-radius: 4px; min-height: 0; pa
   .act-extra { display: none; }
   .act-more { display: inline-flex; }
 }
-.pn-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
+.pn-body { display: grid; grid-template-columns: minmax(0, 1fr) 360px; grid-template-areas: "pane side" "below side"; gap: 14px 16px; align-items: start; }
+.pn-body > .pn-pane { grid-area: pane; }
+.pn-body > .pn-below { grid-area: below; margin-top: 0; }
+.pn-body > .pn-side { grid-area: side; }
 .pn-pane { position: relative; width: min(100%, calc(70vh * var(--pn-aspect, 2))); aspect-ratio: var(--pn-aspect, 2); max-height: 70vh; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; overflow: hidden; background: var(--app-map-bg); touch-action: none; cursor: grab; outline-offset: 2px; }
 .pn-pane[data-adding=true] { cursor: crosshair; }
 .pn-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -648,7 +651,7 @@ button.link { background: none; border: 0; border-radius: 4px; min-height: 0; pa
 .pn-row.on { border-color: var(--md-sys-color-outline); background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
 .pn-row .pn-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pn-sw { flex: none; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; }
-@media (max-width: 860px) { .pn-body { grid-template-columns: 1fr; } }
+
 .pn-cats { border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; padding: 6px 12px; margin: 0 0 8px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .pn-cats legend { padding: 0 4px; font-size: 12px; color: var(--md-sys-color-on-surface-variant); }
 .pn-cats p { flex-basis: 100%; margin: 0; }
@@ -1022,3 +1025,41 @@ button.r-mini-name { display: flex; align-items: center; gap: 10px; flex: 1 1 au
 .r-inspector .rcard .rname, .r-inspector .rcard .rinfo > div:first-child > .swatch { display: none; }
 .r-inspector .rcard .rinfo > div:first-child > .rcreator { margin-left: 0; }
 .r-inspector .rcard > .rthumb { max-width: 336px; }
+
+/* ── Pins: list + inspector ── The map and the tree on the left, the inspector (a pin's form, a pin map's or a folder's
+   actions) sticky on the right. Below 1024 px one column: the pin form sits right under the map (the map stays in
+   view while placing or dragging), and a pin map's or folder's inspector is a sheet like the Regions one. */
+.pn-side { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; padding: 16px; border-radius: 16px; background: var(--md-sys-color-surface-container); box-shadow: 0 1px 3px rgba(0, 0, 0, .12), 0 4px 12px rgba(0, 0, 0, .08); min-width: 0; }
+.pn-side .empty { border: 0; padding: 0; background: transparent; }
+.pn-form .r-insp-head { margin-bottom: 2px; }
+.pn-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pn-side .pn-list { display: grid; gap: 4px; }
+.pn-tree .pinmap { border: 0; border-radius: 0; padding: 0; gap: 2px; }
+.pn-tree .pinmap-head { flex-wrap: nowrap; gap: 0; min-height: 40px; padding: 0 8px 0 0; border-radius: 12px; }
+.pn-tree .pinmap-head.picked { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+.pn-tree .pinmap-head > .bulk-box { margin: 0 4px 0 6px; }
+.pinmap-loose { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; min-height: 40px; padding: 0 4px; color: var(--md-sys-color-on-surface-variant); font-size: 15px; }
+.pn-tree .pinmap-body { display: grid; gap: 2px; margin: 2px 0 0 20px; }
+.pn-tree .pinmap-body[hidden] { display: none; }
+.pn-tree .pinmap-body > p { margin: 4px 12px 8px; }
+.pn-tree .pn-row { min-height: 40px; border: 0; padding: 0 12px 0 12px; }
+.pn-tree .pn-row:hover { background-color: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent); }
+.pn-tree .pn-row.on { background-color: var(--md-sys-color-secondary-container); }
+.pn-tree .pn-item { display: flex; align-items: center; gap: 4px; border-radius: 12px; }
+.pn-tree .pn-item > .pn-row { flex: 1 1 auto; min-width: 0; }
+.pn-tree .pn-item.selected { background: var(--md-sys-color-secondary-container); }
+@media (max-width: 1023px) {
+  .pn-body { grid-template-columns: minmax(0, 1fr); grid-template-areas: "pane" "side" "below"; }
+  .pn-side { position: static; max-height: none; overflow: visible; padding: 0; background: transparent; box-shadow: none; border-radius: 0; }
+  .pn-side.open { position: fixed; z-index: 15; left: 0; right: 0; bottom: 0; top: auto; max-height: 70vh; overflow: auto; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); border-radius: 28px 28px 0 0; background: var(--md-sys-color-surface-container-high); box-shadow: 0 -2px 12px rgba(0, 0, 0, .25); }
+  .pn-side.open::before { content: ""; display: block; width: 32px; height: 4px; margin: 0 auto 10px; border-radius: 2px; background: var(--md-sys-color-on-surface-variant); opacity: .4; }
+  .pn-side.open .r-insp-close { display: inline-flex; }
+  #tab-pins:has(.pn-side.open) .pn-tree { margin-bottom: 50vh; }
+}
+@media (max-width: 720px) {
+  .pn-side.open { bottom: calc(77px + env(safe-area-inset-bottom)); max-height: calc(70vh - 77px); }
+  body.bulk-on .pn-side.open { display: none; }
+}
+@media (max-width: 600px) {
+  .pn-tree .pinmap-body { margin-left: 12px; }
+}

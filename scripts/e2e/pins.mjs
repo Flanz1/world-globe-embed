@@ -24,7 +24,7 @@ import { MockGitHub } from "./mock-github.mjs";
 import { useAdminApi } from "./admin-api.mjs";
 
 import { port } from "./ports.mjs";
-import { pickRegion } from "./regions-ui.mjs";
+import { pickPinFolder, pickPinMap, pickRegion } from "./regions-ui.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
@@ -602,12 +602,17 @@ await step(A, "owner places, moves and deletes a pin", async () => {
         if (w === 375 && scheme === "light") {
           const b = await bar.boundingBox();
           check(A, "at 375 the header actions sit under the fields on a row of their own", b.width <= 375);
-          const more = page.locator('.pinmap[data-pinmap="battles"] .act-more button[data-action="more"]');
-          check(A, "at 375 a pin map row keeps Embed code… and moves the rest into More…", (await page.locator('.pinmap[data-pinmap="battles"] button[data-action="embed-map"]').isVisible()) && !(await page.locator('.pinmap[data-pinmap="battles"] button[data-action="rename-map"]').isVisible()) && (await more.isVisible()));
-          await more.click();
-          check(A, "…the menu has Move, Rename and Delete", (await page.locator('.rmenu:popover-open button').allTextContents()).join("|") === "Move…|Rename…|Delete…");
+          if (await page.locator("#tab-pins button[data-action=place-done]").isVisible()) await page.click("#tab-pins button[data-action=place-done]");
+          await pickPinMap(page, "battles");
+          const sheet = page.locator("#pn-inspector.open");
+          const sb = await sheet.boundingBox();
+          check(A, "at 375 picking a pin map opens its actions in a sheet above the bottom bar", !!sb && sb.width <= 375 && sb.y + sb.height <= 812 - 56 && (await sheet.locator(".r-insp-actions button").allTextContents()).join("|") === "Embed code…|Rename|Move to…|Delete", JSON.stringify(sb));
           await page.keyboard.press("Escape");
-          check(A, "folder reorder buttons have names", (await page.locator('.rfolder button[data-action="up"]').first().getAttribute("aria-label")) !== null);
+          await page.waitForTimeout(200);
+          check(A, "…Esc closes the sheet", (await page.locator("#pn-inspector.open").count()) === 0);
+          await pickPinFolder(page, "places");
+          check(A, "folder reorder buttons have names", (await page.locator('#pn-inspector [data-action="up"]').getAttribute("aria-label")) !== null);
+          await page.keyboard.press("Escape");
         }
         if (await page.locator("#tab-pins button[data-action=place-done]").isVisible()) await page.click("#tab-pins button[data-action=place-done]");
       }
@@ -690,7 +695,8 @@ await step(A, "owner organises pin maps and folders", async () => {
   f = onBranch("content/pinmaps.json");
   check(A, "adding a folder is one commit", mock.log.length === n + 1 && f?.folders.some((k) => k.id === "trade" && !k.parent), JSON.stringify(f?.folders.map((k) => k.id)));
   n = mock.log.length;
-  await page.click('.pinmap[data-pinmap="trade-ports"] button[data-action="move-map"]');
+  await pickPinMap(page, "trade-ports");
+  await page.click('#pn-inspector [data-insp-pinmap="trade-ports"] button[data-action="move-map"]');
   await page.selectOption('dialog[open] select[data-field="pinmap-folder"]', "trade");
   await page.click('dialog[open] button[data-action="confirm-move-pinmap"]');
   await waitCommit(page, n);
@@ -698,14 +704,16 @@ await step(A, "owner organises pin maps and folders", async () => {
   check(A, "moving a pin map into a folder", f?.folders.find((k) => k.id === "trade")?.regions.includes("trade-ports"), JSON.stringify(f?.folders));
   // A subfolder, then rename the pin map.
   n = mock.log.length;
-  await page.click('.rfolder[data-pinfolder="trade"] > .rfolder-head button[data-action="subfolder"]');
+  await pickPinFolder(page, "trade");
+  await page.click('#pn-inspector [data-insp-pinfolder="trade"] button[data-action="subfolder"]');
   await page.fill('dialog[open] input[data-field="pinmap-name"]', "Sea");
   await page.click('dialog[open] button[data-action="confirm-pinmap"]');
   await waitCommit(page, n);
   f = onBranch("content/pinmaps.json");
   check(A, "a subfolder nests under its folder", f?.folders.some((k) => k.id === "sea" && k.parent === "trade"), JSON.stringify(f?.folders.map((k) => [k.id, k.parent])));
   n = mock.log.length;
-  await page.click('.pinmap[data-pinmap="trade-ports"] button[data-action="rename-map"]');
+  await pickPinMap(page, "trade-ports");
+  await page.click('#pn-inspector [data-insp-pinmap="trade-ports"] button[data-action="rename-map"]');
   await page.fill('dialog[open] input[data-field="pinmap-name"]', "Ports of trade");
   await page.click('dialog[open] button[data-action="confirm-pinmap"]');
   await waitCommit(page, n);
@@ -713,7 +721,8 @@ await step(A, "owner organises pin maps and folders", async () => {
   check(A, "renaming keeps the id (embeds keep working)", f?.maps.some((m) => m.id === "trade-ports" && m.name === "Ports of trade"));
   // Deleting a pin map leaves its pins.
   n = mock.log.length;
-  await page.click('.pinmap[data-pinmap="battles"] button[data-action="delete-map"]');
+  await pickPinMap(page, "battles");
+  await page.click('#pn-inspector [data-insp-pinmap="battles"] button[data-action="delete-map"]');
   await page.click("dialog.small-dlg.danger[open] button:has-text('Delete pin map')");
   await waitCommit(page, n);
   f = onBranch("content/pinmaps.json");
@@ -721,7 +730,8 @@ await step(A, "owner organises pin maps and folders", async () => {
   await page.waitForTimeout(400);
   check(A, "…the pin shows as not in a pin map", (await page.locator('.pinmap.loose .pn-row:has-text("Battle of the Red Field")').count()) === 1);
   // Embed code for one pin map.
-  await page.click('.pinmap[data-pinmap="holy-sites"] button[data-action="embed-map"]');
+  await pickPinMap(page, "holy-sites");
+  await page.click('#pn-inspector [data-insp-pinmap="holy-sites"] button[data-action="embed-map"]');
   const code = await page.inputValue('textarea[aria-label="Embed code"]');
   check(A, "a pin map's own embed code points at it", /pins=holy-sites"/.test(code), code);
   check(A, "no errors in the admin page", errors.length === 0, errors.join(" | "));

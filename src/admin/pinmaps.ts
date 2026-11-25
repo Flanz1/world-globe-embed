@@ -28,12 +28,11 @@ import {
   type PinMapsFile,
 } from "../shared/pinmaps.ts";
 import type { Category } from "../shared/categories.ts";
-import { h } from "./dom.ts";
+import { folderIcon, h } from "./dom.ts";
 import { GitHubError, type GitHub } from "./github.ts";
 import { optimistic } from "./optimistic.ts";
 import { confirmBox, modal } from "./region-dialogs.ts";
 import { can, refusal } from "./session.ts";
-import { moreMenu } from "./more-menu.ts";
 
 export interface PinMapsDeps {
   gh: () => GitHub;
@@ -222,7 +221,20 @@ export interface TreeOptions {
   /** The count shown beside a pin map, and whether it matches the search (a pin map with nothing to show is hidden while searching). */
   filtering: boolean;
   hasMatch: (m: PinMap | null) => boolean;
+  /** The folder shown in the inspector (its row is marked), and what picking a folder's row does. */
+  picked: string | null;
+  pick: (id: string) => void;
 }
+
+/** What the inspector needs to know about a folder drawn in the tree: where it sits among its siblings and what it holds. */
+export interface FolderInfo {
+  k: Category;
+  pos: { first: boolean; last: boolean };
+  maps: PinMap[];
+  subs: number;
+}
+const info = new Map<string, FolderInfo>();
+export const folderInfo = (id: string): FolderInfo | undefined => info.get(id);
 
 export const small = (text: string, action: string, onclick: () => void, why = "", cls = "ghost", aria = "") =>
   h("button", { type: "button", className: cls, textContent: text, onclick, disabled: !!why, title: why, ariaLabel: aria || null, dataset: { action } });
@@ -231,7 +243,8 @@ function folderEl(k: Category, o: TreeOptions, pos: { first: boolean; last: bool
   const el = h("section", { className: "rfolder", dataset: { pinfolder: k.id } });
   const body = h("div", { className: "rfolder-body" });
   const open = o.filtering || !closed.has(k.id);
-  const toggle = h("button", { type: "button", className: "rfolder-toggle ghost", ariaExpanded: String(open), title: "Open or close this folder" }, h("span", { className: "rfolder-arrow", ariaHidden: "true", textContent: "▾" }), h("strong", { className: "rfolder-name", textContent: k.name }), h("span", { className: "badge", textContent: String(maps.length), title: `${maps.length} pin map${maps.length === 1 ? "" : "s"} on this slot` }));
+  info.set(k.id, { k, pos, maps, subs: kids.length });
+  const toggle = h("button", { type: "button", className: "rfolder-toggle", ariaExpanded: String(open), ariaLabel: `Open or close ${k.name || "folder"}`, title: "Open or close this folder" }, h("span", { className: "rfolder-arrow", ariaHidden: "true", textContent: "▾" }));
   toggle.addEventListener("click", () => {
     const now = body.hidden;
     body.hidden = !now;
@@ -240,41 +253,45 @@ function folderEl(k: Category, o: TreeOptions, pos: { first: boolean; last: bool
     if (now) closed.delete(k.id);
     else closed.add(k.id);
   });
-  const why = canOrganise() ? "" : "You don't have permission to change folders.";
+  const on = o.picked === k.id;
   const head = h(
     "div",
-    { className: "rfolder-head" },
+    { className: `rfolder-head${on ? " picked" : ""}` },
     toggle,
     h(
-      "div",
-      { className: "actions" },
-      small("+ Pin map", "new-map", () => newMap(o.slot, k.id), why),
-      small("+ Subfolder", "subfolder", () => newFolder(k.id), why, "ghost act-extra"),
-      small("↑", "up", () => void shift(k, -1), pos.first ? "Already first" : why, "ghost act-extra", `Move folder ${k.name} up`),
-      small("↓", "down", () => void shift(k, 1), pos.last ? "Already last" : why, "ghost act-extra", `Move folder ${k.name} down`),
-      small("Move", "move", () => moveFolder(k), why, "ghost act-extra"),
-      small("Rename", "rename", () => renameFolder(k), why, "ghost act-extra"),
-      small("Delete", "delete", () => void removeFolder(k), why, "ghost danger act-extra"),
-      moreMenu(`More actions for folder ${k.name}`, [
-        { text: "+ Subfolder", action: "menu-subfolder", onclick: () => newFolder(k.id), why },
-        { text: "Move up", action: "menu-up", onclick: () => void shift(k, -1), why: pos.first ? "Already first" : why },
-        { text: "Move down", action: "menu-down", onclick: () => void shift(k, 1), why: pos.last ? "Already last" : why },
-        { text: "Move…", action: "menu-move", onclick: () => moveFolder(k), why },
-        { text: "Rename…", action: "menu-rename", onclick: () => renameFolder(k), why },
-        { text: "Delete…", action: "menu-delete", onclick: () => void removeFolder(k), why, danger: true },
-      ], { wrap: "act-more" }),
+      "button",
+      { type: "button", className: "rfolder-pick", ariaPressed: String(on), dataset: { pickPinfolder: k.id }, title: "Show this folder's actions", onclick: () => o.pick(k.id) },
+      folderIcon(),
+      h("span", { className: "rfolder-name", textContent: k.name }),
+      h("span", { className: "rcount", textContent: String(maps.length), title: `${maps.length} pin map${maps.length === 1 ? "" : "s"} on this slot` }),
     ),
   );
   body.hidden = !open;
   el.classList.toggle("closed", !open);
   const empty = !maps.length && !kids.length;
-  body.append(...maps.map((m) => o.mapBody(m)), ...kids, ...(empty ? [h("p", { className: "muted small", textContent: "This folder is empty. Add a pin map here, or move one with its Move button." })] : []));
+  body.append(...maps.map((m) => o.mapBody(m)), ...kids, ...(empty ? [h("p", { className: "muted small rfolder-empty", textContent: "This folder is empty. Add a pin map here, or move one into it." })] : []));
   el.append(head, body);
   return el;
 }
 
+/** The actions on a folder, for the inspector: + Pin map, + Subfolder, Rename, Move up, Move down, Move to…, Delete. */
+export function folderActions(f: FolderInfo, slot: string): HTMLElement[] {
+  const { k, pos } = f;
+  const why = canOrganise() ? "" : "You don't have permission to change folders.";
+  return [
+    small("+ Pin map", "new-map", () => newMap(slot, k.id), why, "tonal"),
+    small("+ Subfolder", "subfolder", () => newFolder(k.id), why),
+    small("Rename", "rename", () => renameFolder(k), why),
+    small("↑ Move up", "up", () => void shift(k, -1), pos.first ? "Already first" : why, "ghost", `Move folder ${k.name} up`),
+    small("↓ Move down", "down", () => void shift(k, 1), pos.last ? "Already last" : why, "ghost", `Move folder ${k.name} down`),
+    small("Move to…", "move", () => moveFolder(k), why),
+    small("Delete", "delete", () => void removeFolder(k), why, "ghost danger"),
+  ];
+}
+
 /** The folders (with the pin maps of the slot in them, then the folders inside), then pin maps in no folder, then pins in no pin map. */
 export function renderTree(o: TreeOptions): HTMLElement[] {
+  info.clear();
   const tree = treeOf(current);
   const onSlot = (id: string) => current.maps.find((m) => m.id === id && m.slot === o.slot);
   const level = (parent: string | null): HTMLElement[] => {
