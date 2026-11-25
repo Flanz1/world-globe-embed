@@ -588,11 +588,13 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   await page.waitForFunction(() => document.querySelector(".pn-form input[aria-label=Name]")?.value === "Test Harbour");
   check(A, "Discard pin drops the unsaved pin and opens the other", (await page.locator(".pn-marker").count()) === SEED.length + 1);
   // Labels, region outlines and the kind filter.
-  await page.click('.pn-zoom button[data-action="pin-labels"]');
+  await page.click('.pn-zoom button[data-action="pin-show"]');
+  await page.check('.sw-menu input[data-action="pin-labels"]', { force: true });
   await page.waitForTimeout(200);
   check(A, "Labels shows names next to the pins", (await page.locator(".pn-layer").getAttribute("data-labels")) === "true" && (await page.locator(".pn-marker .pn-label").first().isVisible()));
-  await page.click('.pn-zoom button[data-action="pin-regions"]');
-  check(A, "Regions is a pressed toggle", (await page.locator('.pn-zoom button[data-action="pin-regions"]').getAttribute("aria-pressed")) === "true");
+  await page.check('.sw-menu input[data-action="pin-regions"]', { force: true });
+  check(A, "Region outlines is a switch that stays on", await page.isChecked('.sw-menu input[data-action="pin-regions"]'));
+  await page.keyboard.press("Escape");
   await page.click('.pn-kindbar [data-kind="battle"]');
   for (const [w, hgt] of [[1440, 900], [768, 900], [375, 800]])
     for (const scheme of ["light", "dark"]) {
@@ -632,8 +634,10 @@ await step(A, "owner places, moves and deletes a pin", async () => {
   const kinds = await page.locator(".pn-row .muted").allTextContents();
   check(A, "the kind chips narrow the list", kinds.length > 0 && kinds.every((k) => k === "Battle"), JSON.stringify(kinds));
   await page.click('.pn-kindbar [data-kind="battle"]');
-  await page.click('.pn-zoom button[data-action="pin-labels"]');
-  await page.click('.pn-zoom button[data-action="pin-regions"]');
+  await page.click('.pn-zoom button[data-action="pin-show"]');
+  await page.uncheck('.sw-menu input[data-action="pin-labels"]', { force: true });
+  await page.uncheck('.sw-menu input[data-action="pin-regions"]', { force: true });
+  await page.keyboard.press("Escape");
   // Arrow keys nudge the selected marker.
   await page.locator(".pn-row", { hasText: "Test Harbour" }).click();
   await page.locator(".pn-marker[aria-pressed=true]").focus();
