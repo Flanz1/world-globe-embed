@@ -59,7 +59,7 @@ transition:opacity .4s ease}
 @media (hover:hover){#ui button:hover::after{opacity:1;transition-delay:.4s}}
 #ui button:focus-visible::after{opacity:1}
 #ui.notip button::after{opacity:0!important}
-#btn-lock::before{content:"";position:absolute;right:3px;bottom:3px;width:9px;height:9px;border-radius:50%;background:#e8c44a center/7px 7px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.2 4.2l2 2 3.6-4.4' fill='none' stroke='%231a1710' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+#btn-lock[aria-pressed=false]::before{content:"";position:absolute}
 #btn-lock[aria-pressed=false]::before{width:2px;height:20px;right:13px;bottom:4px;border-radius:1px;background:#e8dcc8;box-shadow:0 0 0 1px rgba(20,18,14,.9);transform:rotate(45deg)}
 @media (pointer:coarse){#ui{gap:4px;border-radius:14px}#ui button{width:44px;height:44px;border-radius:10px}#ui button::after{display:none}}
 #hint{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);padding:6px 12px;border-radius:14px;background:rgba(20,18,14,.8);color:#f3ead8;font:600 13px/1.3 system-ui,sans-serif;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .4s}

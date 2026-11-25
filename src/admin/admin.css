@@ -967,7 +967,7 @@ dialog.warp > .dlg-foot { display: flex; align-items: center; gap: 8px; padding:
   .ed-head-row { gap: 2px; }
   .ed-view-tools.floating { position: absolute; right: 8px; top: 8px; z-index: 3; flex-direction: column; gap: 4px; padding: 4px; border-radius: 16px; background: var(--md-sys-color-surface-container-high); box-shadow: var(--app-shadow); }
   dialog.editor .ed-view-tools.floating .ed-hb { min-width: 40px; min-height: 40px; border-color: transparent; color: var(--md-sys-color-on-surface); }
-  dialog.editor .ed-view-tools.floating .ed-hb[aria-pressed="true"], dialog.editor .ed-view-tools.floating .ed-ov-btn.active { color: var(--md-sys-color-on-secondary-container); }
+  dialog.editor .ed-view-tools.floating .ed-hb[aria-pressed="true"], dialog.editor .ed-view-tools.floating .ed-ov-btn.active { background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
   .ed-map-tl { max-width: calc(100% - 72px); }
   .ed-ov-panel { right: 64px; width: calc(100% - 72px); }
 }
@@ -1181,5 +1181,8 @@ label.sw-row.single { max-width: 440px; }
 @media (max-width: 599px) {
   .sw-menu.sheet { left: 0 !important; right: 0; bottom: 0; top: auto !important; max-width: none; min-width: 0; max-height: 80vh; border-radius: 28px 28px 0 0; padding: 8px 0 24px; background: var(--md-sys-color-surface-container-low); }
   .sw-menu.sheet label.sw-row { min-height: 56px; }
+  .sw-grab { width: 32px; height: 4px; border-radius: 2px; background: var(--md-sys-color-on-surface-variant); opacity: .4; margin: 4px auto 8px; }
+  .sw-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px 8px; }
+  .sw-sheet-head h3 { margin: 0; font-size: 16px; min-width: 0; overflow-wrap: anywhere; }
 }
 @media (pointer: coarse) { label.sw-row { min-height: 48px; } }

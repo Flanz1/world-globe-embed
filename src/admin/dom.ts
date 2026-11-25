@@ -49,9 +49,14 @@ export function switchRow(text: string | Node, box: HTMLInputElement, opts: { he
 }
 
 /** Opens a floating popup of switches under (or beside) a button; Esc, a click outside or the button closes it. Phones get a bottom sheet. */
-export function switchPopup(btn: HTMLElement, build: () => HTMLElement[], opts: { title?: string; label: string; align?: "left" | "right"; onClose?: () => void }): { close(): void } {
-  const menu = h("div", { className: "sw-menu", role: "dialog", ariaLabel: opts.label }, opts.title ? h("div", { className: "sw-menu-title", textContent: opts.title }) : null, ...build());
+export function switchPopup(btn: HTMLElement, build: () => HTMLElement[], opts: { title?: string; sheetTitle?: string; label: string; align?: "left" | "right"; onClose?: () => void }): { close(): void } {
   const phone = matchMedia("(max-width: 599px)").matches;
+  let closeFn = (): void => {};
+  // Phones: a bottom sheet with a handle, a title naming what it changes and a Close button; larger screens: a small titled popup.
+  const head = phone
+    ? [h("div", { className: "sw-grab", ariaHidden: "true" }), h("div", { className: "sw-sheet-head" }, h("h3", { textContent: opts.sheetTitle ?? opts.title ?? opts.label }), h("button", { type: "button", className: "ghost", textContent: "Close", onclick: () => closeFn() }))]
+    : [opts.title ? h("div", { className: "sw-menu-title", textContent: opts.title }) : null];
+  const menu = h("div", { className: "sw-menu", role: "dialog", ariaLabel: opts.label }, ...head, ...build());
   const scrim = phone ? h("div", { className: "sw-scrim" }) : null;
   if (phone) menu.classList.add("sheet");
   const host = btn.closest("dialog[open]") ?? document.body;
@@ -75,6 +80,7 @@ export function switchPopup(btn: HTMLElement, build: () => HTMLElement[], opts: 
     document.removeEventListener("keydown", onKey, true);
     opts.onClose?.();
   };
+  closeFn = close;
   const onDown = (e: Event) => {
     const t = e.target as Node;
     if (!menu.contains(t) && !btn.contains(t)) close();

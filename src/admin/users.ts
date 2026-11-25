@@ -49,7 +49,7 @@ function openPermissions(u: AccessUser, btn: HTMLElement, focusPerm?: string): v
       });
       return switchRow(PERMISSION_LABELS[p].label, box, { help: PERMISSION_LABELS[p].help });
     });
-  const handle = switchPopup(btn, build, { title: "What they can do", label: `Permissions for ${u.login}`, onClose: () => { if (permPopup === handle2) permPopup = null; } });
+  const handle = switchPopup(btn, build, { title: "What they can do", sheetTitle: `${u.login} · Permissions ${isOwner ? PERMISSIONS.length : u.permissions.length}/${PERMISSIONS.length}`, label: `Permissions for ${u.login}`, onClose: () => { if (permPopup === handle2) permPopup = null; } });
   const handle2 = { login: u.login, close: handle.close };
   permPopup = handle2;
   reopen = null;
