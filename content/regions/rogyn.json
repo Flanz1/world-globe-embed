@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "rogyn",
   "properties": {
+    "name": "Rogyn",
     "slot": "inara",
     "map": "globe-map",
     "color": "#60e169",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-18T16:20:34Z",
+    "updated": "2026-11-26T01:24:52Z",
     "created": "2026-11-18T16:20:34Z",
     "createdBy": {
       "id": 357569561,
       "login": "Mank-cmd"
     },
     "updatedBy": {
-      "id": 357569561,
-      "login": "Mank-cmd"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
