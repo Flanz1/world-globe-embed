@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "erlmondy",
   "properties": {
+    "name": "Erlmondy",
     "slot": "inara",
     "map": "globe-map",
     "color": "#162dda",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-16T22:28:18Z",
+    "updated": "2026-11-26T01:27:30Z",
     "created": "2026-11-16T21:38:56Z",
     "createdBy": {
       "id": 357569561,
       "login": "Mank-cmd"
     },
     "updatedBy": {
-      "id": 357569561,
-      "login": "Mank-cmd"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
