@@ -39,8 +39,7 @@
       "id": "ilrakhan",
       "name": "Ilrakhan",
       "regions": [
-        "rogyn",
-        "vihr"
+        "rogyn"
       ],
       "parent": "country",
       "createdBy": {
@@ -186,6 +185,7 @@
         "tloky",
         "torry",
         "trazlova",
+        "vihr",
         "wytlords"
       ],
       "parent": "ilrakhan",
