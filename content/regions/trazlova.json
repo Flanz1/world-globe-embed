@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "trazlova",
   "properties": {
+    "name": "Trazlova",
     "slot": "inara",
     "map": "globe-map",
     "color": "#2a20bc",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-20T18:55:28Z",
+    "updated": "2026-11-26T01:30:54Z",
     "created": "2026-11-20T18:55:28Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
