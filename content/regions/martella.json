@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "martella",
   "properties": {
+    "name": "Martella",
     "slot": "inara",
     "map": "globe-map",
     "color": "#d9c812",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-16T22:26:50Z",
+    "updated": "2026-11-26T01:27:56Z",
     "created": "2026-11-16T22:25:39Z",
     "createdBy": {
       "id": 357569561,
       "login": "Mank-cmd"
     },
     "updatedBy": {
-      "id": 357569561,
-      "login": "Mank-cmd"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
