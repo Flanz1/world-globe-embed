@@ -3,13 +3,14 @@
   "type": "Feature",
   "id": "diarism",
   "properties": {
+    "name": "Diarism",
     "slot": "inara",
     "map": "globe-map",
     "color": "#a64ae3",
     "colorLabel": "Diarism",
     "fillOpacity": 0.35,
     "label": false,
-    "updated": "2026-11-16T08:51:44Z",
+    "updated": "2026-11-26T00:09:12Z",
     "updatedBy": {
       "id": 45669787,
       "login": "Flanz1"
