@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "battvia",
   "properties": {
+    "name": "Battvia",
     "slot": "inara",
     "map": "globe-map",
     "color": "#ddccca",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-18T18:27:21Z",
+    "updated": "2026-11-26T01:25:30Z",
     "created": "2026-11-18T18:10:04Z",
     "createdBy": {
       "id": 357569561,
       "login": "Mank-cmd"
     },
     "updatedBy": {
-      "id": 357569561,
-      "login": "Mank-cmd"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
