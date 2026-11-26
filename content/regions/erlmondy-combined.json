@@ -3,6 +3,7 @@
   "type": "Feature",
   "id": "erlmondy-combined",
   "properties": {
+    "name": "Sertova Combined",
     "slot": "inara",
     "map": "globe-map",
     "color": "#162dda",
@@ -116,10 +117,10 @@
       "id": 357569561,
       "login": "Mank-cmd"
     },
-    "updated": "2026-11-16T22:30:33Z",
+    "updated": "2026-11-26T01:27:47Z",
     "updatedBy": {
-      "id": 357569561,
-      "login": "Mank-cmd"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
