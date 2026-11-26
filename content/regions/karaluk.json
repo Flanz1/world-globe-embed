@@ -3,12 +3,13 @@
   "type": "Feature",
   "id": "karaluk",
   "properties": {
+    "name": "Karaluk",
     "slot": "inara",
     "map": "globe-map",
     "color": "#05eeff",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-16T08:47:14Z",
+    "updated": "2026-11-26T01:31:37Z",
     "created": "2026-11-13T19:16:05Z",
     "createdBy": {
       "id": 138310181,
