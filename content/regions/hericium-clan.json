@@ -3,6 +3,7 @@
   "type": "Feature",
   "id": "hericium-clan",
   "properties": {
+    "name": "Drizan Peninsula",
     "slot": "inara",
     "map": "globe-map",
     "color": "#e4de1b",
@@ -125,7 +126,7 @@
       true,
       true
     ],
-    "updated": "2026-11-16T08:51:13Z",
+    "updated": "2026-11-26T01:24:45Z",
     "created": "2026-11-13T14:17:41Z",
     "createdBy": {
       "id": 167983516,
