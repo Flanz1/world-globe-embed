@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "bihrasmanism",
   "properties": {
+    "name": "Bihrasmanism",
     "slot": "inara",
     "map": "globe-map",
     "color": "#48db96",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-13T19:01:02Z",
+    "updated": "2026-11-26T01:31:23Z",
     "created": "2026-11-13T19:01:02Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
