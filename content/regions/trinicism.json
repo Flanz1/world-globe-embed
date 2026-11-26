@@ -3,13 +3,14 @@
   "type": "Feature",
   "id": "trinicism",
   "properties": {
+    "name": "Trinicism",
     "slot": "inara",
     "map": "globe-map",
     "color": "#23af33",
     "colorLabel": "Trinicism",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-16T08:51:59Z",
+    "updated": "2026-11-26T00:09:49Z",
     "updatedBy": {
       "id": 45669787,
       "login": "Flanz1"
