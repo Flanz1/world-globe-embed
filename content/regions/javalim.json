@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "javalim",
   "properties": {
+    "name": "Javalim",
     "slot": "inara",
     "map": "globe-map",
     "color": "#cf11e8",
     "fillOpacity": 0.35,
     "label": false,
-    "updated": "2026-11-13T19:04:05Z",
+    "updated": "2026-11-26T01:22:33Z",
     "created": "2026-11-13T19:04:05Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
