@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "twintailborder",
   "properties": {
+    "name": "Twin Tail Imperium",
     "slot": "inara",
     "map": "globe-map",
     "color": "#c01630",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-19T19:02:22Z",
+    "updated": "2026-11-26T01:23:40Z",
     "created": "2026-11-12T16:08:48Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
