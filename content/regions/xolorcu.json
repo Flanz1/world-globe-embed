@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "xolorcu",
   "properties": {
+    "name": "Xolorcu",
     "slot": "inara",
     "map": "globe-map",
     "color": "#710962",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-13T20:21:43Z",
+    "updated": "2026-11-26T01:23:26Z",
     "created": "2026-11-13T20:21:43Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
