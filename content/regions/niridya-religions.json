@@ -7,43 +7,44 @@
     "slot": "inara",
     "map": "globe-map",
     "color": "#27d011",
+    "colorLabel": "Faiginism",
     "fillOpacity": 0.35,
     "label": true,
     "legend": [
       {
-        "label": "javalim",
+        "label": "Javalim",
         "color": "#cf11e8"
       },
       {
-        "label": "gethricisminnyridia",
-        "color": "#c0392b"
+        "label": "Gethricism",
+        "color": "#ff6600"
       },
       {
-        "label": "firstpath",
+        "label": "First Path",
         "color": "#e88787"
       },
       {
-        "label": "kaarminism",
+        "label": "Kaarminism",
         "color": "#09952c"
       },
       {
-        "label": "lakalism",
+        "label": "Lakalism",
         "color": "#ffffff"
       },
       {
-        "label": "margun",
+        "label": "Margun",
         "color": "#eece2f"
       },
       {
-        "label": "nuralism",
+        "label": "Nuralism",
         "color": "#3c923a"
       },
       {
-        "label": "secondpath",
+        "label": "Second Path",
         "color": "#682818"
       },
       {
-        "label": "sihixilar",
+        "label": "Sihixilar",
         "color": "#3e4c48"
       },
       {
@@ -51,39 +52,39 @@
         "color": "#894c06"
       },
       {
-        "label": "tsurugism",
+        "label": "Tsurugism",
         "color": "#f9a20b"
       },
       {
-        "label": "xolorcu",
+        "label": "Xolorcu",
         "color": "#710962"
       },
       {
-        "label": "zuhurism",
+        "label": "Zuhurism",
         "color": "#ff1e05"
       },
       {
-        "label": "rayadan",
+        "label": "Rayadan",
         "color": "#195ce1"
       },
       {
-        "label": "noorism",
+        "label": "Noorism",
         "color": "#582bbf"
       },
       {
-        "label": "karaluk",
+        "label": "Karaluk",
         "color": "#05eeff"
       },
       {
-        "label": "iratism",
+        "label": "Iratism",
         "color": "#05637a"
       },
       {
-        "label": "bihrasmanism",
+        "label": "Bihrasmanism",
         "color": "#48db96"
       },
       {
-        "label": "bigronism",
+        "label": "Birgonism",
         "color": "#7952e5"
       }
     ],
@@ -302,6 +303,7 @@
       "",
       "",
       "",
+      "First Path",
       "",
       "",
       "",
@@ -363,6 +365,9 @@
       "",
       "",
       "",
+      "Kaarminism",
+      "Lakalism",
+      "Margun",
       "",
       "",
       "",
@@ -375,11 +380,13 @@
       "",
       "",
       "",
+      "Nuralism",
       "",
       "",
       "",
       "",
       "",
+      "Second Path",
       "",
       "",
       "",
@@ -393,8 +400,10 @@
       "",
       "",
       "",
+      "Sihixilar",
       "",
       "",
+      "Xolorcu",
       "",
       "",
       "",
@@ -468,6 +477,8 @@
       "",
       "",
       "",
+      "Noorism",
+      "Karaluk",
       "",
       "",
       "",
@@ -479,6 +490,7 @@
       "",
       "",
       "",
+      "Iratism",
       "",
       "",
       "",
@@ -493,19 +505,8 @@
       "",
       "",
       "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
+      "Bihrasmanism",
+      "Birgonism"
     ],
     "linked": [
       "faiginism",
@@ -529,6 +530,13 @@
       "bigronism"
     ],
     "linkedNames": {
+      "legend": [
+        {
+          "color": "#ff6600",
+          "from": "Gethricism(Nirdya)",
+          "label": "Gethricism"
+        }
+      ],
       "legendTitle": ""
     },
     "created": "2026-11-18T21:19:13Z",
@@ -536,7 +544,7 @@
       "id": 45669787,
       "login": "Flanz1"
     },
-    "updated": "2026-11-26T00:09:58Z",
+    "updated": "2026-11-26T15:40:24Z",
     "updatedBy": {
       "id": 45669787,
       "login": "Flanz1"
