@@ -3,7 +3,7 @@
   "type": "Feature",
   "id": "albesan-combined",
   "properties": {
-    "name": "Cevoli Combined",
+    "name": "Cevolia Combined",
     "slot": "inara",
     "map": "globe-map",
     "color": "#831307",
@@ -191,7 +191,7 @@
       "id": 357569561,
       "login": "Mank-cmd"
     },
-    "updated": "2026-11-26T01:27:19Z",
+    "updated": "2026-11-26T23:19:14Z",
     "updatedBy": {
       "id": 45669787,
       "login": "Flanz1"
