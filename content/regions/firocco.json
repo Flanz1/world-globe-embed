@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "firocco",
   "properties": {
+    "name": "Firocco",
     "slot": "inara",
     "map": "globe-map",
     "color": "#179315",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-18T21:21:04Z",
+    "updated": "2026-11-26T01:25:50Z",
     "created": "2026-11-18T18:16:30Z",
     "createdBy": {
       "id": 357569561,
       "login": "Mank-cmd"
     },
     "updatedBy": {
-      "id": 357569561,
-      "login": "Mank-cmd"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
