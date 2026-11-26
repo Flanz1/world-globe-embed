@@ -3,13 +3,14 @@
   "type": "Feature",
   "id": "kethregion",
   "properties": {
+    "name": "Kethricism",
     "slot": "inara",
     "map": "globe-map",
     "color": "#5881ad",
     "colorLabel": "Kethricism",
     "fillOpacity": 0.35,
     "label": false,
-    "updated": "2026-11-16T08:51:53Z",
+    "updated": "2026-11-26T00:09:20Z",
     "updatedBy": {
       "id": 45669787,
       "login": "Flanz1"
