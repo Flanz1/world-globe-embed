@@ -3,6 +3,7 @@
   "type": "Feature",
   "id": "vas-ira",
   "properties": {
+    "name": "Vas Ira",
     "slot": "inara",
     "map": "globe-map",
     "color": "#7952e5",
@@ -207,7 +208,7 @@
       "id": 45669787,
       "login": "Flanz1"
     },
-    "updated": "2026-11-16T08:48:08Z",
+    "updated": "2026-11-26T01:31:08Z",
     "updatedBy": {
       "id": 45669787,
       "login": "Flanz1"
