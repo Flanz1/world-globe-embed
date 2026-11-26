@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "nuv-werm",
   "properties": {
+    "name": "Nuv werm",
     "slot": "inara",
     "map": "globe-map",
     "color": "#000000",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-20T19:29:08Z",
+    "updated": "2026-11-26T01:29:13Z",
     "created": "2026-11-20T18:59:01Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
