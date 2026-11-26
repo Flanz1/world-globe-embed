@@ -3,12 +3,13 @@
   "type": "Feature",
   "id": "kindly-lords",
   "properties": {
+    "name": "Kindly Lords",
     "slot": "inara",
     "map": "globe-map",
     "color": "#68c08e",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-17T22:34:53Z",
+    "updated": "2026-11-26T00:08:57Z",
     "created": "2026-11-17T00:52:08Z",
     "createdBy": {
       "id": 45669787,
