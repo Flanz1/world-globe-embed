@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "nuralism",
   "properties": {
+    "name": "Nuralism",
     "slot": "inara",
     "map": "globe-map",
     "color": "#3c923a",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-13T20:06:11Z",
+    "updated": "2026-11-26T01:23:00Z",
     "created": "2026-11-13T20:06:11Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
