@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "firstpath",
   "properties": {
+    "name": "First Path",
     "slot": "inara",
     "map": "globe-map",
     "color": "#e88787",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-13T20:16:00Z",
+    "updated": "2026-11-26T00:10:13Z",
     "created": "2026-11-13T20:16:00Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
