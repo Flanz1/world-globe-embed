@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "faiginism",
   "properties": {
+    "name": "Faiginism",
     "slot": "inara",
     "map": "globe-map",
     "color": "#27d011",
     "fillOpacity": 0.35,
     "label": false,
-    "updated": "2026-11-13T19:39:01Z",
+    "updated": "2026-11-26T00:10:06Z",
     "created": "2026-11-13T19:39:01Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
