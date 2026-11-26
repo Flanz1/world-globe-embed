@@ -3,6 +3,7 @@
   "type": "Feature",
   "id": "gethricism",
   "properties": {
+    "name": "Gethricism",
     "slot": "inara",
     "map": "globe-map",
     "color": "#a64ae3",
@@ -329,7 +330,7 @@
       "id": 45669787,
       "login": "Flanz1"
     },
-    "updated": "2026-11-15T20:28:18Z",
+    "updated": "2026-11-26T00:09:04Z",
     "updatedBy": {
       "id": 45669787,
       "login": "Flanz1"
