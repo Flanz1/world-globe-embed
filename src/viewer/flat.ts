@@ -179,10 +179,8 @@ export async function start(ctx: FlatStartContext): Promise<void> {
       drawnView = { cx: view.cx, cy: view.cy, k: view.k, w: canvas.width, h: canvas.height };
     }
     paintOverlays(w, h);
-    if (!slide) {
-      maybeUpgrade();
-      maybeTiles();
-    }
+    if (!slide) maybeUpgrade();
+    maybeTiles();
   }
   function paintMap(w: number, h: number, d: number): void {
     g.setTransform(d, 0, 0, d, 0, 0);
@@ -307,7 +305,8 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   type FlatTile = { img: Img; level: number; c: number; r: number };
   const tileCache = new TileCache<FlatTile>(TILE_BUDGET, (t) => "close" in t.img && t.img.close());
   const tileKey = (l: number, c: number, r: number) => `${l}:${c}:${r}`;
-  let tileBusy = false;
+  const tileFlight = new Set<string>();
+  const TILE_PARALLEL = 4;
   let tilesOff = false;
   let tileTop = -1;
   function drawTiles(w: number, h: number, offsets: number[], span: number, top: number, height: number): void {
@@ -329,10 +328,11 @@ export async function start(ctx: FlatStartContext): Promise<void> {
   function maybeTiles(): void {
     const top = tileLevels.length && imgW >= 8192 && texLimit >= 8192 ? levelFor(tileLevels, 360 * view.k * dpr()) : undefined;
     tileTop = top ? tileLevels.indexOf(top) : -1;
-    if (!top || tileBusy || tilesOff) return;
+    if (!top || tilesOff) return;
     const { w, h } = size();
     const pts: [number, number][] = [];
-    for (const [fx, fy] of [[0.5, 0.5], ...[0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6, 1].flatMap((a) => [0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6, 1].map((b) => [a, b]))]) {
+    const steps = [-0.15, 0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6, 1, 1.15];
+    for (const [fx, fy] of [[0.5, 0.5], ...steps.flatMap((a) => steps.map((b) => [a, b]))]) {
       const lon = view.cx + (fx * w - w / 2) / view.k;
       const lat = view.cy - (fy * h - h / 2) / (view.k * ky);
       if (lat > 90 || lat < -90) continue;
@@ -341,29 +341,34 @@ export async function start(ctx: FlatStartContext): Promise<void> {
     // Lower levels first: the 16384 tiles show while the 32768 ones load.
     const need: [number, number, number][] = [];
     for (let li = 0; li <= tileTop; li++) for (const [c, r] of tilesAt(tileLevels[li], pts)) need.push([li, c, r]);
-    const next = need.find(([l, c, r]) => !tileCache.has(tileKey(l, c, r)));
-    if (!next) {
+    const missing = need.filter(([l, c, r]) => !tileCache.has(tileKey(l, c, r)));
+    if (!missing.length && !tileFlight.size) {
       root.dataset.tiles = String(top.w);
       return;
     }
     const keep = new Set(need.map(([l, c, r]) => tileKey(l, c, r)));
-    const [l, c, r] = next;
-    tileBusy = true;
-    void fetch(tileUrl(tileLevels[l], c, r))
-      .then((res) => {
-        if (!res.ok) throw new Error(String(res.status));
-        return res.blob();
-      })
-      .then(decode)
-      .then((im) => {
-        tileCache.set(tileKey(l, c, r), { img: im, level: l, c, r }, keep);
-        tileBusy = false;
-        schedule(); // the render calls maybeTiles again for the next one
-      })
-      .catch(() => {
-        tileBusy = false;
-        tilesOff = true; // a broken tile: keep what's there, load no more
-      });
+    // Several tiles at once (the round trip, not the decode, is what makes a new area slow to appear).
+    for (const [l, c, r] of missing) {
+      if (tileFlight.size >= TILE_PARALLEL) break;
+      const key = tileKey(l, c, r);
+      if (tileFlight.has(key)) continue;
+      tileFlight.add(key);
+      void fetch(tileUrl(tileLevels[l], c, r))
+        .then((res) => {
+          if (!res.ok) throw new Error(String(res.status));
+          return res.blob();
+        })
+        .then(decode)
+        .then((im) => {
+          tileCache.set(key, { img: im, level: l, c, r }, keep);
+          tileFlight.delete(key);
+          schedule(); // the render calls maybeTiles again for the next ones
+        })
+        .catch(() => {
+          tileFlight.delete(key);
+          tilesOff = true; // a broken tile: keep what's there, load no more
+        });
+    }
   }
 
   /* ── Input: direct manipulation only, while unlocked ── */

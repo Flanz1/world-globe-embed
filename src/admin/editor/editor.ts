@@ -975,7 +975,8 @@ export function openEditor(o: EditorOptions): void {
   type EdTile = { img: HTMLImageElement; level: number; c: number; r: number };
   const tileCache = new TileCache<EdTile>(TILE_BUDGET, () => {});
   const tileKey = (l: number, c: number, r: number) => `${l}:${c}:${r}`;
-  let tileBusy = false;
+  const tileFlight = new Set<string>();
+  const TILE_PARALLEL = 4;
   let tilesOff = false;
   let tileTop = -1;
   let tileVersion = 0;
@@ -1005,9 +1006,9 @@ export function openEditor(o: EditorOptions): void {
     // whatever the screen: tracing borders wants the sharpest map, not the one that just fills the pixels.
     const top = tileLevels.length && imgW >= 8192 && levelFor(tileLevels, 360 * view.k * dpr) ? tileLevels[tileLevels.length - 1] : undefined;
     tileTop = top ? tileLevels.indexOf(top) : -1;
-    if (!top || tileBusy || tilesOff) return;
+    if (!top || tilesOff) return;
     const { w, h: hh } = size();
-    const steps = [0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6, 1];
+    const steps = [-0.15, 0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6, 1, 1.15];
     const pts: [number, number][] = [];
     for (const [fx, fy] of [[0.5, 0.5], ...steps.flatMap((a) => steps.map((b) => [a, b]))]) {
       const lat = wy(fy * hh);
@@ -1017,29 +1018,34 @@ export function openEditor(o: EditorOptions): void {
     // Lower levels first: the 16384 tiles show while the 32768 ones load.
     const need: [number, number, number][] = [];
     for (let li = 0; li <= tileTop; li++) for (const [c, r] of tilesAt(tileLevels[li], pts)) need.push([li, c, r]);
-    const next = need.find(([l, c, r]) => !tileCache.has(tileKey(l, c, r)));
-    if (!next) {
+    const missing = need.filter(([l, c, r]) => !tileCache.has(tileKey(l, c, r)));
+    if (!missing.length && !tileFlight.size) {
       dlg.dataset.tiles = String(top.w);
       return;
     }
     const keep = new Set(need.map(([l, c, r]) => tileKey(l, c, r)));
-    const [l, c, r] = next;
-    tileBusy = true;
-    // Not through images.ts's cache, which keeps everything: only TILE_BUDGET tiles stay in memory.
-    const im = new Image();
-    im.src = tileUrl(tileLevels[l], c, r);
-    void im.decode().then(
-      () => {
-        tileCache.set(tileKey(l, c, r), { img: im, level: l, c, r }, keep);
-        tileVersion++;
-        tileBusy = false;
-        draw(); // the render calls maybeTiles again for the next one
-      },
-      () => {
-        tileBusy = false;
-        tilesOff = true; // a broken tile: keep what's there, load no more
-      },
-    );
+    // Several tiles at once: the round trip, not the decode, is what makes a new area slow to appear.
+    for (const [l, c, r] of missing) {
+      if (tileFlight.size >= TILE_PARALLEL) break;
+      const key = tileKey(l, c, r);
+      if (tileFlight.has(key)) continue;
+      tileFlight.add(key);
+      // Not through images.ts's cache, which keeps everything: only TILE_BUDGET tiles stay in memory.
+      const im = new Image();
+      im.src = tileUrl(tileLevels[l], c, r);
+      void im.decode().then(
+        () => {
+          tileCache.set(key, { img: im, level: l, c, r }, keep);
+          tileVersion++;
+          tileFlight.delete(key);
+          draw(); // the render calls maybeTiles again for the next ones
+        },
+        () => {
+          tileFlight.delete(key);
+          tilesOff = true; // a broken tile: keep what's there, load no more
+        },
+      );
+    }
   }
 
   /* ── State ── */
@@ -1375,6 +1381,7 @@ export function openEditor(o: EditorOptions): void {
     mainCtx.fillStyle = "#14120f";
     mainCtx.fillRect(0, 0, canvas.width, canvas.height);
     mainCtx.drawImage(panSnap, Math.round(dx), Math.round(dy));
+    maybeTiles(); // load what the drag is about to reveal while it is still moving
     pinTool.reposition();
     commentTool.reposition();
     updateStatus();
