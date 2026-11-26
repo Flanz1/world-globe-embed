@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "mindano",
   "properties": {
+    "name": "Mindano",
     "slot": "inara",
     "map": "globe-map",
     "color": "#b07003",
     "fillOpacity": 0.35,
     "label": false,
-    "updated": "2026-11-18T21:06:51Z",
+    "updated": "2026-11-26T01:26:10Z",
     "created": "2026-11-18T20:45:18Z",
     "createdBy": {
       "id": 357569561,
       "login": "Mank-cmd"
     },
     "updatedBy": {
-      "id": 357569561,
-      "login": "Mank-cmd"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
