@@ -3,7 +3,7 @@
   "type": "Feature",
   "id": "vihr",
   "properties": {
-    "name": "Vihr",
+    "name": "Vihr(old)",
     "slot": "inara",
     "map": "globe-map",
     "color": "#8b2bbf",
@@ -321,7 +321,7 @@
         [-15.9721, 34.9995]
       ]
     ],
-    "updated": "2026-11-26T01:25:01Z",
+    "updated": "2026-11-26T23:18:48Z",
     "created": "2026-11-12T21:39:43Z",
     "createdBy": {
       "id": 138310181,
