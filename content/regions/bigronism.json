@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "bigronism",
   "properties": {
+    "name": "Birgonism",
     "slot": "inara",
     "map": "globe-map",
     "color": "#7952e5",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-13T19:19:09Z",
+    "updated": "2026-11-26T01:31:16Z",
     "created": "2026-11-13T19:19:09Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
