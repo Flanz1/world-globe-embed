@@ -3,6 +3,7 @@
   "type": "Feature",
   "id": "crownlands-combined",
   "properties": {
+    "name": "Vihr Constituencies",
     "slot": "inara",
     "map": "globe-map",
     "color": "#cb20c5",
@@ -244,7 +245,7 @@
       "id": 138310181,
       "login": "LoopSimon"
     },
-    "updated": "2026-11-24T22:30:47Z",
+    "updated": "2026-11-26T01:28:45Z",
     "updatedBy": {
       "id": 45669787,
       "login": "Flanz1"
