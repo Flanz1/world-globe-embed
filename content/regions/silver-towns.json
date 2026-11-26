@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "silver-towns",
   "properties": {
+    "name": "Silver towns",
     "slot": "inara",
     "map": "globe-map",
     "color": "#f8f7f7",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-20T19:05:50Z",
+    "updated": "2026-11-26T01:30:05Z",
     "created": "2026-11-20T19:05:50Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
