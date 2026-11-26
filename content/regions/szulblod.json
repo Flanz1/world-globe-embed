@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "szulblod",
   "properties": {
+    "name": "Szulblod",
     "slot": "inara",
     "map": "globe-map",
     "color": "#c9ba0d",
     "fillOpacity": 0.35,
     "label": false,
-    "updated": "2026-11-20T18:56:47Z",
+    "updated": "2026-11-26T01:30:26Z",
     "created": "2026-11-20T18:56:47Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
