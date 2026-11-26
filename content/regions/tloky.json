@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "tloky",
   "properties": {
+    "name": "Tloky",
     "slot": "inara",
     "map": "globe-map",
     "color": "#455478",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-20T19:07:41Z",
+    "updated": "2026-11-26T01:30:40Z",
     "created": "2026-11-20T19:07:41Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
