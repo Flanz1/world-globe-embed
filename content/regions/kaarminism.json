@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "kaarminism",
   "properties": {
+    "name": "Kaarminism",
     "slot": "inara",
     "map": "globe-map",
     "color": "#09952c",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-13T19:41:35Z",
+    "updated": "2026-11-26T01:22:39Z",
     "created": "2026-11-13T19:41:35Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
