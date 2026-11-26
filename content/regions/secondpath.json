@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "secondpath",
   "properties": {
+    "name": "Second Path",
     "slot": "inara",
     "map": "globe-map",
     "color": "#682818",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-13T20:17:55Z",
+    "updated": "2026-11-26T01:23:07Z",
     "created": "2026-11-13T20:17:55Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
