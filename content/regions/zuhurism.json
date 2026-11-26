@@ -3,12 +3,13 @@
   "type": "Feature",
   "id": "zuhurism",
   "properties": {
+    "name": "Zuhurism",
     "slot": "inara",
     "map": "globe-map",
     "color": "#ff1e05",
     "fillOpacity": 0.35,
     "label": false,
-    "updated": "2026-11-18T21:19:13Z",
+    "updated": "2026-11-26T01:23:33Z",
     "created": "2026-11-13T19:54:59Z",
     "createdBy": {
       "id": 138310181,
