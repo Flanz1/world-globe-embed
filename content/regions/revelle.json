@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "revelle",
   "properties": {
+    "name": "Revelle",
     "slot": "inara",
     "map": "globe-map",
     "color": "#df8f6d",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-16T22:15:32Z",
+    "updated": "2026-11-26T01:28:25Z",
     "created": "2026-11-16T22:12:13Z",
     "createdBy": {
       "id": 357569561,
       "login": "Mank-cmd"
     },
     "updatedBy": {
-      "id": 357569561,
-      "login": "Mank-cmd"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
