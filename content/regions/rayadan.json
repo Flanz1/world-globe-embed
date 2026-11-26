@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "rayadan",
   "properties": {
+    "name": "Rayadan",
     "slot": "inara",
     "map": "globe-map",
     "color": "#195ce1",
     "fillOpacity": 0.35,
     "label": false,
-    "updated": "2026-11-13T19:25:31Z",
+    "updated": "2026-11-26T01:31:51Z",
     "created": "2026-11-13T19:25:31Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
