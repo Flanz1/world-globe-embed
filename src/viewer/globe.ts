@@ -301,7 +301,7 @@ export async function start(ctx: StartContext): Promise<void> {
     const mesh = new Mesh(new SphereGeometry(OVERLAY_R, 8, 4), mat);
     mesh.renderOrder = 1.5;
     const dimCaps = new Group();
-    overlay = { mesh, canvas: c, tex, mat, dimCaps, w: c.width, worker: startOverlayWorker(c) };
+    overlay = { mesh, canvas: c, tex, mat, dimCaps, w: c.width, worker: startOverlayWorker() };
     buildOverlayGeometry();
     world.add(mesh, dimCaps);
     return overlay;
@@ -319,19 +319,23 @@ export async function start(ctx: StartContext): Promise<void> {
    * The overlay is painted by a worker (see overlay-worker.ts), so a repaint (new zoom detail, a layer switch,
    * a live edit) never freezes the page. Without OffscreenCanvas or workers it is painted right here instead.
    */
-  function startOverlayWorker(c: HTMLCanvasElement): Worker | null {
-    if (typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined" || !("transferControlToOffscreen" in c)) return null;
+  function startOverlayWorker(): Worker | null {
+    if (typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined" || typeof createImageBitmap === "undefined") return null;
     try {
       const wk = new Worker(new URL("./overlay-worker.ts", import.meta.url), { type: "module" });
-      const off = c.transferControlToOffscreen();
-      wk.postMessage({ init: off }, [off]);
-      wk.onmessage = (e: MessageEvent<{ id: number }>) => {
-        if (!overlay || e.data.id !== paintSeq) return;
+      wk.onmessage = (e: MessageEvent<{ id: number; bitmap: ImageBitmap }>) => {
+        if (!overlay || e.data.id !== paintSeq) return e.data.bitmap.close();
         paintBusy = false;
+        const old = overlay.tex.image as unknown;
         if (resized) {
           resized = false;
           overlay.tex.dispose();
         }
+        // An ImageBitmap upload ignores flipY / premultiplyAlpha: the worker paints it upside down, and it is premultiplied already.
+        (overlay.tex as unknown as { image: ImageBitmap }).image = e.data.bitmap;
+        overlay.tex.flipY = false;
+        overlay.tex.premultiplyAlpha = false;
+        if (old && typeof (old as ImageBitmap).close === "function") (old as ImageBitmap).close();
         overlay.tex.needsUpdate = true;
         uploadQueued = true;
         invalidate();
@@ -341,12 +345,11 @@ export async function start(ctx: StartContext): Promise<void> {
         // The worker failed to start: swap in a fresh canvas and paint on this thread.
         if (!overlay || overlay.worker !== wk) return;
         wk.terminate();
-        const c2 = document.createElement("canvas");
-        c2.width = overlay.w;
-        c2.height = overlay.w / 2;
-        overlay.canvas = c2;
         overlay.worker = null;
-        overlay.tex.image = c2;
+        overlay.tex.image = overlay.canvas;
+        overlay.tex.flipY = true;
+        overlay.tex.premultiplyAlpha = true;
+        overlay.tex.dispose();
         paintBusy = false;
         requestPaint();
       };
