@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "noorism",
   "properties": {
+    "name": "Noorism",
     "slot": "inara",
     "map": "globe-map",
     "color": "#582bbf",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-13T18:49:40Z",
+    "updated": "2026-11-26T01:31:44Z",
     "created": "2026-11-13T18:49:40Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
