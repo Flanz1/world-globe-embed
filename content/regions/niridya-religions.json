@@ -3,6 +3,7 @@
   "type": "Feature",
   "id": "niridya-religions",
   "properties": {
+    "name": "Nirdya Religions",
     "slot": "inara",
     "map": "globe-map",
     "color": "#27d011",
@@ -535,7 +536,7 @@
       "id": 45669787,
       "login": "Flanz1"
     },
-    "updated": "2026-11-18T21:19:13Z",
+    "updated": "2026-11-26T00:09:58Z",
     "updatedBy": {
       "id": 45669787,
       "login": "Flanz1"
