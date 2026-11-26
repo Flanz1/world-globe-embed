@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "margun",
   "properties": {
+    "name": "Margun",
     "slot": "inara",
     "map": "globe-map",
     "color": "#eece2f",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-13T20:26:22Z",
+    "updated": "2026-11-26T01:22:52Z",
     "created": "2026-11-13T20:26:22Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
