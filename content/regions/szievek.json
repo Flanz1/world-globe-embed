@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "szievek",
   "properties": {
+    "name": "Szievek",
     "slot": "inara",
     "map": "globe-map",
     "color": "#3f0061",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-20T19:10:56Z",
+    "updated": "2026-11-26T01:30:18Z",
     "created": "2026-11-20T19:10:56Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
