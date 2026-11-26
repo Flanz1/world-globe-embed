@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "iratism",
   "properties": {
+    "name": "Iratism",
     "slot": "inara",
     "map": "globe-map",
     "color": "#05637a",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-13T19:31:11Z",
+    "updated": "2026-11-26T01:31:30Z",
     "created": "2026-11-13T19:31:11Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
