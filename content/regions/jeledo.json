@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "jeledo",
   "properties": {
+    "name": "Jeledo",
     "slot": "inara",
     "map": "globe-map",
     "color": "#9119a9",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-18T20:50:08Z",
+    "updated": "2026-11-26T01:25:56Z",
     "created": "2026-11-18T17:41:03Z",
     "createdBy": {
       "id": 357569561,
       "login": "Mank-cmd"
     },
     "updatedBy": {
-      "id": 357569561,
-      "login": "Mank-cmd"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
