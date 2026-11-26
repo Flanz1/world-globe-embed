@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "albesan",
   "properties": {
+    "name": "Albesan",
     "slot": "inara",
     "map": "globe-map",
     "color": "#831307",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-18T20:35:44Z",
+    "updated": "2026-11-26T01:25:16Z",
     "created": "2026-11-18T20:05:51Z",
     "createdBy": {
       "id": 357569561,
       "login": "Mank-cmd"
     },
     "updatedBy": {
-      "id": 357569561,
-      "login": "Mank-cmd"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
