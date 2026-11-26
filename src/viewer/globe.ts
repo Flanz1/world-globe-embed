@@ -245,7 +245,7 @@ export async function start(ctx: StartContext): Promise<void> {
    * on a band with the same padding and the same shift offset, so the two line up exactly. ── */
   let reg: RegionData | null = null;
   let labelAt: LabelPoint[] = [];
-  let overlay: { mesh: Mesh; canvas: HTMLCanvasElement; tex: CanvasTexture; mat: MeshPhongMaterial; dimCaps: Group } | null = null;
+  let overlay: { mesh: Mesh; canvas: HTMLCanvasElement; tex: CanvasTexture; mat: MeshPhongMaterial; dimCaps: Group; w: number; worker: Worker | null } | null = null;
   const dimMat = new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5, depthWrite: false });
   const dimOn = () => !!R?.dim;
   function buildOverlayGeometry(): void {
@@ -301,7 +301,7 @@ export async function start(ctx: StartContext): Promise<void> {
     const mesh = new Mesh(new SphereGeometry(OVERLAY_R, 8, 4), mat);
     mesh.renderOrder = 1.5;
     const dimCaps = new Group();
-    overlay = { mesh, canvas: c, tex, mat, dimCaps };
+    overlay = { mesh, canvas: c, tex, mat, dimCaps, w: c.width, worker: startOverlayWorker() };
     buildOverlayGeometry();
     world.add(mesh, dimCaps);
     return overlay;
@@ -315,32 +315,96 @@ export async function start(ctx: StartContext): Promise<void> {
     // Never below one texel: a thinner stroke fades out instead of getting thinner once the texture is magnified.
     return Math.max(1, (FLAT_LINE_PX * (W / (2 * Math.PI))) / screenPxPerRad);
   }
+  /*
+   * The overlay is painted by a worker (see overlay-worker.ts), so a repaint (new zoom detail, a layer switch,
+   * a live edit) never freezes the page. Without OffscreenCanvas or workers it is painted right here instead.
+   */
+  function startOverlayWorker(): Worker | null {
+    if (typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined" || typeof createImageBitmap === "undefined") return null;
+    try {
+      const wk = new Worker(new URL("./overlay-worker.ts", import.meta.url), { type: "module" });
+      wk.onmessage = (e: MessageEvent<{ id: number; bitmap: ImageBitmap }>) => {
+        if (!overlay || e.data.id !== paintSeq) return e.data.bitmap.close();
+        paintBusy = false;
+        const old = overlay.tex.image as unknown;
+        if (resized) {
+          resized = false;
+          overlay.tex.dispose();
+        }
+        // An ImageBitmap upload ignores flipY / premultiplyAlpha: the worker paints it upside down, and it is premultiplied already.
+        (overlay.tex as unknown as { image: ImageBitmap }).image = e.data.bitmap;
+        overlay.tex.flipY = false;
+        overlay.tex.premultiplyAlpha = false;
+        if (old && typeof (old as ImageBitmap).close === "function") (old as ImageBitmap).close();
+        overlay.tex.needsUpdate = true;
+        uploadQueued = true;
+        invalidate();
+        if (paintWanted) requestPaint();
+      };
+      wk.onerror = () => {
+        // The worker failed to start: swap in a fresh canvas and paint on this thread.
+        if (!overlay || overlay.worker !== wk) return;
+        wk.terminate();
+        overlay.worker = null;
+        overlay.tex.image = overlay.canvas;
+        overlay.tex.flipY = true;
+        overlay.tex.premultiplyAlpha = true;
+        overlay.tex.dispose();
+        paintBusy = false;
+        requestPaint();
+      };
+      return wk;
+    } catch {
+      return null;
+    }
+  }
+  let resized = false;
+  let paintSeq = 0;
+  let paintBusy = false;
+  let paintWanted = false;
+  let sentLayers: PaintLayer[] | null = null;
+  function requestPaint(): void {
+    const o = overlay;
+    if (!o || !reg || !spec) return;
+    const W = o.w;
+    const H = W / 2;
+    drawnLineW = overlayLineWidth(W);
+    if (!o.worker) {
+      if (o.canvas.width !== W) {
+        o.canvas.width = W;
+        o.canvas.height = H;
+        o.tex.dispose();
+        resized = false;
+      }
+      const g = o.canvas.getContext("2d")!;
+      g.clearRect(0, 0, W, H);
+      // Map-image frame → texture pixels, exactly like the map texture's own UVs.
+      paintLayerStack(g, spec, (lon) => ((lon + 180) / 360) * W, (lat) => ((90 - lat) / 180) * H, [-360, 0, 360], { lineWidth: drawnLineW, dim: dimOn() }, { w: W, h: H });
+      o.tex.needsUpdate = true;
+      uploadQueued = true;
+      return;
+    }
+    // One paint at a time: while one runs, the latest request waits and the ones before it are dropped.
+    if (paintBusy) {
+      paintWanted = true;
+      return;
+    }
+    paintBusy = true;
+    paintWanted = false;
+    const layers = sentLayers !== spec ? spec : undefined;
+    sentLayers = spec;
+    o.worker.postMessage({ id: ++paintSeq, w: W, h: H, layers, lineWidth: drawnLineW, dim: dimOn() });
+  }
   function drawRegion(): void {
     if (!reg) return;
-    const o = ensureOverlay();
-    const W = o.canvas.width;
-    const H = o.canvas.height;
-    const g = o.canvas.getContext("2d")!;
-    g.clearRect(0, 0, W, H);
-    drawnLineW = overlayLineWidth(W); 
+    ensureOverlay();
     // Clashes are worked out once per region (or live update), not per redraw.
     const vis = visible.of(reg);
     if (specFor !== vis) {
       spec = regionPaintLayers(vis);
       specFor = vis;
     }
-    // Map-image frame → texture pixels, exactly like the map texture's own UVs.
-    paintLayerStack(
-      g,
-      spec!,
-      (lon) => ((lon + 180) / 360) * W,
-      (lat) => ((90 - lat) / 180) * H,
-      [-360, 0, 360],
-      { lineWidth: drawnLineW, dim: dimOn() },
-      { w: W, h: H },
-    );
-    o.tex.needsUpdate = true;
-    uploadQueued = true;
+    requestPaint();
     const pts = (R?.label ?? vis.label) ? regionLabelPoints(vis, R?.label === true) : [];
     labelAt = pts;
     labels?.set(pts.map((p) => p.text));
@@ -909,13 +973,13 @@ export async function start(ctx: StartContext): Promise<void> {
     zoomTimer = window.setTimeout(() => {
       void upgradeTexture();
       // A region overlay re-rasterised to match the zoom (never smaller than it already is, to avoid flapping).
-      if (overlay && reg && overlayWidth() > overlay.canvas.width) {
-        overlay.canvas.width = overlayWidth();
-        overlay.canvas.height = overlay.canvas.width / 2;
-        overlay.tex.dispose();
+      if (overlay && reg && overlayWidth() > overlay.w) {
+        overlay.w = overlayWidth();
+        resized = true; // the old texture is dropped once the new, larger paint is in
         drawRegion();
-      } else if (overlay && reg && Math.abs(overlayLineWidth(overlay.canvas.width) / drawnLineW - 1) > 0.08) {
-        // Keep the borders the same on-screen thickness as the flat map.
+      } else if (overlay && reg && Math.abs(overlayLineWidth(overlay.w) / drawnLineW - 1) > 0.3) {
+        // Keep the borders about the same on-screen thickness as the flat map. (A repaint of a big overlay is
+        // expensive, so it waits for a clear change rather than following every zoom step.)
         drawRegion();
         invalidate();
       }
