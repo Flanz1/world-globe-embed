@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "crownlands",
   "properties": {
+    "name": "Crownlands",
     "slot": "inara",
     "map": "globe-map",
     "color": "#cb20c5",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-20T18:50:51Z",
+    "updated": "2026-11-26T01:28:38Z",
     "created": "2026-11-20T18:50:51Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
