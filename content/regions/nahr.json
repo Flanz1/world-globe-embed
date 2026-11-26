@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "nahr",
   "properties": {
+    "name": "Nahr",
     "slot": "inara",
     "map": "globe-map",
     "color": "#1b7e26",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-16T22:15:51Z",
+    "updated": "2026-11-26T01:28:12Z",
     "created": "2026-11-16T22:06:22Z",
     "createdBy": {
       "id": 357569561,
       "login": "Mank-cmd"
     },
     "updatedBy": {
-      "id": 357569561,
-      "login": "Mank-cmd"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
