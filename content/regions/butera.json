@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "butera",
   "properties": {
+    "name": "Butera",
     "slot": "inara",
     "map": "globe-map",
     "color": "#a37a0a",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-18T19:04:43Z",
+    "updated": "2026-11-26T01:25:37Z",
     "created": "2026-11-18T19:04:43Z",
     "createdBy": {
       "id": 357569561,
       "login": "Mank-cmd"
     },
     "updatedBy": {
-      "id": 357569561,
-      "login": "Mank-cmd"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
