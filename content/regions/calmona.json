@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "calmona",
   "properties": {
+    "name": "Calmona",
     "slot": "inara",
     "map": "globe-map",
     "color": "#ce8912",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-18T20:55:17Z",
+    "updated": "2026-11-26T01:25:44Z",
     "created": "2026-11-18T20:55:17Z",
     "createdBy": {
       "id": 357569561,
       "login": "Mank-cmd"
     },
     "updatedBy": {
-      "id": 357569561,
-      "login": "Mank-cmd"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
