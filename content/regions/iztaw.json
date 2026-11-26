@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "iztaw",
   "properties": {
+    "name": "Iztaw",
     "slot": "inara",
     "map": "globe-map",
     "color": "#ff0000",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-20T18:43:12Z",
+    "updated": "2026-11-26T01:28:59Z",
     "created": "2026-11-20T18:43:12Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
