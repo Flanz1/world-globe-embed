@@ -3,6 +3,7 @@
   "type": "Feature",
   "id": "region",
   "properties": {
+    "name": "Gethricism",
     "slot": "inara",
     "map": "globe-map",
     "color": "#e56e2e",
@@ -10,7 +11,7 @@
     "fillOpacity": 0.35,
     "label": true,
     "legendTitle": "High Gethricism",
-    "updated": "2026-11-15T13:44:40Z",
+    "updated": "2026-11-26T00:09:34Z",
     "created": "2026-11-11T22:46:49Z",
     "createdBy": {
       "id": 138310181,
