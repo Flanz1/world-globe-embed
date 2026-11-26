@@ -3,12 +3,13 @@
   "type": "Feature",
   "id": "lakalism",
   "properties": {
+    "name": "Lakalism",
     "slot": "inara",
     "map": "globe-map",
     "color": "#ffffff",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-18T21:19:13Z",
+    "updated": "2026-11-26T01:22:46Z",
     "created": "2026-11-13T19:35:50Z",
     "createdBy": {
       "id": 138310181,
