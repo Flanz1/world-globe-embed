@@ -3,6 +3,7 @@
   "type": "Feature",
   "id": "tsurugism",
   "properties": {
+    "name": "Tsurugism",
     "slot": "inara",
     "map": "globe-map",
     "color": "#f9a20b",
@@ -16,15 +17,15 @@
       }
     ],
     "partLegend": [-1, 0],
-    "updated": "2026-11-13T18:55:01Z",
+    "updated": "2026-11-26T01:23:20Z",
     "created": "2026-11-13T18:55:01Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
