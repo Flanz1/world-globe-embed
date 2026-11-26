@@ -3,21 +3,22 @@
   "type": "Feature",
   "id": "sihixilar",
   "properties": {
+    "name": "Sihixilar",
     "slot": "inara",
     "map": "globe-map",
     "color": "#3e4c48",
     "fillOpacity": 0.35,
     "label": true,
     "nationalBorders": true,
-    "updated": "2026-11-13T20:18:44Z",
+    "updated": "2026-11-26T01:23:13Z",
     "created": "2026-11-13T19:59:53Z",
     "createdBy": {
       "id": 138310181,
       "login": "LoopSimon"
     },
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
