@@ -3,20 +3,21 @@
   "type": "Feature",
   "id": "ligoggia",
   "properties": {
+    "name": "Ligoggia",
     "slot": "inara",
     "map": "globe-map",
     "color": "#4f0c92",
     "fillOpacity": 0.35,
     "label": true,
-    "updated": "2026-11-18T21:16:06Z",
+    "updated": "2026-11-26T01:26:03Z",
     "created": "2026-11-18T21:16:06Z",
     "createdBy": {
       "id": 357569561,
       "login": "Mank-cmd"
     },
     "updatedBy": {
-      "id": 357569561,
-      "login": "Mank-cmd"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
