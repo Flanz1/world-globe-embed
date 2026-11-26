@@ -188,7 +188,10 @@
         "trazlova",
         "wytlords"
       ],
-      "parent": "ilrakhan"
+      "parent": "ilrakhan",
+      "pinned": [
+        "crownlands-combined"
+      ]
     }
   ]
 }
