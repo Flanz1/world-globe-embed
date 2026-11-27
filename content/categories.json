@@ -226,7 +226,8 @@
       "regions": [
         "cimfon",
         "cimfon-combined",
-        "droil"
+        "droil",
+        "gairwin-tower"
       ],
       "parent": "ilrakhan"
     }
