@@ -225,7 +225,8 @@
       "name": "Othirdon",
       "regions": [
         "cimfon",
-        "cimfon-combined"
+        "cimfon-combined",
+        "droil"
       ],
       "parent": "ilrakhan"
     }
