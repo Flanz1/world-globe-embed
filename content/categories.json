@@ -193,6 +193,12 @@
         "crownlands-combined",
         "vihr"
       ]
+    },
+    {
+      "id": "trykkerog",
+      "name": "Trykkerog",
+      "regions": [],
+      "parent": "ilrakhan"
     }
   ]
 }
