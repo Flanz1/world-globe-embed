@@ -219,6 +219,11 @@
       "pinned": [
         "zenr-combined"
       ]
+    },
+    {
+      "id": "othirdon",
+      "name": "Othirdon",
+      "regions": []
     }
   ]
 }
