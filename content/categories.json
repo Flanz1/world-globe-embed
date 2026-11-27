@@ -223,7 +223,8 @@
     {
       "id": "othirdon",
       "name": "Othirdon",
-      "regions": []
+      "regions": [],
+      "parent": "ilrakhan"
     }
   ]
 }
