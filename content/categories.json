@@ -213,7 +213,10 @@
         "zenr",
         "zenr-combined"
       ],
-      "parent": "ilrakhan"
+      "parent": "ilrakhan",
+      "pinned": [
+        "zenr-combined"
+      ]
     }
   ]
 }
