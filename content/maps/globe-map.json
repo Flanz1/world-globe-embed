@@ -3,16 +3,16 @@
   "id": "globe-map",
   "name": "Globe Map",
   "uploadedBy": "LoopSimon",
-  "date": "2026-11-26T23:07:30.053Z",
+  "date": "2026-11-27T11:51:38.193Z",
   "aspect": 1.732,
   "width": 32768,
   "height": 18923,
-  "hash": "5a07238ac0fe",
+  "hash": "0873cdb7e7f4",
   "sizes": {
-    "1024": "maps/globe-map/5a07238ac0fe-1024.webp",
-    "2048": "maps/globe-map/5a07238ac0fe-2048.webp",
-    "4096": "maps/globe-map/5a07238ac0fe-4096.webp",
-    "8192": "maps/globe-map/5a07238ac0fe-8192.webp"
+    "1024": "maps/globe-map/0873cdb7e7f4-1024.webp",
+    "2048": "maps/globe-map/0873cdb7e7f4-2048.webp",
+    "4096": "maps/globe-map/0873cdb7e7f4-4096.webp",
+    "8192": "maps/globe-map/0873cdb7e7f4-8192.webp"
   },
   "tiles": {
     "16384": {
@@ -21,7 +21,7 @@
       "size": 2048,
       "cols": 8,
       "rows": 5,
-      "url": "maps/globe-map/5a07238ac0fe-16384"
+      "url": "maps/globe-map/0873cdb7e7f4-16384"
     },
     "32768": {
       "w": 32768,
@@ -29,9 +29,9 @@
       "size": 2048,
       "cols": 16,
       "rows": 10,
-      "url": "maps/globe-map/5a07238ac0fe-32768"
+      "url": "maps/globe-map/0873cdb7e7f4-32768"
     }
   },
-  "coast": "maps/globe-map/5a07238ac0fe-coast.bin",
+  "coast": "maps/globe-map/0873cdb7e7f4-coast.bin",
   "lqip": "data:image/webp;base64,UklGRqgBAABXRUJQVlA4IJwBAABwBwCdASowABwAPtFgpU8oJaMiJWzJABoJQBYd5fsOOzqVEP8iCufKJGk6CLDfx2UJo9e+OLw+olbxJ8o2Es0Bk+0sgAD+6jpmrJh2r/D2n+1esGSHnfwp8UHi14ZKlowzobv0VIuVqquUpPuGqLPsU4fDIcgb3Ll0iU58k1Glt2HiyK9jUcJN1KAFOjNpzvxd4DyyzBOeWO9YligjsCllk1eTA5X1WErUKAVABKfM9U1oDAMfS9qi4rHriTvp3vl3CrS//p0UuMgADZt3jIv4rOXL6Ra6GCTg9pGRqpSKOhP4ytCff4NEc9Y57vmWm0YQbmpUN0itLUBH2C+M8TNbRm9+rmthYgez0FIjzKXO3cR9iJyotcbRd7d+jq5yKzJwKIn2oB9qVIrt02swmp8ZKXcvjoa4qNftxWnSamCT/7KeOt5RW7tyxK/BqhjNy+Hu8vtb40c92jpmzIOA2s7O2Mzb5l2ukr7CDhcWlrnpkWH6DHGSZsk1mZgzPsF/tUXEEul+CvYOwmCe7tR8Bw2fM3JktGir8k6fAAAA"
 }
