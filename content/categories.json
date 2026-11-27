@@ -198,7 +198,8 @@
       "id": "trykkerog",
       "name": "Trykkerog",
       "regions": [
-        "levangr"
+        "levangr",
+        "sallesand"
       ],
       "parent": "ilrakhan"
     }
