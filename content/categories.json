@@ -197,7 +197,9 @@
     {
       "id": "trykkerog",
       "name": "Trykkerog",
-      "regions": [],
+      "regions": [
+        "levangr"
+      ],
       "parent": "ilrakhan"
     }
   ]
