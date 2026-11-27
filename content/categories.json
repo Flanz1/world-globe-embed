@@ -224,7 +224,8 @@
       "id": "othirdon",
       "name": "Othirdon",
       "regions": [
-        "cimfon"
+        "cimfon",
+        "cimfon-combined"
       ],
       "parent": "ilrakhan"
     }
