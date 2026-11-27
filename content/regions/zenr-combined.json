@@ -3,7 +3,7 @@
   "type": "Feature",
   "id": "zenr-combined",
   "properties": {
-    "name": "Zenr combined",
+    "name": "Trykkerog Combined",
     "slot": "inara",
     "map": "globe-map",
     "color": "#c810e0",
@@ -180,10 +180,10 @@
       "id": 138310181,
       "login": "LoopSimon"
     },
-    "updated": "2026-11-27T17:56:35Z",
+    "updated": "2026-11-27T18:02:58Z",
     "updatedBy": {
-      "id": 138310181,
-      "login": "LoopSimon"
+      "id": 45669787,
+      "login": "Flanz1"
     }
   },
   "geometry": {
