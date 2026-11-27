@@ -223,7 +223,9 @@
     {
       "id": "othirdon",
       "name": "Othirdon",
-      "regions": [],
+      "regions": [
+        "cimfon"
+      ],
       "parent": "ilrakhan"
     }
   ]
